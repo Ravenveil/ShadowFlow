@@ -439,6 +439,39 @@ export async function stopGroupChat(groupId: string): Promise<boolean> {
   return json?.stopped === true;
 }
 
+// ── 2026-11-05 交接记录查询（OpenBot hop 模型，功能线②「任务交接记录」可视化）──
+
+/** 单条 hop（GET /hops?all=1 的行形状，对齐 server storage/agent-hops.ts AgentHop）。 */
+export interface GroupHop {
+  id: string;
+  group_id: string;
+  turn_seq: number;
+  from_agent: string;
+  to_agent: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'timeout' | 'empty' | 'denied' | 'aborted';
+  output_chars: number;
+  detail: string;
+  created_at: number;
+  settled_at: number | null;
+}
+
+/**
+ * GET /api/groups/:id/hops?all=1 — 逐条交接记录（默认最近 1 回合；?turns=N 更多）。
+ * 失败返回空数组（面板显示「暂无交接记录」，不打断聊天主链路）。
+ */
+export async function fetchGroupHops(groupId: string, turns = 3): Promise<GroupHop[]> {
+  try {
+    const res = await fetch(
+      `${getApiBase()}/api/groups/${groupId}/hops?all=1&turns=${encodeURIComponent(String(turns))}`,
+    );
+    if (!res.ok) return [];
+    const json = (await res.json().catch(() => null)) as { hops?: GroupHop[] } | null;
+    return json?.hops ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Stream M 2026-05-29 · 消息悬浮工具栏「反应」「Pin」接后端 ───────────────
 // 后端：POST /api/groups/{gid}/messages/{mid}/reactions  (toggle by user)
 //       POST /api/groups/{gid}/messages/{mid}/pin         (toggle / set)

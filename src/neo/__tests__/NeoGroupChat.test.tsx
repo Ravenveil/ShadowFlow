@@ -35,9 +35,15 @@ const groupRecord: Record<string, unknown> = {
   agent_ids: ['a1'],
   messages: [],
 };
+// 交接记录 mock（2026-11-05 迭代六：hops 面板数据源）。
+const hopsData: Array<Record<string, unknown>> = [];
 vi.mock('../../api/groupApi', () => ({
   getGroup: vi.fn(() => Promise.resolve(groupRecord)),
   postGroupMessage: vi.fn(() => Promise.resolve({})),
+  addGroupMembers: vi.fn(),
+  removeGroupMember: vi.fn(),
+  stopGroupChat: vi.fn(() => Promise.resolve(false)),
+  fetchGroupHops: vi.fn(() => Promise.resolve(hopsData)),
 }));
 
 vi.mock('../../api/agents', () => ({
@@ -98,6 +104,7 @@ beforeEach(() => {
   timelineState.error = null;
   groupRecord.kind = 'group';
   groupRecord.agent_ids = ['a1'];
+  hopsData.length = 0;
 });
 
 describe('segmentTurn — turn 内钉钉分段', () => {
@@ -213,5 +220,69 @@ describe('NeoGroupChat — @ 提及成员接线（2026-11-05，OpenBot 定向派
       expect(el).toHaveTextContent('a1:读读');
       expect(el).toHaveTextContent('ghost-id:ghost-id');
     });
+  });
+});
+
+describe('NeoGroupChat — 交接记录面板（2026-11-05 迭代六，OpenBot hop 模型）', () => {
+  it('顶栏「交接」钮点开面板：空态文案（fetchGroupHops 空数组）', async () => {
+    renderChat();
+    await screen.findByTestId('neo-gc-add-member');
+    // 点开前面板不存在。
+    expect(screen.queryByTestId('neo-gc-hops-panel')).not.toBeInTheDocument();
+    (screen.getByTestId('neo-gc-hops-btn') as HTMLButtonElement).click();
+    expect(await screen.findByTestId('neo-gc-hops-panel')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('neo-gc-hops-panel')).toHaveTextContent('暂无交接记录');
+    });
+  });
+
+  it('有 hop 数据 → 行内出 A→B 名字 + 终态标签 + 失败 detail', async () => {
+    hopsData.push(
+      {
+        id: 'h1',
+        group_id: 'g1',
+        turn_seq: 1,
+        from_agent: 'a1',
+        to_agent: 'ghost',
+        status: 'done',
+        output_chars: 120,
+        detail: '',
+        created_at: 1,
+        settled_at: 2,
+      },
+      {
+        id: 'h2',
+        group_id: 'g1',
+        turn_seq: 1,
+        from_agent: 'ghost',
+        to_agent: 'a1',
+        status: 'timeout',
+        output_chars: 0,
+        detail: '上游 ghost timeout',
+        created_at: 3,
+        settled_at: 4,
+      },
+    );
+    renderChat();
+    await screen.findByTestId('neo-gc-add-member');
+    (screen.getByTestId('neo-gc-hops-btn') as HTMLButtonElement).click();
+    const panel = await screen.findByTestId('neo-gc-hops-panel');
+    // 名字解析：a1 → 读读（listAgents mock）；ghost 无记录退 id。
+    await waitFor(() => {
+      expect(panel).toHaveTextContent('读读');
+      expect(panel).toHaveTextContent('ghost');
+    });
+    // 终态徽章 + 失败原因。
+    expect(panel).toHaveTextContent('完成');
+    expect(panel).toHaveTextContent('超时');
+    expect(panel).toHaveTextContent('上游 ghost timeout');
+    expect(panel).toHaveTextContent('120 字');
+  });
+
+  it('DM 会话不出交接钮（单聊无交接语义）', async () => {
+    groupRecord.kind = 'dm';
+    renderChat();
+    await screen.findByTestId('composer-stub');
+    expect(screen.queryByTestId('neo-gc-hops-btn')).not.toBeInTheDocument();
   });
 });

@@ -29,16 +29,18 @@
  * 入口：NeoRail 群列表行 / NeoChat 顶栏「群聊现场」跳转（session ↔ group
  * 经 B1 互链反查）。样式全部在 neo-group.css（--t-* token，day/night 安全）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Plus, UserPlus, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Plus, UserPlus, UsersRound } from 'lucide-react';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
 import {
   addGroupMembers,
+  fetchGroupHops,
   getGroup,
   postGroupMessage,
   removeGroupMember,
   stopGroupChat,
+  type GroupHop,
   type GroupRecord,
 } from '../api/groupApi';
 import { listAgents, type AgentRecord } from '../api/agents';
@@ -214,6 +216,20 @@ function gcAvatarInitial(name: string): string {
   return /[A-Za-z]/.test(first) ? first.toUpperCase() : first;
 }
 
+/** hop 终态 → 中文标签（交接面板徽章；与 server hopStatusLabel 同源语义）。 */
+function hopStatusLabel(s: GroupHop['status']): string {
+  switch (s) {
+    case 'done': return '完成';
+    case 'failed': return '失败';
+    case 'timeout': return '超时';
+    case 'empty': return '空回复';
+    case 'denied': return '被拦截';
+    case 'aborted': return '中止';
+    case 'running': return '进行中';
+    case 'pending': return '待开始';
+  }
+}
+
 /** 头像条最多叠 5 个，其余收进 +N。 */
 const MEMBER_STACK_MAX = 5;
 
@@ -330,6 +346,28 @@ export function NeoGroupChat({
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [memberBusy, setMemberBusy] = useState<string | null>(null);
   const [memberErr, setMemberErr] = useState<string | null>(null);
+
+  // ── 交接记录面板（2026-11-05 迭代六，OpenBot hop 模型可视化）──────────────
+  // 顶栏「交接」钮 → 下拉面板展示最近 3 回合的 agent 间交接（谁→谁、终态、
+  // 产出规模、失败原因）。数据源 GET /hops?all=1；回合结束自动刷新一次
+  // （busy true→false 沿），打开时也刷新。失败静默（面板显示空态）。
+  const [hopsOpen, setHopsOpen] = useState(false);
+  const [hops, setHops] = useState<GroupHop[]>([]);
+  const prevBusyRef = useRef(busy);
+  const refreshHops = useCallback(() => {
+    if (!groupId) return;
+    void fetchGroupHops(groupId, 3)
+      .then(setHops)
+      .catch(() => undefined);
+  }, [groupId]);
+  useEffect(() => {
+    if (hopsOpen) refreshHops();
+  }, [hopsOpen, refreshHops]);
+  useEffect(() => {
+    // busy true→false（一轮 fan-out 结束）→ 若面板开着就刷新。
+    if (prevBusyRef.current && !busy && hopsOpen) refreshHops();
+    prevBusyRef.current = busy;
+  }, [busy, hopsOpen, refreshHops]);
 
   /** 把 PATCH 回来的群记录同步进本地各派生态（成员/形态/单聊对象）。 */
   const syncGroupRecord = useCallback((g: GroupRecord | null) => {
@@ -696,6 +734,57 @@ export function NeoGroupChat({
               )}
             </div>
             {memberErr && <div className="neo-gc-member-picker-error">{memberErr}</div>}
+          </div>
+        )}
+
+        {/* ── 交接记录面板（2026-11-05 迭代六，OpenBot hop 模型可视化）───────
+            评审表功能②「任务交接记录」的可演示落点：点顶栏「交接」钮看最近
+            3 回合谁把什么交给了谁、哪里断了（终态徽章 + 失败原因）。 */}
+        {!isDm && (
+          <button
+            type="button"
+            className={`neo-gc-hops-btn${hopsOpen ? ' on' : ''}`}
+            onClick={() => setHopsOpen((o) => !o)}
+            title={t('neo.group.hops', { defaultValue: '交接记录' })}
+            aria-label={t('neo.group.hops', { defaultValue: '交接记录' })}
+            aria-expanded={hopsOpen}
+            data-testid="neo-gc-hops-btn"
+          >
+            <ArrowRight size={14} strokeWidth={1.9} aria-hidden />
+            {t('neo.group.hops', { defaultValue: '交接' })}
+          </button>
+        )}
+        {hopsOpen && !isDm && (
+          <div className="neo-gc-hops-panel" data-testid="neo-gc-hops-panel">
+            <div className="neo-gc-hops-head">
+              {t('neo.group.hopsTitle', { defaultValue: '最近交接（3 回合）' })}
+            </div>
+            <div className="neo-gc-hops-list">
+              {hops.length === 0 ? (
+                <div className="neo-gc-hops-empty">
+                  {t('neo.group.hopsEmpty', { defaultValue: '暂无交接记录 — 跑一轮团队协作后这里会出现每次 A→B 交接' })}
+                </div>
+              ) : (
+                [...hops]
+                  .sort((a, b) => b.turn_seq - a.turn_seq || a.created_at - b.created_at)
+                  .slice(0, 30)
+                  .map((h) => (
+                    <div key={h.id} className="neo-gc-hop" data-status={h.status}>
+                      <span className="neo-gc-hop-turn">#{h.turn_seq}</span>
+                      <span className="neo-gc-hop-edge">
+                        {agentById.get(h.from_agent)?.name ?? h.from_agent}
+                        <span className="neo-gc-hop-arrow" aria-hidden>→</span>
+                        {agentById.get(h.to_agent)?.name ?? h.to_agent}
+                      </span>
+                      <span className="neo-gc-hop-status">{hopStatusLabel(h.status)}</span>
+                      {h.output_chars > 0 && (
+                        <span className="neo-gc-hop-chars">{h.output_chars} 字</span>
+                      )}
+                      {h.detail && <span className="neo-gc-hop-detail" title={h.detail}>{h.detail}</span>}
+                    </div>
+                  ))
+              )}
+            </div>
           </div>
         )}
         {busy && (
