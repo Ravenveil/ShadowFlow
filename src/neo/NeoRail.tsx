@@ -42,6 +42,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
+  BarChart3,
   Brain,
   ChevronDown,
   Folder,
@@ -1492,6 +1493,20 @@ export function NeoRail({
           <Brain size={15} strokeWidth={1.75} aria-hidden />
           <span className="neo-nav-row-name">
             {t('neo.memoryBase', { defaultValue: language === 'zh' ? '记忆' : 'Memory' })}
+          </span>
+        </button>
+        {/* 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）：nav 常驻行。
+            列表区保持当前内容（dashboard 是内容阅读态，不占列表区）。 */}
+        <button
+          type="button"
+          className={`neo-nav-row${nav.view === 'dashboard' ? ' on' : ''}`}
+          onClick={() => onNavigate({ view: 'dashboard' })}
+          aria-pressed={nav.view === 'dashboard'}
+          data-testid="neo-nav-dashboard"
+        >
+          <BarChart3 size={15} strokeWidth={1.75} aria-hidden />
+          <span className="neo-nav-row-name">
+            {t('neo.dashboard', { defaultValue: language === 'zh' ? '数据看板' : 'Dashboard' })}
           </span>
         </button>
         <button

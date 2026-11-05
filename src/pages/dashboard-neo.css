@@ -1,0 +1,85 @@
+/* ===== DashboardPage Neo 化（2026-11-05，数据看板）=====
+   与 memory-neo.css 同一套作用域 token 策略：颜色一律 var(--t-*)，
+   day/night 双主题安全；类名 neo-db-* 前缀避免冲突。
+   数据源：GET /api/dashboard/*（Node，routes/dashboard.ts）。
+   图表：轻量 SVG 自绘（无新依赖，评审决议）。 */
+
+.neo-db {
+  min-height: 100vh;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  padding: 32px 40px;
+  font-family: var(--font-sans, inherit);
+  --t-accent: #1C1C1E;
+  --t-accent-bright: #000000;
+  --t-accent-tint: #F4F4F5;
+  --t-accent-ink: #FAFAFA;
+}
+[data-theme="night"] .neo-db {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+}
+
+/* ── 页头 ─────────────────────────────────────────────────────────────── */
+.neo-db-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.neo-db-eyebrow { margin: 0; font-family: var(--font-mono); font-size: 11px; color: var(--t-fg-4); letter-spacing: 0.18em; text-transform: uppercase; }
+.neo-db-title { margin: 6px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.neo-db-sub { margin: 4px 0 0; font-size: 13px; color: var(--t-fg-3); }
+.neo-db-refresh { height: 30px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--t-line); background: transparent; color: var(--t-fg-3); font-size: 12px; cursor: pointer; transition: all 0.15s ease; }
+.neo-db-refresh:hover { color: var(--t-fg); border-color: var(--t-fg-4); }
+.neo-db-refresh:disabled { opacity: 0.5; cursor: default; }
+
+/* ── 天数窗口 tabs（复用 memory tabs 样式口径）────────────────────────── */
+.neo-db-tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+.neo-db-tab { height: 28px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--t-line); background: transparent; color: var(--t-fg-3); font-size: 12px; cursor: pointer; transition: all 0.15s ease; }
+.neo-db-tab:hover { color: var(--t-fg); }
+.neo-db-tab.on { background: var(--t-accent); border-color: var(--t-accent); color: var(--t-accent-ink); }
+
+/* ── 概览卡网格 ───────────────────────────────────────────────────────── */
+.neo-db-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.neo-db-card { border: 1px solid var(--t-line); border-radius: 14px; background: var(--t-card, var(--t-bg)); padding: 14px 16px; }
+.neo-db-card-label { margin: 0 0 6px; font-size: 11px; color: var(--t-fg-3); letter-spacing: 0.02em; }
+.neo-db-card-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.neo-db-card-delta { margin: 4px 0 0; font-size: 11px; color: var(--t-fg-4); font-variant-numeric: tabular-nums; }
+.neo-db-card-delta.up { color: #B45309; }
+.neo-db-card-delta.down { color: #15803D; }
+.neo-db-card-hint { margin: 4px 0 0; font-size: 11px; color: var(--t-fg-4); }
+
+/* ── 区块 ─────────────────────────────────────────────────────────────── */
+.neo-db-section { margin-bottom: 22px; max-width: 960px; }
+.neo-db-section-title { margin: 0 0 10px; font-size: 13px; font-weight: 650; }
+.neo-db-panel { border: 1px solid var(--t-line); border-radius: 14px; background: var(--t-card, var(--t-bg)); padding: 16px; }
+
+/* ── 趋势图（SVG 折线）────────────────────────────────────────────────── */
+.neo-db-chart-wrap { display: flex; gap: 6px; margin-bottom: 10px; }
+.neo-db-chart-svg { width: 100%; height: auto; display: block; }
+.neo-db-chart-line { fill: none; stroke: var(--t-accent); stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.neo-db-chart-dot { fill: var(--t-accent); }
+.neo-db-chart-area { fill: var(--t-accent-tint); stroke: none; }
+.neo-db-chart-empty { margin: 0; padding: 24px 0; text-align: center; font-size: 12px; color: var(--t-fg-4); }
+
+/* ── breakdown 表 ─────────────────────────────────────────────────────── */
+.neo-db-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.neo-db-table th { text-align: left; padding: 6px 10px; color: var(--t-fg-3); font-weight: 550; border-bottom: 1px solid var(--t-line); white-space: nowrap; }
+.neo-db-table td { padding: 7px 10px; border-bottom: 1px solid var(--t-line); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.neo-db-table tr:last-child td { border-bottom: none; }
+.neo-db-table-num { text-align: right; white-space: nowrap; }
+
+/* ── 每日简报 ─────────────────────────────────────────────────────────── */
+.neo-db-brief-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.neo-db-brief-item { padding: 10px 12px; border-radius: 10px; background: var(--t-accent-tint); }
+.neo-db-brief-k { margin: 0 0 4px; font-size: 11px; color: var(--t-fg-3); }
+.neo-db-brief-v { margin: 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.neo-db-alerts { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.neo-db-alert { padding: 10px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, #B45309 35%, var(--t-line)); background: color-mix(in srgb, #B45309 8%, transparent); font-size: 12px; color: var(--t-fg); }
+.neo-db-lesson-kinds { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.neo-db-lesson-chip { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--t-line); font-size: 11px; color: var(--t-fg-3); }
+
+/* ── 状态条（loading / error）────────────────────────────────────────── */
+.neo-db-status { margin: 8px 0 16px; font-size: 12px; color: var(--t-fg-3); }
+.neo-db-status--error { color: #B91C1C; }
+
+/* ── embedded 变体（NeoApp 中栏内嵌：rail 常驻，紧凑填充）───────────────── */
+.neo-db.embedded { min-height: 100%; padding: 20px 24px; }

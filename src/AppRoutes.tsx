@@ -19,6 +19,8 @@ const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 // 图谱 = KnowledgePack 的 LightRAG 实体关系可视化（从 Shadow 搬迁，去 Tauri 化）。
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
 const KnowledgeGraphPage = lazy(() => import('./pages/KnowledgeGraphPage'));
+// 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）：token/成本/run 统计 + 每日简报。
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 // ClawHub（2026-06）— Claw 集合平台目录页（浏览/安装/详情）。
 const ClawHubPage = lazy(() => import('./pages/clawhub/ClawHubPage'));
 
@@ -47,6 +49,8 @@ export function AppRoutes() {
           <Route path="/knowledge/graph" element={<KnowledgeGraphPage />} />
           {/* 河流记忆（River Memory，Story 16.1 前端补齐） */}
           <Route path="/memory" element={<MemoryPage />} />
+          {/* 数据看板（2026-11-05）：侧边栏「数据看板」入口的全页深链变体 */}
+          <Route path="/dashboard" element={<DashboardPage />} />
           {/* ClawHub（2026-06）— Claw 集合平台（浏览/安装/详情抽屉） */}
           <Route path="/clawhub" element={<ClawHubPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

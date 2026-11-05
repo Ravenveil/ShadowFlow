@@ -149,6 +149,45 @@ export function getDb(): Database.Database {
     status TEXT NOT NULL DEFAULT 'active'
   );`);
 
+  // 经验记忆（2026-11-05，移植自 OPC-OS PR#3 memory.py 设计）— 跨任务长期记忆：
+  // run 结束时从已有事实自动提炼（失败→教训、中断→偏好），零 LLM 调用。
+  // scope_key/task_type 分域召回（空=通用，不匹配不召回）；同域上限 8 条软归档；
+  // 重复内容只加权（score+0.1 上限 1.0, hits+1）不新增。与手动 River Memory
+  //（storage/memory-entries.ts JSON）并存双区、互不覆盖。
+  db.exec(`CREATE TABLE IF NOT EXISTS memory_lessons (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'lesson',
+    scope_key TEXT NOT NULL DEFAULT '',
+    task_type TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT '',
+    source_ref TEXT NOT NULL DEFAULT '',
+    score REAL NOT NULL DEFAULT 0.6,
+    hits INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_lessons_scope
+    ON memory_lessons(scope_key, task_type, archived);`);
+
+  // Token 用量流水（2026-11-05，ledger 思想平移自 OPC-OS PR#3 company.py）—
+  // llm.ts 每次调用返回 usage 时落一条（input/output tokens + 估算成本），
+  // 数据看板（routes/dashboard.ts）按天/按模型聚合现算。写入 best-effort，
+  // 失败静默，绝不影响 LLM 主链路。
+  db.exec(`CREATE TABLE IF NOT EXISTS token_usage (
+    id TEXT PRIMARY KEY,
+    ts INTEGER NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_est_usd REAL NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(ts);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);`);
+
   _db = db;
   _initialized = true;
   console.log(`[sqlite] db ${dbExisted ? 'loaded' : 'initialized'} at ${file}`);

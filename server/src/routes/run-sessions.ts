@@ -35,6 +35,9 @@ import { toolApprovals, type PermissionDecision } from '../lib/tool-approval';
 import { parseSkillToken } from '../lib/skill-token';
 import { saveRun, type ArtifactType } from '../storage/runs';
 import { getSetting } from '../storage/settings';
+// 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
+// run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
+import { remember, contextBlock } from '../storage/memory-lessons';
 import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
@@ -787,11 +790,82 @@ export function registerGatewayRun(meta: {
       runBus.finish(session_id, status);
       touchSession(session_id); // 结束时刷新活跃度，避免 TTL 早扫
       try { setRunIndexStatus(session_id, status ?? 'succeeded'); } catch { /* 同上 */ }
+      // 经验记忆自动沉淀（best-effort）— 网关聊天轮失败同样记教训
+      try {
+        recordRunLesson(
+          { skill_name: 'chat-gateway', goal: meta.goal },
+          { aborted: status === 'canceled', failed: status === 'failed', errorMessage: status === 'failed' ? 'chat gateway round failed' : null },
+        );
+      } catch { /* 非致命 */ }
     },
   };
 }
 
 const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
+
+/**
+ * 经验记忆召回块（run 提示词注入用）。按 skill_name 分域，空块返回 ''。
+ * 开关：settings.memory.autoLearn（默认开）；settings.memory.recallTopK（默认 4）。
+ */
+function lessonsBlockForSession(skillName: string): string {
+  try {
+    if (getSetting('memory.autoLearn') === false) return '';
+    const topK = getSetting('memory.recallTopK');
+    const k = typeof topK === 'number' && topK > 0 ? Math.min(Math.round(topK), 12) : 4;
+    const block = contextBlock(skillName ?? '', '', k);
+    return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
+  } catch {
+    return '';
+  }
+}
+
+/** skill 层内容 + 经验块拼接（两者都可能为空）。 */
+function joinLessons(base: string | undefined, lessonsBlock: string): string | undefined {
+  const baseStr = base ?? '';
+  if (!baseStr) return lessonsBlock || undefined;
+  return baseStr + lessonsBlock;
+}
+
+/**
+ * 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）。
+ *
+ * 口径对齐对方"从已有事实里挖、不额外调模型"：
+ *   - run 失败 → 教训（kind=lesson, source='run_failed'）：失败原因原文就是教训。
+ *   - 用户中断 → 偏好（kind=preference, source='user_abort'）：用户不想让它跑完
+ *     是对该类任务的明确态度。
+ * 分域：scope_key 取 skill_name（与对方 employees.role 对齐）；task_type 一期留空。
+ * 开关：settings.memory.autoLearn（默认开）。调用方已 try/catch，这里再兜一层。
+ */
+function recordRunLesson(
+  session: { skill_name?: string; goal?: string },
+  outcome: { aborted: boolean; failed: boolean; errorMessage?: string | null },
+): void {
+  if (getSetting('memory.autoLearn') === false) return;
+  const scopeKey = (session.skill_name ?? '').slice(0, 120);
+  const goal = (session.goal ?? '').trim();
+  if (outcome.failed) {
+    const reason = (outcome.errorMessage ?? '').trim().slice(0, 400);
+    if (!reason) return; // 没有原因原文就不硬编——不造事实
+    remember({
+      content: `任务「${goal.slice(0, 80) || '(无目标)'}」失败：${reason}。同类任务执行前先按这条自查规避。`,
+      kind: 'lesson',
+      scope_key: scopeKey,
+      source: 'run_failed',
+      source_ref: '',
+      score: 0.85,
+    });
+  } else if (outcome.aborted) {
+    remember({
+      content: `用户中断了「${goal.slice(0, 80) || '(无目标)'}」这类任务。再次执行同类目标时先与用户确认范围与方式，再动手。`,
+      kind: 'preference',
+      scope_key: scopeKey,
+      source: 'user_abort',
+      source_ref: '',
+      score: 0.9,
+    });
+  }
+}
+
 
 function coerceArtifactType(raw: unknown): ArtifactType | null {
   if (typeof raw !== 'string') return null;
@@ -1694,10 +1768,13 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   // 普通对话直通路（investigate 根因修复）：skill 层换成普通对话/编码 agent 人设，
   // 并关掉 discovery（强制"复述意图+计划"，组装味）与 framework（mode 专属指令），
   // 不加载组装 skill 的 side files。保留 identity（反 AI 味）+ conversation_history（多轮）。
+  // 经验记忆（2026-11-05，OPC-OS PR#3 移植）：按 skill_name 分域召回，拼进 skill 层
+  // 尾部（静态段内、技能指令之后），空块自动丢弃不打乱段落顺序。失败静默。
+  const lessonsBlock = lessonsBlockForSession(session.skill_name);
   const compose = wantPlainConversation
     ? composeSystemPrompt({
         ds_injection: ds?.injection_prompt,
-        skill_system_prompt: CONVERSATIONAL_AGENT_PROMPT,
+        skill_system_prompt: joinLessons(CONVERSATIONAL_AGENT_PROMPT, lessonsBlock),
         skill_mode: undefined,
         project_meta: session.project_meta ?? null,
         conversation_history: conversationHistoryBlock,
@@ -1706,7 +1783,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       })
     : composeSystemPrompt({
         ds_injection: ds?.injection_prompt,
-        skill_system_prompt: skillForPrompt?.system_prompt,
+        skill_system_prompt: joinLessons(skillForPrompt?.system_prompt, lessonsBlock),
         skill_mode: skillForPrompt?.mode,
         project_meta: session.project_meta ?? null,
         conversation_history: conversationHistoryBlock,
@@ -2361,6 +2438,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     stopLoopWatcher(); // 迭代环 watcher 随 run 终态停止
     // 阶段0 — 终态写进持久索引
     try { setRunIndexStatus(id, sawError && !sawComplete ? 'failed' : 'succeeded'); } catch { /* 非致命 */ }
+    // 经验记忆自动沉淀（best-effort，绝不影响主流程）：
+    //   失败 → 教训（失败原因原文）；用户中断 → 偏好。零 LLM 调用。
+    try { recordRunLesson(session, { aborted: abortController.signal.aborted, failed: sawError && !sawComplete, errorMessage: lastErrorMessage }); } catch { /* 非致命 */ }
     console.log(`[run-sessions] run ${id} finished (complete=${sawComplete} error=${sawError})`);
 
     // Persist run record — only when the stream actually terminated (not when

@@ -58,6 +58,22 @@ import { PermissionPolicyV2 } from '../lib/permission-policy-v2';
 import { ToolRegistry } from '../lib/tool-spec';
 import { toolApprovals } from '../lib/tool-approval';
 import { promptDefaultsForTools } from '../lib/tools/builtin';
+// 经验记忆召回（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）— 失败静默
+import { contextBlock } from '../storage/memory-lessons';
+import { getSetting } from '../storage/settings';
+
+/** 拼该 agent 域的经验记忆块。空（无记忆/开关关）返回 ''。绝不抛错。 */
+function lessonsBlockFor(agentId: string): string {
+  try {
+    if (getSetting('memory.autoLearn') === false) return '';
+    const topK = getSetting('memory.recallTopK');
+    const k = typeof topK === 'number' && topK > 0 ? Math.min(Math.round(topK), 12) : 4;
+    const block = contextBlock(agentId, '', k);
+    return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
+  } catch {
+    return '';
+  }
+}
 
 // ─── Workspace I/O ───────────────────────────────────────────────────────────
 
@@ -112,7 +128,7 @@ function plannedArtifactPaths(agent: SkillAgentDef, workspace: string): string[]
   return keys.map((k) => path.join(workspace, safeRel(k)));
 }
 
-/** Compose the agent's full system prompt (persona + workspace inputs). */
+/** Compose the agent's full system prompt (persona + workspace inputs + 经验记忆). */
 function composeSystemPrompt(agent: SkillAgentDef, workspace: string): string {
   const persona = agent.persona ?? '';
   const inputs = slurpExpectedInputs(agent, workspace);
@@ -122,7 +138,10 @@ function composeSystemPrompt(agent: SkillAgentDef, workspace: string): string {
     Object.keys(agent.io?.outputs?.produces ?? {}).length > 0
       ? `\n\n## Output\n\nProduce the content for: ${Object.keys(agent.io!.outputs!.produces!).join(', ')}`
       : '';
-  return [persona, inputs, outHint].filter(Boolean).join('\n');
+  // 经验记忆召回（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：按 agent id
+  // 分域取该域沉淀的教训/偏好，拼进 persona 之后。失败静默——记忆是加分项。
+  const lessons = lessonsBlockFor(agent.id);
+  return [persona, lessons, inputs, outHint].filter(Boolean).join('\n');
 }
 
 // ─── Single node execution ───────────────────────────────────────────────────

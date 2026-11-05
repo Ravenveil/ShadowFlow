@@ -149,6 +149,40 @@ describe('NeoRail — 导航行 onNavigate 上报（跳转收敛契约）', () =
     fireEvent.click(screen.getByTestId('neo-nav-memory'));
     expect(await screen.findByText('还没有记忆条目')).toBeInTheDocument();
   });
+
+  it('数据看板导航行（2026-11-05 整合批）：点击上报 dashboard nav，行高亮，左栏列表区保持', () => {
+    const onNavigate = vi.fn();
+    const v1 = render(
+      <MemoryRouter>
+        <NeoRail
+          nav={{ view: 'home' }}
+          section="home"
+          onNavigate={onNavigate}
+          onNewTask={() => {}}
+          collapsed={false}
+          onToggleCollapsed={() => {}}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('neo-nav-dashboard'));
+    expect(onNavigate).toHaveBeenCalledWith({ view: 'dashboard' });
+    v1.unmount();
+    // dashboard 视图：导航行点亮（aria-pressed），列表区仍归 section 管
+    render(
+      <MemoryRouter>
+        <NeoRail
+          nav={{ view: 'dashboard' }}
+          section="home"
+          onNavigate={onNavigate}
+          onNewTask={() => {}}
+          collapsed={false}
+          onToggleCollapsed={() => {}}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('neo-nav-dashboard')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('neo-nav-memory')).toHaveAttribute('aria-pressed', 'false');
+  });
 });
 
 describe('NeoRail — home 统一列表区（os-unified 2026-11-04）', () => {

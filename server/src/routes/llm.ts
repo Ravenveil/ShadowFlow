@@ -41,6 +41,7 @@ import {
   type ProviderChunk,
   type ProviderId,
 } from '../transport/api-clients';
+import { recordUsage } from '../storage/token-usage';
 
 const router = Router();
 
@@ -270,6 +271,13 @@ router.post('/messages', async (req: Request, res: Response) => {
       stop_sequence: null,
       usage: { input_tokens: 0, output_tokens: text.length },
     });
+    // Token 用量流水（best-effort，失败静默）— 数据看板数据源
+    recordUsage({
+      session_id: req.header('x-session-id') ?? '',
+      model: body.model,
+      input_tokens: 0,
+      output_tokens: text.length,
+    });
     return;
   }
 
@@ -339,6 +347,13 @@ router.post('/messages', async (req: Request, res: Response) => {
     usage: { output_tokens: outputChars },
   });
   writeAnthropicSse(res, 'message_stop', { type: 'message_stop' });
+  // Token 用量流水（best-effort，失败静默）— 流式 Anthropic 路径
+  recordUsage({
+    session_id: req.header('x-session-id') ?? '',
+    model: body.model,
+    input_tokens: 0,
+    output_tokens: outputChars,
+  });
   res.end();
 });
 
@@ -437,6 +452,13 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
       ],
       usage: { prompt_tokens: 0, completion_tokens: text.length, total_tokens: text.length },
     });
+    // Token 用量流水（best-effort，失败静默）— 非流式 OpenAI 路径
+    recordUsage({
+      session_id: req.header('x-session-id') ?? '',
+      model: body.model,
+      input_tokens: 0,
+      output_tokens: text.length,
+    });
     return;
   }
 
@@ -458,9 +480,11 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
   });
 
   let errored = false;
+  let outputCharsOpenAi = 0;
   try {
     for await (const chunk of stream) {
       if (chunk.type === 'text-delta') {
+        outputCharsOpenAi += chunk.text.length;
         writeOpenAiSse(res, {
           id: completionId,
           object: 'chat.completion.chunk',
@@ -497,6 +521,13 @@ router.post('/chat/completions', async (req: Request, res: Response) => {
     choices: [{ index: 0, delta: {}, finish_reason: errored ? 'error' : 'stop' }],
   });
   res.write('data: [DONE]\n\n');
+  // Token 用量流水（best-effort，失败静默）— 流式 OpenAI 路径
+  recordUsage({
+    session_id: req.header('x-session-id') ?? '',
+    model: body.model,
+    input_tokens: 0,
+    output_tokens: outputCharsOpenAi,
+  });
   res.end();
 });
 
