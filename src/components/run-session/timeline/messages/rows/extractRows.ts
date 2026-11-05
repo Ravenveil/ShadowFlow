@@ -64,6 +64,20 @@ const DOLLAR_LINE_RE = /^[ \t]*\$ (.+)$/gm;
 const HEADING_LINE_RE = /^[ \t]*(#{2,3})[ \t]+(.+?)[ \t]*#*[ \t]*$/gm;
 
 /**
+ * 2026-11-05 — `<sf:thinking>` / `<sf-thinking>` 思考段剥离（前端兜底）。
+ *
+ * 服务端 groups-chat.stripThinking 已在落库前剥最终回复（含连字符形态），但
+ * 截图实证仍会有漏网：① 修复前已持久化的历史消息；② 新形态（模型自创变体）。
+ * 这里在 markdown 解析入口再剥一次 —— 思考过程已有 thinking 过程卡实时展示，
+ * 消息气泡只应呈现正文。成对 + 未闭合（截断）两形态 × 冒号/连字符分隔符。
+ */
+export function stripThinkingRows(body: string): string {
+  return body
+    .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*?<\/sf[:-]thinking>/g, '')
+    .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*$/g, '');
+}
+
+/**
  * Push a `text` row from `body[start..end]`, trimming leading/trailing
  * blank lines so chip/text/chip sequences don't end up with empty paragraphs.
  * No-op when the slice is whitespace-only.
@@ -86,7 +100,9 @@ function pushText(rows: Row[], body: string, start: number, end: number): void {
  *      patterns and split text/bash-inline at those.
  *   3. Emit rows in original document order.
  */
-export function extractRows(body: string): Row[] {
+export function extractRows(input: string): Row[] {
+  // 2026-11-05 — 入口先剥思考段（历史脏数据兜底），再走正常解析。
+  const body = stripThinkingRows(input);
   if (!body || !body.trim()) return [];
 
   const rows: Row[] = [];

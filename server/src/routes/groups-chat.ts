@@ -45,6 +45,7 @@ import { parseMentions, restrictTeamToMentions, type MentionCandidate } from '..
 // 2026-11-05 交接记录 — OpenBot hop/work_items 设计移植：DAG 边 A→B 全生命周期
 // 落库 + 回合结束紧凑交接摘要（零 LLM）+ GET /:id/hops 查询。
 import {
+  listHopsByTurn,
   listRecentHops,
   nextTurnSeq,
   openHop,
@@ -255,11 +256,16 @@ function sseWireToText(value: string): string {
  * ApiClientCallable 的 reasoning_content 包装，流式文本里成对/未闭合（max_tokens
  * 截断）两种形态都会出现；思考过程已由过程卡（thinking 卡）实时展示，最终
  * 消息只留正文。与 src/api/llm.ts 人设生成同款策略。
+ *
+ * 2026-11-05 — 补连字符形态 `<sf-thinking>`：模型模仿 sf: 协议时经常把冒号
+ * 写成连字符（群聊气泡实证：`<sf-thinking>The user said…</sf-thinking>` 整段
+ * 英文思考漏进中文界面）。冒号/连字符 × 成对/未闭合全部剥干净。
  */
 export function stripThinking(s: string): string {
+  // <sf:thinking> / <sf-thinking>（属性可选）… </sf:thinking> / </sf-thinking>。
   return s
-    .replace(/<sf:thinking(?:\s[^>]*)?>[\s\S]*?<\/sf:thinking>/g, '')
-    .replace(/<sf:thinking(?:\s[^>]*)?>[\s\S]*$/g, '');
+    .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*?<\/sf[:-]thinking>/g, '')
+    .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*$/g, '');
 }
 
 /**
@@ -818,13 +824,98 @@ async function runFanout(
         // 本回合一个 turn_seq；SQLite 落库失败时降级为内存 Map（聊天主链路零影响）。
         let turnSeq = 0;
         let hopStore: HopRecorder | null = null;
+        // 2026-11-05 Task#10 — hop 生命周期实时播报（hop_card 帧 + hop_update patch）：
+        // SQLite 侧照旧落库，播报属 best-effort（gw 为 null / emit 抛错都不影响主链路）。
+        // roster 名解析：hopIdFor 只拿 agentId，这里维护 id→name 快照表。
+        const agentNameById = new Map<string, string>();
+        const hopCardIdByEdge = new Map<string, string>(); // "from→to" → hop_card 帧id
+        const hopOpenedAtByEdge = new Map<string, number>();
+        const resolveAgentName = async (agentId: string): Promise<string> => {
+          const hit = agentNameById.get(agentId);
+          if (hit) return hit;
+          const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`).catch(() => null);
+          const name = a?.name || agentId;
+          agentNameById.set(agentId, name);
+          return name;
+        };
+        /** 把 SQLite hopStore 的三次回调包上播报；emit 失败静默（best-effort）。 */
+        const emitHopFrame = (fn: () => void): void => {
+          try {
+            fn();
+          } catch { /* best-effort */ }
+        };
         try {
           turnSeq = nextTurnSeq(groupId);
-          hopStore = {
+          const dbStore: HopRecorder = {
             open: (edge) => openHop({ group_id: groupId, turn_seq: turnSeq, from_agent: edge.from, to_agent: edge.to }),
             start: (id) => { try { startHop(id); } catch { /* best-effort */ } },
             settle: (id, status, opts) => { try { settleHop(id, status, opts); } catch { /* best-effort */ } },
           };
+          if (gw) {
+            hopStore = {
+              open: (edge) => {
+                const hopId = dbStore.open(edge);
+                // 播报帧异步准备（open 回调本身要求同步返回 hopId，不能 await）。
+                void (async () => {
+                  const [fromName, toName] = await Promise.all([resolveAgentName(edge.from), resolveAgentName(edge.to)]);
+                  const cardId = gw.nextId();
+                  const key = `${edge.from}→${edge.to}`;
+                  hopCardIdByEdge.set(key, cardId);
+                  hopOpenedAtByEdge.set(key, Date.now());
+                  emitHopFrame(() =>
+                    gw.emitMessage({
+                      id: cardId,
+                      kind: 'hop_card',
+                      turn_id: gw.turnId,
+                      ts: Date.now(),
+                      from_agent: edge.from,
+                      to_agent: edge.to,
+                      from_name: fromName,
+                      to_name: toName,
+                      status: 'pending',
+                    }),
+                  );
+                })();
+                return hopId;
+              },
+              start: (id) => {
+                dbStore.start(id);
+                // start 回调只拿 hopId（不拿边），由 SQLite 行反查边 key —— 但为避免
+                // 逐帧查库，这里用「settled 未知的帧保持 pending」策略：播报粒度到
+                // settle 已足够（pending → 终态），start 不单独 patch。
+              },
+              settle: (id, status, opts) => {
+                dbStore.settle(id, status, opts);
+                // settle 同样只拿 hopId —— 边 key 反查走 SQLite 行（listHopsByTurn 本回合），
+                // 但 settle 高频小查询代价可忽略；找不到对应帧则静默（降级安全）。
+                void (async () => {
+                  try {
+                    const hops = listHopsByTurn(groupId, turnSeq);
+                    const hop = hops.find((h) => h.id === id);
+                    if (!hop) return;
+                    const key = `${hop.from_agent}→${hop.to_agent}`;
+                    const cardId = hopCardIdByEdge.get(key);
+                    if (!cardId) return;
+                    const openedAt = hopOpenedAtByEdge.get(key) ?? Date.now();
+                    emitHopFrame(() =>
+                      gw.emitPatch({
+                        id: cardId,
+                        op: 'hop_update',
+                        patch: {
+                          status,
+                          ...(opts?.outputChars !== undefined ? { output_chars: opts.outputChars } : {}),
+                          ...(opts?.detail ? { detail: opts.detail } : {}),
+                          duration_ms: Date.now() - openedAt,
+                        },
+                      }),
+                    );
+                  } catch { /* best-effort */ }
+                })();
+              },
+            };
+          } else {
+            hopStore = dbStore;
+          }
         } catch { hopStore = null; }
 
         const deps: RunTeamDagDeps = {
