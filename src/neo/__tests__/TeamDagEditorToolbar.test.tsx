@@ -125,13 +125,10 @@ describe('TeamDagEditor — 工具条四钮合一（2026-11-05）', () => {
     expect(screen.getByTestId('team-dag-save-btn')).not.toHaveTextContent('校验并保存');
   });
 
-  it('「+ 节点」独立按钮移除；下拉选中即添加节点（2026-11-05 二轮：直调带参，不再依赖旧闭包）', async () => {
+  it('「+ 节点」独立按钮与添加下拉均已移除（四轮：全员孤点直铺，无添加入口）', async () => {
     renderEditor();
     expect(screen.queryByTestId('team-dag-add-btn')).not.toBeInTheDocument();
-    const select = screen.getByTestId('team-dag-add-select');
-    expect(select).toBeInTheDocument();
-    // select 渲染了未上画布的候选（AGENTS 里 a1/a2 已在 WF，无剩余候选 → 只剩占位项）
-    expect(select).toHaveTextContent('+ 选择成员添加节点');
+    expect(screen.queryByTestId('team-dag-add-select')).not.toBeInTheDocument();
   });
 
   it('⋯ 菜单：点开出现版本历史/放弃修改；放弃修改未 dirty 时禁用', async () => {
@@ -170,6 +167,24 @@ describe('TeamDagEditor — 工具条四钮合一（2026-11-05）', () => {
   });
 });
 
+describe('TeamDagEditor — n8n 式全员孤点直铺（2026-11-05 四轮）', () => {
+  it('保存 payload 自动包含未上画布的成员（孤点直铺核心）', async () => {
+    // 全局 reactflow mock 不渲染节点本体，孤点直铺通过保存 payload 验证：
+    // WF_ONE 只含 a1（n1），保存时应自动补上 a2 的孤立节点 n-a2
+    const WF_ONE: TeamWorkflow = { nodes: [WF.nodes[0]], edges: [] };
+    renderEditor({ workflow: WF_ONE });
+    fireEvent.click(await screen.findByTestId('team-dag-save-btn'));
+    await waitFor(() => expect(putWorkflowMock).toHaveBeenCalled());
+    const saved = putWorkflowMock.mock.calls[0][1] as TeamWorkflow;
+    const ids = saved.nodes.map((n) => n.id);
+    expect(ids).toContain('n1');
+    expect(ids).toContain('n-a2');
+    const orphan = saved.nodes.find((n) => n.id === 'n-a2');
+    expect(orphan?.data?.agentId).toBe('a2');
+    expect(saved.edges).toHaveLength(0);
+  });
+});
+
 describe('TeamDagEditor — 保存链路（四钮合一后）', () => {
   it('保存成功 → PUT workflow + PUT layout，随后自动干跑 /dag/validate（404 静默，无错误区）', async () => {
     const { onSaved } = renderEditor();
@@ -197,8 +212,8 @@ describe('TeamDagEditor — 保存链路（四钮合一后）', () => {
   });
 });
 
-describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三轮）', () => {
-  // 只有 a1 上画布 → 下拉里有 a2 可选（触发结构变更）
+describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三/四轮）', () => {
+  // 只有 a1 上画布（a2 会作为孤点自动补上 → 画布上有 2 个节点）
   const WF_ONE: TeamWorkflow = { nodes: [WF.nodes[0]], edges: [] };
 
   it('初始态：撤销/重做按钮均禁用（无历史）', async () => {
@@ -208,11 +223,10 @@ describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三轮）'
     expect(screen.getByTestId('team-dag-redo-btn')).toBeDisabled();
   });
 
-  it('结构变更（下拉添加节点）→ 撤销可用；Ctrl+Z 撤销后重做可用', async () => {
+  it('结构变更（自动排列）→ 撤销可用；Ctrl+Z 撤销后重做可用', async () => {
     renderEditor({ workflow: WF_ONE });
-    const select = await screen.findByTestId('team-dag-add-select');
-    // 下拉选中即添加（addAgentNode 内部 pushHistory）
-    fireEvent.change(select, { target: { value: 'a2' } });
+    // 自动排列入撤销栈（结构变更通道之一；jsdom mock 下坐标重排可重复触发）
+    fireEvent.click(await screen.findByTestId('team-dag-layout-btn'));
     expect(await screen.findByTestId('team-dag-undo-btn')).toBeEnabled();
     expect(screen.getByTestId('team-dag-redo-btn')).toBeDisabled();
     // Ctrl+Z 快捷键走同一 undo 通道（window keydown，输入框聚焦时不拦截）
@@ -226,13 +240,13 @@ describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三轮）'
       <TeamDagEditor
         teamId="t1"
         workflow={{ nodes: [], edges: [] }}
-        agents={AGENTS}
+        agents={[]}
         onSaved={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
     const hint = await screen.findByTestId('team-dag-empty-hint');
-    expect(hint).toHaveTextContent('选择成员添加第一个节点');
+    expect(hint).toHaveTextContent('从节点手柄拖线连接');
     expect(hint).toHaveTextContent('AI 生成');
     expect(screen.getByTestId('team-dag-layout-btn')).toBeDisabled();
     unmount();

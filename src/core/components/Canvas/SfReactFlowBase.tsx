@@ -60,6 +60,7 @@ import ReactFlow, {
   type OnConnect,
   type OnConnectStart,
   type OnConnectEnd,
+  type OnEdgeUpdateFunc,
   type NodeMouseHandler,
   type ConnectionMode,
   type ReactFlowProps,
@@ -83,6 +84,8 @@ export interface SfReactFlowBaseProps {
   onConnectStart?: OnConnectStart;
   /** react-flow 连线拖拽结束（松手；未命中手柄时调用方可自行处理）。 */
   onConnectEnd?: OnConnectEnd;
+  /** 拖动已有边的端点改接（n8n 式改连；边需 reconnectable 才可拖）。 */
+  onReconnect?: OnEdgeUpdateFunc;
   onNodeClick?: NodeMouseHandler;
   onNodeDragStop?: NodeMouseHandler;
   onPaneClick?: (event: React.MouseEvent) => void;
@@ -130,6 +133,7 @@ function SfReactFlowBaseInner({
   onConnect,
   onConnectStart,
   onConnectEnd,
+  onReconnect,
   onNodeClick,
   onNodeDragStop,
   onPaneClick,
@@ -277,6 +281,7 @@ function SfReactFlowBaseInner({
       onDrop={onDrop}
       onDragOver={onDragOver}
       onEdgeClick={onEdgeClick}
+      onReconnect={onReconnect}
       onNodesDelete={onNodesDelete}
       onEdgesDelete={onEdgesDelete}
       onContextMenu={(e) => e.preventDefault()}

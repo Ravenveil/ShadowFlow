@@ -1848,16 +1848,6 @@
   flex: 1;
 }
 
-.neo-team-dag-select {
-  font: inherit;
-  color: var(--t-fg);
-  background: var(--t-panel-2);
-  border: 1px solid var(--t-border);
-  border-radius: 6px;
-  padding: 3px 6px;
-  max-width: 140px;
-}
-
 .neo-team-dag-btn {
   display: inline-flex;
   align-items: center;

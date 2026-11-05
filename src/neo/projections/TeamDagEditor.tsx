@@ -150,6 +150,8 @@ function edgeVisual(mode: TeamEdgeMode): Pick<Edge, 'className' | 'style'> {
  * 统一建边工厂（2026-11-05 顺滑化）：smoothstep + 14px 圆角（n8n 式柔和
  * 折线，直角太生硬），mode 视觉随动。seed/load/onConnect/drop-connect 四处
  * 建边共用，保证观感一致。
+ * 2026-11-05 四轮：reconnectable —— 直接抓线的端点拖到别的手柄即可改接
+ * （n8n 式改连），配合 onReconnect 完成端点替换。
  */
 function makeTeamEdge(
   base: { id: string; source: string; target: string; label?: string },
@@ -159,6 +161,7 @@ function makeTeamEdge(
     ...base,
     type: 'smoothstep',
     pathOptions: { borderRadius: 14 },
+    reconnectable: true,
     data: { mode },
     ...edgeVisual(mode),
     ...(base.label ? { label: base.label } : {}),
@@ -180,13 +183,18 @@ const POLICY_NODE_COLOR: Record<PolicyCellState, string> = {
   deny: 'var(--t-err, #DC2626)',
 };
 
-function TeamAgentNode({ data }: { data: TeamAgentNodeData }) {
+function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: string }) {
   const policyStyle =
     data.policyState && POLICY_NODE_COLOR[data.policyState]
       ? { border: `2px solid ${POLICY_NODE_COLOR[data.policyState]}` }
       : undefined;
   return (
-    <div className="neo-team-dag-node" style={policyStyle} title={`${data.name || data.agentId} · ${data.agentId}`}>
+    <div
+      className="neo-team-dag-node"
+      style={policyStyle}
+      title={`${data.name || data.agentId} · ${data.agentId}`}
+      data-testid={`team-dag-node-${id ?? data.agentId}`}
+    >
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
       <span className="neo-team-dag-node-avatar">
         <AgentAvatar
@@ -445,27 +453,53 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     [agents],
   );
 
-  const seedNodes = useMemo<Node<TeamAgentNodeData>[]>(
-    () =>
-      workflow.nodes.map((n, i) => {
-        const agentId = n.data?.agentId ?? '';
-        return {
-          id: n.id,
-          type: 'teamAgent',
-          // 无坐标的旧数据给一列种子位，避免全部叠在 (0,0)
-          position: n.position ?? { x: 0, y: i * 106 },
-          data: {
-            agentId,
-            name: resolveNodeName(agentId, n.data?.name, n.id),
-            soul: n.data?.soul ?? '',
-            nodeType: n.type || 'agentTask',
-            policyState: policyColorOf?.get(agentId) ?? null,
-            ...resolveAvatar(agentId),
-          },
-        };
-      }),
-    [workflow, resolveNodeName, resolveAvatar, policyColorOf],
-  );
+  /**
+   * n8n 式初始排布（2026-11-05 四轮，用户反馈）：团队 roster 全员以孤立点
+   * 铺在画布上，用户直接拖手柄连线即可 —— 不再需要「+ 添加成员」入口。
+   * workflow 已有的节点按存量坐标铺；roster 里没上画布的成员补成孤立点，
+   * 网格排布在既有节点下方（4 列，120×110 间距）。id 规则 n-<agentId> 与
+   * addAgentNode 一致，保存后即为持久坐标。
+   */
+  const seedNodes = useMemo<Node<TeamAgentNodeData>[]>(() => {
+    const placed: Node<TeamAgentNodeData>[] = workflow.nodes.map((n, i) => {
+      const agentId = n.data?.agentId ?? '';
+      return {
+        id: n.id,
+        type: 'teamAgent',
+        // 无坐标的旧数据给一列种子位，避免全部叠在 (0,0)
+        position: n.position ?? { x: 0, y: i * 106 },
+        data: {
+          agentId,
+          name: resolveNodeName(agentId, n.data?.name, n.id),
+          soul: n.data?.soul ?? '',
+          nodeType: n.type || 'agentTask',
+          policyState: policyColorOf?.get(agentId) ?? null,
+          ...resolveAvatar(agentId),
+        },
+      };
+    });
+    const placedIds = new Set(placed.map((n) => n.data.agentId).filter(Boolean));
+    const missing = agents.filter((a) => !placedIds.has(a.agent_id));
+    const GRID_COL = 4;
+    const CELL_W = 130;
+    const CELL_H = 110;
+    const baseY =
+      placed.reduce((m, n) => Math.max(m, n.position.y + 120), 0);
+    const orphans: Node<TeamAgentNodeData>[] = missing.map((a, i) => ({
+      id: `n-${a.agent_id}`,
+      type: 'teamAgent',
+      position: { x: (i % GRID_COL) * CELL_W, y: baseY + Math.floor(i / GRID_COL) * CELL_H },
+      data: {
+        agentId: a.agent_id,
+        name: a.name,
+        soul: a.soul ?? '',
+        nodeType: 'agentTask',
+        policyState: policyColorOf?.get(a.agent_id) ?? null,
+        ...resolveAvatar(a.agent_id),
+      },
+    }));
+    return [...placed, ...orphans];
+  }, [workflow, agents, resolveNodeName, resolveAvatar, policyColorOf]);
   const seedEdges = useMemo<Edge[]>(
     () =>
       workflow.edges.map((e) => {
@@ -578,7 +612,6 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   // 画布容器 ref：新节点落点取容器中心（window 中心在右栏布局下会偏）。
   const canvasRef = useRef<HTMLDivElement | null>(null);
 
-  const [pendingAgentId, setPendingAgentId] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [layoutWarning, setLayoutWarning] = useState('');
   const [saving, setSaving] = useState(false);
@@ -637,14 +670,20 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [undo, redo]);
 
-  // 添加候选：roster 里还没上画布的 agent（data.agentId 为空占位的旧节点不挡）。
-  const placedAgentIds = useMemo(
-    () => new Set(rfNodes.map((n) => n.data.agentId).filter(Boolean)),
+  // 添加候选逻辑已随「+ 添加成员」下拉移除（2026-11-05 四轮）：roster 全员
+  // 由 seedNodes 直接铺成孤立点，无需再挑人添加。
+
+  /**
+   * 方向归一（n8n 画布语义）：目标节点应在其上游的右侧 → x 小者为 source；
+   * 同 x 保持调用方给的方向。onConnect / onReconnect / drop-connect 共用。
+   */
+  const normalizeDirection = useCallback(
+    (a: string, b: string): [string, string] => {
+      const ax = rfNodes.find((n) => n.id === a)?.position.x ?? 0;
+      const bx = rfNodes.find((n) => n.id === b)?.position.x ?? 0;
+      return ax <= bx ? [a, b] : [b, a];
+    },
     [rfNodes],
-  );
-  const addableAgents = useMemo(
-    () => agents.filter((a) => !placedAgentIds.has(a.agent_id)),
-    [agents, placedAgentIds],
   );
 
   /**
@@ -656,9 +695,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     (rawConn: Connection) => {
       const { source, target } = rawConn;
       if (!source || !target || source === target) return;
-      const sx = rfNodes.find((n) => n.id === source)?.position.x ?? 0;
-      const tx = rfNodes.find((n) => n.id === target)?.position.x ?? 0;
-      const [from, to] = sx <= tx ? [source, target] : [target, source];
+      const [from, to] = normalizeDirection(source, target);
       pushHistory();
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
@@ -666,7 +703,30 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       });
       setErrors([]);
     },
-    [setRfEdges, rfNodes, pushHistory],
+    [setRfEdges, normalizeDirection, pushHistory],
+  );
+
+  /**
+   * 改接已有边（2026-11-05 四轮，n8n 式）：直接抓一条边的任一端点拖到
+   * 另一个手柄松手 → 替换该端点（改 source 或 target 视抓的是哪头）。
+   * 方向仍按 x 归一；自环/与既有边重复时忽略本次改接（边保持原样）。
+   * id 保留原值（mode/label 随边保留）—— 只换拓扑不改属性。
+   */
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConn: Connection) => {
+      const { source, target } = newConn;
+      if (!source || !target || source === target) return;
+      const [from, to] = normalizeDirection(source, target);
+      // 与其它既有边重复（排除自身）→ 改接后会出现两条同向边，拒
+      const dup = rfEdges.some((e) => e.id !== oldEdge.id && e.source === from && e.target === to);
+      if (dup) return;
+      pushHistory();
+      setRfEdges((eds) =>
+        eds.map((e) => (e.id === oldEdge.id ? { ...e, source: from, target: to } : e)),
+      );
+      setErrors([]);
+    },
+    [rfEdges, normalizeDirection, setRfEdges, pushHistory],
   );
 
   /**
@@ -711,39 +771,18 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     [screenToFlowPosition],
   );
 
-  /** drop-to-connect 浮层：选中成员 → 建节点（松手点）+ 连线（方向按 x 归一）。 */
+  /**
+   * drop-to-connect 浮层（2026-11-05 四轮语义升级）：全员已在画布上，
+   * 松手到空白 → 浮层选的是**画布上已有的节点**，点选即连线（不再建新节点）。
+   * 方向按两节点 x 归一；拒自环/重复边。
+   */
   const connectDroppedToAgent = useCallback(
     (agentId: string) => {
       if (!pendingConnection) return;
-      const agent = agents.find((a) => a.agent_id === agentId);
-      if (!agent) return;
-      const srcNode = rfNodes.find((n) => n.id === pendingConnection.source);
-      const newId = `n-${agent.agent_id}`;
+      const targetNode = rfNodes.find((n) => n.data.agentId === agentId);
+      if (!targetNode || targetNode.id === pendingConnection.source) return;
+      const [from, to] = normalizeDirection(pendingConnection.source, targetNode.id);
       pushHistory();
-      setRfNodes((ns) => {
-        if (ns.some((n) => n.id === newId)) return ns;
-        return [
-          ...ns,
-          {
-            id: newId,
-            type: 'teamAgent',
-            position: pendingConnection.position,
-            data: {
-              agentId: agent.agent_id,
-              name: agent.name,
-              soul: agent.soul,
-              nodeType: 'agentTask',
-              policyState: policyColorOf?.get(agent.agent_id) ?? null,
-              ...resolveAvatar(agent.agent_id),
-            },
-          },
-        ];
-      });
-      // 方向归一：新节点在起点右侧 → source→target；在左侧 → 反向
-      const srcX = srcNode?.position.x ?? 0;
-      const [from, to] = pendingConnection.position.x >= srcX
-        ? [pendingConnection.source, newId]
-        : [newId, pendingConnection.source];
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
         return [...eds, makeTeamEdge({ id: `${from}->${to}`, source: from, target: to })];
@@ -751,61 +790,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       setPendingConnection(null);
       setErrors([]);
     },
-    [pendingConnection, agents, rfNodes, setRfNodes, setRfEdges, resolveAvatar, policyColorOf, pushHistory],
-  );
-
-  /**
-   * 添加节点（2026-11-05 二轮修复）：agentId 参数化 —— 不再依赖 state
-   * （上一版 onChange setTimeout(addAgentNode) 捕获旧闭包 pendingAgentId='',
-   * 查不到 agent 静默 return，选中即添加实际不生效）。节点落在**画布容器**
-   * 视口中心（n8n 式；上一版用 window 中心，编辑器嵌在右栏时节点可能落
-   * 可视区外），已有节点时向右下级联偏移防完全叠住。
-   */
-  const addAgentNode = useCallback(
-    (agentId?: string) => {
-      const targetId = agentId ?? pendingAgentId;
-      const agent = agents.find((a) => a.agent_id === targetId);
-      if (!agent) return;
-      const id = `n-${agent.agent_id}`;
-      pushHistory();
-      setRfNodes((ns) => {
-        if (ns.some((n) => n.id === id)) return ns;
-        // 画布容器中心（flow 坐标）；容器尺寸拿不到时退化为既有节点包围盒右侧
-        let pos: { x: number; y: number };
-        try {
-          const rect = canvasRef.current?.getBoundingClientRect();
-          const origin =
-            rect && rect.width > 0 && rect.height > 0
-              ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-              : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-          const center = screenToFlowPosition(origin);
-          const offset = ns.length * 24;
-          pos = { x: center.x - 48 + offset, y: center.y - 40 + offset };
-        } catch {
-          const maxX = ns.reduce((m, n) => Math.max(m, n.position.x), 0);
-          pos = { x: maxX + (ns.length ? 200 : 0), y: 40 + (ns.length % 6) * 90 };
-        }
-        return [
-          ...ns,
-          {
-            id,
-            type: 'teamAgent',
-            position: pos,
-            data: {
-              agentId: agent.agent_id,
-              name: agent.name,
-              soul: agent.soul,
-              nodeType: 'agentTask',
-              policyState: policyColorOf?.get(agent.agent_id) ?? null,
-              ...resolveAvatar(agent.agent_id),
-            },
-          },
-        ];
-      });
-      setPendingAgentId('');
-      setErrors([]);
-    },
-    [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf, screenToFlowPosition, pushHistory],
+    [pendingConnection, rfNodes, normalizeDirection, setRfEdges, pushHistory],
   );
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
@@ -1092,6 +1077,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
           onConnect={onConnect}
           onConnectStart={onConnectStartCapture}
           onConnectEnd={onConnectEnd}
+          onReconnect={onReconnect}
           onPaneClick={closeOverlays}
           className="neo-team-dag"
           connectionMode={ConnectionMode.Loose}
@@ -1102,28 +1088,6 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
           }}
         >
           <Panel position="top-left" className="neo-team-dag-toolbar">
-            <select
-              className="neo-team-dag-select"
-              value={pendingAgentId}
-              onChange={(e) => {
-                const picked = e.target.value;
-                setPendingAgentId(picked);
-                // 选中即添加（2026-11-05 二轮修复）：直调带参，不再依赖旧闭包
-                if (picked) addAgentNode(picked);
-              }}
-              disabled={saving}
-              title={t('neo.host.teamDagAddHint', { defaultValue: '选择成员即添加节点' })}
-              data-testid="team-dag-add-select"
-            >
-              <option value="">
-                {t('neo.host.teamDagAddPlaceholder', { defaultValue: '+ 选择成员添加节点' })}
-              </option>
-              {addableAgents.map((a) => (
-                <option key={a.agent_id} value={a.agent_id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
             <button
               type="button"
               className="neo-team-dag-btn"
@@ -1172,7 +1136,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
               <Wand2 size={13} strokeWidth={1.9} />
             </button>
             <span className="neo-team-dag-hint">
-              {t('neo.host.teamDagHint', { defaultValue: '拖手柄连线 · 松手到空白添加新节点 · 点边改模式' })}
+              {t('neo.host.teamDagHint', { defaultValue: '拖手柄连线 · 抓边端点改接 · 松手到空白选目标 · 点边改模式' })}
             </span>
             <span className="neo-team-dag-toolbar-spacer" />
             {dirty && !saving && (
@@ -1351,14 +1315,14 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
             <Panel position="top-left" className="neo-team-dag-empty-hint" data-testid="team-dag-empty-hint">
               <span>
                 {t('neo.host.teamDagEmptyHint', {
-                  defaultValue: '从上方下拉选择成员添加第一个节点，或用「AI 生成」一键编排',
+                  defaultValue: '团队成员已就位 —— 从节点手柄拖线连接，或用「AI 生成」一键编排',
                 })}
               </span>
             </Panel>
           )}
-          {/* n8n 式 drop-to-connect：拖线松手到空白处 → 浮层选成员，建节点+连线一步。
-              定位：屏幕坐标 − 画布容器原点（Panel 是容器内绝对定位，直接用 flow
-              坐标会在缩放/平移后错位 —— 2026-11-05 二轮修复）。 */}
+          {/* n8n 式 drop-to-connect（四轮语义）：全员已在画布，拖线松手到空白
+              → 浮层选一个**已有节点**连线。定位：屏幕坐标 − 画布容器原点
+              （Panel 是容器内绝对定位，用 flow 坐标会在缩放/平移后错位）。 */}
           {pendingConnection && (
             <Panel
               position="top-left"
@@ -1377,32 +1341,37 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
                 </span>
               </div>
               <div className="neo-team-dag-drop-list">
-                {addableAgents.length === 0 ? (
-                  <div className="neo-team-dag-versions-empty">
-                    {t('neo.host.teamDagDropEmpty', { defaultValue: '没有可添加的成员了' })}
-                  </div>
-                ) : (
-                  addableAgents.map((a) => (
-                    <button
-                      key={a.agent_id}
-                      type="button"
-                      className="neo-team-dag-drop-item"
-                      onClick={() => connectDroppedToAgent(a.agent_id)}
-                      data-testid={`team-dag-drop-item-${a.agent_id}`}
-                    >
-                      <span className="neo-team-dag-drop-avatar">
-                        <AgentAvatar
-                          name={a.name}
-                          style={a.avatar_style}
-                          seed={a.avatar_seed ?? a.name}
-                          image={a.avatar_image ?? null}
-                          size={20}
-                        />
-                      </span>
-                      <span className="neo-team-dag-drop-name">{a.name}</span>
-                    </button>
-                  ))
-                )}
+                {rfNodes
+                  .filter((n) => n.id !== pendingConnection.source)
+                  .map((n) => {
+                    const already = rfEdges.some(
+                      (e) =>
+                        (e.source === pendingConnection.source && e.target === n.id) ||
+                        (e.source === n.id && e.target === pendingConnection.source),
+                    );
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        className="neo-team-dag-drop-item"
+                        onClick={() => connectDroppedToAgent(n.data.agentId)}
+                        disabled={already}
+                        title={already ? '已连接' : undefined}
+                        data-testid={`team-dag-drop-item-${n.data.agentId}`}
+                      >
+                        <span className="neo-team-dag-drop-avatar">
+                          <AgentAvatar
+                            name={n.data.name}
+                            style={n.data.avatarStyle}
+                            seed={n.data.avatarSeed ?? n.data.name}
+                            image={n.data.avatarImage ?? null}
+                            size={20}
+                          />
+                        </span>
+                        <span className="neo-team-dag-drop-name">{n.data.name}</span>
+                      </button>
+                    );
+                  })}
               </div>
               <button
                 type="button"
