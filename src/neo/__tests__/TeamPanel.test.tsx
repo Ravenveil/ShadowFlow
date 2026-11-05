@@ -132,13 +132,16 @@ describe('TeamPanel — 头部瘦身（2026-11-04 用户反馈第三批）', () 
   });
 });
 
-describe('TeamPanel — 添加成员（2026-11-04 用户反馈第五批）', () => {
-  it('头部右侧出现「+」添加成员钮', async () => {
+describe('TeamPanel — 添加成员（2026-11-05 网格尾格微信化）', () => {
+  it('添加入口在成员网格尾部（最后一位成员右边的「+」格），头部无添加钮', async () => {
     renderPanel();
-    expect(await screen.findByTestId('team-roster-add')).toBeInTheDocument();
+    const grid = await screen.findByTestId('team-roster-grid');
+    const addBtn = await screen.findByTestId('team-roster-add');
+    // 入口是网格的尾格子（微信/钉钉式），不再挂在头部
+    expect(grid).toContainElement(addBtn);
   });
 
-  it('点「+」→ 候选浮层出现：不在编队显示 +，已在编队显示 ✓', async () => {
+  it('点网格尾部「+」格 → 候选浮层出现：不在编队显示 +，已在编队显示 ✓', async () => {
     renderPanel();
     fireEvent.click(await screen.findByTestId('team-roster-add'));
     expect(screen.getByTestId('team-roster-picker')).toBeInTheDocument();

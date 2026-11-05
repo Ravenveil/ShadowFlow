@@ -2404,36 +2404,43 @@
   color: var(--t-fg);
 }
 
-/* ── TeamPanel 添加成员（2026-11-04 用户反馈第五批）──────────────────────
-   成员头部右侧圆形「+」：点开贴在成员 section 下的候选浮层。交互对齐
-   NeoGroupChat 顶栏的 Grok 式添加成员（.neo-gc-member-add / picker 同规范），
-   类名独立（挂 TeamPanel 成员 section，浮层相对 section 定位）。 */
+/* ── TeamPanel 添加成员（2026-11-05 微信化二期）─────────────────────────
+   添加入口移入成员网格尾部：最后一位成员右边一个与成员格同构的「+」格
+   （虚线圆头像区 + 「添加」小字），微信/钉钉群成员网格同款。原头部右侧
+   小圆钮（.neo-host-roster-add）随入口迁移废弃删除。候选浮层
+   （.neo-host-roster-picker）交互不变，仍贴成员 section 顶部右侧。 */
 .neo-host-sec {
   position: relative;
 }
-.neo-host-roster-add {
-  flex-shrink: 0;
+/* 网格尾部「添加」格：复用 .neo-gm-cell 纵排结构，重置为按钮外观 */
+.neo-gm-add {
+  border: none;
+  background: transparent;
+  padding: 4px 2px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.neo-gm-add .neo-gm-add-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 34px;
+  height: 34px;
+  border: 1.5px dashed var(--t-border-2, var(--t-fg-5));
   border-radius: 50%;
-  border: 1px solid var(--t-border);
-  background: transparent;
-  color: var(--t-fg-3);
-  cursor: pointer;
+  color: var(--t-fg-4);
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.neo-host-roster-add:hover {
-  background: var(--t-panel-2, color-mix(in oklab, var(--t-fg) 8%, transparent));
-  color: var(--t-fg);
-  border-color: var(--t-border-2, var(--t-fg-5));
-}
-.neo-host-roster-add.on {
-  background: color-mix(in oklab, var(--t-accent, var(--t-fg-4)) 12%, transparent);
-  color: var(--t-accent, var(--t-fg));
+.neo-gm-add:hover .neo-gm-add-avatar,
+.neo-gm-add.on .neo-gm-add-avatar {
   border-color: var(--t-accent, var(--t-fg-4));
+  color: var(--t-accent, var(--t-fg));
+  background: color-mix(in oklab, var(--t-accent, var(--t-fg-4)) 10%, transparent);
+}
+.neo-gm-add:hover .neo-gm-add-name,
+.neo-gm-add.on .neo-gm-add-name {
+  color: var(--t-accent, var(--t-fg));
 }
 .neo-host-roster-picker {
   position: absolute;

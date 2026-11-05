@@ -9,6 +9,11 @@
  *   - GET /api/teams/{id}/policy   → TeamPolicyMatrix（permit/warn/deny 矩阵）
  *   - GET /api/agents              → 成员名/状态解析（roster 行 + 矩阵行头）
  *
+ * 2026-11-05 用户反馈（添加成员微信化）：
+ *   - 添加入口从成员头部右上角小圆钮移入成员网格尾部：最后一位成员右边
+ *     追加一个「+」虚线格子（微信/钉钉群成员网格同款），点它开合候选
+ *     浮层；头部不再有常驻添加钮。浮层交互（✓ 移出 / + 加入）不变。
+ *
  * 2026-11-04 用户反馈第六批（编队 pane 去重 + 分节点输出移除）：
  *   - 编队 pane 尾部重复的成员面板（GroupMembersPanel：成员/工作流摘要/简报）
  *     与一级「封驳矩阵」section 由 NeoHost 侧移除（前部 TeamPanel 已有
@@ -53,7 +58,6 @@ import {
   GitBranch,
   Plus,
   ShieldCheck,
-  UserPlus,
   UsersRound,
 } from "lucide-react";
 import {
@@ -314,9 +318,9 @@ export function TeamPanel({
 
   return (
     <div className="neo-host-list">
-      {/* 成员 roster（2026-11-04 用户反馈：头部只留「成员 + 计数」——
-          重命名/删除/发起群聊三钮与团队名 meta 全部移除；第五批补「+」
-          添加成员钮 —— 头部右侧常驻，点开候选浮层勾选加编/移出）。 */}
+      {/* 成员 roster（2026-11-05 用户反馈：成员区微信化二期 —— 头部不再放
+          「+」添加钮，添加入口移入网格尾部（最后一位成员右边的「+」格子，
+          微信/钉钉群同款）；头部只留「成员 + 计数」。 */}
       <div className="neo-host-sec">
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
@@ -328,18 +332,6 @@ export function TeamPanel({
               {t("neo.host.teamRosterCount", { defaultValue: "{{count}} 位成员", count: roster.length })}
             </span>
           )}
-          <span className="neo-host-sec-spacer" />
-          <button
-            type="button"
-            className={`neo-host-roster-add${rosterPickerOpen ? " on" : ""}`}
-            onClick={() => setRosterPickerOpen((o) => !o)}
-            title={t("neo.host.teamRosterAdd", { defaultValue: "添加成员" })}
-            aria-label={t("neo.host.teamRosterAdd", { defaultValue: "添加成员" })}
-            aria-expanded={rosterPickerOpen}
-            data-testid="team-roster-add"
-          >
-            <UserPlus size={13} strokeWidth={1.9} />
-          </button>
         </div>
         {/* 候选浮层（对齐 NeoGroupChat 的 Grok 式添加成员）：已在编队显示 ✓
             （点即移出），不在编队显示 +（点即加入）；无候选给空态。 */}
@@ -393,15 +385,16 @@ export function TeamPanel({
           </div>
         )}
         {roster.length === 0 ? (
+          /* 空团队：给一行引导文案 + 尾部「+」格（复用同一网格，保底可加人）。 */
           <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员" })}
+            {t("neo.host.teamRosterEmpty", { defaultValue: "该团队暂无成员，点下方「添加」入队" })}
           </div>
-        ) : (
-          /* 2026-11-04 用户反馈：成员区微信/钉钉式横向头像网格（与
-             GroupMembersPanel 同一套 .neo-gm-* 样式，全产品一个成员观感）：
-             头像上、名字下、状态点挂头像右下；内部 agent ID 收进 tooltip，
-             不再裸露在行尾。角色（blueprint.role）并入 tooltip 第二行。 */
-          <div className="neo-gm-grid" data-testid="team-roster-grid">
+        ) : null}
+        {/* 2026-11-05 用户反馈：成员区微信/钉钉式横向头像网格（与
+            GroupMembersPanel 同一套 .neo-gm-* 样式，全产品一个成员观感）：
+            头像上、名字下、状态点挂头像右下；内部 agent ID 收进 tooltip，
+            不再裸露在行尾。网格尾部常驻「添加」格（微信/钉钉同款入口）。 */}
+        <div className="neo-gm-grid" data-testid="team-roster-grid">
             {roster.map((id) => {
               const agent = agentById.get(id);
               const name = agent?.name ?? id;
@@ -444,8 +437,25 @@ export function TeamPanel({
                 </div>
               );
             })}
+            {/* 网格尾部的「添加成员」格（2026-11-05 微信/钉钉式）：与成员格
+                同构（头像区 + 名字区），虚线圆 + 「+」，点它开合候选浮层。 */}
+            <button
+              type="button"
+              className={`neo-gm-cell neo-gm-add${rosterPickerOpen ? " on" : ""}`}
+              onClick={() => setRosterPickerOpen((o) => !o)}
+              title={t("neo.host.teamRosterAdd", { defaultValue: "添加成员" })}
+              aria-label={t("neo.host.teamRosterAdd", { defaultValue: "添加成员" })}
+              aria-expanded={rosterPickerOpen}
+              data-testid="team-roster-add"
+            >
+              <span className="neo-gm-avatar neo-gm-add-avatar" aria-hidden>
+                <Plus size={16} strokeWidth={2} />
+              </span>
+              <span className="neo-gm-cell-name neo-gm-add-name">
+                {t("neo.host.teamRosterAddShort", { defaultValue: "添加" })}
+              </span>
+            </button>
           </div>
-        )}
       </div>
 
       {/* workflow DAG — 2026-11-03 起「编辑 DAG」section 内联展开：不跳页、
