@@ -64,7 +64,7 @@ import {
   type OnConnectStart,
   type OnConnectEnd,
 } from 'reactflow';
-import { ListTree, MoreHorizontal, Trash2, Wand2 } from 'lucide-react';
+import { ListTree, MoreHorizontal, Redo2, Trash2, Undo2, Wand2 } from 'lucide-react';
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import {
   putTeamWorkflow,
@@ -461,6 +461,101 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<TeamAgentNodeData>(seedNodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState(seedEdges);
 
+  /** 序列化画布 → TeamWorkflow（保存 payload 与撤销快照同构）。 */
+  const serialize = useCallback((): TeamWorkflow => {
+    return {
+      nodes: rfNodes.map((n) => ({
+        id: n.id,
+        type: n.data.nodeType,
+        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        data: { agentId: n.data.agentId, name: n.data.name, soul: n.data.soul },
+      })),
+      edges: rfEdges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        data: { mode: normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode) },
+        ...(e.label ? { label: String(e.label) } : {}),
+      })),
+    };
+  }, [rfNodes, rfEdges]);
+
+  /**
+   * 撤销/重做（2026-11-05 三轮新增，n8n 式编辑器标配）。
+   *
+   * 快照栈设计：只记录**结构性变更**（增删节点/边、自动排列、AI 草稿铺入、
+   * 边 mode 切换、放弃修改回滚），不记录拖拽/平移/缩放/选中 —— 拖拽是高频
+   * 连续 position 变化，进栈会把「挪一下」拆成几十步 undo，体验反而差。
+   * 实现上不侵入 reactflow 状态流：pushHistory 由各结构变更点显式调用，
+   * undo/redo 直接整体回放 nodes+edges 快照（结构级小图，快照成本可忽略）。
+   * 快照存 serialize() 同构的 TeamWorkflow（不含选中态等 UI 噪音），
+   * 回放时重投影头像/策略字段（与 loadWorkflowToCanvas 同源逻辑）。
+   */
+  const [undoStack, setUndoStack] = useState<TeamWorkflow[]>([]);
+  const [redoStack, setRedoStack] = useState<TeamWorkflow[]>([]);
+  const suppressHistoryRef = useRef(false);
+
+  /** 显式记录一步结构变更（清空 redo 栈；上限 50 步防内存膨胀）。 */
+  const pushHistory = useCallback(() => {
+    if (suppressHistoryRef.current) return;
+    const snap = serialize();
+    setUndoStack((stack) => [...stack.slice(-49), snap]);
+    setRedoStack([]);
+  }, [serialize]);
+
+  /** 把一份 TeamWorkflow 回放进画布（撤销/重做共用；重投影头像/策略字段）。 */
+  const replayWorkflow = useCallback(
+    (wf: TeamWorkflow) => {
+      suppressHistoryRef.current = true;
+      setRfNodes(
+        wf.nodes.map((n, i) => {
+          const agentId = n.data?.agentId ?? '';
+          return {
+            id: n.id,
+            type: 'teamAgent',
+            position: n.position ?? { x: 0, y: i * 106 },
+            data: {
+              agentId,
+              name: resolveNodeName(agentId, n.data?.name, n.id),
+              soul: n.data?.soul ?? '',
+              nodeType: n.type || 'agentTask',
+              policyState: policyColorOf?.get(agentId) ?? null,
+              ...resolveAvatar(agentId),
+            },
+          };
+        }),
+      );
+      setRfEdges(
+        wf.edges.map((e) => {
+          const mode = normalizeEdgeMode(e.data?.mode);
+          return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode);
+        }),
+      );
+      suppressHistoryRef.current = false;
+    },
+    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar, policyColorOf],
+  );
+
+  const undo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const current = serialize();
+    const prev = undoStack[undoStack.length - 1];
+    setUndoStack((stack) => stack.slice(0, -1));
+    setRedoStack((stack) => [...stack, current]);
+    replayWorkflow(prev);
+    setErrors([]);
+  }, [undoStack, serialize, replayWorkflow]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const current = serialize();
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack((stack) => stack.slice(0, -1));
+    setUndoStack((stack) => [...stack, current]);
+    replayWorkflow(next);
+    setErrors([]);
+  }, [redoStack, serialize, replayWorkflow]);
+
   // reactflow 实例：视口换算（新节点落视口中心）/ fitView（自动排列后收拢）。
   const { screenToFlowPosition, fitView } = useReactFlow();
   // 画布容器 ref：新节点落点取容器中心（window 中心在右栏布局下会偏）。
@@ -504,6 +599,27 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     setShowVersions(false);
   }, []);
 
+  // 撤销/重做快捷键（2026-11-05 三轮）：Ctrl+Z 撤销、Ctrl+Y / Ctrl+Shift+Z 重做。
+  // 输入框聚焦时不拦截（textarea 打字时 Ctrl+Z 应该是输入级撤销）。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (target?.isContentEditable) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo]);
+
   // 添加候选：roster 里还没上画布的 agent（data.agentId 为空占位的旧节点不挡）。
   const placedAgentIds = useMemo(
     () => new Set(rfNodes.map((n) => n.data.agentId).filter(Boolean)),
@@ -526,13 +642,14 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       const sx = rfNodes.find((n) => n.id === source)?.position.x ?? 0;
       const tx = rfNodes.find((n) => n.id === target)?.position.x ?? 0;
       const [from, to] = sx <= tx ? [source, target] : [target, source];
+      pushHistory();
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
         return addEdge(makeTeamEdge({ id: `${from}->${to}`, source: from, target: to }), eds);
       });
       setErrors([]);
     },
-    [setRfEdges, rfNodes],
+    [setRfEdges, rfNodes, pushHistory],
   );
 
   /**
@@ -585,6 +702,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       if (!agent) return;
       const srcNode = rfNodes.find((n) => n.id === pendingConnection.source);
       const newId = `n-${agent.agent_id}`;
+      pushHistory();
       setRfNodes((ns) => {
         if (ns.some((n) => n.id === newId)) return ns;
         return [
@@ -616,7 +734,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       setPendingConnection(null);
       setErrors([]);
     },
-    [pendingConnection, agents, rfNodes, setRfNodes, setRfEdges, resolveAvatar, policyColorOf],
+    [pendingConnection, agents, rfNodes, setRfNodes, setRfEdges, resolveAvatar, policyColorOf, pushHistory],
   );
 
   /**
@@ -632,6 +750,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       const agent = agents.find((a) => a.agent_id === targetId);
       if (!agent) return;
       const id = `n-${agent.agent_id}`;
+      pushHistory();
       setRfNodes((ns) => {
         if (ns.some((n) => n.id === id)) return ns;
         // 画布容器中心（flow 坐标）；容器尺寸拿不到时退化为既有节点包围盒右侧
@@ -669,7 +788,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       setPendingAgentId('');
       setErrors([]);
     },
-    [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf, screenToFlowPosition],
+    [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf, screenToFlowPosition, pushHistory],
   );
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
@@ -680,9 +799,10 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     ? normalizeEdgeMode((activeEdge.data as { mode?: unknown } | undefined)?.mode)
     : 'direct';
 
-  /** 切换边 mode（direct/approve），并同步虚线/警示色展示属性。 */
+  /** 切换边 mode（direct/approve），并同步虚线/警示色展示属性。三轮起入撤销栈。 */
   const setEdgeMode = useCallback(
     (edgeId: string, mode: TeamEdgeMode) => {
+      pushHistory();
       setRfEdges((es) =>
         applyEdgeMode(es, edgeId, mode).map((e) =>
           // direct 时显式清掉 approve 的 className/style，避免残留虚线
@@ -691,46 +811,30 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       );
       setErrors([]);
     },
-    [setRfEdges],
+    [setRfEdges, pushHistory],
   );
 
   const deleteSelected = useCallback(() => {
     const nodeIds = new Set(rfNodes.filter((n) => n.selected).map((n) => n.id));
     const edgeIds = new Set(rfEdges.filter((e) => e.selected).map((e) => e.id));
     if (nodeIds.size === 0 && edgeIds.size === 0) return;
+    pushHistory();
     setRfNodes((ns) => ns.filter((n) => !nodeIds.has(n.id)));
     // 节点删除连带清掉相连的边
     setRfEdges((es) =>
       es.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)),
     );
     setErrors([]);
-  }, [rfNodes, rfEdges, setRfNodes, setRfEdges]);
-
-  const serialize = useCallback((): TeamWorkflow => {
-    return {
-      nodes: rfNodes.map((n) => ({
-        id: n.id,
-        type: n.data.nodeType,
-        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
-        data: { agentId: n.data.agentId, name: n.data.name, soul: n.data.soul },
-      })),
-      edges: rfEdges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        data: { mode: normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode) },
-        ...(e.label ? { label: String(e.label) } : {}),
-      })),
-    };
-  }, [rfNodes, rfEdges]);
+  }, [rfNodes, rfEdges, setRfNodes, setRfEdges, pushHistory]);
 
   /**
    * 自动排列（2026-11-05 顺滑化）：最长路径分层（复用 TeamDagCanvas 纯函数，
-   * 环安全）×列内行序，n8n 式从左到右整列排布 + fitView 收拢。
+   * 环安全）×列内行序，n8n 式从左到右整列排布 + fitView 收拢。三轮起入撤销栈。
    */
   const autoLayout = useCallback(() => {
     const wf = serialize();
     if (wf.nodes.length === 0) return;
+    pushHistory();
     const cols = computeTeamDagColumns(wf);
     const buckets = new Map<number, string[]>();
     for (const n of wf.nodes) {
@@ -750,7 +854,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     );
     setErrors([]);
     window.setTimeout(() => fitView({ padding: 0.18, duration: 320 }), 50);
-  }, [serialize, setRfNodes, fitView]);
+  }, [serialize, setRfNodes, fitView, pushHistory]);
 
   /**
    * 初始图的序列化快照（与 serialize 同构：坐标取整、name 走 roster 回退、
@@ -928,6 +1032,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
         agents.map((a) => a.agent_id),
       );
       loadWorkflowToCanvas(dagDraftToWorkflow(draft, agents));
+      pushHistory();
       setShowAiDraft(false);
       setAiPrompt('');
       setErrors([]);
@@ -940,7 +1045,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
     } finally {
       setAiBusy(false);
     }
-  }, [aiPrompt, aiBusy, agents, loadWorkflowToCanvas, t]);
+  }, [aiPrompt, aiBusy, agents, loadWorkflowToCanvas, t, pushHistory]);
 
   return (
     <div className="neo-team-dag-editor">
@@ -1001,6 +1106,28 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              className="neo-team-dag-btn"
+              disabled={undoStack.length === 0 || saving}
+              onClick={undo}
+              title={t('neo.host.teamDagUndo', { defaultValue: '撤销（Ctrl+Z）' })}
+              aria-label={t('neo.host.teamDagUndo', { defaultValue: '撤销（Ctrl+Z）' })}
+              data-testid="team-dag-undo-btn"
+            >
+              <Undo2 size={13} strokeWidth={1.9} />
+            </button>
+            <button
+              type="button"
+              className="neo-team-dag-btn"
+              disabled={redoStack.length === 0 || saving}
+              onClick={redo}
+              title={t('neo.host.teamDagRedo', { defaultValue: '重做（Ctrl+Y）' })}
+              aria-label={t('neo.host.teamDagRedo', { defaultValue: '重做（Ctrl+Y）' })}
+              data-testid="team-dag-redo-btn"
+            >
+              <Redo2 size={13} strokeWidth={1.9} />
+            </button>
             <button
               type="button"
               className="neo-team-dag-btn"
@@ -1198,6 +1325,17 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                       defaultValue: '直接边：上游完成后自动流转到下游',
                     })}
               </div>
+            </Panel>
+          )}
+          {/* 空图引导（2026-11-05 三轮）：TeamPanel 空工作流时也渲染编辑器
+              （修死胡同），首节点引导放画布中央；有节点后自动消失。 */}
+          {rfNodes.length === 0 && (
+            <Panel position="top-left" className="neo-team-dag-empty-hint" data-testid="team-dag-empty-hint">
+              <span>
+                {t('neo.host.teamDagEmptyHint', {
+                  defaultValue: '从上方下拉选择成员添加第一个节点，或用「AI 生成」一键编排',
+                })}
+              </span>
             </Panel>
           )}
           {/* n8n 式 drop-to-connect：拖线松手到空白处 → 浮层选成员，建节点+连线一步。

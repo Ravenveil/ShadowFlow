@@ -196,3 +196,50 @@ describe('TeamDagEditor — 保存链路（四钮合一后）', () => {
     expect(await screen.findByTestId('react-flow-mock')).toBeInTheDocument();
   });
 });
+
+describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三轮）', () => {
+  // 只有 a1 上画布 → 下拉里有 a2 可选（触发结构变更）
+  const WF_ONE: TeamWorkflow = { nodes: [WF.nodes[0]], edges: [] };
+
+  it('初始态：撤销/重做按钮均禁用（无历史）', async () => {
+    renderEditor({ workflow: WF_ONE });
+    expect(await screen.findByTestId('team-dag-undo-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('team-dag-undo-btn')).toBeDisabled();
+    expect(screen.getByTestId('team-dag-redo-btn')).toBeDisabled();
+  });
+
+  it('结构变更（下拉添加节点）→ 撤销可用；Ctrl+Z 撤销后重做可用', async () => {
+    renderEditor({ workflow: WF_ONE });
+    const select = await screen.findByTestId('team-dag-add-select');
+    // 下拉选中即添加（addAgentNode 内部 pushHistory）
+    fireEvent.change(select, { target: { value: 'a2' } });
+    expect(await screen.findByTestId('team-dag-undo-btn')).toBeEnabled();
+    expect(screen.getByTestId('team-dag-redo-btn')).toBeDisabled();
+    // Ctrl+Z 快捷键走同一 undo 通道（window keydown，输入框聚焦时不拦截）
+    fireEvent.keyDown(window, { ctrlKey: true, key: 'z' });
+    await waitFor(() => expect(screen.getByTestId('team-dag-undo-btn')).toBeDisabled());
+    expect(screen.getByTestId('team-dag-redo-btn')).toBeEnabled();
+  });
+
+  it('空工作流：显示画布中央引导 + 自动排列禁用；有节点后引导消失', async () => {
+    const { unmount } = render(
+      <TeamDagEditor
+        teamId="t1"
+        workflow={{ nodes: [], edges: [] }}
+        agents={AGENTS}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const hint = await screen.findByTestId('team-dag-empty-hint');
+    expect(hint).toHaveTextContent('选择成员添加第一个节点');
+    expect(hint).toHaveTextContent('AI 生成');
+    expect(screen.getByTestId('team-dag-layout-btn')).toBeDisabled();
+    unmount();
+    // 有节点：无引导，自动排列可用
+    renderEditor();
+    await screen.findByTestId('team-dag-save-btn');
+    expect(screen.queryByTestId('team-dag-empty-hint')).not.toBeInTheDocument();
+    expect(screen.getByTestId('team-dag-layout-btn')).toBeEnabled();
+  });
+});

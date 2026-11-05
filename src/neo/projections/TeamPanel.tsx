@@ -481,38 +481,35 @@ export function TeamPanel({
         </div>
         {/* 2026-11-04 用户反馈：编辑器常驻 —— 不再有「编辑 DAG」开关，工作流
             section 本身就是可拖拽/连线/就地编辑的画布；工具条按钮（AI 生成/
-            校验/保存/版本）由 TeamDagEditor 自带。空团队时给引导文案。
+            保存/版本）由 TeamDagEditor 自带。
+            2026-11-05 三轮：空工作流也渲染编辑器（此前空图只有一行文案 =
+            死胡同 —— 新团队没有画布，加不了第一个节点）。空图引导改由
+            TeamDagEditor 画布内 hint 承担。
             注意：固定高度容器是 reactflow 的硬前提 —— 编辑器在滚动列表里
             不能用 height:100%（父容器无确定高度 → 画布 0 高 → 空白）。 */}
-        {wfNodes.length === 0 && !dagDirty ? (
-          <div className="neo-host-tree-note neo-host-tree-note--pad">
-            {t("neo.host.teamWorkflowEmpty", { defaultValue: "该团队尚未编排工作流" })}
-          </div>
-        ) : (
-          <div className="neo-host-dag-inline-editor">
-            <TeamDagEditor
-              key={workflowStateKey}
-              teamId={teamId}
-              workflow={workflow ?? { nodes: [], edges: [] }}
-              agents={rosterAgents}
-              policyColorOf={agentPolicyColor}
-              onDirtyChange={setDagDirty}
-              onSaved={(wf) => {
-                setWorkflow(wf);
-                setDagDirty(false);
-                // 常驻编辑器：保存/版本回滚后重挂（key 递增），画布重建为
-                // 已保存图，脏检查基线同步归零（否则 dirty 卡在 true）。
-                setWorkflowStateKey((k) => k + 1);
-              }}
-              onCancel={() => {
-                // 常驻编辑器没有「退出编辑」语义：取消 = 放弃未保存修改并
-                // 回滚到服务端图（重挂编辑器即可，key 强制重建画布状态）。
-                setWorkflowStateKey((k) => k + 1);
-                setDagDirty(false);
-              }}
-            />
-          </div>
-        )}
+        <div className="neo-host-dag-inline-editor">
+          <TeamDagEditor
+            key={workflowStateKey}
+            teamId={teamId}
+            workflow={workflow ?? { nodes: [], edges: [] }}
+            agents={rosterAgents}
+            policyColorOf={agentPolicyColor}
+            onDirtyChange={setDagDirty}
+            onSaved={(wf) => {
+              setWorkflow(wf);
+              setDagDirty(false);
+              // 常驻编辑器：保存/版本回滚后重挂（key 递增），画布重建为
+              // 已保存图，脏检查基线同步归零（否则 dirty 卡在 true）。
+              setWorkflowStateKey((k) => k + 1);
+            }}
+            onCancel={() => {
+              // 常驻编辑器没有「退出编辑」语义：取消 = 放弃未保存修改并
+              // 回滚到服务端图（重挂编辑器即可，key 强制重建画布状态）。
+              setWorkflowStateKey((k) => k + 1);
+              setDagDirty(false);
+            }}
+          />
+        </div>
       </div>
 
       {/* 协作策略矩阵（2026-11-03 矩阵化；2026-11-04 起常驻展开）：

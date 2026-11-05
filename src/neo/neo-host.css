@@ -2265,6 +2265,26 @@
   display: block;
 }
 
+/* 空图引导（2026-11-05 三轮）：画布中央半透明提示条，节点数 > 0 自动消失 */
+.neo-team-dag-empty-hint {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%);
+  margin: 0 !important;
+  padding: 10px 16px;
+  border: 1px dashed var(--t-border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--t-bg-elev-2, #141414) 88%, transparent);
+  font-size: 12px;
+  color: var(--t-fg-4);
+  pointer-events: none;
+  max-width: 320px;
+  text-align: center;
+}
+
 /* TeamPanel「工作流」section 头的编辑 DAG 入口钮 */
 .neo-host-wf-edit-btn {
   display: inline-flex;
