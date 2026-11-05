@@ -1,0 +1,24 @@
+/* ===== 商家数据看板（2026-11-05，功能线①）=====
+   与 dashboard-neo.css 同一套 token 策略：颜色一律 var(--t-*)，
+   自适应 day/night；类名 neo-mb-* 前缀，避免与 neo-db-* 抢规则。
+
+   为什么单独一份而不是直接改 dashboard-neo.css：
+   ① 是独立模块（团队要求「分开的基座」），样式也跟着模块走，
+   别人改数据看板样式时不会顺手改坏商家看板的柱子。 */
+
+.neo-mb-chart { width: 100%; max-height: 190px; display: block; }
+
+/* 柱体：实心填充。折线图的 .neo-db-chart-line 是 fill:none，
+   借用过来柱子会变成空心黑框（踩过）。 */
+.neo-mb-bar { fill: var(--t-accent); }
+.neo-mb-bar--zero { fill: transparent; }
+
+.neo-mb-axis { stroke: var(--t-line); stroke-width: 1; }
+.neo-mb-axis-label { fill: var(--t-fg-4); font-size: 8px; font-family: var(--font-mono, monospace); }
+
+/* 表头对齐：.neo-db-table th 的 text-align:left 会压掉 .neo-db-table-num，
+   导致数值列的表头在左、数字在右。这里用自己的类把表头也右对齐。 */
+.neo-mb-table th.neo-mb-num,
+.neo-mb-table td.neo-mb-num { text-align: right; }
+
+.neo-mb-hint { margin: 6px 0 10px; font-size: 11px; color: var(--t-fg-4); }

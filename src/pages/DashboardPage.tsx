@@ -2,15 +2,19 @@
  * DashboardPage — 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）。
  *
  * 指标全部从我们自己的域取材（token_usage / run_index / projects /
- * conversations），订单/客户/营收类指标按评审结论弃掉。图表轻量 SVG
- * 自绘，不引新依赖。双形态：路由页 /dashboard 全页；NeoApp 中栏
- * `<DashboardPage embedded />` 内嵌（rail 常驻——点击侧边栏「数据看板」
- * 后左侧边栏保持）。
+ * conversations）。图表轻量 SVG 自绘，不引新依赖。双形态：路由页 /dashboard
+ * 全页；NeoApp 中栏 `<DashboardPage embedded />` 内嵌（rail 常驻——点击侧边栏
+ * 「数据看板」后左侧边栏保持）。
+ *
+ * 2026-11-05 功能线①：页尾新增「商家数据看板」独立分区（MerchantBoardPanel）。
+ * 它跑的是另一套数据源（/api/merchant）与另一套口径（营收/客流/第一单链路），
+ * 不混进上面这组 AI 用量卡片 —— 上面看「花了多少」，下面看「挣了多少」。
  *
  * 数据源：src/api/dashboard.ts → GET /api/dashboard/*（Node）。
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../common/i18n';
+import MerchantBoardPanel from './MerchantBoardPanel';
 import {
   fetchDashboardOverview,
   fetchDashboardTimeseries,
@@ -364,6 +368,10 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           </div>
         </section>
       )}
+
+      {/* 功能线① 商家数据看板：独立数据源（/api/merchant）与独立口径，
+          不与上面这组 AI 用量指标混算。挂在页尾，失败只降级成一条提示。 */}
+      <MerchantBoardPanel />
     </div>
   );
 }
