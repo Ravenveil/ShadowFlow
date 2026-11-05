@@ -297,6 +297,18 @@ export function NeoGroupChat({
     [groupAgentIds, agentById],
   );
 
+  // 群聊 @ 提及成员（2026-11-05，OpenBot 定向派活）：composer @ 菜单列出群成员，
+  // 选中插入 `@<id>` token，后端 parseMentions 命中后只派活给被点名者。
+  const mentionItems = useMemo(
+    () =>
+      groupAgentIds.map((id) => {
+        const a = agentById.get(id);
+        const role = typeof a?.blueprint?.role === 'string' ? a.blueprint.role.trim() : '';
+        return { id, name: a?.name || id, ...(role ? { role } : {}) };
+      }),
+    [groupAgentIds, agentById],
+  );
+
   // 活跃 run → composer 显示 Stop 视觉 + 顶栏 live 徽章
   const busy = timeline.runs.some((r) => r.status === 'running');
 
@@ -853,11 +865,12 @@ export function NeoGroupChat({
           streaming={busy}
           onStop={handleStop}
           onNavigate={onNavigate}
+          mentionItems={mentionItems}
           placeholder={
             isDm
               ? t('neo.dm.placeholder', { defaultValue: '发消息，TA 就开始干活' })
               : t('neo.group.placeholder', {
-                  defaultValue: '在群里说话，Agents 开始干活 · 拆解/派发/合并全程可见',
+                  defaultValue: '在群里说话，Agents 开始干活 · @成员 定向派活 · 拆解/派发/合并全程可见',
                 })
           }
         />

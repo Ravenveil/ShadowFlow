@@ -38,6 +38,10 @@ import type { ConversationMessage } from '../lib/conversation-types';
 import { loadTeamForRun } from '../lib/team-source';
 import { runTeamDagFanout, type RunTeamDagDeps, type HopRecorder } from '../lib/chat-dag/run-team-dag';
 import { computeDagLayers } from '../lib/chat-dag/dag-layers';
+// 2026-11-05 @ 提及定向派活 — OpenBot「直接点名 = 定向 work assignment」：
+// 消息带 @成员 → 跳过 LLM 意图拆解，只路由被点名节点（DAG 收缩诱导子图 /
+// 串行只派被提及者）；未命中任何成员 → 现状路径零回归。
+import { parseMentions, restrictTeamToMentions, type MentionCandidate } from '../lib/chat-dag/mentions';
 // 2026-11-05 交接记录 — OpenBot hop/work_items 设计移植：DAG 边 A→B 全生命周期
 // 落库 + 回合结束紧凑交接摘要（零 LLM）+ GET /:id/hops 查询。
 import {
@@ -605,12 +609,15 @@ async function integrateAndReport(
 /**
  * Background fan-out: generate + persist one reply per group agent.
  * Never throws to the caller (errors become sender_kind='system' notices).
+ * @param latestUserText 最新用户消息原文（mention 解析用；调用方从持久化记录
+ *   取，缺省时 runFanout 自行从 group.messages 反查——测试/旧调用方兼容）。
  */
 async function runFanout(
   groupId: string,
   executor: string,
   model: string | undefined,
   headers: Request['headers'],
+  latestUserText?: string,
 ): Promise<void> {
   const apiKey = resolveExecutorKey(executor, headers);
 
@@ -619,8 +626,8 @@ async function runFanout(
   // CLI/ACP/MCP need a cwd; byok/anthropic-direct ignore it. Honor the group's
   // user-picked workspace_dir, else a repo-external scratch dir.
   const workspace = resolveChatWorkspace(groupId, group.workspace_dir);
-  const agentIds = (group.agent_ids ?? []).slice(0, MAX_FANOUT_AGENTS);
-  if (agentIds.length === 0) {
+  const allAgentIds = (group.agent_ids ?? []).slice(0, MAX_FANOUT_AGENTS);
+  if (allAgentIds.length === 0) {
     await pyPostMessage(groupId, {
       content: '[chat] No agents are members of this group.',
       sender_name: 'system',
@@ -629,16 +636,31 @@ async function runFanout(
     return;
   }
 
+  // ── @ 提及定向派活（OpenBot 语义）────────────────────────────────────────
+  // 提取消息中的 @token 并对照成员名单解析；命中 ≥1 个成员 → 只派活给被点名者。
+  const userText =
+    typeof latestUserText === 'string' && latestUserText.trim()
+      ? latestUserText
+      : ([...(group.messages ?? [])]
+          .reverse()
+          .find((m) => (m.sender_kind ?? 'user') === 'user')?.content ?? '');
+  const rosterCandidates: MentionCandidate[] = [];
+  for (const id of allAgentIds) {
+    try {
+      const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`);
+      rosterCandidates.push({ id, name: a?.name || id });
+    } catch {
+      rosterCandidates.push({ id, name: id });
+    }
+  }
+  const { mentionedIds } = parseMentions(userText, rosterCandidates);
+  const mentioned = new Set(mentionedIds);
+  const agentIds = mentioned.size > 0 ? allAgentIds.filter((id) => mentioned.has(id)) : allAgentIds;
+
   // B3 · 网关过程事件 — 本轮 fan-out 开一条 gateway run（互链 conversation 下），
   // 执行期过程经 run 管线 emit；B2 GET /:id/timeline 自动归并回放。
   // startGatewayRun 失败返回 null（聊天主链路照常），所有 gw 操作 `gw?.` 防御。
-  const lastUserItem = [...(group.messages ?? [])]
-    .reverse()
-    .find((m) => (m.sender_kind ?? 'user') === 'user');
-  const gw = startGatewayRun(
-    groupId,
-    typeof lastUserItem?.content === 'string' ? lastUserItem.content : '',
-  );
+  const gw = startGatewayRun(groupId, userText);
 
   try {
     // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
@@ -648,18 +670,34 @@ async function runFanout(
     if (shouldRunTeamDag(group)) {
       const { team } = loadTeamForRun(group.team_id!);
       if (team && team.members.length > 0) {
+        // ── @ 提及定向派活（OpenBot 语义）─────────────────────────────────
+        // 有命中提及 → 团队收缩为被提及节点的诱导子图（成员/边双裁剪，conditional
+        // 返工边保留），且跳过 LLM 意图拆解（点名即完整任务说明，无需再拆）。
+        const fullRoster = team;
+        const team2 =
+          mentioned.size > 0 ? restrictTeamToMentions(fullRoster, [...mentioned]) : fullRoster;
+        const mentionRouted = mentioned.size > 0 && team2.members.length > 0;
+        const effTeam = mentionRouted ? team2 : fullRoster;
+        if (!mentionRouted) {
+          // 提及了成员但一个都不在 team 名单里（如 @ 的是非团队成员）→ 当没提过。
+          mentioned.clear();
+        }
+
         // group 已在 runFanout 顶部加载(含 messages);DAG 用单次快照即可(上游上下文经 upstream 参数流转,不靠 history)。
         const history0 = toHistory(group.messages);
         const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
+        // 提及路由时用清洗文本（去掉 @token）当派发 prompt，Agent 不被 @噪音干扰。
         const userPrompt =
-          latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
+          (mentionRouted ? parseMentions(userText, rosterCandidates).cleanText : '')
+            || latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
+            || '';
 
         // ── Polynoia INTENT_PARSE（2026-08-15）─────────────────────────────
         // 编排者前置拆解：BYOK 有 key 时用 LLM 把用户消息拆成 per-agent 子任务
         // prompt（生成合适 prompt 分阶段派发）；任何失败 → null → 降级为原文
-        // 分发（现状行为，零回归）。
+        // 分发（现状行为，零回归）。@ 提及定向派活时跳过（点名即任务说明）。
         const rosterEntries = await Promise.all(
-          team.members.map(async (id) => {
+          effTeam.members.map(async (id) => {
             const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`).catch(() => null);
             return a ? { id, name: a.name || id, soul: a.soul ?? '' } : null;
           }),
@@ -673,7 +711,10 @@ async function runFanout(
             ? 'anthropic'
             : null;
         let parsedTasks: ParsedTask[] | null = null;
-        if (parseProvider && apiKey && isProviderId(parseProvider) && userPrompt.trim()) {
+        if (
+          !mentionRouted &&
+          parseProvider && apiKey && isProviderId(parseProvider) && userPrompt.trim()
+        ) {
           parsedTasks = await decomposeWithLlm({
             userText: userPrompt,
             agents: roster,
@@ -693,18 +734,28 @@ async function runFanout(
           intent: userPrompt,
           target_kind: 'team',
           target_name: team.name ?? group.team_id!,
-          reason: parsedTasks
-            ? `编排者拆解为 ${parsedTasks.length} 个子任务，按 DAG 分层派发`
-            : '拆解不可用（无 BYOK key 或解析失败），用户原文分发给全体成员',
-          assignments: parsedTasks?.map((t) => ({
-            agent_id: t.agentId,
-            name: rosterName(t.agentId),
-            title: t.title,
-          })),
+          reason: mentionRouted
+            ? `用户点名 @${mentionedIds
+                .map((id) => rosterName(id))
+                .join('、')}，定向派发（跳过意图拆解）`
+            : parsedTasks
+              ? `编排者拆解为 ${parsedTasks.length} 个子任务，按 DAG 分层派发`
+              : '拆解不可用（无 BYOK key 或解析失败），用户原文分发给全体成员',
+          assignments: mentionRouted
+            ? effTeam.members.map((id) => ({
+                agent_id: id,
+                name: rosterName(id),
+                title: '定向派活',
+              }))
+            : parsedTasks?.map((t) => ({
+                agent_id: t.agentId,
+                name: rosterName(t.agentId),
+                title: t.title,
+              })),
         });
 
         // ── DISPATCH 可视化：plan_card（层号 = 并行批次）───────────────────
-        const { layers } = computeDagLayers(team.members, team.edges);
+        const { layers } = computeDagLayers(effTeam.members, effTeam.edges);
         let planCardId: string | null = null;
         if (gw && team.members.length >= 2) {
           const planTasks: PlanTaskRow[] = [];
@@ -744,7 +795,7 @@ async function runFanout(
         const runKey = `${groupId}-${Date.now()}`;
         const wtByAgent = new Map<string, PreparedWorktree>();
         if (await isGitWorkable(workspace)) {
-          for (const id of team.members) {
+          for (const id of effTeam.members) {
             const wt = await prepareWorktree(workspace, runKey, id).catch(() => null);
             if (wt) wtByAgent.set(id, wt);
           }
@@ -879,7 +930,7 @@ async function runFanout(
         let dagController: AbortController | undefined;
         try {
           dagController = swapDagRun(groupId, activeDagRuns);
-          await runTeamDagFanout(team, deps, userPrompt, {
+          await runTeamDagFanout(effTeam, deps, userPrompt, {
             signal: dagController.signal,
             maxConcurrency: MAX_FANOUT_AGENTS,
             // nodeTimeoutMs/defaultMaxRetries 用 runTeamDagFanout 默认值(120s / 1)。
@@ -938,8 +989,11 @@ async function runFanout(
       const fresh = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
       const history = toHistory(fresh?.messages);
       const latestUser = [...history].reverse().find((m) => m.role === 'user');
+      // @ 提及路由时用清洗文本（@token 已删）当 prompt，Agent 不吃 @ 噪音。
       const prompt =
-        latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('') ?? '';
+        (mentioned.size > 0 ? parseMentions(userText, rosterCandidates).cleanText : '')
+          || latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
+          || '';
 
       const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
       if (!agent) {
@@ -962,7 +1016,9 @@ async function runFanout(
           intent: prompt,
           target_kind: 'agent',
           target_name: agentName,
-          reason: '群未绑定团队，按成员依次处理用户原文',
+          reason: mentioned.size > 0
+            ? '用户点名，定向派发（群未绑定团队）'
+            : '群未绑定团队，按成员依次处理用户原文',
         });
       }
 
@@ -1273,7 +1329,9 @@ router.post('/:id/messages', (req: Request, res: Response) => {
       typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
 
     // Fire-and-forget; replies reach the browser via Python SSE.
-    void runFanout(groupId, executor, model, req.headers).catch((e) => {
+    // userText 原文透传（@ 提及解析用）——persisted 记录即 content，直接用它
+    // 避免 runFanout 二次反查（时序上 group.messages 已含本条）。
+    void runFanout(groupId, executor, model, req.headers, content).catch((e) => {
       // eslint-disable-next-line no-console
       console.warn('[groups-chat] fanout failed:', e);
     });
@@ -1282,3 +1340,9 @@ router.post('/:id/messages', (req: Request, res: Response) => {
 
 export { router as groupsChatRouter };
 export default router;
+
+/**
+ * 测试专用薄导出 — runFanout 原样透传（mention 定向派活路由行为测试用，
+ * 避免为驱动 fan-out 而起真 HTTP / 真 Python）。生产代码不要调用。
+ */
+export const runFanoutAsync = runFanout;

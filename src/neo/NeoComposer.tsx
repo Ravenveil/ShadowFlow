@@ -130,6 +130,10 @@ export interface NeoComposerProps {
   onClearClawTarget?: () => void;
   /** ClawHub（2026-10-31 加号菜单）：从菜单挑选 Claw → 父级设为聊天 target。 */
   onPickClaw?: (cliId: string) => void;
+  /** 群聊 @ 提及成员（2026-11-05，OpenBot 定向派活语义）：非空时 @ 菜单在
+   *  Skills 之前列出这些成员（选中插入 @token，后端据此只派活给被点名者）。
+   *  id 必须是成员 id（后端 mention 解析的锚点），title 用显示名。 */
+  mentionItems?: Array<{ id: string; name: string; role?: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1299,6 +1303,7 @@ export function NeoComposer({
   clawTarget,
   onClearClawTarget,
   onPickClaw,
+  mentionItems,
 }: NeoComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -1497,7 +1502,23 @@ export function NeoComposer({
     const { mode: triggerMode, start, end } = commandMenu;
     const before = composer.slice(0, start);
     const after = composer.slice(end);
-    if (item.id.startsWith('skill:')) {
+    if (item.id.startsWith('member:')) {
+      // 群聊 @ 提及成员（OpenBot 定向派活）：插入 `@<成员id> ` token。token 用
+      // id 而非显示名——后端 parseMentions 按 id/name 双锚匹配，id 恒唯一稳定；
+      // 显示名放 title 供菜单展示，不进文本。纯文本插入，无 skill 副作用。
+      const memberId = item.id.slice('member:'.length);
+      const insert = `${triggerMode}${memberId} `;
+      setComposer(before + insert + after);
+      setToast(t('neo.composer.memberMentioned', { defaultValue: `已点名 ${item.title}，消息将定向派发` }));
+      setTimeout(() => {
+        const el = composerRef.current;
+        if (el) {
+          const pos = start + insert.length;
+          el.focus();
+          el.setSelectionRange(pos, pos);
+        }
+      }, 0);
+    } else if (item.id.startsWith('skill:')) {
       const skillId = item.id.slice('skill:'.length);
       const insert = `${triggerMode}${skillId} `;
       setComposer(before + insert + after);
@@ -1629,7 +1650,14 @@ export function NeoComposer({
       };
     });
     if (commandMenu.mode === '@') {
-      return skillItems;
+      // 群聊 @ 提及成员排在 Skills 之前（点名活人 > 挂技能，高频动作优先）。
+      const memberItems: NeoMenuItem[] = (mentionItems ?? []).map((a) => ({
+        id: `member:${a.id}`,
+        title: `@${a.name}`,
+        subtitle: a.role?.trim() || `定向派活 · ${a.id}`,
+        hint: 'member',
+      }));
+      return [...memberItems, ...skillItems];
     }
     const subCommandItems: NeoMenuItem[] = (catalogSkills ?? [])
       .filter((s) => s.skill_id.includes(':'))
@@ -1649,7 +1677,7 @@ export function NeoComposer({
     ];
     return [...builtin, ...subCommandItems, ...skillItems];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commandMenu, installedSkills, catalogSkills, skillStatusById]);
+  }, [commandMenu, installedSkills, catalogSkills, skillStatusById, mentionItems]);
 
   function toggleKnowledgePack(packId: string) {
     setKnowledge((prev) =>

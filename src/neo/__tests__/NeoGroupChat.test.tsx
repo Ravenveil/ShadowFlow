@@ -58,15 +58,23 @@ vi.mock('../../api/agents', () => ({
 }));
 
 // stub 重组件：NeoTimeline 只回显消息 id（渲染契约另由它自己的测试覆盖），
-// NeoComposer 只透 placeholder。
+// NeoComposer 回显 mentionItems（@ 提及成员接线契约，2026-11-05）。
 vi.mock('../NeoTimeline', () => ({
   NeoTimeline: (props: { messages: TimelineMessage[] }) => (
     <div data-testid="tl-stub">{props.messages.map((m) => m.id).join(',')}</div>
   ),
 }));
 vi.mock('../NeoComposer', () => ({
-  NeoComposer: (props: { placeholder?: string }) => (
-    <div data-testid="composer-stub">{props.placeholder}</div>
+  NeoComposer: (props: {
+    placeholder?: string;
+    mentionItems?: Array<{ id: string; name: string; role?: string }>;
+  }) => (
+    <div data-testid="composer-stub">
+      {props.placeholder}
+      <span data-testid="mention-items">
+        {(props.mentionItems ?? []).map((m) => `${m.id}:${m.name}`).join('|')}
+      </span>
+    </div>
   ),
 }));
 
@@ -185,5 +193,25 @@ describe('NeoGroupChat — 钉钉气泡流', () => {
       return el!;
     });
     expect(proc.querySelector('[data-testid="tl-stub"]')).toHaveTextContent('p1');
+  });
+});
+
+describe('NeoGroupChat — @ 提及成员接线（2026-11-05，OpenBot 定向派活）', () => {
+  it('mentionItems = agent_ids join 记录（id+name 透传 composer）', async () => {
+    renderChat();
+    // getGroup/listAgents 异步回填 → 等内容到达（首帧 groupAgentIds 还是空）。
+    await waitFor(() => {
+      expect(screen.getByTestId('mention-items')).toHaveTextContent('a1:读读');
+    });
+  });
+
+  it('成员记录拉不到 → 退化为 id 当名（不丢成员）', async () => {
+    groupRecord.agent_ids = ['a1', 'ghost-id'];
+    renderChat();
+    await waitFor(() => {
+      const el = screen.getByTestId('mention-items');
+      expect(el).toHaveTextContent('a1:读读');
+      expect(el).toHaveTextContent('ghost-id:ghost-id');
+    });
   });
 });
