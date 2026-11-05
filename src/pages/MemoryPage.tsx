@@ -36,6 +36,8 @@ import {
 } from '../api/memoryLessons';
 import { useI18n } from '../common/i18n';
 import MemoryProfilePanel from './MemoryProfilePanel';
+// 功能线③ 外接面板：A 下班 B 接班 + 长期画像写回（一行挂载，主页面逻辑不变）。
+import MemoryHandoffPanel from './MemoryHandoffPanel';
 import { NeoConfirmModal } from '../neo/NeoConfirmModal';
 import './memory-neo.css';
 
@@ -283,6 +285,7 @@ export default function MemoryPage({ embedded = false }: { embedded?: boolean } 
       </div>
 
       <MemoryProfilePanel />
+      <MemoryHandoffPanel />
 
       {status === 'loading' && (
         <div className="neo-mm-loading">

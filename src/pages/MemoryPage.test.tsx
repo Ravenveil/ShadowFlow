@@ -37,6 +37,12 @@ vi.mock('./MemoryProfilePanel', () => ({
   default: () => <section data-testid="memory-profile-panel-stub" />,
 }));
 
+// MemoryHandoffPanel 依赖 /api/memory/handoff，且同样用 .neo-mm-card；
+// 本页测试要用「第一个 .neo-mm-card」断言记忆列表混排，故整面板 mock 掉。
+vi.mock('./MemoryHandoffPanel', () => ({
+  default: () => <section data-testid="memory-handoff-panel-stub" />,
+}));
+
 import {
   createMemoryEntry,
   deleteMemoryEntry,

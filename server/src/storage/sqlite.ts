@@ -208,6 +208,69 @@ export function getDb(): Database.Database {
   CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(ts);
   CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);`);
 
+  // 记忆交接 + 长期画像写回（2026-11-05，功能线③ OPC-OS PR#3 设计的另一半）—
+  // 纯增量表，不动 memory_lessons / agent_hops 的既有语义。交接副本单独存
+  // memory_handoff_items，不写回经验记忆表（避免挤占每域 8 条上限）。
+  // 画像用「当前值表 + append-only 事件流水」双表：覆盖有规则，历史可回溯。
+  db.exec(`CREATE TABLE IF NOT EXISTS memory_handoffs (
+    id TEXT PRIMARY KEY,
+    shift_id TEXT NOT NULL,
+    from_agent TEXT NOT NULL,
+    to_agent TEXT NOT NULL,
+    scope_key TEXT NOT NULL DEFAULT '',
+    task_type TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    context_json TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    accepted_at INTEGER,
+    UNIQUE(shift_id, from_agent, to_agent)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_handoffs_to
+    ON memory_handoffs(to_agent, status);
+
+  CREATE TABLE IF NOT EXISTS memory_handoff_items (
+    id TEXT PRIMARY KEY,
+    handoff_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'lesson',
+    scope_key TEXT NOT NULL DEFAULT '',
+    task_type TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    score REAL NOT NULL DEFAULT 0.6,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_handoff_items_ref ON memory_handoff_items(handoff_id);
+
+  CREATE TABLE IF NOT EXISTS memory_profile_values (
+    subject_type TEXT NOT NULL DEFAULT 'customer',
+    subject_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.7,
+    source TEXT NOT NULL DEFAULT '',
+    evidence TEXT NOT NULL DEFAULT '',
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY(subject_type, subject_id, key)
+  );
+
+  CREATE TABLE IF NOT EXISTS memory_profile_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_type TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT NOT NULL,
+    old_confidence REAL,
+    confidence REAL NOT NULL,
+    action TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT '',
+    evidence TEXT NOT NULL DEFAULT '',
+    actor TEXT NOT NULL DEFAULT 'system',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_profile_events
+    ON memory_profile_events(subject_id, key, id);`);
+
   _db = db;
   _initialized = true;
   console.log(`[sqlite] db ${dbExisted ? 'loaded' : 'initialized'} at ${file}`);
