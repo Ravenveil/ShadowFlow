@@ -43,6 +43,9 @@ import memoryEntriesRouter from './routes/memory-entries';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
 import memoryLessonsRouter from './routes/memory-lessons';
 import dashboardRouter from './routes/dashboard';
+// 功能线③ 另一半（2026-11-05）：agent 间记忆交接 + 长期画像写回。外接 Router，
+// 主入口只挂一行，不新增服务/端口，也不改既有路由语义。
+import memoryHandoffRouter from './routes/memory-handoff';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/conversations';
@@ -144,6 +147,7 @@ app.use('/api/projects', projectScopedConversationsRouter);
 app.use('/api/memory-entries', memoryEntriesRouter);
 // 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂在 proxyFallback 之前。
 app.use('/api/memory/lessons', memoryLessonsRouter);
+app.use('/api/memory/handoff', memoryHandoffRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/conversations', conversationsRouter);
 // Chat/DM/群聊 发消息网关 — 拦下 POST /api/groups/:id/messages 用 Node dispatcher
