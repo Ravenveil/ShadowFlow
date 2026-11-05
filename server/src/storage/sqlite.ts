@@ -172,6 +172,26 @@ export function getDb(): Database.Database {
   CREATE INDEX IF NOT EXISTS idx_memory_lessons_scope
     ON memory_lessons(scope_key, task_type, archived);`);
 
+  // Agent 间任务交接（2026-11-05，设计移植自 CopilotKit/OpenBot 的 hop/work_items
+  // 模型）— 每次 DAG 边遍历（A→B 交接）落一行，status 全生命周期可审计：
+  // pending → running → done|failed|timeout|empty|denied|aborted。
+  // 部分索引只覆盖未结算行（settled_at IS NULL），对齐 OpenBot「只索引未完成
+  // work_items」——正常跑完的库绝大部分行已结算，该索引又小又准。
+  db.exec(`CREATE TABLE IF NOT EXISTS agent_hops (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    turn_seq INTEGER NOT NULL,
+    from_agent TEXT NOT NULL,
+    to_agent TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    output_chars INTEGER NOT NULL DEFAULT 0,
+    detail TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    settled_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_agent_hops_group_turn ON agent_hops(group_id, turn_seq);
+  CREATE INDEX IF NOT EXISTS idx_agent_hops_open ON agent_hops(status) WHERE settled_at IS NULL;`);
+
   // Token 用量流水（2026-11-05，ledger 思想平移自 OPC-OS PR#3 company.py）—
   // llm.ts 每次调用返回 usage 时落一条（input/output tokens + 估算成本），
   // 数据看板（routes/dashboard.ts）按天/按模型聚合现算。写入 best-effort，

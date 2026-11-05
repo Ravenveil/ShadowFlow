@@ -86,12 +86,17 @@ describe('runTeamDagFanout', () => {
     expect(deps.posted.some((p) => p.sender_kind === 'system' && /boom|出错/.test(p.content))).toBe(true);
   });
 
-  it('agent 空回复 → 记 empty + 系统提示,不喂下游', async () => {
+  it('agent 空回复 → 记 empty + 系统提示,下游收到失败传播通知(2026-11-05)', async () => {
     const deps = mkDeps({ callAgent: vi.fn(async ({ agentId }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:ok` })) });
     const r = await runTeamDagFanout(linear, deps, 'go');
     expect(r.perAgent.pm).toBe('empty');
     const calls = (deps.callAgent as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(calls.find((c) => c.agentId === 'arch').upstream).toEqual([]);
+    // 2026-11-05 失败传播 — pm 空回复不再静默:arch 的 upstream 带 [系统通知]。
+    const archUp = calls.find((c) => c.agentId === 'arch').upstream;
+    expect(archUp).toHaveLength(1);
+    expect(archUp[0].from).toBe('pm');
+    expect(archUp[0].text).toContain('[系统通知]');
+    expect(archUp[0].text).toContain('空回复');
   });
 
   it('getAgent 返回 null → 该节点跳过、记 error,不喂下游', async () => {
@@ -100,14 +105,17 @@ describe('runTeamDagFanout', () => {
     expect(r.perAgent.pm).toBe('error');
   });
 
-  it('warn 边但上游空回复 → warnedEdges 仍计数、note 说明无产出、不喂下游', async () => {
+  it('warn 边但上游空回复 → warnedEdges 仍计数 + 失败传播通知(2026-11-05)', async () => {
     const team: TeamRunShape = { ...linear, policy_matrix: { pm: { arch: 'warn' } } };
     const deps = mkDeps({ callAgent: vi.fn(async ({ agentId, upstream }: { agentId: string; name: string; soul: string; upstream: UpstreamMsg[]; signal: AbortSignal }) => (agentId === 'pm' ? { text: '   ' } : { text: `${agentId}:up=${upstream.map((u) => u.from).join('+') || 'none'}` })) });
     const r = await runTeamDagFanout(team, deps, 'go');
     expect(r.warnedEdges).toBe(1);
     const calls = (deps.callAgent as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(calls.find((c) => c.agentId === 'arch').upstream).toEqual([]); // pm 空,不喂
+    // warn 提醒仍发（无产出文案）；2026-11-05 起 arch 的 upstream 另带 [系统通知]。
     expect(deps.posted.some((p) => p.sender_kind === 'system' && /无产出/.test(p.content))).toBe(true);
+    const archUp = calls.find((c) => c.agentId === 'arch').upstream;
+    expect(archUp).toHaveLength(1);
+    expect(archUp[0].text).toContain('[系统通知]');
   });
 
   it('opts.signal 预先 abort → 不跑任何 agent,全部 perAgent=aborted', async () => {

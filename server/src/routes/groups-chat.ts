@@ -36,8 +36,18 @@ import { resolveProviderKey } from '../transport/byokKey';
 import { isProviderId } from '../transport/api-clients';
 import type { ConversationMessage } from '../lib/conversation-types';
 import { loadTeamForRun } from '../lib/team-source';
-import { runTeamDagFanout, type RunTeamDagDeps } from '../lib/chat-dag/run-team-dag';
+import { runTeamDagFanout, type RunTeamDagDeps, type HopRecorder } from '../lib/chat-dag/run-team-dag';
 import { computeDagLayers } from '../lib/chat-dag/dag-layers';
+// 2026-11-05 交接记录 — OpenBot hop/work_items 设计移植：DAG 边 A→B 全生命周期
+// 落库 + 回合结束紧凑交接摘要（零 LLM）+ GET /:id/hops 查询。
+import {
+  listRecentHops,
+  nextTurnSeq,
+  openHop,
+  settleHop,
+  startHop,
+  summarizeHops,
+} from '../storage/agent-hops';
 // Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
 import { decomposeWithLlm, type ParsedTask } from '../lib/orchestrator-parse';
 import {
@@ -740,6 +750,19 @@ async function runFanout(
           }
         }
 
+        // ── 交接记录（2026-11-05，OpenBot hop 模型）───────────────────────
+        // 本回合一个 turn_seq；SQLite 落库失败时降级为内存 Map（聊天主链路零影响）。
+        let turnSeq = 0;
+        let hopStore: HopRecorder | null = null;
+        try {
+          turnSeq = nextTurnSeq(groupId);
+          hopStore = {
+            open: (edge) => openHop({ group_id: groupId, turn_seq: turnSeq, from_agent: edge.from, to_agent: edge.to }),
+            start: (id) => { try { startHop(id); } catch { /* best-effort */ } },
+            settle: (id, status, opts) => { try { settleHop(id, status, opts); } catch { /* best-effort */ } },
+          };
+        } catch { hopStore = null; }
+
         const deps: RunTeamDagDeps = {
           getAgent: async (agentId) => {
             const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
@@ -850,6 +873,8 @@ async function runFanout(
               ...(m.agent_id ? { agent_id: m.agent_id } : {}),
             }).catch(() => {});
           },
+          // 交接记录（2026-11-05）— hopStore 为 null（SQLite 异常）时省略，执行器走无记录路径。
+          ...(hopStore ? { hops: hopStore } : {}),
         };
         let dagController: AbortController | undefined;
         try {
@@ -862,6 +887,20 @@ async function runFanout(
         } finally {
           // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
           if (dagController && activeDagRuns.get(groupId) === dagController) activeDagRuns.delete(groupId);
+        }
+        // 交接摘要（零 LLM，从 hops 表现算）— 对齐「记忆交接」体验：本回合谁把
+        // 什么交给了谁、哪里断了他能接住。postMessage 失败静默（best-effort）。
+        if (hopStore) {
+          try {
+            const summary = summarizeHops(groupId, turnSeq);
+            if (summary) {
+              await pyPostMessage(groupId, {
+                content: summary,
+                sender_name: 'system',
+                sender_kind: 'system',
+              });
+            }
+          } catch { /* best-effort */ }
         }
         // ── Polynoia AGGREGATE/MERGE 收尾 ─────────────────────────────────
         // 各 agent 分支按 DAG 层序并入集成分支 sf/run/<runKey>（专用 integration
@@ -1093,6 +1132,34 @@ router.post('/:id/stop', (req: Request, res: Response) => {
   const groupId = req.params.id;
   const stopped = stopGroupFanout(groupId);
   res.json({ group_id: groupId, stopped });
+});
+
+/**
+ * GET /api/groups/:id/hops — agent 间交接记录查询（2026-11-05，OpenBot hop 模型）。
+ * ?turns=N 取最近 N 个回合（默认 1，上限 20）；?all=1 展开为逐条 hop 数组。
+ * 默认返回紧凑摘要文本（与回合结束 postMessage 同源，前端可直接渲染）。
+ */
+router.get('/:id/hops', (req: Request, res: Response) => {
+  void (async () => {
+    const groupId = req.params.id;
+    const turns = Math.min(Math.max(Number(req.query.turns ?? 1) || 1, 1), 20);
+    const hops = listRecentHops(groupId, turns);
+    const turnSeqs = [...new Set(hops.map((h) => h.turn_seq))];
+    if (req.query.all === '1') {
+      res.json({ group_id: groupId, turns: turnSeqs.sort((a, b) => b - a), hops });
+      return;
+    }
+    const summaries = turnSeqs
+      .sort((a, b) => b - a)
+      .map((t) => ({ turn_seq: t, summary: summarizeHops(groupId, t) }))
+      .filter((s) => s.summary);
+    res.json({ group_id: groupId, turns: turnSeqs.sort((a, b) => b - a), summaries });
+  })().catch((e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { code: 'HOPS_FAILED', message: msg } });
+    }
+  });
 });
 
 router.get('/:id/timeline', (req: Request, res: Response) => {
