@@ -49,6 +49,9 @@ import conversationsRouter, {
 import authRouter from './routes/auth';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
+// B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
+import { sweepOrphanHops } from './storage/agent-hops';
+import { sweepOrphanRunIndex } from './storage/run-index';
 import { reloadSkills } from './skills';
 import {
   reloadDesignSystems,
@@ -92,6 +95,21 @@ app.get('/health', (_req, res) => {
 // Story 15.16 — sqlite must be initialized before any storage-backed route
 // runs. initSqlite() is idempotent (cached singleton) so calling it here +
 // later from inside route handlers via getDb() is fine.
+initSqlite();
+
+// B2 中断恢复收尾（2026-11-05 迭代三）— 单进程启动时刻不存在活 DAG 回合，
+// sqlite 里所有未结算 hop / NULL 状态 run_index 都是上一进程崩溃残留，补结算
+// （与 run-event-bus 启动 hydration 的「中断 run 补 canceled 帧」配套，审计链
+// 两侧都不悬空）。失败仅告警，不阻塞启动。
+try {
+  const sweptHops = sweepOrphanHops();
+  const sweptRuns = sweepOrphanRunIndex();
+  if (sweptHops > 0 || sweptRuns > 0) {
+    console.log(`[boot] crash-recovery sweep: ${sweptHops} orphan hop(s), ${sweptRuns} stale run_index row(s)`);
+  }
+} catch (e) {
+  console.warn('[boot] crash-recovery sweep failed (non-fatal):', e);
+}
 initSqlite();
 
 app.use('/api/run-sessions', runSessionsRouter);

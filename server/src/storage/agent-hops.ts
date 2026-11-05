@@ -184,6 +184,31 @@ export function hopStatusLabel(s: HopStatus): string {
   }
 }
 
+/**
+ * 启动清扫 — 把上一进程遗留的孤儿 hop（pending/running）补结算为 aborted
+ * （2026-11-05 迭代三，B2 中断恢复收尾）。
+ *
+ * 为什么安全：本服务器单进程，启动时刻不存在任何活 DAG 回合——所有未结算
+ * hop 都是上一进程崩溃残留（正常路径由 run-team-dag 收尾兜底结算，见
+ * run-team-dag.ts「不留悬空」）。与 run-event-bus 的启动 hydration（中断
+ * run 补 canceled 帧）配套，sqlite 侧审计链同样不悬空。
+ *
+ * 返回清扫行数。幂等：已结算行（settled_at 非空）永不再动。
+ */
+export function sweepOrphanHops(opts: { detail?: string } = {}): number {
+  const res = getDb()
+    .prepare(
+      `UPDATE agent_hops
+       SET status = 'aborted', detail = ?, settled_at = ?
+       WHERE settled_at IS NULL`,
+    )
+    .run(
+      (opts.detail ?? '进程重启中断，启动清扫补结算').slice(0, 500),
+      Date.now(),
+    );
+  return res.changes;
+}
+
 /** 测试隔离用。 */
 export function _resetHopsForTests(): void {
   getDb().prepare(`DELETE FROM agent_hops`).run();
