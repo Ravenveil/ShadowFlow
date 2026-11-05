@@ -271,3 +271,104 @@ describe('口径边界（本地日界 / 客单价 / 链路归因）', () => {
     expect(res.body.complete).toBe(false);
   });
 });
+
+describe('聚合下推到 SQL（分桶口径不能串）', () => {
+  it('下单与支付落在不同的天：下单量归下单日，成交额归支付日', async () => {
+    const product = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '跨桶商品', price_cents: 800, cost_cents: 100 });
+    const order = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: product.body.id, channel: 'cross-bucket' });
+    await request(app())
+      .post(`/api/merchant/orders/${order.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-cross-bucket' });
+
+    // 把这一单改成「昨天下单、今天付款」，制造两个不同的桶
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today.getTime() - 86400000);
+    sqlite
+      .getDb()
+      .prepare('UPDATE mb_orders SET created_at = ?, paid_at = ? WHERE id = ?')
+      .run(yesterday.getTime() + 3600000, today.getTime() + 3600000, order.body.id);
+
+    const q = {
+      start: new Date(yesterday.getTime()).toISOString(),
+      end: new Date(today.getTime() + 86400000).toISOString(),
+    };
+    const res = await request(app()).get(
+      `/api/merchant/orders/timeseries?granularity=day&start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+    const y = res.body.series.find((b: { ts: number }) => b.ts === yesterday.getTime());
+    const t = res.body.series.find((b: { ts: number }) => b.ts === today.getTime());
+    // 昨天：只有下单，没有成交
+    expect(y.orders).toBe(1);
+    expect(y.paid_orders).toBe(0);
+    expect(y.amount_cents).toBe(0);
+    // 今天：有成交额（今天还有别的用例建的单，所以只断言 >=）
+    expect(t.paid_orders).toBeGreaterThanOrEqual(1);
+    expect(t.amount_cents).toBeGreaterThanOrEqual(800);
+
+    // 更强的口径断言：各桶求和必须等于「区间内该字段的全部行」，分桶不能丢也不能重复
+    const db = sqlite.getDb();
+    const expectedOrders = (
+      db
+        .prepare('SELECT COUNT(*) AS n FROM mb_orders WHERE created_at >= ? AND created_at < ?')
+        .get(yesterday.getTime(), today.getTime() + 86400000) as { n: number }
+    ).n;
+    const expectedAmount = (
+      db
+        .prepare(
+          `SELECT COALESCE(SUM(amount_cents), 0) AS amt FROM mb_orders
+            WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?`,
+        )
+        .get(yesterday.getTime(), today.getTime() + 86400000) as { amt: number }
+    ).amt;
+    const sumOrders = res.body.series.reduce((a: number, b: { orders: number }) => a + b.orders, 0);
+    const sumAmount = res.body.series.reduce((a: number, b: { amount_cents: number }) => a + b.amount_cents, 0);
+    expect(sumOrders).toBe(expectedOrders);
+    expect(sumAmount).toBe(expectedAmount);
+  });
+
+  it('同一访客跨两天访问：分桶 UV 各算 1，渠道口径 UV 去重为 1', async () => {
+    const visitor = 'v-cross-day';
+    await request(app()).post('/api/merchant/visits').send({ visitor_id: visitor, channel: 'cross-day' });
+    await request(app()).post('/api/merchant/visits').send({ visitor_id: visitor, channel: 'cross-day' });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today.getTime() - 86400000);
+    const rows = sqlite
+      .getDb()
+      .prepare(`SELECT id FROM mb_visits WHERE visitor_id = ? ORDER BY created_at ASC`)
+      .all(visitor) as Array<{ id: string }>;
+    sqlite
+      .getDb()
+      .prepare('UPDATE mb_visits SET created_at = ? WHERE id = ?')
+      .run(yesterday.getTime() + 3600000, rows[0].id);
+    sqlite
+      .getDb()
+      .prepare('UPDATE mb_visits SET created_at = ? WHERE id = ?')
+      .run(today.getTime() + 3600000, rows[1].id);
+
+    const q = {
+      start: new Date(yesterday.getTime()).toISOString(),
+      end: new Date(today.getTime() + 86400000).toISOString(),
+    };
+    const res = await request(app()).get(
+      `/api/merchant/traffic/curve?granularity=day&start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+    const y = res.body.series.find((b: { ts: number }) => b.ts === yesterday.getTime());
+    const t = res.body.series.find((b: { ts: number }) => b.ts === today.getTime());
+    expect(y.pv).toBe(1);
+    expect(y.uv).toBe(1);
+    expect(t.uv).toBeGreaterThanOrEqual(1);
+
+    const ch = res.body.channels.find((c: { channel: string }) => c.channel === 'cross-day');
+    expect(ch.pv).toBe(2);
+    expect(ch.uv).toBe(1); // 同一访客两天只算一个 UV
+  });
+});
