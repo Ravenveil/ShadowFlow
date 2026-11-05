@@ -92,6 +92,7 @@ import { LoopVerdicts } from './projections/LoopVerdicts';
 import { EvidencePanel } from './projections/EvidencePanel';
 import { TeamPanel } from './projections/TeamPanel';
 import { NeoAgentSoul } from './NeoAgentSoul';
+import { NeoAgentInspector } from './NeoAgentInspector';
 import { AgentSchedulesPanel } from './AgentSchedulesPanel';
 import type { NeoHostProps } from './types';
 // ClawHub（2026-06，T08）：soulAgent 头像（AgentRecord → DiceBear）
@@ -193,7 +194,7 @@ function previewTypeOf(filename: string): ArtifactType {
   return 'markdown';
 }
 
-export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps) {
+export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, onCloseInspectAgent, onNavigate }: NeoHostProps) {
   const { t } = useI18n();
 
   // ── ClawHub（2026-06，T08）：soulAgent 的完整记录（DiceBear 头像字段）────
@@ -1110,6 +1111,23 @@ export function NeoHost({ target, runId, soulAgent, conversation }: NeoHostProps
 
   return (
     <div className="neo-host">
+      {/* ── Agent 检查器浮层（2026-11-05 Task#11，ZCode 后台运行式）──────────
+          群聊点 agent 头像 → NeoApp 下发 inspectAgent → 右栏整体覆盖为该
+          agent 的后台活动流 + 发起私聊；× 关闭回落常规 tab（tab 保活不丢态）。 */}
+      {inspectAgent && (
+        <div className="neo-host-inspect" data-testid="neo-host-inspect">
+          <NeoAgentInspector
+            agentId={inspectAgent.agentId}
+            name={inspectAgent.name}
+            groupId={inspectAgent.groupId}
+            onOpenDm={(dmGroupId) => {
+              onCloseInspectAgent?.();
+              onNavigate({ view: 'conversation', groupId: dmGroupId });
+            }}
+            onClose={() => onCloseInspectAgent?.()}
+          />
+        </div>
+      )}
       {/* tab 栏：Agent 的主机 + 固定 tab（工作空间/产物/过程 + 条件性灵魂/编队/成员）
           + 动态产物 tab（可关闭）+ 「+」
           （2026-08-15 任务 V：ClawsGo 大图标盒形态 — 44px hairline 盒 + 下方小标签） */}

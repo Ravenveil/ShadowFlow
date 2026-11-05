@@ -55,7 +55,13 @@ export type MessageKind =
    * 派发决策帧（派给谁、为什么）。群聊现场由 NeoGroupChat 的
    * NeoDispatchCard 渲染；通用 Timeline 不渲染（见 NeoTimeline case）。
    */
-  | 'intent';
+  | 'intent'
+  /**
+   * 2026-11-05 — 群聊 DAG 交接边实时播报（hop 生命周期可视化）：A→B 交接边
+   * open→终态逐帧上屏（open 全量帧 + hop_update patch 推进），用户在聊天流里
+   * 直接看到「谁的产出交给了谁、哪里断了」。additive。
+   */
+  | 'hop_card';
 
 export interface TimelineMessageBase {
   /** ULID-ish stable id. React key + patch target. */
@@ -302,6 +308,23 @@ export type TimelineMessage =
       reason: string;
       /** 可选：per-agent 子任务明细（仅 LLM 拆解成功时有）。 */
       assignments?: IntentAssignment[];
+    })
+  | (TimelineMessageBase & {
+      kind: 'hop_card';
+      /** 交接发起方 agent id。 */
+      from_agent: string;
+      /** 接收方 agent id。 */
+      to_agent: string;
+      /** 展示名快照（open 时刻服务端解析，避免前端查不到 agent 时裸露 id）。 */
+      from_name: string;
+      to_name: string;
+      status: 'pending' | 'running' | 'done' | 'failed' | 'timeout' | 'empty' | 'denied' | 'aborted';
+      /** 结算时上游产出的字符数（0 = 无产出）。 */
+      output_chars?: number;
+      /** 终态原因（错误信息 / denied 原因 / aborted 来源）。 */
+      detail?: string;
+      /** 结算耗时 ms。 */
+      duration_ms?: number;
     });
 
 export type MessagePatch =
@@ -334,7 +357,18 @@ export type MessagePatch =
       }>;
     }
   // Polynoia-parity — live task status transitions inside an open plan_card.
-  | { id: string; op: 'plan_update_task'; task_id: string; patch: Partial<PlanTaskRow> };
+  | { id: string; op: 'plan_update_task'; task_id: string; patch: Partial<PlanTaskRow> }
+  // 2026-11-05 — hop_card 生命周期推进：running / 终态结算（open 已有全量帧）。
+  | {
+      id: string;
+      op: 'hop_update';
+      patch: Partial<{
+        status: 'running' | 'done' | 'failed' | 'timeout' | 'empty' | 'denied' | 'aborted';
+        output_chars: number;
+        detail: string;
+        duration_ms: number;
+      }>;
+    };
 
 /**
  * Pure reducer helper — apply a `MessagePatch` onto the matching
@@ -425,6 +459,10 @@ export function applyPatch(
           t.id === patch.task_id ? { ...t, ...patch.patch } : t,
         ),
       };
+    }
+    case 'hop_update': {
+      if (msg.kind !== 'hop_card') return msg;
+      return { ...msg, ...patch.patch };
     }
     default:
       return msg;

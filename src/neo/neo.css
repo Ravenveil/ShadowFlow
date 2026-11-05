@@ -581,6 +581,141 @@
   margin: 10px 6px 0 4px;
 }
 
+/* ── Agent 检查器（2026-11-05 Task#11，ZCode 后台运行式）────────────────
+   右栏整体覆盖浮层：绝对定位盖住 tab 壳（tab 保活，× 关闭即回落）。 */
+.neo-host-inspect {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-bg);
+  border-left: 1px solid var(--t-border);
+}
+.neo-host { position: relative; }
+
+.neo-inspect {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.neo-inspect-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-inspect-avatar-fallback {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #fff;
+  background: var(--t-fg-4);
+}
+.neo-inspect-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.neo-inspect-title strong {
+  font-size: 13.5px;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-inspect-sub {
+  font-size: 11px;
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-inspect-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--t-fg-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.neo-inspect-close:hover { background: var(--t-panel-2); color: var(--t-fg); }
+.neo-inspect-dm {
+  margin: 10px 14px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--t-fg);
+  background: var(--t-panel-2);
+  border: 1px solid var(--t-border);
+  cursor: pointer;
+}
+.neo-inspect-dm:hover:not(:disabled) { border-color: var(--t-fg-4); }
+.neo-inspect-dm:disabled { opacity: 0.55; cursor: default; }
+.neo-inspect-dm-err {
+  margin: 6px 14px 0;
+  font-size: 11.5px;
+  color: var(--t-err, #EF4444);
+}
+.neo-inspect-sec-label {
+  padding: 12px 14px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--t-fg-4);
+}
+.neo-inspect-stream {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+}
+.neo-inspect-empty {
+  padding: 24px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--t-fg-4);
+}
+
+/* 群聊可点头像（气泡/顶栏成员栈）→ 右栏检查器 */
+.neo-gc-msg-avatar-btn {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+  line-height: 0;
+}
+.neo-gc-msg-avatar-btn:hover .neo-gc-msg-avatar { outline: 2px solid var(--t-border); }
+.neo-gc-member--click {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+  line-height: 0;
+}
+.neo-gc-member--click:hover { outline: 2px solid var(--t-border); }
+
 /* ── A14/B27 新建 Agent 模态（ClawsGO a_002 简化：遮罩 + 白卡 r16，无 2×2 营销格） ── */
 .neo-modal-mask {
   position: fixed;

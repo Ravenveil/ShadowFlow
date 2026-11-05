@@ -50,6 +50,68 @@ describe('applyPatch · plan_update_task', () => {
   });
 });
 
+// ── 2026-11-05 Task#10 — hop_card 生命周期（hop_update patch）──────────────
+describe('applyPatch · hop_update', () => {
+  const hopMsg: TimelineMessage = {
+    ...base,
+    id: 'm-hop',
+    kind: 'hop_card',
+    from_agent: 'scout',
+    to_agent: 'matcher',
+    from_name: 'Scout · 商机扫描',
+    to_name: 'Matcher · 线索匹配',
+    status: 'pending',
+  };
+
+  it('patches status/detail/duration immutably (settle)', () => {
+    const next = applyPatch(hopMsg, {
+      id: 'm-hop',
+      op: 'hop_update',
+      patch: { status: 'done', output_chars: 520, duration_ms: 4300 },
+    });
+    if (next.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(next).toMatchObject({ status: 'done', output_chars: 520, duration_ms: 4300 });
+    expect(next.from_name).toBe('Scout · 商机扫描');
+    expect(next).not.toBe(hopMsg);
+  });
+
+  it('patches failure terminal status with detail', () => {
+    const next = applyPatch(hopMsg, {
+      id: 'm-hop',
+      op: 'hop_update',
+      patch: { status: 'timeout', detail: '上游 scout timeout' },
+    });
+    if (next.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(next.status).toBe('timeout');
+    expect(next.detail).toBe('上游 scout timeout');
+  });
+
+  it('is a no-op when targeting a non-hop message', () => {
+    const msg: TimelineMessage = { ...base, id: 'm-text', kind: 'assistant_text', body: 'x' };
+    expect(applyPatch(msg, { id: 'm-text', op: 'hop_update', patch: { status: 'done' } })).toBe(msg);
+  });
+});
+
+describe('MessageRegistry · hop_card', () => {
+  it('renders nothing in the classic registry (Neo-only card)', () => {
+    const { container } = render(
+      <MessageRegistry
+        msg={{
+          ...base,
+          id: 'm-hop',
+          kind: 'hop_card',
+          from_agent: 'a',
+          to_agent: 'b',
+          from_name: 'A',
+          to_name: 'B',
+          status: 'pending',
+        }}
+      />,
+    );
+    expect(container.childElementCount).toBe(0);
+  });
+});
+
 describe('MessageRegistry · rich kinds', () => {
   it('renders plan_card tasks with live statuses', () => {
     render(

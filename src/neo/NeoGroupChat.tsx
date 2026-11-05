@@ -246,12 +246,16 @@ export function NeoGroupChat({
   groupId: groupIdProp,
   embedded = false,
   onNavigate,
+  onInspectAgent,
 }: {
   groupId?: string;
   embedded?: boolean;
   /** NeoApp 内部导航（内嵌态由 NeoApp 透传）——转发给 NeoComposer 的
    *  /inspect 等内建 slash 命令；独立路由页缺省。 */
   onNavigate?: (nav: NeoNav) => void;
+  /** 2026-11-05 Task#11 — 点 agent 头像（气泡/顶栏成员栈）→ 右栏检查器。
+   *  内嵌态由 NeoApp 下发；独立路由页缺省（无右栏壳）。 */
+  onInspectAgent?: (agent: { agentId: string; name: string; groupId: string }) => void;
 } = {}) {
   const params = useParams<{ groupId: string }>();
   const groupId = groupIdProp ?? params.groupId;
@@ -642,8 +646,18 @@ export function NeoGroupChat({
                 const rec = m.key.startsWith('name:')
                   ? undefined
                   : agentById.get(m.key);
+                // 2026-11-05 Task#11 — 有记录的成员头像可点 → 右栏检查器。
                 return rec ? (
-                  <span key={m.key} className="neo-gc-member neo-gc-member--img">
+                  <button
+                    key={m.key}
+                    type="button"
+                    className="neo-gc-member neo-gc-member--img neo-gc-member--click"
+                    onClick={() =>
+                      onInspectAgent?.({ agentId: rec.agent_id, name: rec.name, groupId: groupId ?? '' })
+                    }
+                    title={t('neo.inspect.open', { defaultValue: '查看 {{name}} 的后台活动', name: rec.name })}
+                    data-testid="neo-gc-member-inspect"
+                  >
                     <AgentAvatar
                       name={rec.name}
                       style={rec.avatar_style}
@@ -651,7 +665,7 @@ export function NeoGroupChat({
                       image={rec.avatar_image ?? null}
                       size={22}
                     />
-                  </span>
+                  </button>
                 ) : (
                   <span
                     key={m.key}
@@ -887,24 +901,34 @@ export function NeoGroupChat({
                                   （未配置按名字 hash 稳定生成）；字符色块保留为
                                   SVG 异常兜底（fallback）。 */}
                               {agentRec ? (
-                                <AgentAvatar
-                                  name={sender}
-                                  style={agentRec.avatar_style}
-                                  seed={agentRec.avatar_seed ?? sender}
-                                  size={28}
-                                  className="neo-gc-msg-avatar"
-                                  fallback={
-                                    <span
-                                      className="neo-gc-msg-avatar"
-                                      style={{
-                                        background: agentRec?.avatar_color ?? gcAvatarColor(aid ?? sender),
-                                      }}
-                                      aria-hidden
-                                    >
-                                      {gcAvatarInitial(sender)}
-                                    </span>
+                                <button
+                                  type="button"
+                                  className="neo-gc-msg-avatar-btn"
+                                  onClick={() =>
+                                    onInspectAgent?.({ agentId: agentRec.agent_id, name: agentRec.name, groupId: groupId ?? '' })
                                   }
-                                />
+                                  title={t('neo.inspect.open', { defaultValue: '查看 {{name}} 的后台活动', name: agentRec.name })}
+                                  data-testid="neo-gc-msg-avatar-inspect"
+                                >
+                                  <AgentAvatar
+                                    name={sender}
+                                    style={agentRec.avatar_style}
+                                    seed={agentRec.avatar_seed ?? sender}
+                                    size={28}
+                                    className="neo-gc-msg-avatar"
+                                    fallback={
+                                      <span
+                                        className="neo-gc-msg-avatar"
+                                        style={{
+                                          background: agentRec?.avatar_color ?? gcAvatarColor(aid ?? sender),
+                                        }}
+                                        aria-hidden
+                                      >
+                                        {gcAvatarInitial(sender)}
+                                      </span>
+                                    }
+                                  />
+                                </button>
                               ) : (
                                 <span
                                   className="neo-gc-msg-avatar"

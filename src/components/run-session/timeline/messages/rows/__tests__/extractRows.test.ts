@@ -157,4 +157,40 @@ describe('extractRows', () => {
       cmd: 'npm start',
     });
   });
+
+  // ── 2026-11-05 思考段兜底剥离（历史脏消息 + 服务端漏网形态）──────────
+  it('strips paired <sf-thinking> block and keeps prose (hyphen variant leak)', () => {
+    const body =
+      '<sf-thinking>The user just said "hi" - a simple greeting.</sf-thinking>你好！我是 Scout。';
+    const rows = extractRows(body);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({ kind: 'text', body: '你好！我是 Scout。' });
+  });
+
+  it('strips paired <sf:thinking> block at the extractRows entry', () => {
+    const body = '<sf:thinking>想想</sf:thinking>正文开始';
+    const rows = extractRows(body);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({ kind: 'text', body: '正文开始' });
+  });
+
+  it('strips unclosed <sf-thinking> block entirely (truncated stream)', () => {
+    const rows = extractRows('<sf-thinking>I should respond warmly but also');
+    expect(rows).toEqual([]);
+  });
+
+  it('strips thinking blocks that wrap markdown content', () => {
+    const body = [
+      '<sf-thinking>',
+      '## 内部分析',
+      'plan the response structure',
+      '</sf-thinking>',
+      '## 结论',
+      '正文内容',
+    ].join('\n');
+    const rows = extractRows(body);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ kind: 'section-header', title: '结论' });
+    expect(rows[1]).toEqual({ kind: 'text', body: '正文内容' });
+  });
 });

@@ -1065,6 +1065,52 @@ const NeoMsgFoot = memo(function NeoMsgFoot({
   );
 });
 
+/* ═══ hop_card — 群聊 DAG 交接边实时播报（2026-11-05 Task#10） ═══════════════ */
+const HOP_STATUS_LABEL: Record<Extract<TimelineMessage, { kind: 'hop_card' }>['status'], string> = {
+  pending: '待交接',
+  running: '交接中',
+  done: '已交接',
+  failed: '失败',
+  timeout: '超时',
+  empty: '空产出',
+  denied: '被拦截',
+  aborted: '中止',
+};
+
+const NeoHopCard = memo(function NeoHopCard({
+  msg,
+}: {
+  msg: Extract<TimelineMessage, { kind: 'hop_card' }>;
+}) {
+  const settled = msg.status !== 'pending' && msg.status !== 'running';
+  return (
+    <div className="neo-tl-hop" data-status={msg.status}>
+      <span className="neo-tl-hop-icon">
+        {msg.status === 'running' ? (
+          <Loader2 size={13} className="neo-tl-spin" aria-hidden />
+        ) : msg.status === 'done' ? (
+          <CircleCheck size={13} className="neo-tl-ok" aria-hidden />
+        ) : settled ? (
+          <CircleX size={13} className="neo-tl-err" aria-hidden />
+        ) : (
+          <Circle size={13} className="neo-tl-dim" aria-hidden />
+        )}
+      </span>
+      <span className="neo-tl-hop-from">{msg.from_name}</span>
+      <span className="neo-tl-hop-arrow" aria-hidden>→</span>
+      <span className="neo-tl-hop-to">{msg.to_name}</span>
+      <span className="neo-tl-hop-status">{HOP_STATUS_LABEL[msg.status]}</span>
+      {typeof msg.duration_ms === 'number' && (
+        <span className="neo-tl-hop-elapsed">{(msg.duration_ms / 1000).toFixed(1)}s</span>
+      )}
+      {typeof msg.output_chars === 'number' && msg.output_chars > 0 && (
+        <span className="neo-tl-hop-chars">{msg.output_chars} 字</span>
+      )}
+      {msg.detail ? <span className="neo-tl-hop-detail">{msg.detail}</span> : null}
+    </div>
+  );
+});
+
 /* ═══ plan_card — 编排计划卡（任务拆解 + 实时状态） ══════════════════════════ */
 const PLAN_STATUS_LABEL: Record<PlanTaskRow['status'], string> = {
   pending: '待派发',
@@ -1408,6 +1454,8 @@ function NeoMessage({
       // 派发决策卡由 NeoGroupChat 的 NeoDispatchCard 渲染（群聊现场专属）；
       // 其他 Timeline 消费面（RunInline 等）不重复出卡。
       return null;
+    case 'hop_card':
+      return <NeoHopCard msg={msg} />;
     default: {
       const _exhaustive: never = msg;
       void _exhaustive;

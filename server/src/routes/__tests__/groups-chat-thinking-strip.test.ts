@@ -48,6 +48,30 @@ describe('stripThinking — 最终回复剥离 <sf:thinking> 思考段', () => {
     const s = '我在思考 thinking 这个词怎么翻译';
     expect(stripThinking(s)).toBe(s);
   });
+
+  // ── 2026-11-05 连字符形态 <sf-thinking>（模型模仿 sf: 协议时常写错分隔符，
+  //    群聊气泡截图实证：整段英文思考漏进中文界面）────────────────────────
+  it('连字符形态成对标签整体剥离（<sf-thinking>）', () => {
+    const s =
+      '<sf-thinking>The user just said "hi" - a simple greeting. I should respond warmly.</sf-thinking>你好！我是猎奇团队的 Scout。';
+    expect(stripThinking(s)).toBe('你好！我是猎奇团队的 Scout。');
+  });
+
+  it('连字符形态未闭合标签从开标签起全剥', () => {
+    const s = '<sf-thinking>Since this is just a greeting, I should respond in character';
+    expect(stripThinking(s)).toBe('');
+  });
+
+  it('连字符形态带属性的开标签也剥', () => {
+    const s = '<sf-thinking step="extended">think</sf-thinking>结论';
+    expect(stripThinking(s)).toBe('结论');
+  });
+
+  it('冒号与连字符多段混排只剥思考，正文按序保留', () => {
+    const s =
+      '<sf:thinking>想一下</sf:thinking>第一段。<sf-thinking>再想想</sf-thinking>第二段。';
+    expect(stripThinking(s)).toBe('第一段。第二段。');
+  });
 });
 
 describe('pickDefaultExecutor — 默认 executor 回退', () => {
