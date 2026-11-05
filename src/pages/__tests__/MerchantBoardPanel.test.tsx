@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { I18nProvider } from '../../common/i18n';
 import * as api from '../../api/merchantBoard';
 import MerchantBoardPanel from '../MerchantBoardPanel';
@@ -17,6 +17,7 @@ vi.mock('../../api/merchantBoard', () => ({
   fetchTrafficCurve: vi.fn(),
   fetchReconcile: vi.fn(),
   fetchFirstOrderChain: vi.fn(),
+  fetchMerchantOrders: vi.fn(),
 }));
 
 const overview: api.MerchantOverview = {
@@ -76,6 +77,51 @@ const reconcile: api.ReconcileResult = {
   balanced: true,
 };
 
+const orders: api.MerchantOrderRow[] = [
+  {
+    id: 'o1',
+    product_id: 'p1',
+    visit_id: 'v1',
+    amount_cents: 19900,
+    cost_cents: 4300,
+    status: 'paid',
+    pay_txn_id: 'txn-1',
+    trace_id: 't1',
+    created_at: 1700000000000,
+    paid_at: 1700000001000,
+    product_name: '手冲咖啡',
+    gross_profit_cents: 15600,
+  },
+  {
+    id: 'o2',
+    product_id: 'p2',
+    visit_id: '',
+    amount_cents: 2800,
+    cost_cents: 900,
+    status: 'refunded',
+    pay_txn_id: 'txn-2',
+    trace_id: 't1',
+    created_at: 1700000002000,
+    paid_at: 1700000003000,
+    product_name: '冷萃咖啡',
+    gross_profit_cents: 1900,
+  },
+  {
+    id: 'o3',
+    product_id: 'p2',
+    visit_id: '',
+    amount_cents: 2800,
+    cost_cents: 900,
+    status: 'created',
+    pay_txn_id: null,
+    trace_id: 't1',
+    created_at: 1700000004000,
+    paid_at: null,
+    product_name: '冷萃咖啡',
+    gross_profit_cents: 1900,
+  },
+];
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.fetchMerchantOverview).mockResolvedValue(overview);
@@ -83,6 +129,7 @@ beforeEach(() => {
   vi.mocked(api.fetchTrafficCurve).mockResolvedValue(traffic);
   vi.mocked(api.fetchReconcile).mockResolvedValue(reconcile);
   vi.mocked(api.fetchFirstOrderChain).mockResolvedValue(chain);
+  vi.mocked(api.fetchMerchantOrders).mockResolvedValue(orders);
 });
 
 function renderPanel() {
@@ -141,5 +188,33 @@ describe('MerchantBoardPanel', () => {
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('merchant-error')).toHaveTextContent('boom'));
     expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
+  });
+});
+
+describe('订单明细（业务要能直接看状态，不用翻流水反推）', () => {
+  it('三种状态各一行，带商品名/金额/成本/毛利', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-order-table')).toBeInTheDocument());
+    expect(screen.getByTestId('merchant-orders-sum')).toHaveTextContent('共 3 单');
+
+    expect(screen.getAllByTestId('merchant-order-row-paid')).toHaveLength(1);
+    expect(screen.getAllByTestId('merchant-order-row-refunded')).toHaveLength(1);
+    expect(screen.getAllByTestId('merchant-order-row-created')).toHaveLength(1);
+
+    const table = screen.getByTestId('merchant-order-table');
+    expect(within(table).getByText('待支付')).toBeInTheDocument();
+    expect(within(table).getByText('已支付')).toBeInTheDocument();
+    expect(within(table).getByText('已退款')).toBeInTheDocument();
+    expect(within(table).getByText('手冲咖啡')).toBeInTheDocument();
+    expect(within(table).getByText(/¥199/)).toBeInTheDocument();
+  });
+
+  it('点状态筛选会用 status 重新取数', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-order-table')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('merchant-order-filter-refunded'));
+    await waitFor(() =>
+      expect(api.fetchMerchantOrders).toHaveBeenCalledWith(expect.objectContaining({ status: 'refunded' })),
+    );
   });
 });

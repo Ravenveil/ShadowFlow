@@ -372,3 +372,165 @@ describe('聚合下推到 SQL（分桶口径不能串）', () => {
     expect(ch.uv).toBe(1); // 同一访客两天只算一个 UV
   });
 });
+
+describe('退款要冲回成本（否则全额退款后毛利为负）', () => {
+  it('卖一单再全退：这笔带来的营收/成本/毛利全部归零', async () => {
+    const before = (await request(app()).get('/api/merchant/overview')).body;
+
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '全退测试品', price_cents: 5000, cost_cents: 2000 });
+    const o = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${o.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-cost-back-1' });
+
+    const mid = (await request(app()).get('/api/merchant/overview')).body;
+    expect(mid.revenue_cents - before.revenue_cents).toBe(5000);
+    expect(mid.cost_cents - before.cost_cents).toBe(2000);
+    expect(mid.gross_profit_cents - before.gross_profit_cents).toBe(3000);
+
+    await request(app()).post(`/api/merchant/orders/${o.body.id}/refund`);
+
+    const after = (await request(app()).get('/api/merchant/overview')).body;
+    // 关键：退干净之后，这一单不能再留下任何成本
+    expect(after.revenue_cents).toBe(before.revenue_cents);
+    expect(after.cost_cents).toBe(before.cost_cents);
+    expect(after.gross_profit_cents).toBe(before.gross_profit_cents);
+  });
+
+  it('两单卖出一单退款：成本只留未退那单', async () => {
+    const before = (await request(app()).get('/api/merchant/overview')).body;
+
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '部分退款品', price_cents: 1000, cost_cents: 400 });
+    const keep = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    const drop = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${keep.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-cost-back-keep' });
+    await request(app())
+      .post(`/api/merchant/orders/${drop.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-cost-back-drop' });
+    await request(app()).post(`/api/merchant/orders/${drop.body.id}/refund`);
+
+    const after = (await request(app()).get('/api/merchant/overview')).body;
+    expect(after.revenue_cents - before.revenue_cents).toBe(1000);
+    expect(after.cost_cents - before.cost_cents).toBe(400);
+    expect(after.gross_profit_cents - before.gross_profit_cents).toBe(600);
+  });
+
+  it('退款后账实仍然相符（负数 expense 与「排除退款单的 cost」口径对齐）', async () => {
+    const rec = await request(app()).get('/api/merchant/reconcile');
+    expect(rec.status).toBe(200);
+    expect(rec.body.diffs.expense_cents).toBe(0);
+    expect(rec.body.diffs.income_cents).toBe(0);
+    expect(rec.body.balanced).toBe(true);
+  });
+});
+
+describe('订单列表 GET /orders（看状态不该靠流水反推）', () => {
+  it('返回订单明细：商品名、状态、金额、成本、单笔毛利', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '列表商品', price_cents: 2500, cost_cents: 1000 });
+    const o = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${o.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-list-1' });
+
+    const res = await request(app()).get('/api/merchant/orders?limit=5');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    const row = res.body.find((x: { id: string }) => x.id === o.body.id);
+    expect(row).toBeTruthy();
+    expect(row.product_name).toBe('列表商品');
+    expect(row.status).toBe('paid');
+    expect(row.amount_cents).toBe(2500);
+    expect(row.cost_cents).toBe(1000);
+    expect(row.gross_profit_cents).toBe(1500);
+    expect(row.pay_txn_id).toBe('txn-list-1');
+  });
+
+  it('按状态筛选：created / paid / refunded 各自只返回对应单', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '状态筛选品', price_cents: 700, cost_cents: 100 });
+    const unpaid = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    const paid = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${paid.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-status-filter' });
+    const refunded = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${refunded.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-status-filter-2' });
+    await request(app()).post(`/api/merchant/orders/${refunded.body.id}/refund`);
+
+    const onlyCreated = await request(app()).get('/api/merchant/orders?status=created&limit=500');
+    expect(onlyCreated.status).toBe(200);
+    expect(onlyCreated.body.every((x: { status: string }) => x.status === 'created')).toBe(true);
+    expect(onlyCreated.body.some((x: { id: string }) => x.id === unpaid.body.id)).toBe(true);
+
+    const onlyRefunded = await request(app()).get('/api/merchant/orders?status=refunded&limit=500');
+    expect(onlyRefunded.body.every((x: { status: string }) => x.status === 'refunded')).toBe(true);
+    expect(onlyRefunded.body.some((x: { id: string }) => x.id === refunded.body.id)).toBe(true);
+    expect(onlyRefunded.body.some((x: { id: string }) => x.id === paid.body.id)).toBe(false);
+  });
+
+  it('非法 status 返回 400（不静默返回空列表）', async () => {
+    const res = await request(app()).get('/api/merchant/orders?status=whatever');
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('status must be one of');
+  });
+
+  it('limit 越界收敛到 1..500，不报错', async () => {
+    expect((await request(app()).get('/api/merchant/orders?limit=0')).status).toBe(200);
+    expect((await request(app()).get('/api/merchant/orders?limit=-5')).status).toBe(200);
+    expect((await request(app()).get('/api/merchant/orders?limit=99999')).status).toBe(200);
+  });
+});
+
+describe('历史数据回填（已退款却没冲销成本的单）', () => {
+  it('补一条负数 expense，且重复执行不会重复冲', async () => {
+    const storage = await import('../storage/merchant-board');
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '回填测试品', price_cents: 3000, cost_cents: 1200 });
+    const o = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${o.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-backfill-1' });
+    await request(app()).post(`/api/merchant/orders/${o.body.id}/refund`);
+
+    // 模拟老数据：把冲销行删掉，只留收入/退款
+    sqlite
+      .getDb()
+      .prepare(`DELETE FROM mb_ledger WHERE order_id = ? AND kind = 'expense' AND amount_cents < 0`)
+      .run(o.body.id);
+    const missing = sqlite
+      .getDb()
+      .prepare(`SELECT COUNT(*) AS n FROM mb_ledger WHERE order_id = ? AND kind = 'expense' AND amount_cents < 0`)
+      .get(o.body.id) as { n: number };
+    expect(missing.n).toBe(0);
+
+    storage._backfillRefundCostForTests();
+    const restored = sqlite
+      .getDb()
+      .prepare(`SELECT amount_cents FROM mb_ledger WHERE order_id = ? AND kind = 'expense' AND amount_cents < 0`)
+      .get(o.body.id) as { amount_cents: number } | undefined;
+    expect(restored?.amount_cents).toBe(-1200);
+
+    // 再跑一次：幂等，不会变成 -2400 两条
+    storage._backfillRefundCostForTests();
+    const rows = sqlite
+      .getDb()
+      .prepare(`SELECT COUNT(*) AS n FROM mb_ledger WHERE order_id = ? AND kind = 'expense' AND amount_cents < 0`)
+      .get(o.body.id) as { n: number };
+    expect(rows.n).toBe(1);
+
+    const rec = await request(app()).get('/api/merchant/reconcile');
+    expect(rec.body.balanced).toBe(true);
+  });
+});

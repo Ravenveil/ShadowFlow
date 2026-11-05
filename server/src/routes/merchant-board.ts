@@ -10,6 +10,7 @@
  * GET  /api/merchant/orders/timeseries      → 订单流水分时（零值补齐 + 峰值）
  * GET  /api/merchant/traffic/curve          → 客流曲线（PV/UV/转化/分渠道）
  * GET  /api/merchant/ledger                 → 收支流水
+ * GET  /api/merchant/orders                 → 订单列表（含状态，可按 status 筛）
  * GET  /api/merchant/reconcile              → 账实对账
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
@@ -29,6 +30,7 @@ import {
   createProduct,
   firstOrderChain,
   listLedger,
+  listOrders,
   listProducts,
   orderTimeseries,
   overview,
@@ -99,6 +101,17 @@ router.get('/traffic/curve', (req: Request, res: Response) => {
 router.get('/ledger', (req: Request, res: Response) => {
   try {
     res.json(listLedger(Number(req.query.limit), str(req.query.kind, 32)));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 订单列表（含状态）。以前只有聚合，业务想知道「第 3 单是待付还是已退」只能翻流水反推。
+// 注意：这个路径以前没有注册，GET /api/merchant/orders 会落到 proxyFallback 被转给
+// 旧 Python 后端，返回 503 PYTHON_BACKEND_UNAVAILABLE —— 看起来像服务挂了。
+router.get('/orders', (req: Request, res: Response) => {
+  try {
+    res.json(listOrders({ limit: req.query.limit, status: str(req.query.status, 16) }));
   } catch (err) {
     fail(res, err);
   }

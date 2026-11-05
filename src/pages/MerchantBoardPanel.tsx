@@ -17,12 +17,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../common/i18n';
 import {
   fetchFirstOrderChain,
+  fetchMerchantOrders,
   fetchMerchantOverview,
   fetchOrderTimeseries,
   fetchReconcile,
   fetchTrafficCurve,
   type FirstOrderChain,
   type Granularity,
+  type MerchantOrderRow,
   type MerchantOverview,
   type OrderTimeseries,
   type ReconcileResult,
@@ -40,6 +42,20 @@ function fmtYuan(cents: number): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/** 订单时间：月-日 时:分，够看且不占宽度。 */
+function fmtTime(ts: number): string {
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** 订单状态机三态。created 是「已下单未支付」，对业务说人话叫「待支付」。 */
+const ORDER_STATUS_LABEL: Record<MerchantOrderRow['status'], string> = {
+  created: '待支付',
+  paid: '已支付',
+  refunded: '已退款',
+};
 
 function fmtPct(v: number | null): string {
   return v === null ? '—' : `${v}%`;
@@ -131,6 +147,8 @@ export default function MerchantBoardPanel() {
   const [traffic, setTraffic] = useState<TrafficCurve | null>(null);
   const [chain, setChain] = useState<FirstOrderChain | null>(null);
   const [reconcile, setReconcile] = useState<ReconcileResult | null>(null);
+  const [orders, setOrders] = useState<MerchantOrderRow[]>([]);
+  const [orderFilter, setOrderFilter] = useState<'' | 'created' | 'paid' | 'refunded'>('');
   const [traceId, setTraceId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -141,18 +159,20 @@ export default function MerchantBoardPanel() {
     setBusy(true);
     setErrorMsg('');
     try {
-      const [ov, ts, tc, rec, ch] = await Promise.all([
+      const [ov, ts, tc, rec, ch, od] = await Promise.all([
         fetchMerchantOverview(),
         fetchOrderTimeseries({ granularity, start: windowStart(granularity) }),
         fetchTrafficCurve({ granularity, start: windowStart(granularity) }),
         fetchReconcile(),
         fetchFirstOrderChain(''),
+        fetchMerchantOrders({ limit: 50, status: orderFilter }),
       ]);
       setOverview(ov);
       setFlow(ts);
       setTraffic(tc);
       setReconcile(rec);
       setChain(ch);
+      setOrders(od);
     } catch (err) {
       // 后端未起 / 网关未挂时只降级成一条错误提示，不拖垮整页数据看板。
       setErrorMsg(
@@ -163,7 +183,7 @@ export default function MerchantBoardPanel() {
     } finally {
       setBusy(false);
     }
-  }, [granularity, t]);
+  }, [granularity, orderFilter, t]);
 
   const loadChain = useCallback(async () => {
     try {
@@ -345,6 +365,76 @@ export default function MerchantBoardPanel() {
         ) : (
           <p className="neo-db-chart-empty">—</p>
         )}
+      </div>
+
+      {/* ── 订单明细 ── */}
+      <div className="neo-db-panel" style={{ marginTop: 12 }} data-testid="merchant-orders">
+        <p className="neo-db-card-label">
+          {t('neo.merchant.orders', { defaultValue: '订单明细' })}
+          <span style={{ marginLeft: 8 }} data-testid="merchant-orders-sum">
+            {t('neo.merchant.ordersSum', { defaultValue: `共 ${orders.length} 单` })}
+          </span>
+        </p>
+        <div className="neo-db-tabs" style={{ marginBottom: 10 }} role="tablist">
+          {([
+            ['', t('neo.merchant.orderAll', { defaultValue: '全部' })],
+            ['created', t('neo.merchant.orderCreated', { defaultValue: '待支付' })],
+            ['paid', t('neo.merchant.orderPaid', { defaultValue: '已支付' })],
+            ['refunded', t('neo.merchant.orderRefunded', { defaultValue: '已退款' })],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value || 'all'}
+              type="button"
+              className={`neo-db-tab${orderFilter === value ? ' on' : ''}`}
+              onClick={() => setOrderFilter(value)}
+              data-testid={`merchant-order-filter-${value || 'all'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {orders.length > 0 ? (
+          <table className="neo-db-table neo-mb-table" data-testid="merchant-order-table">
+            <thead>
+              <tr>
+                <th>{t('neo.merchant.orderTime', { defaultValue: '时间' })}</th>
+                <th>{t('neo.merchant.orderProduct', { defaultValue: '商品' })}</th>
+                <th>{t('neo.merchant.orderStatus', { defaultValue: '状态' })}</th>
+                <th className="neo-mb-num">{t('neo.merchant.orderAmount', { defaultValue: '金额' })}</th>
+                <th className="neo-mb-num">{t('neo.merchant.orderCost', { defaultValue: '成本' })}</th>
+                <th className="neo-mb-num">{t('neo.merchant.orderGross', { defaultValue: '毛利' })}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((o) => (
+                <tr key={o.id} data-testid={`merchant-order-row-${o.status}`}>
+                  <td className="neo-mb-mono">{fmtTime(o.created_at)}</td>
+                  <td>{o.product_name}</td>
+                  <td>
+                    <span className={`neo-mb-status neo-mb-status--${o.status}`}>
+                      {ORDER_STATUS_LABEL[o.status]}
+                    </span>
+                  </td>
+                  <td className="neo-mb-num">{fmtYuan(o.amount_cents)}</td>
+                  <td className="neo-mb-num">{fmtYuan(o.cost_cents)}</td>
+                  <td className="neo-mb-num">{fmtYuan(o.gross_profit_cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="neo-db-chart-empty">
+            {orderFilter
+              ? t('neo.merchant.ordersEmptyFiltered', { defaultValue: '该状态下还没有订单' })
+              : t('neo.merchant.ordersEmpty', { defaultValue: '还没有订单，先跑一单试试' })}
+          </p>
+        )}
+        <p className="neo-mb-hint">
+          {t('neo.merchant.ordersNote', {
+            defaultValue:
+              '状态由订单本身决定：待支付=已下单未付款，已支付=钱已入账，已退款=已冲回收入与成本。',
+          })}
+        </p>
       </div>
 
       {/* ── 第一单链路 ── */}
