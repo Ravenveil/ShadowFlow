@@ -19,7 +19,6 @@ import {
   DICEBEAR_STYLES,
   DEFAULT_AVATAR_STYLE,
   avatarFromPrompt,
-  hashSeed,
   randomSeed,
   renderAvatarSvg,
   type DicebearStyleId,
@@ -43,7 +42,7 @@ interface GenCandidate {
 export interface AvatarStylePickerProps {
   value: AvatarConfigValue;
   onChange: (next: AvatarConfigValue) => void;
-  /** 预览用 Agent 名（种子为空时按名字 hash）。 */
+  /** 预览用 Agent 名（种子为空时名字直作种子）。 */
   agentName: string;
   /** 尺寸档：紧凑（表单内嵌）| 舒展（模态）。默认 compact。 */
   variant?: 'compact' | 'roomy';
@@ -132,7 +131,10 @@ export function AvatarStylePicker({
   const [genSource, setGenSource] = useState<'cloud' | 'local' | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
 
-  const effectiveSeed = value.seed.trim() || hashSeed(agentName);
+  // 种子兜底唯一约定（2026-11-05 修复）：空 → agentName 直作种子，
+  // 与 AgentAvatar 组件内兜底及调用方 `avatar_seed ?? name` 同规则，
+  // 保证选择器预览/缩略图与侧栏头像同一张脸。
+  const effectiveSeed = value.seed.trim() || agentName;
 
   /** 生成：云端优先（BYOK 绘图模型），503/失败 → 本地 DiceBear 4 候选。 */
   async function handleGenerate() {

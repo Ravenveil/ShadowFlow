@@ -23,7 +23,7 @@ import { AgentApiError, quickCreateAgent } from '../api/agents';
 import { generateAgentPersona, LlmApiError } from '../api/llm';
 import { listDetectedClis, type DetectedCli } from '../api/cli';
 import { AvatarStylePicker, type AvatarConfigValue } from '../components/agent/AvatarStylePicker';
-import { DEFAULT_AVATAR_STYLE, hashSeed } from '../config/clawhub';
+import { DEFAULT_AVATAR_STYLE } from '../config/clawhub';
 import { useI18n } from '../common/i18n';
 // ClawHub（2026-06）：Claw 下拉 + 头像选择器样式（增量引入）
 import '../pages/clawhub/clawhub.css';
@@ -82,7 +82,7 @@ export function NeoCreateAgentModal({ workspaceId, onClose, onCreated }: NeoCrea
       alive = false;
     };
   }, []);
-  // 名字变化且种子为空时预览跟随（hashSeed(name)）
+  // 名字变化且种子为空时预览跟随（name 直作种子，与 AgentAvatar 兜底一致）
   const previewName = useMemo(() => name.trim() || t('neo.newAgent.namePlaceholder', { defaultValue: '我的 Agent' }), [name, t]);
 
   const locked = busy || generating;
@@ -294,14 +294,14 @@ export function NeoCreateAgentModal({ workspaceId, onClose, onCreated }: NeoCrea
           agentName={previewName}
           variant="compact"
         />
-        {/* 隐式引用 AgentAvatar：AvatarStylePicker 内部已用；此处确保 hashSeed
-            默认值语义可见（种子空 → 按名字 hash，见 config/clawhub.ts） */}
+        {/* 隐式引用 AgentAvatar：AvatarStylePicker 内部已用；此处展示种子
+            空值语义（种子空 → 名字直作种子，与 AgentAvatar 兜底唯一约定） */}
         <span className="claw-copyonly-hint" data-testid="neo-avatar-seed-hint">
           {avatarCfg.seed.trim()
             ? `${t('clawhub.avatar.seedLabel', { defaultValue: '种子' })}: ${avatarCfg.seed}`
             : t('clawhub.avatar.seedAuto', { defaultValue: '种子留空 = 按名字自动生成' })}
           {' · '}
-          {hashSeed(previewName)}
+          {previewName}
         </span>
 
         {error && (

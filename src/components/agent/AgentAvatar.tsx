@@ -3,20 +3,23 @@
  *
  *  - 本地生成（@dicebear/core createAvatar → SVG 字符串，离线可用，不走公网）
  *  - 尺寸档：24 / 32 / 48 / 128（PRD §6.2；其他数值也接受，按 px 直出）
- *  - 兜底链：avatar_style 缺失/未知 → bottts-neutral；seed 缺失 → hashSeed(name)；
+ *  - 兜底链：avatar_style 缺失/未知 → bottts-neutral；seed 缺失/空串 → name
+ *    本身直作种子（与调用方 `avatar_seed ?? name` 唯一约定——2026-11-05 修复：
+ *    此前组件内兜底 hashSeed(name)，与侧栏的名字直作种子两条规则并存，
+ *    同一 agent 在侧栏与灵魂页预览画出两张脸）
  *    SVG 生成异常 → fallback 节点（调用方传入或首字母色块）
  *
  * 使用方（T08）：NeoRail 列表行 / NeoHost / NeoGroupChat / NeoCreateAgentModal 预览。
  */
 import { useMemo, useState } from 'react';
-import { hashSeed, normalizeStyle, renderAvatarSvg } from '../../config/clawhub';
+import { normalizeStyle, renderAvatarSvg } from '../../config/clawhub';
 
 export interface AgentAvatarProps {
-  /** Agent 名（seed 缺省时的 hash 源 + 兜底首字母）。 */
+  /** Agent 名（seed 缺省时的种子来源 + 兜底首字母）。 */
   name: string;
   /** DiceBear 风格 id（normalizeStyle 兜底 bottts-neutral）。 */
   style?: string | null;
-  /** DiceBear 种子（缺省 hashSeed(name)）。 */
+  /** DiceBear 种子（缺省/空串 = name 直作种子，与调用方兜底约定一致）。 */
   seed?: string | null;
   /** 提示词生成头像图（dataURL/URL）；非空时优先渲染（os-unified 2026-11-04）。 */
   image?: string | null;
@@ -63,7 +66,9 @@ export function AgentAvatar({
     if (failed) return null;
     try {
       const styleId = normalizeStyle(style);
-      const effectiveSeed = seed && seed.trim().length > 0 ? seed : hashSeed(name);
+      // 种子兜底：空/缺省 → name 直作种子。唯一约定（2026-11-05 修复），
+      // 与全部调用方 `avatar_seed ?? name` 同规则，保证同 agent 各处同脸。
+      const effectiveSeed = seed && seed.trim().length > 0 ? seed : name;
       return renderAvatarSvg(styleId, effectiveSeed);
     } catch {
       setFailed(true);
