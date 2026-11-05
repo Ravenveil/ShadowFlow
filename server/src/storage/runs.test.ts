@@ -35,7 +35,9 @@ function check(label: string, cond: boolean, detail?: unknown) {
 
 // Run each test in its own tmp cwd so tests don't trample each other.
 function inIsolatedCwd(fn: (storage: typeof import('./runs')) => void | Promise<void>): Promise<void> {
-  return new Promise(async (resolve, reject) => {
+  // async 逻辑放在内部函数里，executor 本身保持同步 —— async executor 抛出的
+  // 拒绝会被 Promise 吞掉（no-async-promise-executor），这里显式 return。
+  const run = async (): Promise<void> => {
     const originalCwd = process.cwd();
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-runs-test-'));
     process.chdir(tmpDir);
@@ -49,14 +51,13 @@ function inIsolatedCwd(fn: (storage: typeof import('./runs')) => void | Promise<
       mod._resetForTests();
       await fn(mod);
       mod._resetForTests();
-      resolve();
-    } catch (err) {
-      reject(err);
     } finally {
       process.chdir(originalCwd);
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
     }
-  });
+  };
+
+  return run();
 }
 
 function makeRecord(overrides: Partial<import('./runs').RunRecord> = {}): import('./runs').RunRecord {

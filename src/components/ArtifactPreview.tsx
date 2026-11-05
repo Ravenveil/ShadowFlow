@@ -63,6 +63,10 @@ function DownloadActions({
   isComplete,
 }: Required<Pick<ArtifactPreviewProps, 'url' | 'type'>> &
   Pick<ArtifactPreviewProps, 'sessionId' | 'filename' | 'isComplete'>) {
+  // 必须在任何提前 return 之前声明：isComplete 由 false 变 true 时组件会多出
+  // 一个 hook，React 会抛 "Rendered more hooks than during the previous render"。
+  const [pdfUnavailable, setPdfUnavailable] = useState(false);
+
   if (!isComplete || !sessionId || !filename || !url) return null;
 
   const linkStyle: React.CSSProperties = {
@@ -94,7 +98,6 @@ function DownloadActions({
   // dumped into a generic browser error. HEAD the endpoint first; on 503 we
   // show an inline alert bar (2026-11-04: replaces native alert()) and abort,
   // otherwise fall through to the native download.
-  const [pdfUnavailable, setPdfUnavailable] = useState(false);
   async function handlePdfClick(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();
     try {

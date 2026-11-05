@@ -16,6 +16,11 @@ export default defineConfig({
           environment: 'jsdom',
           setupFiles: ['./src/test/setup.ts'],
           include: ['src/**/*.{test,spec}.{ts,tsx}'],
+          // 默认 5s 的 testTimeout 在「全量 60+ 文件 + CI 2 核」时不够用：
+          // 整个用例（含多条 await + 动态 chunk）会整条超时，表现为随机几条
+          // 失败、单跑又全绿。放宽到 20s，真卡死的用例照样会失败。
+          testTimeout: 20000,
+          hookTimeout: 20000,
           // Known-broken legacy tests (Story 0.2): excluded to unblock CI.
           // Tracked separately — see Story 0.2 Completion Notes.
           exclude: [

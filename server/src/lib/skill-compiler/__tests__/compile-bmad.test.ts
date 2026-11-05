@@ -86,6 +86,8 @@ async function main(): Promise<void> {
   // ─── Test 1: fallback path ────────────────────────────────────────────────
   console.log('\n[1] fallback compile (LLM forced to throw) → mode=team');
   {
+    // 故意只抛不 yield：模拟 LLM 调用失败，让 compile() 走 fallback 分支。
+    // eslint-disable-next-line require-yield
     _setCallProviderForTests(async function* () {
       throw new Error('forced-llm-failure');
     });
