@@ -84,6 +84,11 @@ function db(): Database.Database {
     conn.exec(DDL);
     ready.add(key);
   }
+  // 把 JS 的分桶函数注册给 SQLite：聚合在 SQL 里做，就不用把整段区间的明细
+  // 捞进 Node 再循环（十万单 = 十万行）。口径与 bucketKey 完全同源。
+  conn.function('mb_bucket', { deterministic: true }, (ts: unknown, size: unknown) =>
+    bucketKey(Number(ts), Number(size)),
+  );
   return conn;
 }
 
@@ -360,31 +365,40 @@ export interface Bucket {
 
 export function orderTimeseries(input: { granularity?: unknown; start?: unknown; end?: unknown }) {
   const { from, to, size, granularity } = timeWindow(input.start, input.end, String(input.granularity ?? 'day'));
-  const rows = db()
+  const conn = db();
+
+  // 下单量按 created_at 归桶，成交额按 paid_at 归桶 —— 两个时间轴，两条 GROUP BY。
+  // 之前是 SELECT 整段明细再在 JS 里循环，单量大时每次刷新都要把行全捞出来。
+  const createdRows = conn
     .prepare(
-      `SELECT amount_cents, status, created_at, paid_at FROM mb_orders
-       WHERE created_at >= ? AND created_at < ?`,
+      `SELECT mb_bucket(created_at, ?) AS k, COUNT(*) AS n
+         FROM mb_orders
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY k`,
     )
-    .all(from, to) as Array<{ amount_cents: number; status: string; created_at: number; paid_at: number | null }>;
+    .all(size, from, to) as Array<{ k: number; n: number }>;
+
+  const paidRows = conn
+    .prepare(
+      `SELECT mb_bucket(paid_at, ?) AS k, COUNT(*) AS n, COALESCE(SUM(amount_cents), 0) AS amt
+         FROM mb_orders
+        WHERE paid_at IS NOT NULL AND paid_at >= ? AND paid_at < ?
+        GROUP BY k`,
+    )
+    .all(size, from, to) as Array<{ k: number; n: number; amt: number }>;
 
   const map = new Map<number, Bucket>();
-  const bump = (ts: number | null, field: 'orders' | 'paid_orders' | 'amount_cents', amount = 0) => {
-    if (ts == null || ts < from || ts >= to) return;
-    const key = bucketKey(ts, size);
+  const at = (key: number): Bucket => {
     const b = map.get(key) ?? { ts: key, orders: 0, paid_orders: 0, amount_cents: 0, avg_order_cents: 0 };
-    if (field === 'amount_cents') b.amount_cents += amount;
-    else if (field === 'paid_orders') b.paid_orders += 1;
-    else b.orders += 1;
     map.set(key, b);
+    return b;
   };
 
-  for (const r of rows) {
-    bump(r.created_at, 'orders');
-    // 成交额按支付时间归桶；退款的历史成交仍算流水（与净营收口径不同）
-    if (r.paid_at != null) {
-      bump(r.paid_at, 'paid_orders');
-      bump(r.paid_at, 'amount_cents', r.amount_cents);
-    }
+  for (const r of createdRows) at(r.k).orders += r.n;
+  for (const r of paidRows) {
+    const b = at(r.k);
+    b.paid_orders += r.n;
+    b.amount_cents += r.amt;
   }
 
   // 零值补齐：无单的桶也要有，前端曲线不跳轴
@@ -411,55 +425,61 @@ export function orderTimeseries(input: { granularity?: unknown; start?: unknown;
 
 export function trafficCurve(input: { granularity?: unknown; start?: unknown; end?: unknown }) {
   const { from, to, size, granularity } = timeWindow(input.start, input.end, String(input.granularity ?? 'day'));
-  const rows = db()
+  const conn = db();
+
+  // PV / UV / 转化访客都在 SQL 里算完：COUNT(DISTINCT ...) 让去重也在索引侧完成，
+  // 不再把 visitor_id 全捞进 Set。
+  const agg = `COUNT(*) AS pv,
+               COUNT(DISTINCT visitor_id) AS uv,
+               COUNT(DISTINCT CASE WHEN converted = 1 THEN visitor_id END) AS cv`;
+
+  const bucketRows = conn
     .prepare(
-      `SELECT visitor_id, channel, converted, created_at FROM mb_visits
-       WHERE created_at >= ? AND created_at < ?`,
+      `SELECT mb_bucket(created_at, ?) AS k, ${agg}
+         FROM mb_visits
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY k`,
     )
-    .all(from, to) as Array<{ visitor_id: string; channel: string; converted: number; created_at: number }>;
+    .all(size, from, to) as Array<{ k: number; pv: number; uv: number; cv: number }>;
 
-  const shape = () => ({
-    pv: 0,
-    uv: 0,
-    converted_visits: 0,
-    visitors: new Set<string>(),
-    converted: new Set<string>(),
-  });
-  const buckets = new Map<number, ReturnType<typeof shape>>();
-  const channels = new Map<string, ReturnType<typeof shape>>();
-  const all = shape();
+  const channelRows = conn
+    .prepare(
+      `SELECT COALESCE(NULLIF(channel, ''), '(unknown)') AS channel, ${agg}
+         FROM mb_visits
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY channel`,
+    )
+    .all(from, to) as Array<{ channel: string; pv: number; uv: number; cv: number }>;
 
-  for (const r of rows) {
-    const key = bucketKey(r.created_at, size);
-    const b = buckets.get(key) ?? shape();
-    const c = channels.get(r.channel || '(unknown)') ?? shape();
-    for (const target of [b, c, all]) {
-      target.pv += 1;
-      target.visitors.add(r.visitor_id);
-      if (r.converted) target.converted.add(r.visitor_id);
-    }
-    buckets.set(key, b);
-    channels.set(r.channel || '(unknown)', c);
-  }
+  const totalRow = conn
+    .prepare(
+      `SELECT ${agg}
+         FROM mb_visits
+        WHERE created_at >= ? AND created_at < ?`,
+    )
+    .get(from, to) as { pv: number; uv: number; cv: number };
 
-  const pack = (x: ReturnType<typeof shape>) => ({
+  const pack = (x: { pv: number; uv: number; cv: number }) => ({
     pv: x.pv,
-    uv: x.visitors.size,
-    converted_visits: x.converted.size,
-    conversion_rate: x.visitors.size ? Math.round((x.converted.size / x.visitors.size) * 1000) / 10 : 0,
+    uv: x.uv,
+    converted_visits: x.cv,
+    conversion_rate: x.uv ? Math.round((x.cv / x.uv) * 1000) / 10 : 0,
   });
+
+  const empty = { pv: 0, uv: 0, cv: 0 };
+  const byKey = new Map(bucketRows.map((r) => [r.k, r]));
 
   const series: Array<{ ts: number; pv: number; uv: number; converted_visits: number; conversion_rate: number }> = [];
   for (let t = bucketKey(from, size); t < to; t = nextBucket(t, size)) {
-    series.push({ ts: t, ...pack(buckets.get(t) ?? shape()) });
+    series.push({ ts: t, ...pack(byKey.get(t) ?? empty) });
   }
   return {
     granularity,
     from,
     to,
     series,
-    channels: [...channels.entries()].map(([channel, v]) => ({ channel, ...pack(v) })),
-    total: pack(all),
+    channels: channelRows.map((r) => ({ channel: r.channel, ...pack(r) })),
+    total: pack(totalRow ?? empty),
   };
 }
 
