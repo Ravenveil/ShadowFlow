@@ -2138,7 +2138,8 @@
 
 /* ── 2026-11-05 顺滑化改版：⋯ 溢出菜单 + drop-to-connect 浮层 ────────── */
 
-/* ⋯ 菜单（top-right Panel）：版本历史 / 放弃修改竖排小菜单 */
+/* ⋯ 菜单（2026-11-05 二轮：锚定工具条正下方、向右对齐保存钮一带；
+   避免与 top-right 的边属性面板重叠） */
 .neo-team-dag-menu-panel {
   display: flex;
   flex-direction: column;
@@ -2149,6 +2150,11 @@
   background: var(--t-bg-elev-2, #141414);
   min-width: 132px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  /* react-flow__panel top-left 基准 + margin 下推到工具条下方 */
+  margin-top: 40px;
+  margin-left: auto;
+  left: auto !important;
+  right: 10px !important;
 }
 .neo-team-dag-menu-item {
   display: flex;
@@ -2187,12 +2193,15 @@
 }
 
 /* drop-to-connect 浮层（拖线松手到空白处）：绝对定位在松手点附近。
-   Panel 默认走 react-flow__panel 定位，这里覆盖为 free 模式由内联 style 定点。 */
+   2026-11-05 二轮：内联 style 给的是「屏幕坐标 − 容器原点」的容器内坐标，
+   这里固定 top:0/left:0 基准（覆盖 react-flow__panel 的默认 margin）。 */
 .neo-team-dag-drop-panel {
   position: absolute !important;
-  right: auto;
-  bottom: auto;
-  transform: translate(12px, -12px);
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2202,6 +2211,7 @@
   background: var(--t-bg-elev-2, #141414);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
   max-width: 220px;
+  z-index: 10;
 }
 .neo-team-dag-drop-list {
   display: flex;
@@ -2221,7 +2231,7 @@
   background: transparent;
   border: none;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
@@ -2229,6 +2239,14 @@
 .neo-team-dag-drop-item:hover {
   background: var(--t-panel-2);
   color: var(--t-fg);
+}
+.neo-team-dag-drop-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 .neo-team-dag-drop-name {
   overflow: hidden;

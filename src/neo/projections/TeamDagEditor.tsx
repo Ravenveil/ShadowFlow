@@ -56,6 +56,7 @@ import {
   useEdgesState,
   addEdge,
   ConnectionMode,
+  ConnectionLineType,
   type Connection,
   type Node,
   type Edge,
@@ -462,6 +463,8 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
 
   // reactflow 实例：视口换算（新节点落视口中心）/ fitView（自动排列后收拢）。
   const { screenToFlowPosition, fitView } = useReactFlow();
+  // 画布容器 ref：新节点落点取容器中心（window 中心在右栏布局下会偏）。
+  const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const [pendingAgentId, setPendingAgentId] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
@@ -480,8 +483,26 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
   // 跑一遍（2026-11-05 起不再是独立按钮），ok/不适用走提示行，errors 走错误区
   const [validating, setValidating] = useState(false);
   const [validateInfo, setValidateInfo] = useState('');
-  // n8n 式 drop-to-connect：拖线松手在空白处 → 记住连线起点，浮层选成员建节点+连线
-  const [pendingConnection, setPendingConnection] = useState<{ source: string; sourceHandle: string | null; position: { x: number; y: number } } | null>(null);
+  // n8n 式 drop-to-connect：拖线松手在空白处 → 记住连线起点，浮层选成员建节点+连线。
+  // 2026-11-05 二轮修复：同时记屏幕坐标（浮层定位用，Panel 在屏幕坐标系）与
+  // flow 坐标（新节点落点用）—— 上一版只有 flow 坐标，缩放/平移后浮层会飘。
+  const [pendingConnection, setPendingConnection] = useState<{
+    source: string;
+    position: { x: number; y: number };
+    screen: { x: number; y: number };
+  } | null>(null);
+
+  /**
+   * 点画布空白处关闭所有浮层（2026-11-05 二轮新增）：⋯ 菜单 / drop-connect
+   * 浮层 / AI 面板此前只能再点一次按钮收起，点空白无反应，不合编辑器直觉。
+   * （版本面板/AI 面板一并收起 —— 空白点击语义 = 「我不用这些浮层了」。）
+   */
+  const closeOverlays = useCallback(() => {
+    setMenuOpen(false);
+    setPendingConnection(null);
+    setShowAiDraft(false);
+    setShowVersions(false);
+  }, []);
 
   // 添加候选：roster 里还没上画布的 agent（data.agentId 为空占位的旧节点不挡）。
   const placedAgentIds = useMemo(
@@ -540,13 +561,18 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
       if (target && (target.classList.contains('react-flow__handle') || target.closest?.('.react-flow__handle'))) {
         return;
       }
-      const coords = screenToFlowPosition(
-        event instanceof MouseEvent ? { x: event.clientX, y: event.clientY } : {
-          x: (event as TouchEvent).changedTouches?.[0]?.clientX ?? 0,
-          y: (event as TouchEvent).changedTouches?.[0]?.clientY ?? 0,
-        },
-      );
-      setPendingConnection({ source: start.nodeId, sourceHandle: null, position: coords });
+      const client =
+        event instanceof MouseEvent
+          ? { x: event.clientX, y: event.clientY }
+          : {
+              x: (event as TouchEvent).changedTouches?.[0]?.clientX ?? 0,
+              y: (event as TouchEvent).changedTouches?.[0]?.clientY ?? 0,
+            };
+      setPendingConnection({
+        source: start.nodeId,
+        position: screenToFlowPosition(client),
+        screen: client,
+      });
     },
     [screenToFlowPosition],
   );
@@ -594,48 +620,57 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
   );
 
   /**
-   * 下拉选中即添加（2026-11-05 顺滑化：不再有独立「+ 节点」钮）—— 节点落在
-   * 当前视口中心（n8n 式），已有节点时向右下级联偏移，避免完全叠住。
+   * 添加节点（2026-11-05 二轮修复）：agentId 参数化 —— 不再依赖 state
+   * （上一版 onChange setTimeout(addAgentNode) 捕获旧闭包 pendingAgentId='',
+   * 查不到 agent 静默 return，选中即添加实际不生效）。节点落在**画布容器**
+   * 视口中心（n8n 式；上一版用 window 中心，编辑器嵌在右栏时节点可能落
+   * 可视区外），已有节点时向右下级联偏移防完全叠住。
    */
-  const addAgentNode = useCallback(() => {
-    const agent = agents.find((a) => a.agent_id === pendingAgentId);
-    if (!agent) return;
-    const id = `n-${agent.agent_id}`;
-    setRfNodes((ns) => {
-      if (ns.some((n) => n.id === id)) return ns;
-      // 视口中心（flow 坐标）；拿不到视口时退化为既有节点包围盒右侧
-      let pos: { x: number; y: number };
-      try {
-        const center = screenToFlowPosition({
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-        });
-        const offset = ns.length * 24;
-        pos = { x: center.x - 48 + offset, y: center.y - 40 + offset };
-      } catch {
-        const maxX = ns.reduce((m, n) => Math.max(m, n.position.x), 0);
-        pos = { x: maxX + (ns.length ? 200 : 0), y: 40 + (ns.length % 6) * 90 };
-      }
-      return [
-        ...ns,
-        {
-          id,
-          type: 'teamAgent',
-          position: pos,
-          data: {
-            agentId: agent.agent_id,
-            name: agent.name,
-            soul: agent.soul,
-            nodeType: 'agentTask',
-            policyState: policyColorOf?.get(agent.agent_id) ?? null,
-            ...resolveAvatar(agent.agent_id),
+  const addAgentNode = useCallback(
+    (agentId?: string) => {
+      const targetId = agentId ?? pendingAgentId;
+      const agent = agents.find((a) => a.agent_id === targetId);
+      if (!agent) return;
+      const id = `n-${agent.agent_id}`;
+      setRfNodes((ns) => {
+        if (ns.some((n) => n.id === id)) return ns;
+        // 画布容器中心（flow 坐标）；容器尺寸拿不到时退化为既有节点包围盒右侧
+        let pos: { x: number; y: number };
+        try {
+          const rect = canvasRef.current?.getBoundingClientRect();
+          const origin =
+            rect && rect.width > 0 && rect.height > 0
+              ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+              : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+          const center = screenToFlowPosition(origin);
+          const offset = ns.length * 24;
+          pos = { x: center.x - 48 + offset, y: center.y - 40 + offset };
+        } catch {
+          const maxX = ns.reduce((m, n) => Math.max(m, n.position.x), 0);
+          pos = { x: maxX + (ns.length ? 200 : 0), y: 40 + (ns.length % 6) * 90 };
+        }
+        return [
+          ...ns,
+          {
+            id,
+            type: 'teamAgent',
+            position: pos,
+            data: {
+              agentId: agent.agent_id,
+              name: agent.name,
+              soul: agent.soul,
+              nodeType: 'agentTask',
+              policyState: policyColorOf?.get(agent.agent_id) ?? null,
+              ...resolveAvatar(agent.agent_id),
+            },
           },
-        },
-      ];
-    });
-    setPendingAgentId('');
-    setErrors([]);
-  }, [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf, screenToFlowPosition]);
+        ];
+      });
+      setPendingAgentId('');
+      setErrors([]);
+    },
+    [agents, pendingAgentId, setRfNodes, resolveAvatar, policyColorOf, screenToFlowPosition],
+  );
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
   const selectedEdges = rfEdges.filter((e) => e.selected);
@@ -924,7 +959,7 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
           {validateInfo}
         </div>
       )}
-      <div className="neo-team-dag-editor-canvas">
+      <div className="neo-team-dag-editor-canvas" ref={canvasRef}>
         <SfReactFlowBase
           nodes={rfNodes}
           edges={rfEdges}
@@ -934,11 +969,12 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
           onConnect={onConnect}
           onConnectStart={onConnectStartCapture}
           onConnectEnd={onConnectEnd}
+          onPaneClick={closeOverlays}
           className="neo-team-dag"
           connectionMode={ConnectionMode.Loose}
           reactFlowProps={{
             deleteKeyCode: ['Delete', 'Backspace'],
-            connectionLineType: 'smoothstep' as never,
+            connectionLineType: ConnectionLineType.SmoothStep,
             connectionRadius: 28,
           }}
         >
@@ -947,9 +983,10 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
               className="neo-team-dag-select"
               value={pendingAgentId}
               onChange={(e) => {
-                setPendingAgentId(e.target.value);
-                // 选中即添加（2026-11-05）：选完直接落节点，不再点「+ 节点」
-                if (e.target.value) window.setTimeout(addAgentNode, 0);
+                const picked = e.target.value;
+                setPendingAgentId(picked);
+                // 选中即添加（2026-11-05 二轮修复）：直调带参，不再依赖旧闭包
+                if (picked) addAgentNode(picked);
               }}
               disabled={saving}
               title={t('neo.host.teamDagAddHint', { defaultValue: '选择成员即添加节点' })}
@@ -1035,9 +1072,11 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                 : t('neo.host.teamDagSave', { defaultValue: '保存' })}
             </button>
           </Panel>
-          {/* ⋯ 溢出菜单：版本历史开关 + 放弃修改（原「取消」钮，dirty 时二次确认） */}
+          {/* ⋯ 溢出菜单：版本历史开关 + 放弃修改（原「取消」钮，dirty 时二次确认）。
+              2026-11-05 二轮：从 top-right 移到工具条下方左上（right 语义让给
+              边属性面板，避免两 Panel 重叠）；菜单位置由 CSS 类锚定工具条尾部。 */}
           {menuOpen && (
-            <Panel position="top-right" className="neo-team-dag-menu-panel" data-testid="team-dag-menu-panel">
+            <Panel position="top-left" className="neo-team-dag-menu-panel" data-testid="team-dag-menu-panel">
               <button
                 type="button"
                 className={`neo-team-dag-menu-item${showVersions ? ' is-active' : ''}`}
@@ -1161,12 +1200,19 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
               </div>
             </Panel>
           )}
-          {/* n8n 式 drop-to-connect：拖线松手到空白处 → 浮层选成员，建节点+连线一步 */}
+          {/* n8n 式 drop-to-connect：拖线松手到空白处 → 浮层选成员，建节点+连线一步。
+              定位：屏幕坐标 − 画布容器原点（Panel 是容器内绝对定位，直接用 flow
+              坐标会在缩放/平移后错位 —— 2026-11-05 二轮修复）。 */}
           {pendingConnection && (
             <Panel
               position="top-left"
               className="neo-team-dag-drop-panel"
-              style={{ left: pendingConnection.position.x, top: pendingConnection.position.y }}
+              style={(() => {
+                const rect = canvasRef.current?.getBoundingClientRect();
+                const left = rect ? pendingConnection.screen.x - rect.left : pendingConnection.screen.x;
+                const top = rect ? pendingConnection.screen.y - rect.top : pendingConnection.screen.y;
+                return { left: Math.max(0, left), top: Math.max(0, top) };
+              })()}
               data-testid="team-dag-drop-panel"
             >
               <div className="neo-team-dag-versions-head">
@@ -1188,6 +1234,15 @@ export function TeamDagEditor({ teamId, workflow, agents, onSaved, onCancel, pol
                       onClick={() => connectDroppedToAgent(a.agent_id)}
                       data-testid={`team-dag-drop-item-${a.agent_id}`}
                     >
+                      <span className="neo-team-dag-drop-avatar">
+                        <AgentAvatar
+                          name={a.name}
+                          style={a.avatar_style}
+                          seed={a.avatar_seed ?? a.name}
+                          image={a.avatar_image ?? null}
+                          size={20}
+                        />
+                      </span>
                       <span className="neo-team-dag-drop-name">{a.name}</span>
                     </button>
                   ))
