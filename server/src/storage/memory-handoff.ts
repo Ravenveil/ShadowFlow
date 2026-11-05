@@ -23,6 +23,8 @@ import { recallLessons } from './memory-lessons';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_TEXT = 600;
+/** 每个画像主体保留的流水条数上限；超出滚动删除最老的（当前值表不受影响）。 */
+const PROFILE_EVENT_KEEP = 200;
 
 export class MemoryHandoffError extends Error {
   status: number;
@@ -429,6 +431,18 @@ export function writeback(input: {
       cur ? cur.confidence : null,
       confidence, action, source, evidence, actor, now,
     );
+    // 流水只留最近 PROFILE_EVENT_KEEP 条：append-only 不等于无限增长，
+    // 长期跑下来（每个客户几百次写回）单表会拖慢 profile() 的历史查询。
+    // 当前值在 memory_profile_values 里，裁剪历史不影响画像本身。
+    db.prepare(
+      `DELETE FROM memory_profile_events
+        WHERE subject_type = ? AND subject_id = ?
+          AND id NOT IN (
+            SELECT id FROM memory_profile_events
+             WHERE subject_type = ? AND subject_id = ?
+             ORDER BY id DESC LIMIT ?
+          )`,
+    ).run(subject_type, subject_id, subject_type, subject_id, PROFILE_EVENT_KEEP);
     return {
       action,
       value: action === 'create' || action === 'update' ? value : cur!.value,
