@@ -43,6 +43,8 @@ import memoryEntriesRouter from './routes/memory-entries';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
 import memoryLessonsRouter from './routes/memory-lessons';
 import dashboardRouter from './routes/dashboard';
+// 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
+import merchantBoardRouter from './routes/merchant-board';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/conversations';
@@ -127,6 +129,8 @@ app.use('/api/memory-entries', memoryEntriesRouter);
 // 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂在 proxyFallback 之前。
 app.use('/api/memory/lessons', memoryLessonsRouter);
 app.use('/api/dashboard', dashboardRouter);
+// 功能线① 商家商业化数据（订单分时 / 客流 / 第一单链路），挂 proxyFallback 之前
+app.use('/api/merchant', merchantBoardRouter);
 app.use('/api/conversations', conversationsRouter);
 // Chat/DM/群聊 发消息网关 — 拦下 POST /api/groups/:id/messages 用 Node dispatcher
 // 生成回复（CLI + API 都真生效）。其余 /api/groups/* 不在此定义 → next() →
