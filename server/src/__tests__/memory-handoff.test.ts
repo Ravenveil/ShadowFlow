@@ -563,3 +563,55 @@ describe('反馈自动写回队列（投递即写回 → 幂等 → 冲突 → �
     expect(weirdRun.status).toBeLessThan(500);
   });
 });
+
+describe('记忆消费留痕（每次读上下文落一条访问记录）', () => {
+  it('contextFor 落痕：消费方 / 作用域 / 带出条数 / 来源可核，stats 计数同步', async () => {
+    const before = (await request(app()).get('/api/memory/handoff/context/reads?limit=100')).body;
+    const read = await request(app()).get(
+      '/api/memory/handoff/context?agent=消费岗-B&scope_key=copywriting&task_type=writer',
+    );
+    expect(read.status).toBe(200);
+    expect(read.body.count).toBeGreaterThanOrEqual(1);
+
+    const after = (await request(app()).get('/api/memory/handoff/context/reads?limit=100')).body;
+    expect(after.total).toBe(before.total + 1);
+    const latest = after.items[after.items.length - 1];
+    expect(latest.agent).toBe('消费岗-B');
+    expect(latest.scope_key).toBe('copywriting');
+    expect(latest.task_type).toBe('writer');
+    expect(latest.item_count).toBe(read.body.count);
+    expect(latest.sources).toEqual(read.body.sources);
+
+    const stats = (await request(app()).get('/api/memory/handoff/stats')).body;
+    expect(stats.context_reads).toBe(after.total);
+  });
+
+  it('消费审计可按窗口筛；脏参数回落默认值不 5xx', async () => {
+    const future = Date.now() + 60000;
+    const none = (await request(app()).get(`/api/memory/handoff/context/reads?from=${future}`)).body;
+    expect(none.total).toBe(0);
+    expect(none.items).toEqual([]);
+
+    const all = (await request(app()).get('/api/memory/handoff/context/reads')).body;
+    expect(all.total).toBeGreaterThanOrEqual(1);
+    expect(Object.keys(all.by_agent).length).toBeGreaterThanOrEqual(1);
+
+    // limit / from / to 全给脏值：回落默认（不筛、不超上限），不是 5xx 也不是静默报错
+    const dirty = await request(app()).get('/api/memory/handoff/context/reads?limit=oops&from=xx&to=yy');
+    expect(dirty.status).toBe(200);
+    expect(dirty.body.total).toBe(all.total);
+  });
+
+  it('访问日志滚动裁剪：连读 210 次全表只留最近 200 条，最近一次还在', async () => {
+    for (let i = 0; i < 210; i++) {
+      await request(app()).get('/api/memory/handoff/context?agent=压测岗&limit=1');
+    }
+    const total = (
+      sqlite.getDb().prepare(`SELECT COUNT(*) AS n FROM memory_context_reads`).get() as { n: number }
+    ).n;
+    expect(total).toBe(200); // 与画像流水同法：append-only 也要有上界
+    const rows = (await request(app()).get('/api/memory/handoff/context/reads?limit=1')).body;
+    expect(rows.items[rows.items.length - 1].agent).toBe('压测岗');
+    expect(rows.total).toBe(200);
+  });
+});
