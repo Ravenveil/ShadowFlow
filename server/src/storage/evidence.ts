@@ -129,6 +129,8 @@ export interface FeedbackItem {
   conflicts: number;
   source: string;
   created_at: number;
+  /** 写回失败时的失败原因（processFeedbackRow 的 catch 落下的 error）；正常行为空串。 */
+  error: string;
 }
 
 export interface FeedbackSnapshot {
@@ -169,11 +171,11 @@ function readFeedback(db: Db, cap: number): FeedbackSnapshot {
     }
   }
   const rows = db
-    .prepare(`SELECT subject_id, status, actions_json, conflicts, source, created_at
+    .prepare(`SELECT subject_id, status, actions_json, conflicts, source, created_at, error
                 FROM memory_feedback_queue ORDER BY created_at DESC LIMIT ?`)
     .all(cap) as Array<{
     subject_id: string; status: string; actions_json: string;
-    conflicts: number; source: string; created_at: number;
+    conflicts: number; source: string; created_at: number; error: string;
   }>;
   return {
     available: true,
@@ -185,6 +187,7 @@ function readFeedback(db: Db, cap: number): FeedbackSnapshot {
       conflicts: r.conflicts,
       source: r.source,
       created_at: r.created_at,
+      error: r.error ?? '',
     })),
   };
 }
@@ -589,6 +592,9 @@ function scorecardBody(report: EvidenceReport): string[] {
   const gaps = ['支付为演示用模拟回调，未接真实支付渠道；金额以整数分记账，展示时换算成元。'];
   if (!m.first_order.complete) gaps.push('第一单五步链路未通：按第七章步骤建商品 → 埋点 → 下单 → 支付后重新导出。');
   if (!mm.feedback.available) gaps.push('反馈自动写回队列模块尚未启用（表不存在），队列计数为 0。');
+  if (hd.failed_feedback > 0 || hd.pending_feedback > 0) {
+    gaps.push(`反馈队列还有 ${hd.failed_feedback} 条写回失败 / ${hd.pending_feedback} 条待处理：在「设置 — 记忆」点「补跑待处理 / 失败」重放后重新导出，失败原因见七章报告的反馈队列表。`);
+  }
   if (mm.audit.total === 0 && mm.stats.handoffs === 0) {
     gaps.push('本区间没有画像写回 / 交接包留痕：投递客户反馈或触发一次岗位交接后重新导出，创新性与人机分工两格才有事实可核。');
   }
@@ -775,9 +781,10 @@ export function evidenceMarkdown(report: EvidenceReport): string {
   if (mm.feedback.items.length === 0) {
     push('_还没有反馈投递_');
   } else {
-    table(['时间', '主体', '状态', '写回动作', '冲突', '来源'], mm.feedback.items.map((f) => [
+    table(['时间', '主体', '状态', '写回动作', '冲突', '来源', '失败原因'], mm.feedback.items.map((f) => [
       stamp(f.created_at), f.subject_id, f.status, f.actions.join('/') || '—',
       String(f.conflicts), f.source,
+      f.status === 'failed' ? (f.error || '（未留原因）').slice(0, 60) : '—',
     ]));
   }
   push();

@@ -259,6 +259,35 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     expect(r.memory.audit.events.some((e: { actor: string }) => e.actor === 'boss')).toBe(true);
   });
 
+  it('失败反馈可核实：队列表带失败原因，速览提示人工补跑后重新导出', async () => {
+    // 真实失败由 processFeedbackRow 的 catch 落成 failed + error；公开 API 没法
+    // 确定性逼出写回异常，这里直接种一条失败态（与 demo-exception-replay 同一手法，
+    // 只写队列表、不造假表），验证「失败可补跑」这条闭环在材料里看得见原因。
+    sqlite.getDb()
+      .prepare(
+        `INSERT INTO memory_feedback_queue
+           (id, subject_type, subject_id, text_hash, text, source, source_ref,
+            status, keys_json, actions_json, conflicts, error, actor, created_at)
+         VALUES ('fb-fail-1', 'customer', 'cust-ev', 'hash-fail-1', '行业做的是烘焙',
+                 'test', 'case-failed-feedback', 'failed', '[]', '[]', 0,
+                 '模拟写回失败：库忙超时', 'system', ?)`,
+      )
+      .run(Date.now());
+
+    const r = (await request(app()).get('/api/merchant/evidence')).body;
+    expect(r.human_decisions.failed_feedback).toBeGreaterThanOrEqual(1);
+    const failed = r.memory.feedback.items.find((i: { status: string }) => i.status === 'failed');
+    expect(failed?.error).toContain('模拟写回失败');
+
+    const md = (await request(app()).get('/api/merchant/evidence.md')).text;
+    expect(md).toContain('失败原因');
+    expect(md).toContain('模拟写回失败：库忙超时');
+
+    const card = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+    expect(card).toContain('条写回失败');
+    expect(card).toContain('补跑待处理 / 失败');
+  });
+
   it('Markdown 是能直接当答辩附件的中文材料', async () => {
     const md = (await request(app()).get('/api/merchant/evidence.md')).text;
     expect(md).toContain('## 〇、评委速览（对照赛题评分表）');
