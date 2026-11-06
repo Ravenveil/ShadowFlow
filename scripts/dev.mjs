@@ -15,7 +15,7 @@
  *
  * 可选参数:--no-open 不开浏览器;--no-python 只起网关+前端。
  */
-import { spawn, execFile } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -59,12 +59,29 @@ function resolvePython() {
 }
 
 // ── 端口/HTTP 就绪探测 ────────────────────────────────────────────────────────
-function portInUse(port) {
+/**
+ * 回环地址有两个协议族，两个都可能有人监听：
+ *   - Vite 默认 host 是 `localhost`，Node 解析成 ::1 时只绑 [::1]（这是常态）；
+ *   - Express/tsx 绑 0.0.0.0。
+ * 只探 127.0.0.1 会把 ::1 上的服务当成"没起来"，白等 120s 后误杀整棵树。
+ */
+const LOOPBACK_HOSTS = ['127.0.0.1', '::1'];
+
+function loopbackUrl(host, port, pathname) {
+  return `http://${host.includes(':') ? `[${host}]` : host}:${port}${pathname}`;
+}
+
+function portInUseOne(port, host) {
   return new Promise((resolve) => {
-    const s = net.connect({ port, host: '127.0.0.1' });
+    const s = net.connect({ port, host });
     s.once('connect', () => { s.destroy(); resolve(true); });
     s.once('error', () => resolve(false));
   });
+}
+
+async function portInUse(port) {
+  for (const host of LOOPBACK_HOSTS) if (await portInUseOne(port, host)) return true;
+  return false;
 }
 
 function probe(url) {
@@ -76,13 +93,15 @@ function probe(url) {
   });
 }
 
-async function waitReady(url, label, timeoutMs = 120_000) {
+async function waitReady(port, pathname, label, timeoutMs = 120_000) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
-    if (await probe(url)) return;
+    for (const host of LOOPBACK_HOSTS) {
+      if (await probe(loopbackUrl(host, port, pathname))) return;
+    }
     await sleep(400);
   }
-  throw new Error(`${label} 在 ${timeoutMs / 1000}s 内未就绪:${url}`);
+  throw new Error(`${label} 在 ${timeoutMs / 1000}s 内未就绪:${pathname}（端口 ${port}）`);
 }
 
 // ── 子进程日志:按行分帧 + 彩色前缀 ──────────────────────────────────────────
@@ -218,15 +237,45 @@ function openBrowser(url) {
 }
 
 // ── 主流程 ────────────────────────────────────────────────────────────────────
+/**
+ * Python 侧是 legacy 服务(FastAPI)，Node 网关才是现在的产品面。
+ * 但它的依赖不在 repo 里：新同学 clone 完直接 `npm run dev`，py 进程起不来
+ * 就整棵树收摊，前端一行都干不了。所以启动前先探一次——依赖不全就明确告警
+ * 后跳过 Python，网关照常起，只有 legacy 路由会 503。
+ */
+function pythonUsable(pyBin) {
+  try {
+    execFileSync(pyBin, ['-c', 'import uvicorn, yaml, fastapi'], {
+      stdio: 'ignore',
+      timeout: 20_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   const uiUrl = `http://localhost:${WEB_PORT}`;
+  const pyBin = resolvePython();
+  let withPython = WITH_PYTHON;
+  if (withPython && !pythonUsable(pyBin)) {
+    withPython = false;
+    console.log(
+      `${C.yellow}⚠ Python 侧依赖不全，已跳过 legacy FastAPI(:${PY_PORT})${C.reset}\n` +
+        `${C.dim}  解释器: ${pyBin}\n` +
+        `  受影响：legacy 路由会 503，其余功能正常。\n` +
+        `  补齐依赖: ${pyBin} -m pip install -e ".[server]"\n` +
+        `  显式跳过: npm run dev -- --no-python${C.reset}\n`,
+    );
+  }
 
   console.log(`
 ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.reset}
   ────────────────────────────────────────────
   ${C.cyan}UI${C.reset}      ${uiUrl}
   ${C.cyan}网关${C.reset}    http://localhost:${GW_PORT}/health
-  ${C.cyan}Python${C.reset}  http://localhost:${PY_PORT}/docs
+  ${withPython ? `${C.cyan}Python${C.reset}  http://localhost:${PY_PORT}/docs` : `${C.dim}Python  已跳过${C.reset}`}
   ${C.dim}Ctrl+C 停止全部服务${C.reset}
 `);
 
@@ -234,7 +283,7 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
   const need = [
     { port: WEB_PORT, name: 'Vite 前端' },
     { port: GW_PORT, name: 'Node 网关' },
-    ...(WITH_PYTHON ? [{ port: PY_PORT, name: 'Python FastAPI' }] : []),
+    ...(withPython ? [{ port: PY_PORT, name: 'Python FastAPI' }] : []),
   ];
   const busy = [];
   for (const n of need) if (await portInUse(n.port)) busy.push(n);
@@ -245,8 +294,7 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
   }
 
   // 2) 依次拉起三个进程(直连入口,不经过 npm 壳,进程树干净好杀)
-  const pyBin = resolvePython();
-  if (WITH_PYTHON) {
+  if (withPython) {
     launch('py', C.py, pyBin, [
       '-m', 'uvicorn', 'shadowflow.server:app',
       '--host', '127.0.0.1', '--port', String(PY_PORT), '--reload',
@@ -265,10 +313,10 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
 
   // 3) 就绪探测(任一进程死掉会走 exit handler 直接收摊,这里只会等超时)
   const waiting = [
-    waitReady(`http://127.0.0.1:${WEB_PORT}/`, 'Vite 前端').then(() => console.log(`${C.green}✓${C.reset} 前端就绪 :${WEB_PORT}`)),
-    waitReady(`http://127.0.0.1:${GW_PORT}/health`, 'Node 网关').then(() => console.log(`${C.green}✓${C.reset} 网关就绪 :${GW_PORT}`)),
-    ...(WITH_PYTHON
-      ? [waitReady(`http://127.0.0.1:${PY_PORT}/docs`, 'Python FastAPI').then(() => console.log(`${C.green}✓${C.reset} Python 就绪 :${PY_PORT}`))]
+    waitReady(WEB_PORT, '/', 'Vite 前端').then(() => console.log(`${C.green}✓${C.reset} 前端就绪 :${WEB_PORT}`)),
+    waitReady(GW_PORT, '/health', 'Node 网关').then(() => console.log(`${C.green}✓${C.reset} 网关就绪 :${GW_PORT}`)),
+    ...(withPython
+      ? [waitReady(PY_PORT, '/docs', 'Python FastAPI').then(() => console.log(`${C.green}✓${C.reset} Python 就绪 :${PY_PORT}`))]
       : []),
   ];
   try {
