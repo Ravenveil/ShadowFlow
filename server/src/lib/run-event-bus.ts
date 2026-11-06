@@ -78,6 +78,19 @@ const TERMINAL: ReadonlySet<RunStatus> = new Set<RunStatus>([
   'canceled',
 ]);
 
+/**
+ * hop 卡终态集合 — contracts.ts hop_update patch.status 里除 'running' 外皆终态
+ * （done/failed/timeout/empty/denied/aborted）。清扫用它判「已有结算、勿再补」。
+ */
+const HOP_TERMINAL: ReadonlySet<string> = new Set([
+  'done',
+  'failed',
+  'timeout',
+  'empty',
+  'denied',
+  'aborted',
+]);
+
 /** A connected SSE view. The route layer implements these against `res`. */
 export interface RunEventSink {
   /** Write one event frame. Called for replayed AND live events. */
@@ -240,20 +253,23 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
    * 只认 message/message-patch 事件，这些卡就永远停在 streaming（前端转圈
    * 23 小时的根因）。这里扫一遍日志，给每张未终态卡就地补一条终态 patch
    * （'message-patch' 事件追加到日志尾部），使任何回放路径都干净落定。
-   * 幂等：已终态的卡直接跳过。
+   * 2026-11-07 hop 卡收口 — hop_card 帧（pending/running）同样在此补
+   * hop_update {status:'aborted'} 终态：SQLite 侧有 sweepOrphanHops 兜底，
+   * 但重放可见的时间线侧此前无人收口，崩溃/中断后 hop 卡永卡「交接中」。
+   * 幂等：已终态的卡直接跳过（含本清扫补过的 —— 合成 patch 也在日志里）。
    */
   const sweepOpenProcessCards = (run: Run): number => {
     // 按消息 id 归并已见过的终态信号（append/中间帧不算）——后写的终态优先。
     const finalized = new Set<string>();
     for (const rec of run.events) {
       if (rec.event !== 'message-patch') continue;
-      const p = rec.data as { id?: string; op?: string } | null;
+      const p = rec.data as { id?: string; op?: string; patch?: { status?: string } } | null;
       if (!p || typeof p.id !== 'string') continue;
       if (
         p.op === 'thinking_finalize' ||
         p.op === 'tool_finalize' ||
-        (p.op === 'msg_foot_update' &&
-          (p as { patch?: { status?: string } }).patch?.status === 'done')
+        (p.op === 'msg_foot_update' && p.patch?.status === 'done') ||
+        (p.op === 'hop_update' && HOP_TERMINAL.has(p.patch?.status ?? ''))
       ) {
         finalized.add(p.id);
       }
@@ -298,6 +314,27 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
             id: m.id,
             op: 'msg_foot_update',
             patch: { status: 'done' },
+          },
+          ts: now(),
+        });
+        finalized.add(m.id);
+        swept += 1;
+      } else if (m.kind === 'hop_card' && (m.status === 'pending' || m.status === 'running')) {
+        // hop 卡收口 — 中断/崩溃时 hop 的 settle 从未发生（SQLite 侧由
+        // sweepOrphanHops 补 aborted），日志侧在此对齐：补 aborted 终态
+        // patch，回放不再永卡「交接中」。已 settle 的卡在上面 finalized
+        // 已收集（终态 hop_update），不会被改写。
+        run.events.push({
+          id: run.nextEventId++,
+          event: 'message-patch',
+          data: {
+            id: m.id,
+            op: 'hop_update',
+            patch: {
+              status: 'aborted',
+              detail: '回合中断，交接未结算',
+              duration_ms: Math.max(0, now() - (m.ts ?? now())),
+            },
           },
           ts: now(),
         });

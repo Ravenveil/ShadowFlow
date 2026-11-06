@@ -86,6 +86,27 @@ describe('applyPatch · hop_update', () => {
     expect(next.detail).toBe('上游 scout timeout');
   });
 
+  it('transitions through running「交接中」中间态（pending → running → done）', () => {
+    const running = applyPatch(hopMsg, {
+      id: 'm-hop',
+      op: 'hop_update',
+      patch: { status: 'running' },
+    });
+    if (running.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(running.status).toBe('running');
+    // 中间态 patch 不带终态字段 —— 缺席字段不被 undefined 覆盖
+    expect(running.output_chars).toBeUndefined();
+    expect(running.detail).toBeUndefined();
+
+    const done = applyPatch(running, {
+      id: 'm-hop',
+      op: 'hop_update',
+      patch: { status: 'done', output_chars: 80, duration_ms: 1200 },
+    });
+    if (done.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(done).toMatchObject({ status: 'done', output_chars: 80, duration_ms: 1200 });
+  });
+
   it('is a no-op when targeting a non-hop message', () => {
     const msg: TimelineMessage = { ...base, id: 'm-text', kind: 'assistant_text', body: 'x' };
     expect(applyPatch(msg, { id: 'm-text', op: 'hop_update', patch: { status: 'done' } })).toBe(msg);
