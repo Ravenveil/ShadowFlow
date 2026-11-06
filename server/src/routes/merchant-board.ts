@@ -23,6 +23,8 @@
  * GET  /api/merchant/evidence/orders.csv   → 区间内订单明细 CSV（UTF-8 BOM）
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
+ * GET  /api/merchant/products/economics     → 产品贡献与定价（产品 × 营收/成本/毛利/标价对照，
+ *                                             合计与 overview 同窗口同口径）
  * POST /api/merchant/products               → 建商品（管理）
  * POST /api/merchant/visits                 → 落地页埋点
  * POST /api/merchant/orders                 → 下单
@@ -45,6 +47,7 @@ import {
   orderTimeseries,
   overview,
   payOrder,
+  productEconomics,
   recordVisit,
   reconcile,
   refundOrder,
@@ -120,6 +123,16 @@ router.get('/traffic/curve', (req: Request, res: Response) => {
 router.get('/channels', (req: Request, res: Response) => {
   try {
     res.json(channelEconomics({ start: req.query.start, end: req.query.end }));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 产品贡献与定价：订单列表只答「这一单赚多少」，答不了「这个产品整体挣不挣钱、
+// 定价兑现了多少」。标价对照单均实收，退款吃掉的水分一眼可见。
+router.get('/products/economics', (req: Request, res: Response) => {
+  try {
+    res.json(productEconomics({ start: req.query.start, end: req.query.end }));
   } catch (err) {
     fail(res, err);
   }

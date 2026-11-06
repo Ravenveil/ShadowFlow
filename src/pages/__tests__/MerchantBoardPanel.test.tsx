@@ -16,6 +16,7 @@ vi.mock('../../api/merchantBoard', () => ({
   fetchOrderTimeseries: vi.fn(),
   fetchTrafficCurve: vi.fn(),
   fetchChannelEconomics: vi.fn(),
+  fetchProductEconomics: vi.fn(),
   fetchReconcile: vi.fn(),
   fetchFirstOrderChain: vi.fn(),
   fetchMerchantOrders: vi.fn(),
@@ -109,6 +110,57 @@ const channelEcon: api.ChannelEconomics = {
     cost_cents: 3200,
     gross_profit_cents: 9600,
     gross_margin_pct: 75,
+  },
+};
+
+/** 产品贡献与定价 mock：烘焙课挣钱、代运营全退归零，钱口径合计与 overview
+ *  （营收 ¥199 / 成本 ¥43 / 毛利 ¥156 / 78.4%）逐字段一致。 */
+const productEcon: api.ProductEconomics = {
+  range: { from: null, to: null },
+  products: [
+    {
+      product_id: 'p-bake',
+      product_name: '烘焙课',
+      list_price_cents: 21900,
+      orders_total: 2,
+      paid_orders: 1,
+      refunded_orders: 1,
+      revenue_cents: 19900,
+      cost_cents: 4300,
+      gross_profit_cents: 15600,
+      gross_margin_pct: 78.4,
+      // 单均实收 = 19900 ÷ 成交 2 单 = 9950，比标价 21900 低一半：退款吃掉的水分
+      avg_realized_price_cents: 9950,
+      unit_gross_profit_cents: 7800,
+      revenue_share_pct: 100,
+    },
+    {
+      product_id: 'p-ops',
+      product_name: '代运营',
+      list_price_cents: 68000,
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 1,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+      gross_margin_pct: null,
+      // 全退成交过：单均实收如实 0（钱确实没留住），不是 null
+      avg_realized_price_cents: 0,
+      unit_gross_profit_cents: 0,
+      revenue_share_pct: 0,
+    },
+  ],
+  total: {
+    orders_total: 3,
+    paid_orders: 1,
+    refunded_orders: 2,
+    revenue_cents: 19900,
+    cost_cents: 4300,
+    gross_profit_cents: 15600,
+    gross_margin_pct: 78.4,
+    avg_realized_price_cents: 6633,
+    unit_gross_profit_cents: 5200,
   },
 };
 
@@ -214,6 +266,7 @@ beforeEach(() => {
   vi.mocked(api.fetchOrderTimeseries).mockResolvedValue(flow);
   vi.mocked(api.fetchTrafficCurve).mockResolvedValue(traffic);
   vi.mocked(api.fetchChannelEconomics).mockResolvedValue(channelEcon);
+  vi.mocked(api.fetchProductEconomics).mockResolvedValue(productEcon);
   vi.mocked(api.fetchReconcile).mockResolvedValue(reconcile);
   vi.mocked(api.fetchFirstOrderChain).mockResolvedValue(chain);
   vi.mocked(api.fetchMerchantOrders).mockResolvedValue({
@@ -554,6 +607,64 @@ describe('渠道获客经济性（哪个渠道挣钱，合计=KPI）', () => {
     await waitFor(() => expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199'));
     expect(screen.getByTestId('merchant-channel-econ')).toBeInTheDocument();
     expect(screen.queryByTestId('merchant-channel-econ-table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
+  });
+});
+
+describe('产品贡献与定价（哪个产品挣钱、定价兑现多少，合计=KPI）', () => {
+  it('表格列出标价/单均实收/单均毛利，合计行可与 KPI 对账', async () => {
+    renderPanel();
+    const table = await screen.findByTestId('merchant-product-econ-table');
+    // 按行断言：同名金额在多行复现，整表 getByText 会命中多元素
+    const rows = within(table).getAllByTestId('merchant-product-econ-row');
+    expect(rows).toHaveLength(2);
+    const [bake, ops] = rows;
+    expect(within(bake).getByText('烘焙课')).toBeInTheDocument();
+    // 标价与单均实收同格渲染（td + 子行 span）：用 ^ 锚定子行文本，避免命中双元素
+    expect(within(bake).getByText(/^¥219\.00/)).toBeInTheDocument();
+    expect(within(bake).getByText(/^单均实收 ¥99\.50/)).toBeInTheDocument();
+    expect(within(bake).getByText(/^单均 ¥78\.00/)).toBeInTheDocument();
+    expect(within(bake).getByText('78.4%')).toBeInTheDocument();
+    expect(within(bake).getByText('100%')).toBeInTheDocument();
+    // 全退产品：单均实收如实 0 不编空，毛利率无从算起显示 —，占比 0%
+    expect(within(ops).getByText('代运营')).toBeInTheDocument();
+    expect(within(ops).getByText(/^单均实收 ¥0\.00/)).toBeInTheDocument();
+    expect(within(ops).getByText('—')).toBeInTheDocument();
+    expect(within(ops).getByText('0%')).toBeInTheDocument();
+
+    const total = screen.getByTestId('merchant-product-econ-total');
+    expect(total).toHaveTextContent('合计');
+    // 合计与 KPI 是同一笔账：营收 ¥199 / 成本 ¥43 / 毛利 ¥156 / 78.4%
+    expect(within(total).getByText(/^¥199\.00/)).toBeInTheDocument();
+    expect(within(total).getByText(/^¥43\.00/)).toBeInTheDocument();
+    expect(within(total).getByText(/^¥156\.00/)).toBeInTheDocument();
+    expect(within(total).getByText('78.4%')).toBeInTheDocument();
+    expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199');
+    expect(screen.getByTestId('merchant-cost')).toHaveTextContent('¥43');
+    expect(screen.getByTestId('merchant-gross')).toHaveTextContent('¥156');
+
+    // 首屏是全量：与 KPI 同一组参数（不限区间），合计才能对上
+    expect(api.fetchProductEconomics).toHaveBeenCalledTimes(1);
+    expect(api.fetchProductEconomics).toHaveBeenCalledWith({});
+  });
+
+  it('切 KPI 区间时用同一窗口重新取数', async () => {
+    renderPanel();
+    await screen.findByTestId('merchant-product-econ-table');
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchProductEconomics).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
+  it('产品经济性取数失败只降级成空卡，不拖垮整页看板', async () => {
+    vi.mocked(api.fetchProductEconomics).mockRejectedValue(new Error('products boom'));
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199'));
+    expect(screen.getByTestId('merchant-product-econ')).toBeInTheDocument();
+    expect(screen.queryByTestId('merchant-product-econ-table')).not.toBeInTheDocument();
     expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
   });
 });
