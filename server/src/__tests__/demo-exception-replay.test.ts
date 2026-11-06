@@ -38,6 +38,8 @@ interface DemoSummary {
     pending_conflicts: number;
     handoffs: number;
     accepted_handoffs: number;
+    context_reads: number;
+    context_items: number;
     pending_conflict_action: string;
     resolved_conflict_action: string;
     resolution_action: string;
@@ -108,6 +110,8 @@ describe('demo-exception-replay 演示证据包', () => {
       expect(s.memory.pending_conflicts).toBeGreaterThanOrEqual(1);
       expect(s.memory.handoffs).toBeGreaterThanOrEqual(1);
       expect(s.memory.accepted_handoffs).toBeGreaterThanOrEqual(1);
+      expect(s.memory.context_reads).toBeGreaterThanOrEqual(1);
+      expect(s.memory.context_items).toBeGreaterThanOrEqual(1);
       expect(s.memory.audit_total).toBeGreaterThan(0);
 
       // 编排层异常与人工审批拒绝，且不把 policy deny 混成老板决策。

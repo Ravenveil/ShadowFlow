@@ -38,6 +38,7 @@ import {
   type OrderRow,
 } from './merchant-board';
 import {
+  contextReads,
   handoffStats,
   listConflicts,
   listHandoffs,
@@ -316,6 +317,8 @@ export interface EvidenceReport {
     audit: ProfileAuditTrail;
     feedback: FeedbackSnapshot;
     handoffs: Handoff[];
+    /** 记忆消费留痕：contextFor 被调用的记录（谁 / 作用域 / 带出几条 / 来源）。 */
+    context_reads: ReturnType<typeof contextReads>;
   };
   /** 协作 DAG 执行留痕（只读 agent_hops），把「异常处理」变成可核实的运行记录。 */
   collaboration: CollaborationTrail;
@@ -393,6 +396,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
   const conflicts = listConflicts({ limit: cap });
   const audit = readAuditTrail(db, { limit: cap, from, to });
   const handoffs = listHandoffs({ limit: cap });
+  const context_reads = contextReads({ limit: cap, from, to });
   const collaboration = readCollaboration(db, { limit: cap, from, to });
 
   return {
@@ -416,6 +420,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
       audit,
       feedback,
       handoffs,
+      context_reads,
     },
     collaboration,
     human_decisions: {
@@ -434,7 +439,8 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
       '支付为演示用模拟回调，未接真实支付渠道；金额为整数分，展示时换算成元。',
       '画像写回是规则式提炼（零模型消耗）；同置信不同说法记 conflict 并保留原值，不擅自覆盖。',
       '本材料由已落库事实汇总生成，导出过程只读，不改写任何业务数据。',
-      '经营数字、画像写回流水与协作 hop 留痕按所选统计区间；交接包与反馈队列的计数是累计全量、明细只取最近 N 条，两类口径在报告中分开标注。',
+      '经营数字、画像写回流水、记忆消费留痕与协作 hop 留痕按所选统计区间；交接包与反馈队列的计数是累计全量、明细只取最近 N 条，两类口径在报告中分开标注。',
+      '记忆消费留痕 = 每次调用 GET /api/memory/handoff/context 读上下文时自动落的一条访问记录（谁 / 作用域 / 带出几条 / 来源），只证明「记忆被用上」，不含任何产出内容；计数为 0 只说明还没人读过，不代表功能缺失。',
       '协作 hop 取自编排层已落库的 agent_hops（每条 DAG 边一行）；只记状态、产出字符数与终态原因，产出全文不落库。本材料只读汇总，不改编排层。',
       '异常终态 = failed / timeout / denied / aborted / empty；返工按 detail「rework round」识别，人工审批拒绝按「审批被拒」识别；系统策略 deny 与人工审批拒绝都记为 denied，只有后者算人的决策。',
       ...(collaboration.available ? [] : ['协作留痕表 agent_hops 不存在（老库），本章计数为 0；其余章节不受影响。']),
@@ -452,6 +458,8 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
         'GET /api/merchant/evidence/scorecard.md',
         'GET /api/merchant/evidence/orders.csv',
         'GET /api/memory/handoff/stats',
+        'GET /api/memory/handoff/context?agent=B',
+        'GET /api/memory/handoff/context/reads',
         'GET /api/memory/handoff/profiles/conflicts',
         'GET /api/memory/handoff/feedback',
       ],
@@ -555,8 +563,8 @@ function scorecardBody(report: EvidenceReport): string[] {
   push();
   table(['维度（分值）', '赛题评分依据', '本材料的可核实证据', '现场复现'], [
     ['创新性（35）', '公司形态 / 组织设计 / 业务闭环有新意；体现 AI 员工独特价值',
-      `交接包 ${mm.stats.handoffs}（已接班 ${mm.stats.accepted}）· 画像写回 ${mm.audit.total} 事件 · 冲突只留痕不覆盖（待裁决 ${hd.pending_conflicts}）· ${collab}`,
-      '报告第三、四章；GET /api/memory/handoff/stats'],
+      `交接包 ${mm.stats.handoffs}（已接班 ${mm.stats.accepted}）· 画像写回 ${mm.audit.total} 事件 · 记忆消费 ${mm.context_reads.total} 次 · 冲突只留痕不覆盖（待裁决 ${hd.pending_conflicts}）· ${collab}`,
+      '报告第三、四章；GET /api/memory/handoff/stats、/context/reads'],
     ['商业化潜力（25）', '定价 / 获客方式 / 单位经济合理，业务能持续运行',
       `${unitEconomics} · ${balanced}`,
       '报告第一、二章；GET /api/merchant/overview?compare=1、/reconcile'],
@@ -578,8 +586,8 @@ function scorecardBody(report: EvidenceReport): string[] {
     ['人机分工清晰', human,
       hd.resolutions + hd.pending_conflicts + dag.approval_rejections > 0 ? '有数据' : '待造数据'],
     ['跨多个生产力场景形成完整闭环',
-      `落地页 → 下单 → 支付 → 入账 → 看板（${chainSteps}/5 步）；客户反馈 → 画像写回 → 岗位交接；DAG 调度 → 返工 → 审批`,
-      m.first_order.complete && (mm.audit.total > 0 || mm.stats.handoffs > 0 || dag.total > 0)
+      `落地页 → 下单 → 支付 → 入账 → 看板（${chainSteps}/5 步）；客户反馈 → 画像写回 → 岗位交接 → 记忆消费；DAG 调度 → 返工 → 审批`,
+      m.first_order.complete && (mm.audit.total > 0 || mm.stats.handoffs > 0 || mm.context_reads.total > 0 || dag.total > 0)
         ? '有数据' : '部分待补'],
     ['项目可被他人复用',
       `端点清单 ${report.reproduction.endpoints.length} 个 · 复现步骤 ${report.reproduction.steps.length} 步 · 导出只读不脏库`,
@@ -597,6 +605,9 @@ function scorecardBody(report: EvidenceReport): string[] {
   }
   if (mm.audit.total === 0 && mm.stats.handoffs === 0) {
     gaps.push('本区间没有画像写回 / 交接包留痕：投递客户反馈或触发一次岗位交接后重新导出，创新性与人机分工两格才有事实可核。');
+  }
+  if ((mm.audit.total > 0 || mm.stats.handoffs > 0) && mm.context_reads.total === 0) {
+    gaps.push('画像 / 交接有了但还没有记忆消费记录：让接班 agent 调 GET /api/memory/handoff/context 拉一次上下文（每次调用自动落痕）后重新导出，「记忆被用上」才有事实可核。');
   }
   if (!dag.available) gaps.push('老库不存在 agent_hops 表，协作留痕计数为 0。');
   else if (dag.total === 0) gaps.push('本区间没有协作交接：在已绑团队的群触发一次 DAG（含失败 / 返工 / 审批拒绝）后重新导出。');
@@ -797,6 +808,19 @@ export function evidenceMarkdown(report: EvidenceReport): string {
     ]));
     push();
   }
+
+  push(`### 记忆消费留痕（窗口内共 ${mm.context_reads.total} 次，下列最近 ${mm.context_reads.items.length} 条，按时间正序）`);
+  push();
+  if (mm.context_reads.items.length === 0) {
+    push('_窗口内还没有记忆消费记录：让接班 agent 调 `GET /api/memory/handoff/context` 拉一次上下文即可留下痕迹（每次调用自动落一条访问记录）。_');
+  } else {
+    table(['时间', '消费方', '作用域', '带出条数', '来源'], mm.context_reads.items.map((c) => [
+      stamp(c.created_at), c.agent,
+      [c.scope_key, c.task_type].filter(Boolean).join(' / ') || '—',
+      String(c.item_count), c.sources.join('、') || '—',
+    ]));
+  }
+  push();
 
   push('## 六、口径与边界');
   push();

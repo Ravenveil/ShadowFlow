@@ -70,6 +70,7 @@ describe('空库：演示前刚摆好库时材料也不能报错', () => {
     expect(r.merchant.first_order.complete).toBe(false);
     expect(r.memory.audit.total).toBe(0);
     expect(r.memory.conflicts).toEqual([]);
+    expect(r.memory.context_reads).toMatchObject({ total: 0, items: [] });
     expect(r.collaboration).toMatchObject({
       available: true, total: 0, failures: 0, reworks: 0, approval_rejections: 0, open: 0,
     });
@@ -399,5 +400,36 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     }
     const oddLimit = await request(app()).get('/api/merchant/evidence?limit=abc');
     expect(oddLimit.status).toBe(200); // limit 收敛到默认值，不是错误
+  });
+});
+
+describe('记忆消费留痕：「记忆被用上」在材料里可核实', () => {
+  it('没消费记录时速览提示补跑；一次 contextFor 后 JSON / 报告 / 速览三处同步出现', async () => {
+    // 此时已有画像写回 / 交接包（供给侧有数据），但还没人读过记忆（消费侧为 0），
+    // 速览必须自曝这个缺口，不能让评委以为「记忆被用上了」是既成事实。
+    const before = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+    expect(before).toContain('还没有记忆消费记录');
+    expect(before).toContain('GET /api/memory/handoff/context');
+
+    // 接班 agent 真实拉一次上下文（公开路径，消费留痕自动落库）
+    const read = await request(app()).get('/api/memory/handoff/context?agent=交付岗&scope_key=&task_type=');
+    expect(read.status).toBe(200);
+
+    const r = (await request(app()).get('/api/merchant/evidence')).body;
+    expect(r.memory.context_reads.total).toBeGreaterThanOrEqual(1);
+    const mine = r.memory.context_reads.items.filter((i: { agent: string }) => i.agent === '交付岗');
+    expect(mine.length).toBeGreaterThanOrEqual(1);
+    expect(mine[mine.length - 1].item_count).toBe(read.body.count);
+    expect(mine[mine.length - 1].sources).toEqual(read.body.sources);
+
+    const md = (await request(app()).get('/api/merchant/evidence.md')).text;
+    expect(md).toContain('记忆消费留痕');
+    expect(md).toContain('交付岗');
+
+    const card = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+    expect(card).toContain(`记忆消费 ${r.memory.context_reads.total} 次`);
+    expect(card).not.toContain('还没有记忆消费记录');
+    // 评委能照着复现端点核消费留痕
+    expect(r.reproduction.endpoints).toContain('GET /api/memory/handoff/context/reads');
   });
 });
