@@ -17,7 +17,7 @@
  *    为聊天底部紧凑布景（同一结构，高度收敛、圆角 10）。
  *
  * data-testid 保持原 StartPage 前缀（start-composer / start-submit /
- * start-chip-* / start-mode-* / start-knowledge-* …）不变，避免测试与
+ * start-chip-* / start-knowledge-* …）不变，避免测试与
  * E2E 脚本断链。
  */
 import React, { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -25,9 +25,6 @@ import { ComposerTokenMeter } from '../workbench/ComposerTokenMeter';
 import { estimateTokens } from '../workbench/studioTokens';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
-  User,
-  Users,
   BookOpen,
   Paperclip,
   Link2,
@@ -67,8 +64,6 @@ import type { CompileStatus } from '../SkillDropdown';
 // Public types
 // ---------------------------------------------------------------------------
 
-export type ComposerMode = 'auto' | 'single' | 'team';
-
 // Attachments shown as chips between the textarea and the chip row.
 export type AttachmentType = 'file' | 'url' | 'cid';
 export interface AttachedFile {
@@ -83,7 +78,6 @@ export interface UnifiedComposerSubmitPayload {
   /** Resolved skill id — explicit CommandMenu pick (pendingSkill) wins, else
    *  auto-resolved from a `@<skill-id>` token in the text (S11 / PR-E parser). */
   skillName?: string;
-  mode?: ComposerMode;
   knowledge: string[]; // selected knowledge pack ids
   attachments: AttachedFile[];
   // executor/model/cwd are written to localStorage by the internal pickers
@@ -359,9 +353,6 @@ export function UnifiedComposer({
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [mode, setMode] = useState<ComposerMode>('auto');
-  const [modeOpen, setModeOpen] = useState(false);
-  const modeRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
   // Close popovers on outside click
@@ -369,11 +360,10 @@ export function UnifiedComposer({
     function onDoc(e: MouseEvent) {
       const t = e.target as Node;
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(t)) setKnowledgeOpen(false);
-      if (modeOpen && modeRef.current && !modeRef.current.contains(t)) setModeOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [knowledgeOpen, modeOpen]);
+  }, [knowledgeOpen]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -428,7 +418,6 @@ export function UnifiedComposer({
       await onSubmit({
         text,
         skillName: resolvedSkillName,
-        mode,
         knowledge,
         attachments,
       });
@@ -1008,113 +997,6 @@ export function UnifiedComposer({
               />
             )}
           </div>
-
-          {/* MODE chip · Auto (default) / Single / Team */}
-          <div ref={modeRef} style={{ position: 'relative', flexShrink: 0 }}>
-            <ChipBtn
-              glyph={
-                mode === 'auto' ? (
-                  <Sparkles size={14} strokeWidth={2} />
-                ) : mode === 'single' ? (
-                  <User size={14} strokeWidth={2} />
-                ) : (
-                  <Users size={14} strokeWidth={2} />
-                )
-              }
-              label={
-                mode === 'auto'
-                  ? t('start.modeAuto')
-                  : mode === 'single'
-                    ? t('start.modeSingle')
-                    : t('start.modeTeam')
-              }
-              hasArrow
-              active={modeOpen}
-              configured={mode !== 'auto'}
-              onClick={() => setModeOpen((v) => !v)}
-              testId="start-mode-chip"
-              title={t('start.modeLabel')}
-            />
-            {modeOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: 'calc(100% + 6px)',
-                  left: 0,
-                  minWidth: 140,
-                  background: 'var(--t-panel)',
-                  border: '1px solid var(--t-border)',
-                  // ===== UI5.0 ===== · 弹层 10px 刻度 + clawsgo 浮起软影
-                  borderRadius: 10,
-                  padding: 4,
-                  boxShadow: '0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -8px rgba(15,23,42,0.16)',
-                  zIndex: 30,
-                }}
-              >
-                {(['auto', 'single', 'team'] as ComposerMode[]).map((m) => {
-                  const on = mode === m;
-                  const glyph: ReactNode =
-                    m === 'auto' ? (
-                      <Sparkles size={14} strokeWidth={2} />
-                    ) : m === 'single' ? (
-                      <User size={14} strokeWidth={2} />
-                    ) : (
-                      <Users size={14} strokeWidth={2} />
-                    );
-                  const label =
-                    m === 'auto'
-                      ? t('start.modeAutoDesc')
-                      : m === 'single'
-                        ? t('start.modeSingleDesc')
-                        : t('start.modeTeamDesc');
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        setMode(m);
-                        setModeOpen(false);
-                      }}
-                      data-testid={`start-mode-${m}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        width: '100%',
-                        padding: '6px 8px',
-                        borderRadius: 5,
-                        border: 'none',
-                        background: on ? 'var(--t-accent-tint)' : 'transparent',
-                        color: on ? 'var(--t-accent)' : 'var(--t-fg-2)',
-                        fontWeight: on ? 700 : 500,
-                        fontSize: 12,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        textAlign: 'left',
-                      }}
-                    >
-                      <span
-                        aria-hidden
-                        style={{
-                          display: 'inline-flex',
-                          width: 14,
-                          height: 14,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {glyph}
-                      </span>
-                      <span style={{ flex: 1 }}>{label}</span>
-                      {on && <span aria-hidden>✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
 
           {/* KNOWLEDGE chip — calls /knowledge/packs */}
           <div ref={knowledgeRef} style={{ position: 'relative', flexShrink: 0 }}>

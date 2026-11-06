@@ -285,15 +285,14 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
         const resp = await createRunSession({
           goal: text,
           skill_name: p.skillName,
-          // Claw 接管态：单 agent 直连（不走团队编排）；否则保持原 mode 逻辑。
+          // Claw 接管态：单 agent 直连（不走团队编排）；否则按目标类型回落
+          // （团队目标不传，由服务端决定；单 agent 目标固定 single）。
           mode:
             executorOverride
               ? 'single'
-              : p.mode && p.mode !== 'auto'
-                ? p.mode
-                : target?.kind === 'team'
-                  ? undefined
-                  : 'single',
+              : target?.kind === 'team'
+                ? undefined
+                : 'single',
           executor: executorOverride,
           group_id: groupId,
           cwd,

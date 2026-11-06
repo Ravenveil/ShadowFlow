@@ -8,14 +8,14 @@
  *              listInstalledSkills）/ fsBrowse（fsHome·fsList·fsPickNative）/ getApiBase
  *   - 纯函数：  parseSkillToken（lib/skillToken，与服务端 canonical parser 同源）
  *   - 常量/IO： common/constants/modelPicker（无 React 的数据加载 + label + 缓存）
- *   - type-only：UnifiedComposerSubmitPayload / ComposerMode / AttachedFile
+ *   - type-only：UnifiedComposerSubmitPayload / AttachedFile
  *              （提交 payload 形状契约不变，NeoChat / NeoGroupChat 调用零改动）、
  *              CompileStatus（SkillDropdown 的编译状态类型）
  *
  * 功能等价于旧 UnifiedComposer：多行输入（Enter 发送 / Shift+Enter 换行 /
  * ⌘⏎ 备用）、`@` 提及 Skill 与 `/` 命令菜单（detectTrigger 为等价本地拷贝，
  * 规则逐行对齐旧实现）、compile-status 行内徽章、模型（CLI+API，写
- * sf.defaultExecutor/sf.model）、Auto/single/team 模式、CLI 工作目录
+ * sf.defaultExecutor/sf.model）、CLI 工作目录
  * （sf.cwd + 原生对话框）、知识包勾选、Skill URL 识别 chip、SkillPicker
  * 弹窗（URL ingest）、提交错误条、toast、流式中发送钮同位切停止。
  *
@@ -38,9 +38,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   AtSign,
   Slash,
-  Sparkles,
-  User,
-  Users,
   BookOpen,
   Paperclip,
   Link2,
@@ -95,7 +92,6 @@ import {
 } from '../common/constants/modelPicker';
 import type {
   UnifiedComposerSubmitPayload,
-  ComposerMode,
   AttachedFile,
 } from '../components/composer/UnifiedComposer';
 import type { CompileStatus } from '../components/SkillDropdown';
@@ -1359,22 +1355,18 @@ export function NeoComposer({
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [mode, setMode] = useState<ComposerMode>('auto');
-  const [modeOpen, setModeOpen] = useState(false);
-  const modeRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
 
-  // 点外关闭（mode / knowledge 弹层）。
+  // 点外关闭（knowledge 弹层）。
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       const tgt = e.target as Node;
       if (knowledgeOpen && knowledgeRef.current && !knowledgeRef.current.contains(tgt)) setKnowledgeOpen(false);
-      if (modeOpen && modeRef.current && !modeRef.current.contains(tgt)) setModeOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, [knowledgeOpen, modeOpen]);
+  }, [knowledgeOpen]);
 
   // toast 自动消失。
   useEffect(() => {
@@ -1462,7 +1454,6 @@ export function NeoComposer({
       await onSubmit({
         text,
         skillName: resolvedSkillName,
-        mode,
         knowledge,
         attachments,
       });
@@ -1922,73 +1913,6 @@ export function NeoComposer({
                 }}
                 onClose={() => setShowDirPicker(false)}
               />
-            )}
-          </div>
-
-          {/* MODE chip · Auto (default) / Single / Team */}
-          <div ref={modeRef} className="neo-cp-pop-anchor">
-            <NeoChipBtn
-              glyph={
-                mode === 'auto' ? (
-                  <Sparkles size={14} strokeWidth={2} />
-                ) : mode === 'single' ? (
-                  <User size={14} strokeWidth={2} />
-                ) : (
-                  <Users size={14} strokeWidth={2} />
-                )
-              }
-              label={
-                mode === 'auto'
-                  ? t('start.modeAuto')
-                  : mode === 'single'
-                    ? t('start.modeSingle')
-                    : t('start.modeTeam')
-              }
-              hasArrow
-              active={modeOpen}
-              configured={mode !== 'auto'}
-              onClick={() => setModeOpen((v) => !v)}
-              testId="start-mode-chip"
-              title={t('start.modeLabel')}
-            />
-            {modeOpen && (
-              <div className="neo-cp-pop">
-                {(['auto', 'single', 'team'] as ComposerMode[]).map((m) => {
-                  const on = mode === m;
-                  const glyph: ReactNode =
-                    m === 'auto' ? (
-                      <Sparkles size={14} strokeWidth={2} />
-                    ) : m === 'single' ? (
-                      <User size={14} strokeWidth={2} />
-                    ) : (
-                      <Users size={14} strokeWidth={2} />
-                    );
-                  const label =
-                    m === 'auto'
-                      ? t('start.modeAutoDesc')
-                      : m === 'single'
-                        ? t('start.modeSingleDesc')
-                        : t('start.modeTeamDesc');
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        setMode(m);
-                        setModeOpen(false);
-                      }}
-                      data-testid={`start-mode-${m}`}
-                      className={`neo-cp-pop-row${on ? ' on' : ''}`}
-                    >
-                      <span aria-hidden className="neo-cp-pop-row-icon">
-                        {glyph}
-                      </span>
-                      <span className="neo-cp-pop-row-label">{label}</span>
-                      {on && <span aria-hidden>✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
             )}
           </div>
 
