@@ -7,13 +7,14 @@
  *
  * GET  /api/merchant/stats                  → 各表计数
  * GET  /api/merchant/overview               → 营收/成本/毛利/毛利率/客单价/首单
- *                                             （?start&end 可选，缺省为全量）
+ *                                             （?start&end 可选，缺省为全量；
+ *                                               &compare=1 额外返回上一等长区间的环比）
  * GET  /api/merchant/orders/timeseries      → 订单流水分时（零值补齐 + 峰值）
  * GET  /api/merchant/traffic/curve          → 客流曲线（PV/UV/转化/分渠道）
  * GET  /api/merchant/ledger                 → 收支流水
  * GET  /api/merchant/orders                 → 订单列表（status 筛 + offset 分页
  *                                             + start/end 区间，返回 total/has_more）
- * GET  /api/merchant/reconcile              → 账实对账
+ * GET  /api/merchant/reconcile              → 账实对账（差额逐项给出 issues）
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
  * POST /api/merchant/products               → 建商品（管理）
@@ -78,7 +79,7 @@ router.get('/stats', (_req: Request, res: Response) => {
 
 router.get('/overview', (req: Request, res: Response) => {
   try {
-    res.json(overview({ start: req.query.start, end: req.query.end }));
+    res.json(overview({ start: req.query.start, end: req.query.end, compare: req.query.compare }));
   } catch (err) {
     fail(res, err);
   }

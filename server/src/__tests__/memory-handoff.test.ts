@@ -337,3 +337,93 @@ describe('画像流水滚动裁剪（append-only 也要有上界）', () => {
     for (const row of n) expect(row.n).toBe(200);
   });
 });
+
+describe('画像冲突裁决闭环（发现 → 采纳 / 驳回 → 列表清空）', () => {
+  const wb = (payload: Record<string, unknown>) =>
+    request(app()).post('/api/memory/handoff/profiles/writeback').send(payload);
+  const resolve = (payload: Record<string, unknown>) =>
+    request(app()).post('/api/memory/handoff/profiles/conflicts/resolve').send(payload);
+  const conflicts = () => request(app()).get('/api/memory/handoff/profiles/conflicts');
+  const stats = () => request(app()).get('/api/memory/handoff/stats');
+  const has = (rows: Array<{ subject_id: string }>, subject: string) =>
+    rows.some((r) => r.subject_id === subject);
+
+  const seed = async (subject: string) => {
+    await wb({ subject_id: subject, key: 'budget', value: '预算 800', confidence: 0.7, source: 'manual' });
+    const conflict = await wb({
+      subject_id: subject, key: 'budget', value: '预算 3000', confidence: 0.7,
+      source: 'feedback', evidence: '客户后来改口',
+    });
+    expect(conflict.body.action).toBe('conflict');
+    expect(has((await conflicts()).body, subject)).toBe(true);
+  };
+
+  it('采纳提议：覆盖当前值、留 override 痕迹、冲突出列、重复裁决 404', async () => {
+    await seed('cust-r1');
+    const before = (await stats()).body.pending_conflicts;
+
+    const res = await resolve({
+      subject_id: 'cust-r1', key: 'budget', decision: 'accept', actor: 'ops',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.action).toBe('override');
+    expect(res.body.value).toBe('预算 3000');
+    expect(res.body.actor).toBe('ops');
+
+    const p = await request(app()).get('/api/memory/handoff/profiles/cust-r1');
+    expect(p.body.profile[0].value).toBe('预算 3000');
+    expect(p.body.conflicts).toBe(1);          // 历史累计仍留痕
+    expect(p.body.pending_conflicts).toBe(0);  // 但不用再处理
+    expect(p.body.history.some((h: { action: string; actor: string }) =>
+      h.action === 'override' && h.actor === 'ops')).toBe(true);
+
+    expect(has((await conflicts()).body, 'cust-r1')).toBe(false);
+    expect((await stats()).body.pending_conflicts).toBe(before - 1);
+    const again = await resolve({ subject_id: 'cust-r1', key: 'budget', decision: 'accept' });
+    expect(again.status).toBe(404);
+  });
+
+  it('驳回提议：当前值不动、留 dismiss 痕迹，列表与统计同步清空', async () => {
+    await seed('cust-r2');
+    const before = (await stats()).body.pending_conflicts;
+
+    const res = await resolve({
+      subject_id: 'cust-r2', key: 'budget', decision: 'dismiss', actor: 'ops2',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.action).toBe('dismiss');
+    expect(res.body.value).toBe('预算 800');
+
+    const p = await request(app()).get('/api/memory/handoff/profiles/cust-r2');
+    expect(p.body.profile[0].value).toBe('预算 800');
+    expect(p.body.conflicts).toBe(1);
+    expect(p.body.pending_conflicts).toBe(0);
+    expect(p.body.history.some((h: { action: string; actor: string }) =>
+      h.action === 'dismiss' && h.actor === 'ops2')).toBe(true);
+
+    expect(has((await conflicts()).body, 'cust-r2')).toBe(false);
+    expect((await stats()).body.pending_conflicts).toBe(before - 1);
+  });
+
+  it('冲突之后又来更高置信写回：旧提议自动失效，不再挂着让人重复处理', async () => {
+    await seed('cust-r3');
+    await wb({ subject_id: 'cust-r3', key: 'budget', value: '预算 5000', confidence: 0.95 });
+    expect(has((await conflicts()).body, 'cust-r3')).toBe(false);
+    const stale = await resolve({ subject_id: 'cust-r3', key: 'budget', decision: 'accept' });
+    expect(stale.status).toBe(404);
+  });
+
+  it('非法 decision / 缺字段 / 不存在的冲突一律 4xx，不是 5xx', async () => {
+    const cases = [
+      { subject_id: 'cust-r1', key: 'budget', decision: 'maybe' },
+      { subject_id: '', key: 'budget', decision: 'accept' },
+      { subject_id: 'nobody', key: 'none', decision: 'accept' },
+    ];
+    for (const payload of cases) {
+      const res = await resolve(payload);
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBeLessThan(500);
+      expect(res.body.error.code).toBeTruthy();
+    }
+  });
+});

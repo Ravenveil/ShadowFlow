@@ -21,10 +21,13 @@ import {
   getProfile,
   ingestFeedback,
   listHandoffs,
+  listProfileConflicts,
+  resolveProfileConflict,
   writebackProfile,
   type Handoff,
   type HandoffContextResult,
   type HandoffStats,
+  type ProfileConflict,
   type ProfileResult,
 } from '../api/memoryHandoff';
 import './memory-neo.css';
@@ -32,6 +35,7 @@ import './memory-neo.css';
 export default function MemoryHandoffPanel() {
   const { t } = useI18n();
   const [handoffs, setHandoffs] = useState<Handoff[]>([]);
+  const [conflicts, setConflicts] = useState<ProfileConflict[]>([]);
   const [stats, setStats] = useState<HandoffStats | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -58,9 +62,14 @@ export default function MemoryHandoffPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const [list, s] = await Promise.all([listHandoffs(), getHandoffStats()]);
+      const [list, s, pending] = await Promise.all([
+        listHandoffs(),
+        getHandoffStats(),
+        listProfileConflicts(),
+      ]);
       setHandoffs(list);
       setStats(s);
+      setConflicts(pending);
     } catch (err) {
       // 后端未启动 / 网关未挂时静默降级，不阻塞记忆主列表。
       setErrorMsg(`交接数据加载失败：${msg(err)}`);
@@ -148,6 +157,25 @@ export default function MemoryHandoffPanel() {
     await loadProfile(subjectId.trim());
   }, [run, subjectId, feedbackText, loadProfile]);
 
+  /** 裁决后刷新待裁决列表 + 当前主体的画像；重复点按由后端 404 兜住。 */
+  const handleResolve = useCallback(
+    async (c: ProfileConflict, decision: 'accept' | 'dismiss') => {
+      const out = await run(() =>
+        resolveProfileConflict({
+          subject_id: c.subject_id,
+          subject_type: c.subject_type,
+          key: c.key,
+          decision,
+          actor: 'ops',
+        }),
+      );
+      if (!out) return;
+      await refresh();
+      if (subjectId.trim() === c.subject_id) await loadProfile(c.subject_id);
+    },
+    [run, refresh, subjectId, loadProfile],
+  );
+
   return (
     <section data-testid="memory-handoff-panel" className="neo-mm-card">
       <div className="neo-mm-card-head">
@@ -156,7 +184,7 @@ export default function MemoryHandoffPanel() {
         </h3>
         {stats && (
           <span data-testid="handoff-stats" className="neo-mm-scope-pill">
-            交接 {stats.handoffs} · 待接班 {stats.pending} · 画像写入 {stats.profile_events}
+            交接 {stats.handoffs} · 待接班 {stats.pending} · 待裁决 {stats.pending_conflicts} · 画像写入 {stats.profile_events}
           </span>
         )}
       </div>
@@ -340,10 +368,68 @@ export default function MemoryHandoffPanel() {
         </button>
       </div>
 
+      {/* ── 待裁决画像冲突：后端不替人拍板，这里给「采纳 / 保留」两个出口 ── */}
+      <div data-testid="handoff-conflicts" className="neo-mm-card">
+        <div className="neo-mm-card-head">
+          <h3 className="neo-mm-card-title">
+            {t('neo.memory.handoff.conflictTitle', { defaultValue: '待裁决画像冲突' })}
+          </h3>
+          <span data-testid="handoff-conflicts-count" className="neo-mm-scope-pill">
+            {conflicts.length} 条待处理
+          </span>
+        </div>
+        {conflicts.length === 0 && (
+          <p className="neo-mm-card-meta">
+            {t('neo.memory.handoff.conflictEmpty', {
+              defaultValue: '暂无冲突。同置信度出现不同说法时先保留原值，并在这里等人定夺。',
+            })}
+          </p>
+        )}
+        {conflicts.map((c) => (
+          <div
+            key={`${c.subject_type}:${c.subject_id}:${c.key}`}
+            data-testid="handoff-conflict"
+            className="neo-mm-card"
+          >
+            <div className="neo-mm-card-head">
+              <h3 className="neo-mm-card-title">{c.subject_id} · {c.key}</h3>
+              <span className="neo-mm-scope-pill neo-mm-scope-pill--session">
+                {t('neo.memory.handoff.conflictPending', { defaultValue: '待裁决' })}
+              </span>
+            </div>
+            <p className="neo-mm-card-content" data-testid="handoff-conflict-values">
+              {c.current_value} → {c.proposed_value}
+            </p>
+            <p className="neo-mm-card-meta">
+              当前置信度 {c.current_confidence} · 提议置信度 {c.proposed_confidence} · 来源 {c.source}
+              {c.evidence ? ` · ${c.evidence}` : ''}
+            </p>
+            <div className="neo-mm-card-actions">
+              <button
+                data-testid={`handoff-conflict-accept-${c.subject_id}-${c.key}`}
+                disabled={busy}
+                onClick={() => void handleResolve(c, 'accept')}
+                className="neo-mm-btn neo-mm-btn-primary neo-mm-btn-sm"
+              >
+                {t('neo.memory.handoff.conflictAccept', { defaultValue: '采纳提议' })}
+              </button>
+              <button
+                data-testid={`handoff-conflict-dismiss-${c.subject_id}-${c.key}`}
+                disabled={busy}
+                onClick={() => void handleResolve(c, 'dismiss')}
+                className="neo-mm-btn neo-mm-btn-ghost neo-mm-btn-sm"
+              >
+                {t('neo.memory.handoff.conflictDismiss', { defaultValue: '保留当前' })}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {profileResult && (
         <div data-testid="handoff-profile-result">
           <p className="neo-mm-card-meta">
-            当前画像 {profileResult.profile.length} 项 · 变更流水 {profileResult.writes} 条 · 冲突 {profileResult.conflicts} 条
+            当前画像 {profileResult.profile.length} 项 · 变更流水 {profileResult.writes} 条 · 冲突 {profileResult.conflicts} 条 · 待裁决 {profileResult.pending_conflicts} 条
           </p>
           {profileResult.profile.map((p) => (
             <div key={p.key} className="neo-mm-card">

@@ -51,3 +51,32 @@
 [data-testid='merchant-board-panel'] {
   --t-line: var(--t-border);
 }
+
+/* 环比一行贴在 KPI 卡片下面，不再增加卡片；变化率由后端算好，这里只上色。 */
+.neo-mb-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: -2px 0 12px;
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+.neo-mb-compare-label { font-weight: 600; }
+.neo-mb-compare-item { white-space: nowrap; }
+.neo-mb-delta { font-family: var(--font-mono, monospace); font-weight: 600; }
+/* 涨红跌绿：沿用国内业务看板习惯（与股价同向，不是欧美的红跌绿涨）。 */
+.neo-mb-delta--up { color: var(--t-danger, #d94b3f); }
+.neo-mb-delta--down { color: var(--t-success, #2e9e6b); }
+.neo-mb-delta--flat { color: var(--t-fg-4); }
+
+/* 账实不一致时逐项列差额：只给一个「有差额」的红章等于没说。 */
+.neo-mb-issues {
+  margin: 0 0 12px;
+  padding: 8px 12px 8px 28px;
+  border: 1px solid var(--t-line);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--t-danger, #d94b3f);
+}
+.neo-mb-issues li { margin: 2px 0; }

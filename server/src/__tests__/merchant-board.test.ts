@@ -617,3 +617,81 @@ describe('历史数据回填（已退款却没冲销成本的单）', () => {
     expect(rec.body.balanced).toBe(true);
   });
 });
+
+describe('单笔毛利 / 环比 / 对账可解释（口径要能自证）', () => {
+  it('只有「已支付」的单有单笔毛利：待支付与已退款都归零', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '毛利口径品', price_cents: 2000, cost_cents: 500 });
+    const pending = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    const paid = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${paid.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-gross-paid' });
+    const refunded = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${refunded.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-gross-refund' });
+    await request(app()).post(`/api/merchant/orders/${refunded.body.id}/refund`);
+
+    const list = await request(app()).get('/api/merchant/orders?limit=500');
+    expect(list.status).toBe(200);
+    const row = (id: string) => list.body.items.find((x: { id: string }) => x.id === id);
+    // 没成交的钱没进来、退了款的成本已冲回：这两种状态都不该显示正毛利。
+    expect(row(pending.body.id).gross_profit_cents).toBe(0);
+    expect(row(paid.body.id).gross_profit_cents).toBe(1500);
+    expect(row(refunded.body.id).gross_profit_cents).toBe(0);
+  });
+
+  it('compare=1 返回上一等长区间与变化率；不给 compare 或全量时为 null', async () => {
+    const now = Date.now();
+    const from = now - 3600_000;
+    const to = now + 3600_000;
+    const span = to - from; // 2h，上一窗口是 [from-span, from)
+    const prevTs = now - 2 * 3600_000; // 落在上一窗口内
+    const db = sqlite.getDb();
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    ).run('cmp-prev-order', 'cmp-product', '', 12345, 0, 'paid', 'txn-cmp-prev', 'cmp', prevTs, prevTs);
+    db.prepare(
+      `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+       VALUES (?,?,?,?,?,?)`,
+    ).run('cmp-prev-ledger', 'income', 12345, 'cmp-prev-order', 'cmp', prevTs);
+
+    const qs = `start=${encodeURIComponent(new Date(from).toISOString())}&end=${encodeURIComponent(new Date(to).toISOString())}`;
+    const res = await request(app()).get(`/api/merchant/overview?${qs}&compare=1`);
+    expect(res.status).toBe(200);
+    expect(res.body.comparison).toBeTruthy();
+    expect(res.body.comparison.range.to).toBe(from);
+    expect(res.body.comparison.range.from).toBe(from - span);
+    expect(res.body.comparison.revenue_cents).toBe(12345);
+    expect(res.body.comparison.delta_pct.revenue === null || typeof res.body.comparison.delta_pct.revenue === 'number').toBe(true);
+    expect(res.body.comparison.delta_pct.orders === null || typeof res.body.comparison.delta_pct.orders === 'number').toBe(true);
+
+    const plain = await request(app()).get(`/api/merchant/overview?${qs}`);
+    expect(plain.body.comparison).toBeNull();
+    // 全量没有「上一等长区间」可言，传了也只回 null，不硬编一个窗口。
+    const all = await request(app()).get('/api/merchant/overview?compare=1');
+    expect(all.body.comparison).toBeNull();
+  });
+
+  it('账实不一致时逐项说清差在哪，修好后恢复 balanced', async () => {
+    const db = sqlite.getDb();
+    db.prepare(
+      `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+       VALUES (?,?,?,?,?,?)`,
+    ).run('ledger-orphan', 'expense', 777, '', '', Date.now());
+
+    const res = await request(app()).get('/api/merchant/reconcile');
+    expect(res.body.balanced).toBe(false);
+    expect(res.body.diffs.expense_cents).toBe(777);
+    expect(res.body.issues.some((s: string) => s.includes('成本流水'))).toBe(true);
+
+    db.prepare(`DELETE FROM mb_ledger WHERE id = 'ledger-orphan'`).run();
+    const after = await request(app()).get('/api/merchant/reconcile');
+    expect(after.body.balanced).toBe(true);
+    expect(after.body.issues).toEqual([]);
+  });
+});

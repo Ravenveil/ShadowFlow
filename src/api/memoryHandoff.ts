@@ -11,8 +11,10 @@
  *   GET    /api/memory/handoff/:id                  → 详情（含 context）
  *   POST   /api/memory/handoff/:id/accept           → B 接班（幂等）
  *   GET    /api/memory/handoff/context?agent=B      → B 当前可读上下文
+ *   GET    /api/memory/handoff/profiles/conflicts   → 待裁决的画像冲突
+ *   POST   /api/memory/handoff/profiles/conflicts/resolve → 裁决（采纳 / 驳回）
  *   GET    /api/memory/handoff/profiles/:subjectId  → 当前画像 + 变更流水
- *   POST   /api/memory/handoff/profiles/writeback   → 长期画像写回
+ *   POST   /api/memory/handoff/profiles/writeback   → 长期画像写回（force 可裁决）
  *   POST   /api/memory/handoff/profiles/ingest      → 反馈规则式自动提炼
  */
 
@@ -62,7 +64,10 @@ export interface HandoffStats {
   handoff_items: number;
   profiles: number;
   profile_events: number;
+  /** 历史累计冲突次数（含已裁决） */
   conflicts: number;
+  /** 当前还等人处理的条数 */
+  pending_conflicts: number;
 }
 
 export interface ContextItem {
@@ -87,7 +92,7 @@ export interface WritebackResult {
   subject_type: string;
   subject_id: string;
   key: string;
-  action: 'create' | 'update' | 'conflict' | 'keep';
+  action: 'create' | 'update' | 'conflict' | 'keep' | 'override' | 'dismiss';
   changed: boolean;
   value: string;
   confidence: number;
@@ -104,7 +109,10 @@ export interface ProfileResult {
     confidence: number; source: string; actor: string; created_at: number;
   }>;
   writes: number;
+  /** 历史累计冲突次数 */
   conflicts: number;
+  /** 当前待裁决条数 */
+  pending_conflicts: number;
 }
 
 export interface IngestResult {
@@ -186,6 +194,8 @@ export function getHandoffStats(): Promise<HandoffStats> {
 export function writebackProfile(payload: {
   subject_id: string; key: string; value: string; confidence?: number;
   subject_type?: string; source?: string; evidence?: string; actor?: string;
+  /** 人工裁决：绕过置信度比较直接覆盖（后端记 action='override'） */
+  force?: boolean;
 }): Promise<WritebackResult> {
   return post(`${BASE}/profiles/writeback`, payload as unknown as Record<string, unknown>);
 }
@@ -199,4 +209,52 @@ export function ingestFeedback(payload: {
   subject_id: string; text: string; subject_type?: string; actor?: string;
 }): Promise<IngestResult> {
   return post(`${BASE}/profiles/ingest`, payload as unknown as Record<string, unknown>);
+}
+
+/** 同置信不同说法的写回：后端只记 conflict 不改值，等人在这里定夺。 */
+export interface ProfileConflict {
+  subject_type: string;
+  subject_id: string;
+  key: string;
+  current_value: string;
+  current_confidence: number;
+  proposed_value: string;
+  proposed_confidence: number;
+  source: string;
+  evidence: string;
+  created_at: number;
+}
+
+export interface ConflictResolution {
+  subject_type: string;
+  subject_id: string;
+  key: string;
+  decision: 'accept' | 'dismiss';
+  action: string;
+  value: string;
+  actor: string;
+  resolved_at: number;
+}
+
+export function listProfileConflicts(
+  opts: { limit?: number; subject_id?: string } = {},
+): Promise<ProfileConflict[]> {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set('limit', String(opts.limit));
+  if (opts.subject_id) qs.set('subject_id', opts.subject_id);
+  const q = qs.toString();
+  return fetch(`${BASE}/profiles/conflicts${q ? `?${q}` : ''}`).then((r) =>
+    handle<ProfileConflict[]>(r),
+  );
+}
+
+/** 采纳提议 / 驳回提议（保留当前值）；重复裁决后端返回 404。 */
+export function resolveProfileConflict(payload: {
+  subject_id: string;
+  key: string;
+  decision: 'accept' | 'dismiss';
+  subject_type?: string;
+  actor?: string;
+}): Promise<ConflictResolution> {
+  return post(`${BASE}/profiles/conflicts/resolve`, payload as unknown as Record<string, unknown>);
 }
