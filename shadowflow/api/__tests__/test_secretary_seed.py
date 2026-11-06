@@ -82,6 +82,70 @@ class TestSecretarySeed:
         msgs = client.get(f"/api/groups/{gid1}/messages").json()["messages"]
         assert len(msgs) == 1  # 仍是播种那一条
 
+    def test_dm_resolve_backfills_greeting_for_legacy_empty_conversation(self, client):
+        """存量老会话（播种功能上线前建、零消息）resolve 时补种问候。"""
+        # 手工造一条「老」影 DM：kind=dm、零消息——模拟播种功能之前建的会话。
+        gid = "legacy0" + "0" * 27
+        groups_mod._save_group(
+            {
+                "group_id": gid,
+                "name": "影",
+                "template_id": "",
+                "group_template_id": "",
+                "agent_ids": ["agent-shadow-secretary"],
+                "member_emails": [],
+                "policy_matrix": {},
+                "workspace_id": None,
+                "team_id": None,
+                "kind": "dm",
+                "created_at": "2026-11-01T00:00:00+00:00",
+                "messages": [],
+            }
+        )
+        r = client.post("/api/chat/dm/agent-shadow-secretary/resolve")
+        assert r.json()["group_id"] == gid
+        assert r.json()["created"] is False
+        msgs = client.get(f"/api/groups/{gid}/messages").json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["content"] == "Hello World!"
+        assert msgs[0]["sender_kind"] == "agent"
+        assert msgs[0]["agent_id"] == "agent-shadow-secretary"
+        # 再次 resolve 幂等：不重复补种
+        client.post("/api/chat/dm/agent-shadow-secretary/resolve")
+        assert len(client.get(f"/api/groups/{gid}/messages").json()["messages"]) == 1
+
+    def test_dm_resolve_backfill_skips_conversation_with_history(self, client):
+        """已有消息的老会话 resolve 时零变化（绝不覆盖用户聊天）。"""
+        gid = "legacy1" + "0" * 27
+        groups_mod._save_group(
+            {
+                "group_id": gid,
+                "name": "影",
+                "template_id": "",
+                "group_template_id": "",
+                "agent_ids": ["agent-shadow-secretary"],
+                "member_emails": [],
+                "policy_matrix": {},
+                "workspace_id": None,
+                "team_id": None,
+                "kind": "dm",
+                "created_at": "2026-11-01T00:00:00+00:00",
+                "messages": [
+                    {
+                        "sender_name": "用户",
+                        "sender_kind": "user",
+                        "content": "在吗",
+                        "timestamp": "2026-11-01T00:00:01+00:00",
+                    }
+                ],
+            }
+        )
+        r = client.post("/api/chat/dm/agent-shadow-secretary/resolve")
+        assert r.json()["group_id"] == gid
+        msgs = client.get(f"/api/groups/{gid}/messages").json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["content"] == "在吗"
+
     def test_dm_resolve_normal_agent_no_greeting(self, client):
         """普通 agent 的 DM 不带问候（零回归）。"""
         ra = client.post("/api/agents", json={"name": "小艾", "soul": "研究"})

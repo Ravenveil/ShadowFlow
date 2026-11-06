@@ -345,7 +345,7 @@ function captureWarn(): { warns: string[]; restore: () => void } {
   }
 })();
 
-// ─── Test 12: prompt format — `## Reference: <rel>\n\n<content>` ───────────
+// ─── Test 12: prompt format — `## Reference: <rel>\n\n```<type>\n<content>\n``` ` ──
 
 (function testPromptFormat() {
   console.log('\n[12] prompt section format');
@@ -354,8 +354,21 @@ function captureWarn(): { warns: string[]; restore: () => void } {
     writeFile(root, 'sk1/assets/a.md', 'AAA');
     writeFile(root, 'sk1/references/b.md', 'BBB');
     const res = loadSkillSideFiles('sk1', root);
-    const expected =
-      '## Reference: assets/a.md\n\nAAA\n\n## Reference: references/b.md\n\nBBB';
+    // Content is wrapped in a fenced block tagged with the file type (see the
+    // [14] type-field cases) so the model can tell md from css/html/json.
+    const expected = [
+      '## Reference: assets/a.md',
+      '',
+      '```md',
+      'AAA',
+      '```',
+      '',
+      '## Reference: references/b.md',
+      '',
+      '```md',
+      'BBB',
+      '```',
+    ].join('\n');
     check('exact prompt format', res.prompt === expected, {
       got: res.prompt,
       expected,
@@ -410,4 +423,9 @@ console.log('\n─────────────────────�
 console.log(`  ${passCount} passed,  ${failCount} failed`);
 console.log('────────────────────────────────────────\n');
 
-if (failCount > 0) process.exit(1);
+if (failCount > 0) {
+  // vitest 把直接调用 process.exit() 判为「unexpected exit」，整个文件会红成
+  // file-level error。vitest 里改成抛错，`npx tsx` 单独跑时保留退出码。
+  if (process.env.VITEST) throw new Error(`${failCount} checks failed`);
+  process.exit(1);
+}

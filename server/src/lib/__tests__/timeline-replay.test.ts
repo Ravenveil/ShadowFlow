@@ -139,6 +139,75 @@ describe('replayTimeline — message + patch replay', () => {
   });
 });
 
+// ── 2026-11-07 P0 — hop_update 重放（hop 卡生命周期结算不丢）────────────────
+describe('applyPatch / replayTimeline — hop_update', () => {
+  const hopOpen = {
+    ...base,
+    id: 'hop1',
+    kind: 'hop_card',
+    from_agent: 'agent-a',
+    to_agent: 'agent-b',
+    from_name: 'Scout',
+    to_name: 'Writer',
+    status: 'pending',
+  } as const;
+
+  it('hop_update 重放后 hop 卡终态不丢（此前缺分支→刷新回放永卡 pending）', () => {
+    const events: ReplayableEvent[] = [
+      { event: 'message', data: hopOpen },
+      { event: 'message-patch', data: { id: 'hop1', op: 'hop_update', patch: { status: 'running' } } },
+      {
+        event: 'message-patch',
+        data: {
+          id: 'hop1',
+          op: 'hop_update',
+          patch: { status: 'done', output_chars: 520, duration_ms: 4300 },
+        },
+      },
+    ];
+    const out = replayTimeline(events);
+    expect(out).toHaveLength(1);
+    const hop = out[0];
+    if (hop.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(hop).toMatchObject({ status: 'done', output_chars: 520, duration_ms: 4300 });
+    // 原始 open 帧的静态字段保留
+    expect(hop).toMatchObject({ from_name: 'Scout', to_name: 'Writer', from_agent: 'agent-a', to_agent: 'agent-b' });
+  });
+
+  it('失败终态带 detail，且 patch 不可变（原实例不动）', () => {
+    const failed = applyPatch(hopOpen, {
+      id: 'hop1',
+      op: 'hop_update',
+      patch: { status: 'failed', detail: '上游产出为空' },
+    });
+    if (failed.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(failed).toMatchObject({ status: 'failed', detail: '上游产出为空' });
+    // 不可变性：applyPatch 返回新对象，原实例保持 pending
+    expect(hopOpen.status).toBe('pending');
+  });
+
+  it('kind 不匹配为防御式 no-op（返回原实例）', () => {
+    const msg: TimelineMessage = { ...base, id: 't1', kind: 'assistant_text', body: 'x' };
+    expect(applyPatch(msg, { id: 't1', op: 'hop_update', patch: { status: 'done' } })).toBe(msg);
+    // hop_card 收到别类 patch 同样 no-op
+    expect(applyPatch(hopOpen, { id: 'hop1', op: 'text_append', chunk: 'x' })).toBe(hopOpen);
+  });
+
+  it('patch 中缺席的字段不覆盖（部分结算只带 status）', () => {
+    const next = applyPatch(hopOpen, {
+      id: 'hop1',
+      op: 'hop_update',
+      patch: { status: 'timeout' },
+    });
+    if (next.kind !== 'hop_card') throw new Error('kind drifted');
+    expect(next.status).toBe('timeout');
+    // open 帧没写过的可选字段依旧缺席（不被 undefined 污染）
+    expect('output_chars' in next).toBe(false);
+    expect('detail' in next).toBe(false);
+    expect('duration_ms' in next).toBe(false);
+  });
+});
+
 describe('chatMessagesToTimeline — group MessageItem adaptation', () => {
   it('maps user/agent/system kinds and threads turn_id by user message', () => {
     const out = chatMessagesToTimeline([
