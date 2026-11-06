@@ -128,6 +128,9 @@ export type TimelineMessage =
       status: 'streaming' | 'done';
       /** Thinking duration ms, set on finalize. Renders as "Thought for Xs". */
       duration_ms?: number;
+      /** 2026-11-06 Agent 检查器 — 群聊 fanout 归属（additive，老数据回落 label 前缀）。 */
+      agent_id?: string;
+      agent_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'assistant_meta';
@@ -180,8 +183,17 @@ export type TimelineMessage =
       status?: 'running' | 'ok' | 'error';
       duration_ms?: number;
       result_summary?: string;
+      /** 2026-11-06 Agent 检查器 — 群聊 fanout 归属（additive，单聊不传）。 */
+      agent_id?: string;
+      agent_name?: string;
     })
-  | (TimelineMessageBase & { kind: 'tool_echo'; body: string })
+  | (TimelineMessageBase & {
+      kind: 'tool_echo';
+      body: string;
+      /** 2026-11-06 — 同 tool_call.agent_id（echo 与其 call 成对出现）。 */
+      agent_id?: string;
+      agent_name?: string;
+    })
   | (TimelineMessageBase & {
       kind: 'step_panel';
       total_steps: number;

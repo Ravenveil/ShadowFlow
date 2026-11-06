@@ -217,6 +217,12 @@ export type TimelineMessage =
       status: 'streaming' | 'done';
       /** Thinking duration ms, set on finalize. Front-end shows "Thought for Xs". */
       duration_ms?: number;
+      /**
+       * 2026-11-06 Agent 检查器 — 群聊 fanout 下该过程卡属于哪个 agent。
+       * additive：老数据/单聊不传 = 前端回落 label 前缀匹配。
+       */
+      agent_id?: string;
+      agent_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'assistant_meta';
@@ -238,10 +244,19 @@ export type TimelineMessage =
       status?: 'running' | 'ok' | 'error';
       duration_ms?: number;
       result_summary?: string;
+      /**
+       * 2026-11-06 Agent 检查器（ZCode 后台活动式）— 群聊 fanout 下该工具调用
+       * 属于哪个 agent。additive：单聊/老路径不传 = 无归属（检查器不筛它）。
+       */
+      agent_id?: string;
+      agent_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'tool_echo';
       body: string;
+      /** 2026-11-06 — 同 tool_call.agent_id（echo 与其 call 成对出现）。 */
+      agent_id?: string;
+      agent_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'assistant_text';

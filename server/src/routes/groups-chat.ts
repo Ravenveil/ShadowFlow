@@ -385,7 +385,16 @@ export function stripThinking(s: string): string {
  * 调用（前端 ToolCallChip/ToolEchoLine 渲染器+contracts 早已就位，只缺网关 emit）。
  * 映射与 timeline-projector.onToolUse/onToolResult 一致(args 截 200、空 result 跳过)。
  * gw 为 null（startGatewayRun 失败）时整体 no-op，不影响聊天主链路。
+ *
+ * 2026-11-06 Agent 检查器 — who 参数（可选）：群聊 fanout 每个 agent 的
+ * callAgent 传入自己的 id/名，工具卡带 agent_id/agent_name 归属；单聊/老调用
+ * 不传 = 无归属（additive，检查器对无归属卡不筛选）。
  */
+export interface ToolOwner {
+  agentId: string;
+  agentName: string;
+}
+
 /** 网关 gw 接口（emitPatch 可选——老调用方/测试可能只给 emitMessage）。 */
 type ToolGw = {
   nextId(): string;
@@ -397,7 +406,10 @@ type ToolGw = {
 // gap #2（2026-06-24）— 按 gw 记当前未落定的 tool_call（id + 开始时间），
 // 用于 tool-result 时发 tool_finalize（耗时 + 成功/失败 + 结果摘要）。WeakMap
 // 随 gw 生命周期自动回收，不污染 gw 类型。
-const _openToolByGw = new WeakMap<object, { id: string; startMs: number }>();
+// 2026-11-06 — 单槽改 per-agent 槽（Map<agentId, open>）：并发 DAG 多 agent
+// 共享同一 gw，单槽会互相顶替导致 finalize 串台/永久转圈；无 who（单聊）落
+// '' 槽，行为与旧单槽完全一致。
+const _openToolByGw = new WeakMap<object, Map<string, { id: string; startMs: number }>>();
 
 /** body 看起来像错误？（与 timeline-projector.onToolResult 同启发）。 */
 function looksLikeToolError(body: string): boolean {
@@ -405,8 +417,13 @@ function looksLikeToolError(body: string): boolean {
     || (/\b(error|failed)\b/i.test(body.slice(0, 80)) && body.length < 200);
 }
 
-export function emitToolChunk(gw: ToolGw, chunk: TurnChunk): void {
+export function emitToolChunk(gw: ToolGw, chunk: TurnChunk, who?: ToolOwner): void {
   if (!gw) return;
+  // per-agent 开放工具槽（'' = 无归属单聊路径，与旧单槽行为一致）。
+  const slotKey = who?.agentId ?? '';
+  const openMap = _openToolByGw.get(gw) ?? new Map<string, { id: string; startMs: number }>();
+  _openToolByGw.set(gw, openMap);
+  const attribution = who ? { agent_id: who.agentId, agent_name: who.agentName } : {};
   if (chunk.type === 'tool-use') {
     let argsSummary = '';
     try {
@@ -419,12 +436,13 @@ export function emitToolChunk(gw: ToolGw, chunk: TurnChunk): void {
     }
     if (argsSummary.length > 200) argsSummary = argsSummary.slice(0, 200) + '…';
     // 前一个 tool 没收到 result 就被顶替 → 先落定为 ok（防永久转圈）。
-    const prev = _openToolByGw.get(gw);
+    // per-agent 槽：并发 DAG 下别的 agent 的开放工具不受影响。
+    const prev = openMap.get(slotKey);
     if (prev && gw.emitPatch) {
       gw.emitPatch({ id: prev.id, op: 'tool_finalize', status: 'ok', duration_ms: Math.max(0, Date.now() - prev.startMs) });
     }
     const id = gw.nextId();
-    _openToolByGw.set(gw, { id, startMs: Date.now() });
+    openMap.set(slotKey, { id, startMs: Date.now() });
     gw.emitMessage({
       id,
       kind: 'tool_call',
@@ -433,11 +451,12 @@ export function emitToolChunk(gw: ToolGw, chunk: TurnChunk): void {
       name: chunk.tool.tool_name,
       args_summary: argsSummary,
       status: 'running',
+      ...attribution,
     });
   } else if (chunk.type === 'tool-result') {
     const body = (chunk.result.output ?? '').trim();
-    // gap #2 — 落定最近未结的 tool_call（耗时 + 成功/失败 + 结果摘要）。
-    const open = _openToolByGw.get(gw);
+    // gap #2 — 落定该 agent 最近未结的 tool_call（耗时 + 成功/失败 + 结果摘要）。
+    const open = openMap.get(slotKey);
     if (open && gw.emitPatch) {
       gw.emitPatch({
         id: open.id,
@@ -446,7 +465,7 @@ export function emitToolChunk(gw: ToolGw, chunk: TurnChunk): void {
         duration_ms: Math.max(0, Date.now() - open.startMs),
         result_summary: summarizeToolResult(body),
       });
-      _openToolByGw.delete(gw);
+      openMap.delete(slotKey);
     }
     if (!body) return;
     gw.emitMessage({
@@ -455,6 +474,7 @@ export function emitToolChunk(gw: ToolGw, chunk: TurnChunk): void {
       turn_id: gw.turnId,
       ts: Date.now(),
       body,
+      ...attribution,
     });
   }
 }
@@ -1064,6 +1084,8 @@ async function runFanout(
                 ts: startedAt,
                 label: `${name} 正在思考`,
                 status: 'streaming',
+                agent_id: agentId,
+                agent_name: name,
               });
             }
             let buf = '';
@@ -1090,8 +1112,9 @@ async function runFanout(
                     gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
                   }
                 } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
-                  // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）
-                  emitToolChunk(gw, chunk);
+                  // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）；
+                  // 2026-11-06 检查器 — 带 agent 归属（按 agent 筛后台活动）。
+                  emitToolChunk(gw, chunk, { agentId: agentId, agentName: name });
                 } else if (chunk.type === 'error') {
                   errMsg = chunk.error?.message ?? 'stream error';
                   break;
@@ -1303,6 +1326,8 @@ async function runFanout(
           ts: startedAt,
           label: `${agentName} 正在思考`,
           status: 'streaming',
+          agent_id: agentId,
+          agent_name: agentName,
         });
       }
 
@@ -1336,8 +1361,9 @@ async function runFanout(
               gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
             }
           } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
-            // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）
-            emitToolChunk(gw, chunk);
+            // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）；
+            // 2026-11-06 检查器 — 带 agent 归属（串行路径同样可按 agent 筛）。
+            emitToolChunk(gw, chunk, { agentId: agentId, agentName: agentName });
           } else if (chunk.type === 'error') {
             errMsg = chunk.error?.message ?? 'stream error';
             break;

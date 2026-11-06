@@ -1,29 +1,38 @@
 /**
- * NeoAgentInspector — Agent 检查器（2026-11-05 Task#11，ZCode「后台运行」式）。
+ * NeoAgentInspector — Agent 检查器（2026-11-05 Task#11，2026-11-06 对齐 ZCode
+ * 「后台运行」面板形态）。
  *
  * 触发：群聊里点某 agent 的气泡头像 / 顶栏成员头像 → NeoApp 记 inspectAgent
  * → NeoHost 右栏整体覆盖为本组件。
  *
- * 内容两节：
- *   1. 后台活动 — 该 agent 在本群的后台工作流：
+ * 2026-11-06 用户需求：模仿 ZCode/WorkBuddy 的 Agent 后台活动面板——单个
+ * agent 的完整流程（思考 / 工具调用 / 交接 / 产出）都在右栏显示，保持群聊
+ * 聊天区域清爽；且必须能明显地「回去」。
+ *
+ * 内容：
+ *   1. 头部 — 头像 + 名字 + 「返回群聊」钮（← 主退路）+「发起私聊」图标钮
+ *      +「×」关闭。三路都能离开检查器，聊天区不会被卡死。
+ *   2. 后台活动 — 该 agent 在本群的后台工作流（同源复用 useGroupTimeline，
+ *      与中栏同一 SSE 订阅，多 sink 安全，零新端点）：
  *      - assistant_text/raw（agent_id 命中）= 它在群里说的话；
- *      - thinking 卡（label 以它的名字开头）= 它的过程流（含工具调用上下文）；
+ *      - thinking（agent_id 命中；老数据回落 label 前缀匹配）= 过程流；
+ *      - tool_call/tool_echo（agent_id 命中）= 工具调用与结果；
+ *      - plan_card 含它的任务行 / commit_record / file_diff 等 run 产物卡 —
+ *        有 agent_id 的按 id 筛；无归属的（老数据）不进流（宁可少不串台）；
  *      - hop_card（from_agent 或 to_agent 命中）= 它参与的交接边。
- *      同源复用 useGroupTimeline（与中栏同一 SSE 订阅，多 sink 安全），流内
- *      过滤后交给 NeoTimeline 只读渲染 —— 零新端点。
- *   2. 发起私聊 — resolveDmConversation find-or-create 该 agent 的 DM 会话
- *      （与左栏点 agent 同一条通路），成功即 onNavigate 切换会话。
+ *      流内过滤后交给 NeoTimeline 只读渲染。
  *
  * 不 mock：timeline 加载失败/无活动 = 干净空态文案。
  */
 import { useEffect, useMemo } from 'react';
-import { MessageSquare, X } from 'lucide-react';
+import { ArrowLeft, MessageSquare, X } from 'lucide-react';
 import { useI18n } from '../common/i18n';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
 import { resolveDmConversation } from '../api/groupApi';
 import { NeoTimeline } from './NeoTimeline';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { getAgent, type AgentRecord } from '../api/agents';
+import type { TimelineMessage } from '../components/run-session/timeline/types';
 import { useState } from 'react';
 
 export interface NeoAgentInspectorProps {
@@ -34,8 +43,40 @@ export interface NeoAgentInspectorProps {
   groupId: string;
   /** 发起私聊成功 → 切换会话（NeoApp.navigate）。 */
   onOpenDm: (groupId: string) => void;
-  /** 关闭检查器（× 钮）。 */
+  /** 关闭检查器（× / ← 返回群聊）。 */
   onClose: () => void;
+}
+
+/**
+ * 后台活动过滤（导出供单测）— 该 agent 的发言 / 过程卡 / 工具卡 / 交接边。
+ * 归属优先级：显式 agent_id > thinking 的 label 前缀（老数据兜底）> 不进流。
+ */
+export function filterAgentActivity(
+  messages: readonly TimelineMessage[],
+  agentId: string,
+  displayName: string,
+): TimelineMessage[] {
+  const labelPrefix = `${displayName} `; // 老数据过程卡 label 形如 `${name} 正在思考`
+  return messages.filter((m) => isActivity(m, agentId, labelPrefix));
+}
+
+function isActivity(m: TimelineMessage, agentId: string, labelPrefix: string): boolean {
+  switch (m.kind) {
+    case 'assistant_text':
+    case 'raw':
+      return m.agent_id === agentId;
+    case 'thinking':
+      return m.agent_id != null ? m.agent_id === agentId : m.label.startsWith(labelPrefix);
+    case 'tool_call':
+    case 'tool_echo':
+      return m.agent_id === agentId;
+    case 'hop_card':
+      return m.from_agent === agentId || m.to_agent === agentId;
+    default:
+      // run 产物卡（plan/commit/diff/table/verdict…）目前无 per-agent 归属，
+      // 不猜 —— 宁可少显示也不把别人的活算到它头上。
+      return false;
+  }
 }
 
 export function NeoAgentInspector({ agentId, name, groupId, onOpenDm, onClose }: NeoAgentInspectorProps) {
@@ -58,16 +99,11 @@ export function NeoAgentInspector({ agentId, name, groupId, onOpenDm, onClose }:
 
   const displayName = record?.name || name || agentId;
 
-  // 后台活动过滤：该 agent 的发言 / 过程卡（label 前缀匹配）/ 参与的交接边。
-  const activity = useMemo(() => {
-    const labelPrefix = `${displayName} `; // 过程卡 label 形如 `${name} 正在思考`
-    return timeline.messages.filter((m) => {
-      if (m.kind === 'assistant_text' || m.kind === 'raw') return m.agent_id === agentId;
-      if (m.kind === 'thinking') return m.label.startsWith(labelPrefix);
-      if (m.kind === 'hop_card') return m.from_agent === agentId || m.to_agent === agentId;
-      return false;
-    });
-  }, [timeline.messages, agentId, displayName]);
+  // 后台活动过滤（纯函数，导出可单测）。
+  const activity = useMemo(
+    () => filterAgentActivity(timeline.messages, agentId, displayName),
+    [timeline.messages, agentId, displayName],
+  );
 
   // ── 发起私聊（find-or-create DM → 切会话）──────────────────────────────
   const [dmBusy, setDmBusy] = useState(false);
@@ -89,6 +125,16 @@ export function NeoAgentInspector({ agentId, name, groupId, onOpenDm, onClose }:
   return (
     <div className="neo-inspect" data-testid="neo-agent-inspector">
       <header className="neo-inspect-head">
+        <button
+          type="button"
+          className="neo-inspect-back"
+          onClick={onClose}
+          aria-label={t('neo.inspect.back', { defaultValue: '返回群聊' })}
+          title={t('neo.inspect.back', { defaultValue: '返回群聊' })}
+          data-testid="neo-agent-inspector-back"
+        >
+          <ArrowLeft size={15} strokeWidth={1.9} aria-hidden />
+        </button>
         {record ? (
           <AgentAvatar
             name={displayName}
@@ -110,6 +156,19 @@ export function NeoAgentInspector({ agentId, name, groupId, onOpenDm, onClose }:
         </div>
         <button
           type="button"
+          className="neo-inspect-dm-icon"
+          onClick={() => void openDm()}
+          disabled={dmBusy}
+          aria-label={dmBusy
+            ? t('neo.inspect.dmOpening', { defaultValue: '创建私聊…' })
+            : t('neo.inspect.dm', { defaultValue: '发起私聊' })}
+          title={t('neo.inspect.dm', { defaultValue: '发起私聊' })}
+          data-testid="neo-agent-inspector-dm"
+        >
+          <MessageSquare size={14} strokeWidth={1.9} aria-hidden />
+        </button>
+        <button
+          type="button"
           className="neo-inspect-close"
           onClick={onClose}
           aria-label={t('common.close', { defaultValue: '关闭' })}
@@ -119,18 +178,6 @@ export function NeoAgentInspector({ agentId, name, groupId, onOpenDm, onClose }:
         </button>
       </header>
 
-      <button
-        type="button"
-        className="neo-inspect-dm"
-        onClick={() => void openDm()}
-        disabled={dmBusy}
-        data-testid="neo-agent-inspector-dm"
-      >
-        <MessageSquare size={13} strokeWidth={1.9} aria-hidden />
-        {dmBusy
-          ? t('neo.inspect.dmOpening', { defaultValue: '创建私聊…' })
-          : t('neo.inspect.dm', { defaultValue: '发起私聊' })}
-      </button>
       {dmErr && <div className="neo-inspect-dm-err" role="alert">{dmErr}</div>}
 
       <div className="neo-inspect-sec-label">

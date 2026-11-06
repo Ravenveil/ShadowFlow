@@ -109,4 +109,63 @@ describe('emitToolChunk (G1 工具可见)', () => {
     emitToolChunk(gw, { type: 'text-delta', value: 'hi' } as TurnChunk);
     expect(emitted).toHaveLength(0);
   });
+
+  // ── 2026-11-06 Agent 检查器 — who 归属 + per-agent 开放工具槽 ──────────
+  it('who 归属 — tool_call/tool_echo 带 agent_id/agent_name', () => {
+    const { gw, emitted } = makeGw();
+    emitToolChunk(
+      gw,
+      { type: 'tool-use', tool: { tool_name: 'web_search', tool_input: { q: 'x' } } } as TurnChunk,
+      { agentId: 'a1', agentName: 'Scout' },
+    );
+    emitToolChunk(
+      gw,
+      { type: 'tool-result', result: { tool_use_id: 't1', output: 'ok' } } as TurnChunk,
+      { agentId: 'a1', agentName: 'Scout' },
+    );
+    const call = emitted[0] as Extract<TimelineMessage, { kind: 'tool_call' }>;
+    const echo = emitted[1] as Extract<TimelineMessage, { kind: 'tool_echo' }>;
+    expect(call.agent_id).toBe('a1');
+    expect(call.agent_name).toBe('Scout');
+    expect(echo.agent_id).toBe('a1');
+    expect(echo.agent_name).toBe('Scout');
+  });
+
+  it('无 who（单聊/老调用）— 不带归属字段，行为零变化', () => {
+    const { gw, emitted } = makeGw();
+    emitToolChunk(gw, { type: 'tool-use', tool: { tool_name: 'x', tool_input: {} } } as TurnChunk);
+    const call = emitted[0] as Extract<TimelineMessage, { kind: 'tool_call' }>;
+    expect(call.agent_id).toBeUndefined();
+    expect(call.agent_name).toBeUndefined();
+  });
+
+  it('per-agent 槽 — 并发两 agent 的 tool-use/tool-result 不串台', () => {
+    const { gw, emitted, patches } = makeGw();
+    // A、B 交替各开一个工具（旧单槽实现会把 A 的开放工具顶掉）。
+    emitToolChunk(gw, { type: 'tool-use', tool: { tool_name: 'a_tool', tool_input: {} } } as TurnChunk, { agentId: 'a1', agentName: 'A' });
+    emitToolChunk(gw, { type: 'tool-use', tool: { tool_name: 'b_tool', tool_input: {} } } as TurnChunk, { agentId: 'a2', agentName: 'B' });
+    const callA = emitted[0] as Extract<TimelineMessage, { kind: 'tool_call' }>;
+    const callB = emitted[1] as Extract<TimelineMessage, { kind: 'tool_call' }>;
+    // B 的 tool-use 不应把 A 的开放卡提前 finalize 成 ok。
+    expect(patches.find((p) => p.op === 'tool_finalize')).toBeUndefined();
+    // A 的结果先回 → 只 finalize A 的卡。
+    emitToolChunk(gw, { type: 'tool-result', result: { tool_use_id: 'ta', output: 'A done' } } as TurnChunk, { agentId: 'a1', agentName: 'A' });
+    const finA = patches.find((p) => p.op === 'tool_finalize') as Extract<MessagePatch, { op: 'tool_finalize' }>;
+    expect(finA.id).toBe(callA.id);
+    expect(finA.id).not.toBe(callB.id);
+    // B 的结果回 → finalize B 的卡（旧实现此处无开放槽可配对）。
+    emitToolChunk(gw, { type: 'tool-result', result: { tool_use_id: 'tb', output: 'B done' } } as TurnChunk, { agentId: 'a2', agentName: 'B' });
+    const fins = patches.filter((p) => p.op === 'tool_finalize') as Extract<MessagePatch, { op: 'tool_finalize' }>[];
+    expect(fins).toHaveLength(2);
+    expect(fins[1].id).toBe(callB.id);
+  });
+
+  it('同 agent 连续 tool-use 未收 result → 顶替落定为 ok（防永久转圈，语义不变）', () => {
+    const { gw, patches } = makeGw();
+    emitToolChunk(gw, { type: 'tool-use', tool: { tool_name: 'x1', tool_input: {} } } as TurnChunk, { agentId: 'a1', agentName: 'A' });
+    emitToolChunk(gw, { type: 'tool-use', tool: { tool_name: 'x2', tool_input: {} } } as TurnChunk, { agentId: 'a1', agentName: 'A' });
+    const fins = patches.filter((p) => p.op === 'tool_finalize') as Extract<MessagePatch, { op: 'tool_finalize' }>[];
+    expect(fins).toHaveLength(1);
+    expect(fins[0].status).toBe('ok');
+  });
 });
