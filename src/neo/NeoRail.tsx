@@ -1374,8 +1374,8 @@ export function NeoRail({
   // 「成员 vs 团队」的分区感。分组语义交给项目/团队折叠组表达。
   const renderProjectBody = () => (
     <>
-      {/* 内置秘书「影」常驻第一位（2026-11-06）：老板进门先看到秘书 */}
-      {renderSecretaryRow()}
+      {/* 秘书「影」不在这里渲染（2026-11-06 修复重复）：常驻行由列表区
+          「+ 新建」之下统一渲染一次（项目分组之上），默认组只含普通会话。 */}
       {defaultTeams.map(renderTeamGroup)}
       {looseGroupBuckets.unassigned.map(renderGroupRow)}
       {soloDmBuckets.unassigned.map(renderDmRow)}
