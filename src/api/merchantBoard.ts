@@ -151,6 +151,50 @@ export interface ProductEconomics {
   total: Omit<ProductEconomicRow, 'product_id' | 'product_name' | 'list_price_cents' | 'revenue_share_pct'>;
 }
 
+/** 客户贡献与复购一行：客户维度的钱口径 + 是否复购（成交 ≥2 单）。 */
+export interface CustomerEconomicRow {
+  /** 客户 = 访客 ID；订单无访客归因时为 '(unknown)' */
+  customer_id: string;
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+  /** 单均实收 = 营收 ÷ 成交单数（已付+已退）；没成交过是 null */
+  avg_realized_price_cents: number | null;
+  /** 单均毛利 = 毛利 ÷ 成交单数；没成交过是 null */
+  unit_gross_profit_cents: number | null;
+  /** 成交单数 = 已付 + 已退；≥2 即复购客户 */
+  transacted_orders: number;
+  is_repeat: boolean;
+}
+
+export interface CustomerEconomics {
+  range: { from: number | null; to: number | null };
+  summary: {
+    /** 有成交（≥1 单已付/已退）的客户数 */
+    customers: number;
+    /** 成交 ≥2 单的客户数 */
+    repeat_customers: number;
+    /** 复购率（%）；没有客户时为 null */
+    repeat_rate_pct: number | null;
+    /** 复购客户在窗口内的营收合计 */
+    repeat_customer_revenue_cents: number;
+    /** 单次/未成交客户营收合计；与上一行相加恒等于 total.revenue_cents */
+    single_customer_revenue_cents: number;
+    /** 复购客户营收占比（%）；总营收为 0 时为 null */
+    repeat_revenue_share_pct: number | null;
+    /** 客户均贡献（分）；没有客户时为 null */
+    avg_revenue_per_customer_cents: number | null;
+  };
+  /** Top 客户（营收降序前 5） */
+  top: CustomerEconomicRow[];
+  /** 全部客户合计，与 overview 同窗口逐字段一致 */
+  total: Omit<CustomerEconomicRow, 'customer_id' | 'is_repeat'>;
+}
+
 export interface ReconcileResult {
   ledger: { income: number; refund: number; expense: number };
   orders: { amount: number; cost: number };
@@ -243,6 +287,12 @@ export function fetchChannelEconomics(opts: { start?: string; end?: string } = {
 export function fetchProductEconomics(opts: { start?: string; end?: string } = {}): Promise<ProductEconomics> {
   const qs = windowQuery(opts);
   return fetch(`${BASE}/products/economics${qs ? `?${qs}` : ''}`).then((r) => handle(r));
+}
+
+/** 客户贡献与复购。与概览共用同一组 start/end，合计才能和 KPI 对上。 */
+export function fetchCustomerEconomics(opts: { start?: string; end?: string } = {}): Promise<CustomerEconomics> {
+  const qs = windowQuery(opts);
+  return fetch(`${BASE}/customers${qs ? `?${qs}` : ''}`).then((r) => handle(r));
 }
 
 export function fetchMerchantLedger(limit = 100, kind = ''): Promise<Array<{

@@ -13,6 +13,8 @@
  * GET  /api/merchant/traffic/curve          → 客流曲线（PV/UV/转化/分渠道）
  * GET  /api/merchant/channels               → 渠道获客经济性（渠道 × 营收/成本/毛利/占比，
  *                                             合计与 overview 同窗口同口径）
+ * GET  /api/merchant/customers              → 客户贡献与复购（客户 × 钱口径 + 复购拆分，
+ *                                             合计与 overview 同窗口同口径）
  * GET  /api/merchant/ledger                 → 收支流水
  * GET  /api/merchant/orders                 → 订单列表（status 筛 + offset 分页
  *                                             + start/end 区间，返回 total/has_more）
@@ -40,6 +42,7 @@ import {
   channelEconomics,
   createOrder,
   createProduct,
+  customerEconomics,
   firstOrderChain,
   listLedger,
   listOrders,
@@ -133,6 +136,15 @@ router.get('/channels', (req: Request, res: Response) => {
 router.get('/products/economics', (req: Request, res: Response) => {
   try {
     res.json(productEconomics({ start: req.query.start, end: req.query.end }));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 客户贡献与复购：渠道答「从哪来」、产品答「买什么」，这里答「谁在复购、贡献多少」。
+router.get('/customers', (req: Request, res: Response) => {
+  try {
+    res.json(customerEconomics({ start: req.query.start, end: req.query.end }));
   } catch (err) {
     fail(res, err);
   }
