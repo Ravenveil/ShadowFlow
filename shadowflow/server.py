@@ -404,7 +404,7 @@ async def _seed_opc_os() -> None:
 
 @app.on_event("startup")
 async def _seed_secretary() -> None:
-    """Seed the built-in secretary agent「影」(2026-11-06, GrokBot 主Bot范式).
+    """Seed the built-in secretary agent「秘书」(2026-11-06, GrokBot 主Bot范式).
 
     幂等：固定 agent_id，已存在（含用户改过）则跳过。失败只告警不阻塞启动。
     """

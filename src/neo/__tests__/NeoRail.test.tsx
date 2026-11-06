@@ -100,7 +100,7 @@ beforeEach(() => {
 describe('NeoRail — 折叠回路（弹出/收回）', () => {
   it('默认展开：导航行齐全（「新任务」已收起 2026-11-06；秘书常驻行在），收回钮在', () => {
     renderRail();
-    // 「新任务」入口已收起（主控对话由秘书「影」承担，⌘K 保留）
+    // 「新任务」入口已收起（主控对话由秘书承担，⌘K 保留）
     expect(screen.queryByTestId('neo-new-task')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-knowledge')).toBeInTheDocument();
     // 2026-11-06 折叠批：记忆入口已并入「设置 → 记忆」，左栏不再有一级导航行
@@ -109,7 +109,7 @@ describe('NeoRail — 折叠回路（弹出/收回）', () => {
     expect(screen.queryByTestId('neo-nav-agents')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-runs')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-search')).toBeInTheDocument();
-    // 内置秘书「影」常驻行（home 列表第一位）
+    // 内置秘书常驻行（home 列表第一位）
     expect(screen.getByTestId('neo-secretary-row')).toBeInTheDocument();
     // 收回钮存在，展开钮不存在
     expect(screen.getByTestId('neo-rail-collapse')).toBeInTheDocument();

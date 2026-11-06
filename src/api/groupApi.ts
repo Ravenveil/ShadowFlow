@@ -4,6 +4,7 @@ import type { Message } from '../common/types/inbox';
 import { getApiBase } from './_base';
 import { buildByokHeaders } from './chat';
 import { markPythonDown, markPythonUp } from '../core/hooks/usePythonBackendStatus';
+import { createTeam, patchTeam } from './teams';
 
 /**
  * Shared response check — when the Python backend is down, Express's
@@ -182,6 +183,12 @@ export interface PatchGroupRequest {
    * 单聊加人后前端显式下发 'group'（加人即成群，没有独立的「新建群聊」入口）。
    */
   kind?: 'dm' | 'group';
+  /**
+   * 2026-11-06 — 编队补链（建群即建编队）：自由群 find-or-create 同名团队后
+   * 回填挂链（编队 tab 的 TeamPanel 与群聊网关团队 DAG 都按 group.team_id）。
+   * 空串 = 清除链接。
+   */
+  team_id?: string | null;
 }
 
 /**
@@ -341,6 +348,56 @@ export async function patchGroup(
 }
 
 /**
+ * 2026-11-06 · 群 → 编队 find-or-create（与 resolveTeamGroup 反向对称）——
+ * 「建群即建编队」。
+ *
+ * 背景 bug：编队 tab（NeoHost TeamPanel）只在 group.team_id 存在时挂载，
+ * 而「发起群聊」只有勾选恰好等于某团队 roster 才带 team_id，自由群打开后
+ * 编队 pane 整块空白（成员/工作流/协作策略全无）。修复：非 DM 且无 team 的
+ * 群 → 用群名 + 群成员 find-or-create 一个团队（name = group.name，与
+ * resolveTeamGroup 的同名归属约定一致），PATCH 挂链后返回 team_id。
+ *
+ * 已有 team_id 直接返回（幂等）；DM 不建编队返回 null；失败返回 null
+ * （调用方回落无编队态，不阻断聊天主链路）。
+ */
+export async function ensureGroupTeam(group: GroupRecord): Promise<string | null> {
+  if ((group.kind as string | undefined) === 'dm') return null;
+  if (group.team_id) return group.team_id;
+  try {
+    const team = await createTeam({
+      name: group.name || group.group_id,
+      description: '',
+      agent_ids: [...(group.agent_ids ?? [])],
+      workspace_id: group.workspace_id ?? undefined,
+    });
+    await patchGroup(group.group_id, { team_id: team.team_id });
+    return team.team_id;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 2026-11-06 · 群成员变更 → 编队 roster 跟随（best-effort）。
+ * 群↔编队双向同步的群侧半边：群里加/移 Agent 时同步 PATCH 团队 roster，
+ * 否则编队 tab 的成员网格会停在建群那一刻。失败静默（不阻断群成员编辑）。
+ */
+async function syncTeamRosterDelta(
+  group: GroupRecord,
+  delta: { add?: string[]; remove?: string[] },
+): Promise<void> {
+  if (!group.team_id) return;
+  try {
+    await patchTeam(group.team_id, {
+      ...(delta.add?.length ? { add_agent_ids: delta.add } : {}),
+      ...(delta.remove?.length ? { remove_agent_ids: delta.remove } : {}),
+    });
+  } catch {
+    // best-effort：编队同步失败不影响群成员编辑本体
+  }
+}
+
+/**
  * Grok 式「添加成员」（2026-11-03）：往当前会话里加 Agent。
  *
  * 不带独立的「新建群聊」入口——单聊加第二个人就自然升级成群聊
@@ -358,9 +415,13 @@ export async function addGroupMembers(
   // 群不存在时 getGroup 返 null：仍按传入列表回写，由网关 PATCH 404 兜底暴露，
   // 不让调用方吞掉「会话已消失」这个事实。
   const merged = [...(current?.agent_ids ?? [])];
+  const added: string[] = [];
   for (const id of agentIds) {
     const clean = id.trim();
-    if (clean && !merged.includes(clean)) merged.push(clean);
+    if (clean && !merged.includes(clean)) {
+      merged.push(clean);
+      added.push(clean);
+    }
   }
   // 会话形态**只升级、不降级**：只有原本是单聊且加了第二个人时才转 'group'。
   // 给一个 0 成员的群加第一个人不能把它降成 dm（否则群名被单聊头像/名字盖掉，
@@ -368,7 +429,15 @@ export async function addGroupMembers(
   const currentKind = (current?.kind as string | undefined) ?? 'group';
   const patch: PatchGroupRequest = { agent_ids: merged };
   if (currentKind === 'dm' && merged.length > 1) patch.kind = 'group';
-  return patchGroup(groupId, patch);
+  const updated = await patchGroup(groupId, patch);
+  // 2026-11-06 群↔编队双向同步：已有编队 → roster 跟随加人；无编队的群聊
+  // （如单聊加人升级成群）→ 建群即建编队补链，返回记录带上新 team_id。
+  if (updated.team_id) {
+    await syncTeamRosterDelta(updated, { add: added });
+    return updated;
+  }
+  const teamId = await ensureGroupTeam(updated);
+  return teamId ? { ...updated, team_id: teamId } : updated;
 }
 
 /** Grok 式「移出成员」：从当前会话摘掉一个 Agent；剩 1 人自动回落单聊。 */
@@ -380,7 +449,10 @@ export async function removeGroupMember(
   const next = (current?.agent_ids ?? []).filter((id) => id !== agentId);
   // 不自动降级：群聊移出成员后仍是群聊（Grok 里群不会因为人少就变单聊），
   // 原本是单聊的也保持单聊。形态切换只在 addGroupMembers 的「加第二人」发生。
-  return patchGroup(groupId, { agent_ids: next });
+  const updated = await patchGroup(groupId, { agent_ids: next });
+  // 2026-11-06 群↔编队双向同步：移出成员同步摘出编队 roster（best-effort）。
+  await syncTeamRosterDelta(updated, { remove: [agentId] });
+  return updated;
 }
 
 export async function postGroupMessage(
@@ -396,6 +468,9 @@ export async function postGroupMessage(
      *  executor（cli:* / byok:*）生成回复。executor 空时网关默认 anthropic-direct。 */
     executor?: string;
     model?: string;
+    /** 2026-11-06 · 对话框知识库 — 多模态记忆库 pack id 列表，网关 fan-out
+     *  按本轮消息检索命中注入 Agent 提示词（fail-soft）。 */
+    knowledgePackIds?: string[];
     /** AbortSignal — allows cancelling an in-flight POST. */
     signal?: AbortSignal;
   },
@@ -412,6 +487,7 @@ export async function postGroupMessage(
       reply_to: options?.replyTo,
       executor: options?.executor,
       model: options?.model,
+      knowledge_pack_ids: options?.knowledgePackIds,
     }),
     signal: options?.signal,
   });

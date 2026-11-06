@@ -331,16 +331,17 @@ async def resolve_dm_conversation(
     for rec in _list_groups_records(workspace_id, kinds=["dm"]):
         ids = rec.get("agent_ids") or []
         if len(ids) == 1 and ids[0] == agent_id:
-            # 秘书「影」问候幂等补种（2026-11-06）：存量老会话建于播种功能
-            # 上线之前，命中时零消息 → 补一条 Hello World!（与新建播种同款），
-            # 保证「点进来就有主控消息」对老会话同样成立；已有消息绝不覆盖。
-            if agent_id == "agent-shadow-secretary" and not (rec.get("messages") or []):
+            # 秘书问候幂等补种（2026-11-06；同日「Hello World!」改常规欢迎语）：
+            # 存量老会话建于播种功能上线之前，命中时零消息 → 补一条欢迎语
+            # （与新建播种同款），保证「点进来就有主控消息」对老会话同样成立；
+            # 已有消息绝不覆盖。
+            if agent_id == SECRETARY_AGENT_ID and not (rec.get("messages") or []):
                 rec["messages"] = [
                     {
-                        "sender_name": "影",
+                        "sender_name": SECRETARY_NAME,
                         "sender_kind": "agent",
                         "agent_id": agent_id,
-                        "content": "Hello World!",
+                        "content": SECRETARY_GREETING,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                 ]

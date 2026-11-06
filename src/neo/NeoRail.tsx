@@ -85,7 +85,7 @@ import type { KnowledgeVault } from '../common/types/knowledgeVault';
 import { listSchedules, type ScheduleRecord } from '../api/schedules';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
-// 内置秘书「影」（2026-11-06）：固定 id 常量 + 会话去重过滤共用。
+// 内置秘书（2026-11-06）：固定 id 常量 + 会话去重过滤共用。
 import { SECRETARY_AGENT_ID, SECRETARY_NAME } from './secretary';
 // ClawHub（2026-06，T08）：AgentAvatar 样式（增量引入）
 import '../pages/clawhub/clawhub.css';
@@ -532,7 +532,7 @@ export function NeoRail({
   }, [teams, groupByTeamId, projectByGroupId]);
 
   // 散养成员的 DM（归属团队的成员 DM 不单独渲染，行已收进团队分组）。
-  // 内置秘书「影」单独前置渲染（常驻行），不进散养 DM 桶（去重）。
+  // 内置秘书单独前置渲染（常驻行），不进散养 DM 桶（去重）。
   const soloDms = useMemo(
     () => recentDMs.filter((d) => !teamAgentIds.has(d.agentId) && d.agentId !== SECRETARY_AGENT_ID),
     [recentDMs, teamAgentIds],
@@ -553,12 +553,12 @@ export function NeoRail({
       ),
     [filteredAgents, teamAgentIds, dmByAgentId],
   );
-  // 内置秘书「影」的 agent 记录（后端启动播种；未拉到时用固定 id/名兜底渲染）。
+  // 内置秘书的 agent 记录（后端启动播种；未拉到时用固定 id/名兜底渲染）。
   const secretaryAgent = useMemo(
     () => agents.find((a) => a.agent_id === SECRETARY_AGENT_ID) ?? null,
     [agents],
   );
-  // 影的 inbox DM 条目（有会话时行尾显示最后消息/时间；无会话时预览为引导文案）。
+  // 秘书的 inbox DM 条目（有会话时行尾显示最后消息/时间；无会话时预览为引导文案）。
   const secretaryDm = useMemo(
     () => dmByAgentId.get(SECRETARY_AGENT_ID) ?? null,
     [dmByAgentId],
@@ -968,14 +968,14 @@ export function NeoRail({
   // 归组，行内浮层入口冗余）。底层 moveConversation PATCH 通路保留——拖拽
   // drop（handleDropOnProject）仍复用它完成归属回写。
 
-  // ── 内置秘书「影」常驻行（2026-11-06，GrokBot 主Bot范式）─────────────────
+  // ── 内置秘书常驻行（2026-11-06，GrokBot 主Bot范式）─────────────────
   // home 列表区第一位常驻：无论有没有会话，老板随时能找到秘书。点击 =
-  // openAgentDm（find-or-create DM；后端对新 DM 预置 Hello World! 问候）。
+  // openAgentDm（find-or-create DM；后端对新 DM 预置欢迎语问候）。
   // 无 inbox 记录时预览显示引导文案；agent 记录未拉到时也用固定 id/名渲染。
   const renderSecretaryRow = () => {
     const rec = secretaryAgent;
     const dm = secretaryDm;
-    const preview = dm?.lastMessage || (language === 'zh' ? '你的贴身秘书，随时吩咐' : 'Your secretary, at your service');
+    const preview = dm?.lastMessage || (language === 'zh' ? '随时听候吩咐' : 'At your service');
     const rel = dm ? relativeTime(dm.lastActivityAt, nowTick, t) : null;
     return (
       <div className="neo-agent-row" data-testid="neo-secretary-row">
@@ -988,8 +988,8 @@ export function NeoRail({
           <span className="neo-sess-avatar">
             <AgentAvatar
               name={rec?.name ?? SECRETARY_NAME}
-              style={rec?.avatar_style ?? 'bottts-neutral'}
-              seed={rec?.avatar_seed ?? 'shadow-secretary'}
+              style={rec?.avatar_style ?? 'lorelei'}
+              seed={rec?.avatar_seed ?? 'mishu'}
               image={rec?.avatar_image ?? null}
               size={32}
               fallback={
@@ -1352,7 +1352,7 @@ export function NeoRail({
   // 「成员 vs 团队」的分区感。分组语义交给项目/团队折叠组表达。
   const renderProjectBody = () => (
     <>
-      {/* 秘书「影」不在这里渲染（2026-11-06 修复重复）：常驻行由列表区
+      {/* 秘书不在这里渲染（2026-11-06 修复重复）：常驻行由列表区
           「+ 新建」之下统一渲染一次（项目分组之上），默认组只含普通会话。 */}
       {defaultTeams.map(renderTeamGroup)}
       {looseGroupBuckets.unassigned.map(renderGroupRow)}
@@ -1576,7 +1576,7 @@ export function NeoRail({
           os-unified（2026-11-04 Grok Bot 范式批）：只留全局动作（知识库/
           记忆/搜索/ClawHub）——团队/员工/历史按钮移除，成员即会话、团队即
           home 列表区分组，历史由会话列表本身承担。
-          2026-11-06 用户反馈：「新任务」入口收起不展示（主控对话由秘书「影」
+          2026-11-06 用户反馈：「新任务」入口收起不展示（主控对话由秘书
           承担，⌘K 快捷键保留）。 */}
       <nav className="neo-nav">
         <button
@@ -1793,7 +1793,7 @@ export function NeoRail({
               </div>
             )}
 
-            {/* 秘书「影」常驻行（2026-11-06 位置调整）：「+ 新建」之下、
+            {/* 秘书常驻行（2026-11-06 位置调整）：「+ 新建」之下、
                 项目分组之上——老板进门先看到秘书，再往下翻项目与会话。
                 只渲染这一次（默认组 renderProjectBody 内不再重复）。 */}
             {renderSecretaryRow()}
@@ -1808,8 +1808,8 @@ export function NeoRail({
               <div className="neo-list-note">
                 {t('neo.sessionsEmpty', {
                   defaultValue: language === 'zh'
-                    ? '还没有其他会话，向「影」吩咐第一件事吧'
-                    : 'No conversations yet — tell Ying your first task',
+                    ? '还没有其他会话，向总经理吩咐第一件事吧'
+                    : 'No conversations yet — tell the GM your first task',
                 })}
               </div>
             ) : homeLoading ? (

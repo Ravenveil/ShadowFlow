@@ -38,6 +38,7 @@ import { getSetting } from '../storage/settings';
 // 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
 import { remember, contextBlock } from '../storage/memory-lessons';
+import { coercePackIds, knowledgeBlock } from '../lib/memory-bank';
 import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
@@ -335,6 +336,12 @@ interface SessionRecord {
   /** Story 15.12 interface — pre-rendered side-files block; loader to be wired by 15.12. */
   side_files?: string;
   layer_toggles?: LayerToggles;
+  /**
+   * 2026-11-06 — 对话框知识库接线：多模态记忆库 pack id 列表（用户在 composer
+   * KNOWLEDGE chip 勾选）。stream 组装提示词时按 goal 检索命中注入「知识库参考」
+   * 块（fail-soft）；多轮接力每轮以当轮 goal 重新检索。
+   */
+  knowledge_pack_ids?: string[];
   /**
    * Story 15.29 — conversation this run belongs to. Always set: when the
    * client omits `conversation_id` we auto-create an anonymous one under
@@ -1016,6 +1023,8 @@ router.post('/', (req: Request, res: Response) => {
     project_meta,
     side_files,
     layer_toggles,
+    // 2026-11-06 — 对话框知识库：记忆库 pack id 列表（coercePackIds 清洗）。
+    knowledge_pack_ids,
     // Story 15.19 v2 — optional executor selector.
     executor,
     // Story 15.18 — optional provider selector.
@@ -1044,6 +1053,7 @@ router.post('/', (req: Request, res: Response) => {
     project_meta?: unknown;
     side_files?: unknown;
     layer_toggles?: unknown;
+    knowledge_pack_ids?: unknown;
     executor?: unknown;
     provider?: unknown;
     cwd?: unknown;
@@ -1196,6 +1206,8 @@ router.post('/', (req: Request, res: Response) => {
   const validated_side_files =
     typeof side_files === 'string' && side_files.trim().length > 0 ? side_files : undefined;
   const validated_layer_toggles = coerceLayerToggles(layer_toggles);
+  // 对话框知识库（2026-11-06）— 记忆库 pack id 列表；非法项丢弃，空 = 不挂知识。
+  const validated_knowledge_pack_ids = coercePackIds(knowledge_pack_ids);
 
   // Story 15.19 v2 — coerce executor. We accept any non-empty string and let
   // the dispatcher emit structured errors for unknown values; this keeps the
@@ -1305,6 +1317,8 @@ router.post('/', (req: Request, res: Response) => {
     project_meta: validated_project_meta ?? null,
     side_files: validated_side_files,
     layer_toggles: validated_layer_toggles,
+    knowledge_pack_ids:
+      validated_knowledge_pack_ids.length > 0 ? validated_knowledge_pack_ids : undefined,
     executor: validated_executor,
     cwd: validated_cwd,
     conversation_id: validated_conversation_id,
@@ -1381,6 +1395,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     anthropic_key?: unknown;
     executor?: unknown;
     cwd?: unknown;
+    knowledge_pack_ids?: unknown;
   };
   // Accept either `content` (chat-style payload that the RunSessionPage send box
   // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
@@ -1404,6 +1419,11 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   // CLI 工作目录:follow-up 可改;仅接受绝对路径(否则保留 source 继承值)。
   if (typeof body.cwd === 'string' && /^([a-zA-Z]:[\\/]|[\\/])/.test(body.cwd.trim())) {
     overrides.cwd = body.cwd.trim();
+  }
+  // 对话框知识库（2026-11-06）— 显式给出数组即整体替换（空数组 = 本轮取消挂载）；
+  // 未给继承 source 会话的选择。
+  if (Array.isArray(body.knowledge_pack_ids)) {
+    overrides.knowledge_pack_ids = coercePackIds(body.knowledge_pack_ids);
   }
 
   sessionStore.set(new_session_id, {
@@ -1813,10 +1833,20 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   // 经验记忆（2026-11-05，OPC-OS PR#3 移植）：按 skill_name 分域召回，拼进 skill 层
   // 尾部（静态段内、技能指令之后），空块自动丢弃不打乱段落顺序。失败静默。
   const lessonsBlock = lessonsBlockForSession(session.skill_name);
+  // 知识库参考（2026-11-06 对话框知识库接线）：会话挂了记忆库 pack → 按本轮
+  // goal 检索命中注入「知识库参考」块（fail-soft：Python 未起/超时 → 空块）。
+  // 多轮接力每轮以当轮 goal 重新检索，与经验块并列拼进 skill 层尾部。
+  const knowledgeBlockText = await knowledgeBlock(session.knowledge_pack_ids, session.goal);
+  if (knowledgeBlockText) {
+    console.log(
+      `[run-sessions] injecting knowledge_block (chars=${knowledgeBlockText.length}, packs=${session.knowledge_pack_ids?.length ?? 0})`,
+    );
+  }
+  const dynamicContextBlock = lessonsBlock + (knowledgeBlockText ? `\n\n${knowledgeBlockText}` : '');
   const compose = wantPlainConversation
     ? composeSystemPrompt({
         ds_injection: ds?.injection_prompt,
-        skill_system_prompt: joinLessons(CONVERSATIONAL_AGENT_PROMPT, lessonsBlock),
+        skill_system_prompt: joinLessons(CONVERSATIONAL_AGENT_PROMPT, dynamicContextBlock),
         skill_mode: undefined,
         project_meta: session.project_meta ?? null,
         conversation_history: conversationHistoryBlock,
@@ -1825,7 +1855,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       })
     : composeSystemPrompt({
         ds_injection: ds?.injection_prompt,
-        skill_system_prompt: joinLessons(skillForPrompt?.system_prompt, lessonsBlock),
+        skill_system_prompt: joinLessons(skillForPrompt?.system_prompt, dynamicContextBlock),
         skill_mode: skillForPrompt?.mode,
         project_meta: session.project_meta ?? null,
         conversation_history: conversationHistoryBlock,

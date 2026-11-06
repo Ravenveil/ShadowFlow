@@ -55,6 +55,8 @@ import {
 } from '../storage/agent-hops';
 // Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
 import { decomposeWithLlm, type ParsedTask } from '../lib/orchestrator-parse';
+// 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
+import { coercePackIds, knowledgeBlock } from '../lib/memory-bank';
 import {
   commitWorktree,
   integrateAll,
@@ -762,6 +764,7 @@ async function runFanout(
   model: string | undefined,
   headers: Request['headers'],
   latestUserText?: string,
+  knowledgePackIds?: string[],
 ): Promise<void> {
   const apiKey = resolveExecutorKey(executor, headers);
 
@@ -818,6 +821,15 @@ async function runFanout(
   // 执行期过程经 run 管线 emit；B2 GET /:id/timeline 自动归并回放。
   // startGatewayRun 失败返回 null（聊天主链路照常），所有 gw 操作 `gw?.` 防御。
   const gw = startGatewayRun(groupId, userText);
+
+  // 知识库参考（2026-11-06 对话框知识库接线）— 本轮用户消息检索记忆库命中
+  // （fail-soft：Python 未起/超时/零命中 → 空串）；DAG/串行两条派发路径共用。
+  const kbText = await knowledgeBlock(knowledgePackIds, userText);
+  if (kbText) {
+    console.log(
+      `[groups-chat] injecting knowledge_block (chars=${kbText.length}, packs=${knowledgePackIds?.length ?? 0})`,
+    );
+  }
 
   try {
     // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
@@ -1104,7 +1116,7 @@ async function runFanout(
               const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
               for await (const chunk of callable.turn({
                 system: soul,
-                prompt: basePrompt + upstreamText,
+                prompt: basePrompt + kbText + upstreamText,
                 history: history0.slice(0, -1),
                 signal,
                 model,
@@ -1352,7 +1364,7 @@ async function runFanout(
         const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
         for await (const chunk of callable.turn({
           system: soul,
-          prompt,
+          prompt: prompt + kbText,
           history: history.slice(0, -1), // exclude the just-read latest user (it's the prompt)
           signal: ctrl.signal,
           model,
@@ -1609,6 +1621,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
       sender_kind?: string;
       executor?: string;
       model?: string;
+      knowledge_pack_ids?: unknown;
     };
     const senderKind = body.sender_kind ?? 'user';
     const content = typeof body.content === 'string' ? body.content : '';
@@ -1659,7 +1672,15 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // 先把决定送达（不改聊天主链路：消息照常持久化； fan-out 照常，若用户
     // 批/拒后还想派新活，这条消息本身就是新一轮）。
     tryResolveApprovalFromText(groupId, content);
-    void runFanout(groupId, executor, model, req.headers, content).catch((e) => {
+    // 对话框知识库（2026-11-06）— 记忆库 pack id 透传给 fan-out（每轮检索注入）。
+    void runFanout(
+      groupId,
+      executor,
+      model,
+      req.headers,
+      content,
+      coercePackIds(body.knowledge_pack_ids),
+    ).catch((e) => {
       // eslint-disable-next-line no-console
       console.warn('[groups-chat] fanout failed:', e);
     });

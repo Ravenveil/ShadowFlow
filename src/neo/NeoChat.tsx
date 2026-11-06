@@ -296,6 +296,9 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
           executor: executorOverride,
           group_id: groupId,
           cwd,
+          // 对话框知识库（2026-11-06）— 记忆库 pack id 随会话落库，run 组装
+          // 提示词时按 goal 检索命中注入「知识库参考」块。
+          knowledge_pack_ids: p.knowledgePackIds.length > 0 ? p.knowledgePackIds : undefined,
         });
         window.dispatchEvent(new CustomEvent('sf:run-created'));
         onRunChange(resp.session_id);
@@ -306,7 +309,12 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
         const resp = await fetch(`${getApiBase()}/api/run-sessions/${runId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ content: text, cwd }),
+          body: JSON.stringify({
+            content: text,
+            cwd,
+            // 对话框知识库（2026-11-06）— 每轮显式给出（空数组 = 本轮取消挂载）。
+            knowledge_pack_ids: p.knowledgePackIds,
+          }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = (await resp.json()) as { session_id?: string };
@@ -317,9 +325,9 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
         // 多轮接力成功 → 清掉上一轮的陈旧错误条（若曾出错）。
         session.clearError();
       }
-      // 选中知识库 → 发送成功后对 pack 走 RAG query，引用卡挂消息流底部。
-      if (p.knowledge.length > 0) {
-        setCitations({ packIds: p.knowledge, query: text });
+      // 选中知识库 → 发送成功后对记忆库 pack 走 RAG query，引用卡挂消息流底部。
+      if (p.knowledgePackIds.length > 0) {
+        setCitations({ packIds: p.knowledgePackIds, query: text });
       }
     } catch (err) {
       throw new Error(
@@ -352,7 +360,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
     setRetryBusy(true);
     setRetryFailed(null);
     try {
-      await handleSubmit({ text: lastUserText, knowledge: [], attachments: [] });
+      await handleSubmit({ text: lastUserText, knowledgePackIds: [], attachments: [] });
       // 重发成功（可能就地换了新 session_id，NeoApp 会同步 URL/存储）。
       session.clearError();
     } catch (err) {
