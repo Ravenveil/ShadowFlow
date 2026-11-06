@@ -436,6 +436,11 @@
 .neo-gc-roster-item[data-state='done'] .neo-gc-roster-dot {
   background: var(--t-ok, #10b981);
 }
+/* 待命（2026-11-07 三态补全）：还没动静的成员 — 灰点弱化、不转圈 */
+.neo-gc-roster-item[data-state='idle'] .neo-gc-roster-dot {
+  background: var(--t-fg-4, #94a3b8);
+  opacity: 0.6;
+}
 .neo-gc-live-elapsed {
   font-variant-numeric: tabular-nums;
   font-weight: 500;

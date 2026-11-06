@@ -38,9 +38,9 @@ def _isolate_dirs(tmp_path, monkeypatch):
     a.mkdir()
     monkeypatch.setattr(groups_mod, "_GROUPS_DIR", g)
     monkeypatch.setattr(agents_mod, "_AGENTS_DIR", a)
-    _group_events._subscribers.clear()
+    _group_events.reset_for_tests()
     yield
-    _group_events._subscribers.clear()
+    _group_events.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)

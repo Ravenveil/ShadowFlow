@@ -17,6 +17,7 @@ vi.mock('../../api/merchantBoard', () => ({
   fetchTrafficCurve: vi.fn(),
   fetchChannelEconomics: vi.fn(),
   fetchProductEconomics: vi.fn(),
+  fetchCustomerEconomics: vi.fn(),
   fetchReconcile: vi.fn(),
   fetchFirstOrderChain: vi.fn(),
   fetchMerchantOrders: vi.fn(),
@@ -164,6 +165,64 @@ const productEcon: api.ProductEconomics = {
   },
 };
 
+/** 客户贡献与复购 mock：v-rp 复购（成交 2 单）、v-once 单次（1 单），人群口径
+ *  复购贡献 ¥128 + 单次贡献 ¥71 = ¥199 恒等于 overview 营收，合计与 KPI 逐字段一致。 */
+const customerEcon: api.CustomerEconomics = {
+  range: { from: null, to: null },
+  summary: {
+    customers: 2,
+    repeat_customers: 1,
+    repeat_rate_pct: 50,
+    repeat_customer_revenue_cents: 12800,
+    single_customer_revenue_cents: 7100,
+    repeat_revenue_share_pct: 64.3,
+    avg_revenue_per_customer_cents: 9950,
+  },
+  top: [
+    {
+      customer_id: 'v-rp',
+      orders_total: 2,
+      paid_orders: 1,
+      refunded_orders: 1,
+      revenue_cents: 12800,
+      cost_cents: 3200,
+      gross_profit_cents: 9600,
+      gross_margin_pct: 75,
+      // 单均实收 = 12800 ÷ 成交 2 单 = 6400
+      avg_realized_price_cents: 6400,
+      unit_gross_profit_cents: 4800,
+      transacted_orders: 2,
+      is_repeat: true,
+    },
+    {
+      customer_id: 'v-once',
+      orders_total: 1,
+      paid_orders: 1,
+      refunded_orders: 0,
+      revenue_cents: 7100,
+      cost_cents: 1100,
+      gross_profit_cents: 6000,
+      gross_margin_pct: 84.5,
+      avg_realized_price_cents: 7100,
+      unit_gross_profit_cents: 6000,
+      transacted_orders: 1,
+      is_repeat: false,
+    },
+  ],
+  total: {
+    orders_total: 3,
+    paid_orders: 2,
+    refunded_orders: 1,
+    revenue_cents: 19900,
+    cost_cents: 4300,
+    gross_profit_cents: 15600,
+    gross_margin_pct: 78.4,
+    avg_realized_price_cents: 6633,
+    unit_gross_profit_cents: 5200,
+    transacted_orders: 3,
+  },
+};
+
 const reconcile: api.ReconcileResult = {
   ledger: { income: 19900, refund: 0, expense: 4300 },
   orders: { amount: 19900, cost: 4300 },
@@ -267,6 +326,7 @@ beforeEach(() => {
   vi.mocked(api.fetchTrafficCurve).mockResolvedValue(traffic);
   vi.mocked(api.fetchChannelEconomics).mockResolvedValue(channelEcon);
   vi.mocked(api.fetchProductEconomics).mockResolvedValue(productEcon);
+  vi.mocked(api.fetchCustomerEconomics).mockResolvedValue(customerEcon);
   vi.mocked(api.fetchReconcile).mockResolvedValue(reconcile);
   vi.mocked(api.fetchFirstOrderChain).mockResolvedValue(chain);
   vi.mocked(api.fetchMerchantOrders).mockResolvedValue({
@@ -665,6 +725,76 @@ describe('产品贡献与定价（哪个产品挣钱、定价兑现多少，合�
     await waitFor(() => expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199'));
     expect(screen.getByTestId('merchant-product-econ')).toBeInTheDocument();
     expect(screen.queryByTestId('merchant-product-econ-table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
+  });
+});
+
+describe('客户贡献与复购（谁在复购、贡献多少，合计=KPI）', () => {
+  it('摘要给复购率与人群贡献，表格列客户单数/钱/单均，合计行可与 KPI 对账', async () => {
+    renderPanel();
+    const table = await screen.findByTestId('merchant-customer-table');
+
+    // 摘要：复购率看「人」，复购贡献看「钱」，恒等 ¥128 + ¥71 = ¥199
+    const summary = screen.getByTestId('merchant-customer-summary');
+    expect(within(summary).getByText('客户 2')).toBeInTheDocument();
+    expect(within(summary).getByText(/复购客户 1/)).toBeInTheDocument();
+    expect(within(summary).getByText(/50%/)).toBeInTheDocument();
+    expect(within(summary).getByText(/复购客户贡献/)).toBeInTheDocument();
+    expect(within(summary).getByText(/64\.3%/)).toBeInTheDocument();
+    expect(within(summary).getByText(/客户均贡献 ¥99\.50/)).toBeInTheDocument();
+
+    // 按行断言：同名金额在多行复现，整表 getByText 会命中多元素
+    const rows = within(table).getAllByTestId('merchant-customer-row');
+    expect(rows).toHaveLength(2);
+    const [rp, once] = rows;
+    expect(within(rp).getByText('v-rp')).toBeInTheDocument();
+    // 单数格含「成 x · 退 x」子行：用 ^ 锚定子行文本，避免命中双元素
+    expect(within(rp).getByText(/^成 1 · 退 1/)).toBeInTheDocument();
+    expect(within(rp).getByText(/¥128/)).toBeInTheDocument();
+    expect(within(rp).getByText('75%')).toBeInTheDocument();
+    // 单均实收是独立列（不带子行前缀），全格精确匹配
+    expect(within(rp).getByText('¥64.00')).toBeInTheDocument();
+    expect(within(rp).getByText('复购')).toBeInTheDocument();
+    // 单次客户：复购列显示 —，不硬凑标签
+    expect(within(once).getByText('v-once')).toBeInTheDocument();
+    expect(within(once).getByText(/^成 1 · 退 0/)).toBeInTheDocument();
+    expect(within(once).getByText('84.5%')).toBeInTheDocument();
+    expect(within(once).getByText('—')).toBeInTheDocument();
+
+    const total = screen.getByTestId('merchant-customer-total');
+    expect(total).toHaveTextContent('合计');
+    // 合计与 KPI 是同一笔账：营收 ¥199 / 成本 ¥43 / 毛利 ¥156 / 78.4%
+    expect(within(total).getByText('3')).toBeInTheDocument();
+    expect(within(total).getByText(/^¥199\.00/)).toBeInTheDocument();
+    expect(within(total).getByText(/^¥43\.00/)).toBeInTheDocument();
+    expect(within(total).getByText(/^¥156\.00/)).toBeInTheDocument();
+    expect(within(total).getByText('78.4%')).toBeInTheDocument();
+    expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199');
+    expect(screen.getByTestId('merchant-cost')).toHaveTextContent('¥43');
+    expect(screen.getByTestId('merchant-gross')).toHaveTextContent('¥156');
+
+    // 首屏是全量：与 KPI 同一组参数（不限区间），合计才能对上
+    expect(api.fetchCustomerEconomics).toHaveBeenCalledTimes(1);
+    expect(api.fetchCustomerEconomics).toHaveBeenCalledWith({});
+  });
+
+  it('切 KPI 区间时用同一窗口重新取数', async () => {
+    renderPanel();
+    await screen.findByTestId('merchant-customer-table');
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchCustomerEconomics).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
+  it('客户经济性取数失败只降级成空卡，不拖垮整页看板', async () => {
+    vi.mocked(api.fetchCustomerEconomics).mockRejectedValue(new Error('customers boom'));
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199'));
+    expect(screen.getByTestId('merchant-customer-econ')).toBeInTheDocument();
+    expect(screen.queryByTestId('merchant-customer-table')).not.toBeInTheDocument();
     expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
   });
 });

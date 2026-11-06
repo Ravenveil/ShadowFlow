@@ -438,9 +438,30 @@ router.put('/:id/user-settings', (req: Request, res: Response) => {
 // ── GET /api/groups/:id/events — SSE ──────────────────────────────────────────
 // 对齐 stream_group_events：event agent.message / system.notice / agent.typing。
 // Node 侧用本模块内存事件总线（见 groups-event-bus.ts）。群不存在 → 404。
-// 帧格式：`event: <type>\ndata: <json>\n\n`；15s keepalive 注释帧。
+// 帧格式：`id: <seq>\nevent: <type>\ndata: <json>\n\n`；15s keepalive 注释帧。
+//
+// 2026-11-07 — 断线补帧兜底：帧带组内单调 id；连接时按游标补发缓冲中缺失帧，
+// 浏览器 EventSource 自动重连会带 Last-Event-ID 头（sseClient 也支持
+// ?last_event_id= / ?after= 查询参数），断线窗口的帧不再永久丢失。
+// 补帧顺序：先订阅再补发，live 帧 id ≤ 已补发水位则跳过（去重）。
 
-import { subscribe, unsubscribe } from './groups-event-bus';
+import {
+  subscribe,
+  unsubscribe,
+  getGroupEventsAfter,
+  type GroupEvent,
+} from './groups-event-bus';
+
+/** 游标解析：Last-Event-ID 头优先，其次 ?last_event_id= / ?after=。无效 → null（全量补发）。 */
+function parseReplayCursor(req: Request): number | null {
+  const raw =
+    (typeof req.headers['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined) ??
+    (typeof req.query.last_event_id === 'string' ? req.query.last_event_id : undefined) ??
+    (typeof req.query.after === 'string' ? req.query.after : undefined);
+  if (raw === undefined) return null;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
 
 router.get('/:id/events', (req: Request, res: Response) => {
   const rec = store.getGroup(req.params.id);
@@ -455,15 +476,35 @@ router.get('/:id/events', (req: Request, res: Response) => {
     'X-Accel-Buffering': 'no',
   });
   res.write(': connected\n\n');
+  // 断开的客户端继续 write 只该安静失败（bus 已吞 listener 抛错，这里兜住流错误）。
+  res.on('error', () => {});
+  const write = (s: string) => {
+    try {
+      res.write(s);
+    } catch {
+      /* 客户端已断开 */
+    }
+  };
 
   const groupId = req.params.id;
-  const onEvent = (event: { type: string; data: unknown }) => {
-    res.write(`event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`);
+  const cursor = parseReplayCursor(req);
+  // 水位基线从「实际发出」起算而非游标：进程重启后 seq 归零，旧游标可能远大于
+  // 新 id（42 vs 6），以游标为基线会把重启后的 live 帧全部误杀。
+  let lastSentId = -1;
+  const onEvent = (event: GroupEvent) => {
+    if (event.id <= lastSentId) return; // 补帧与 live 重叠去重
+    lastSentId = event.id;
+    write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`);
   };
+  // 先订阅后补帧：订阅与补发之间 publish 的帧走 live 回调，由 lastSentId 去重，
+  // 不丢不重（Node 单线程下实际不会交错，去重是保险丝）。
   subscribe(groupId, onEvent);
+  for (const ev of getGroupEventsAfter(groupId, cursor)) {
+    onEvent(ev);
+  }
 
   const keepalive = setInterval(() => {
-    res.write(': keepalive\n\n');
+    write(': keepalive\n\n');
   }, 15000);
 
   req.on('close', () => {
