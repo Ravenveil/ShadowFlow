@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { swapDagRun } from '../groups-chat';
+import { swapDagRun } from '../groups/groups-chat';
 
 describe('swapDagRun', () => {
   it('同 group 第二轮 abort 第一轮、返回新 controller', () => {

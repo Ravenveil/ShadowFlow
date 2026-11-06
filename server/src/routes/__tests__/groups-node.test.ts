@@ -20,7 +20,7 @@ import path from 'path';
 import os from 'os';
 
 import * as sqlite from '../../storage/sqlite';
-import { groupsNodeRouter, handleDmResolve } from '../groups-node';
+import { groupsNodeRouter, handleDmResolve } from '../groups/groups-node';
 
 interface HttpResp {
   status: number;

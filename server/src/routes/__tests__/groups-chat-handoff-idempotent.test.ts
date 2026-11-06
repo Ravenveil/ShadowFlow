@@ -24,7 +24,7 @@ let handoffs: typeof import('../../storage/memory-handoff');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let settings: typeof import('../../storage/settings');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let chat: typeof import('../groups-chat');
+let chat: typeof import('../groups/groups-chat');
 
 beforeAll(async () => {
   origCwd = process.cwd();
@@ -34,7 +34,7 @@ beforeAll(async () => {
   sqlite._resetForTests();
   handoffs = await import('../../storage/memory-handoff');
   settings = await import('../../storage/settings');
-  chat = await import('../groups-chat');
+  chat = await import('../groups/groups-chat');
   sqlite.getDb();
 });
 

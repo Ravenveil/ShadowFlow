@@ -22,7 +22,7 @@ import {
   reloadDesignSystems,
   listDesignSystems,
   seedBuiltinDesignSystems as seedFromRegistry,
-} from '../design-systems';
+} from './design-systems';
 
 let passCount = 0;
 let failCount = 0;

@@ -18,7 +18,7 @@ import path from 'path';
 import os from 'os';
 
 import * as sqlite from '../../storage/sqlite';
-import { groupsNodeRouter } from '../groups-node';
+import { groupsNodeRouter } from '../groups/groups-node';
 import {
   publishGroupEvent,
   subscribe,
@@ -28,7 +28,7 @@ import {
   subscriberCount,
   resetGroupEventBusForTests,
   REPLAY_BUFFER_MAX,
-} from '../groups-event-bus';
+} from '../groups/groups-event-bus';
 
 // ── SSE 测试工具 ──────────────────────────────────────────────────────────────
 

@@ -6,8 +6,8 @@
  */
 
 import type { Readable } from 'node:stream';
-import type { StreamFormat } from '../../cli-registry';
-import type { SseEvent } from '../../parser';
+import type { StreamFormat } from '../../detectors/cli-registry';
+import type { SseEvent } from '../parser';
 import { parseClaudeStreamJson } from './claude-stream-json';
 import { parseCodexStreamJson } from './codex-stream-json';
 import { parseGhCopilot } from './gh-copilot';

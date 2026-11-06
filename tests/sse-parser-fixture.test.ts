@@ -36,7 +36,7 @@ const ghMod = require('../server/src/parsers/cli-streams/gh-copilot.ts') as type
 const { parseClaudeStreamJson } = claudeMod;
 const { parseCodexStreamJson } = codexMod;
 const { parseGhCopilot } = ghMod;
-import type { SseEvent } from '../server/src/parser';
+import type { SseEvent } from '../server/src/parsers/parser';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -23,8 +23,8 @@ import type { AddressInfo } from 'node:net';
 import type http from 'node:http';
 import type { RunSuggestionContext } from '../../lib/run-suggestions';
 
-let createRunSuggestionsRouter: typeof import('../run-suggestions').createRunSuggestionsRouter;
-let registerGatewayRun: typeof import('../run-sessions').registerGatewayRun;
+let createRunSuggestionsRouter: typeof import('../runs/run-suggestions').createRunSuggestionsRouter;
+let registerGatewayRun: typeof import('../runs/run-sessions').registerGatewayRun;
 let server: http.Server;
 let base: string;
 let origCwd: string;
@@ -38,8 +38,8 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-run-suggestions-'));
   process.chdir(tmp);
-  ({ createRunSuggestionsRouter } = await import('../run-suggestions'));
-  ({ registerGatewayRun } = await import('../run-sessions'));
+  ({ createRunSuggestionsRouter } = await import('../runs/run-suggestions'));
+  ({ registerGatewayRun } = await import('../runs/run-sessions'));
 
   const app = express();
   app.use(express.json());

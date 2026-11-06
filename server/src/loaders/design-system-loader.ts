@@ -22,7 +22,7 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import type { DesignSystem } from '../design-systems';
+import type { DesignSystem } from './design-systems';
 
 const DEFAULT_DS_DIR = path.join(process.cwd(), '.shadowflow', 'design-systems');
 
