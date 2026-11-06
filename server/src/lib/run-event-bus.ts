@@ -232,6 +232,82 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     updatedAt: run.updatedAt,
   });
 
+  /**
+   * 2026-11-06「消息结束了还在转圈」修复 — run 终态时事件日志里可能残留
+   * 未收口的过程卡：thinking(streaming) / tool_call(running) / msg_foot(running)。
+   * 正常路径生产者会先发 thinking_finalize / tool_finalize / msg_foot(done) 再
+   * finish；但崩溃、重启、abort 中断等路径会跳过收口 —— 回放(replayTimeline)
+   * 只认 message/message-patch 事件，这些卡就永远停在 streaming（前端转圈
+   * 23 小时的根因）。这里扫一遍日志，给每张未终态卡就地补一条终态 patch
+   * （'message-patch' 事件追加到日志尾部），使任何回放路径都干净落定。
+   * 幂等：已终态的卡直接跳过。
+   */
+  const sweepOpenProcessCards = (run: Run): number => {
+    // 按消息 id 归并已见过的终态信号（append/中间帧不算）——后写的终态优先。
+    const finalized = new Set<string>();
+    for (const rec of run.events) {
+      if (rec.event !== 'message-patch') continue;
+      const p = rec.data as { id?: string; op?: string } | null;
+      if (!p || typeof p.id !== 'string') continue;
+      if (
+        p.op === 'thinking_finalize' ||
+        p.op === 'tool_finalize' ||
+        (p.op === 'msg_foot_update' &&
+          (p as { patch?: { status?: string } }).patch?.status === 'done')
+      ) {
+        finalized.add(p.id);
+      }
+    }
+    let swept = 0;
+    for (const rec of run.events) {
+      if (rec.event !== 'message') continue;
+      const m = rec.data as {
+        id?: string;
+        kind?: string;
+        status?: string;
+        ts?: number;
+      } | null;
+      if (!m || typeof m.id !== 'string' || finalized.has(m.id)) continue;
+      if (m.kind === 'thinking' && m.status === 'streaming') {
+        run.events.push({
+          id: run.nextEventId++,
+          event: 'message-patch',
+          data: {
+            id: m.id,
+            op: 'thinking_finalize',
+            duration_ms: Math.max(0, now() - (m.ts ?? now())),
+          },
+          ts: now(),
+        });
+        finalized.add(m.id);
+        swept += 1;
+      } else if (m.kind === 'tool_call' && m.status === 'running') {
+        run.events.push({
+          id: run.nextEventId++,
+          event: 'message-patch',
+          data: { id: m.id, op: 'tool_finalize', status: 'error' },
+          ts: now(),
+        });
+        finalized.add(m.id);
+        swept += 1;
+      } else if (m.kind === 'msg_foot' && m.status === 'running') {
+        run.events.push({
+          id: run.nextEventId++,
+          event: 'message-patch',
+          data: {
+            id: m.id,
+            op: 'msg_foot_update',
+            patch: { status: 'done' },
+          },
+          ts: now(),
+        });
+        finalized.add(m.id);
+        swept += 1;
+      }
+    }
+    return swept;
+  };
+
   /** Best-effort persist; never throws into the hot path. */
   const save = (run: Run): void => {
     if (!persist) return;
@@ -288,6 +364,10 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
     };
     let interrupted = false;
     if (!TERMINAL.has(run.status)) {
+      // 崩溃恢复清扫 — 先把日志里 streaming/running 的过程卡收口（补终态
+      // patch 进日志），再追加 run 级 error 终结帧 + canceled。这样重放
+      // timeline 时过程卡先落定，底部再出现「会话进程已重启」错误帧。
+      sweepOpenProcessCards(run);
       run.events.push({
         id: run.nextEventId++,
         event: 'error',
@@ -447,6 +527,9 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
   const finish = (id: string, status: Exclude<RunStatus, 'running'>): void => {
     const run = runs.get(id);
     if (!run || TERMINAL.has(run.status)) return;
+    // 终态清扫 — 收口日志里残留的 streaming/running 过程卡（正常路径生产者
+    // 已自行 finalize，本扫描为 no-op；中断/异常路径在此兜底）。
+    sweepOpenProcessCards(run);
     run.status = status;
     run.updatedAt = now();
     for (const sink of run.clients) {
