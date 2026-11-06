@@ -33,6 +33,14 @@
  *     Python JSON team 无 yaml 层 → 404 静默；不过不挡保存（保存链路自有 D1/D2）
  *   - 「放弃修改」= 原「取消」：dirty 时先弹 NeoConfirmModal 确认
  *
+ * 2026-11-07 顺手化改版（用户反馈「dag 太乱，连接/删除不顺手」）：
+ *   - 初始布局：退化竖列（缺坐标 / 全挤一条 x 窄带）自动分层展开成左→右
+ *     流水线（computeTeamDagSeedLayout），边不再绕大圈；展开不算脏
+ *   - 删边/删节点：自定义 smoothstep 边药丸「×」一键删边、节点角「×」一键
+ *     删节点（连带清边）、边属性面板「删除此边」、Delete/Backspace 全部入
+ *     撤销栈；边隐形命中区加宽到 28px，细线好点选
+ *   - 连线手柄：10px 圆点、节点 hover 放大、拖线中 valid/connecting 高亮
+ *
  * 保存链路（校验不过不允许保存）：
  *   1. 客户端 preflight —— validateTeamWorkflowGraph（镜像后端
  *      team_validation.validate_workflow 的 D1 规则），有错直接列出、不发请求
@@ -46,7 +54,7 @@
  * 与本编辑器操作的 Python workflow 模型不是同一份数据，故不在保存链路里调它；
  * 保存成功后的自动干跑校验仅作提示（404 容忍静默），不阻塞保存结果。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Handle,
   Position,
@@ -58,14 +66,19 @@ import {
   addEdge,
   ConnectionMode,
   ConnectionLineType,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getSmoothStepPath,
   type Connection,
   type Node,
   type Edge,
+  type EdgeProps,
+  type EdgeTypes,
   type NodeTypes,
   type OnConnectStart,
   type OnConnectEnd,
 } from 'reactflow';
-import { ListTree, MoreHorizontal, Redo2, Trash2, Undo2, Wand2 } from 'lucide-react';
+import { ListTree, MoreHorizontal, Redo2, Trash2, Undo2, Wand2, X } from 'lucide-react';
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import {
   putTeamWorkflow,
@@ -84,7 +97,7 @@ import {
 import type { AgentRecord } from '../../api/agents';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode, type TeamEdgeMode } from './teamDagValidation';
-import { computeTeamDagColumns } from './TeamDagCanvas';
+import { computeTeamDagColumns, computeTeamDagSeedLayout } from './TeamDagCanvas';
 import { dagDraftToWorkflow } from './teamDagDraft';
 import { POLICY_COLOR, edgeVisualFor, lookupPairPolicy, type EdgeVisual } from './teamPolicyVisual';
 import { useI18n } from '../../common/i18n';
@@ -119,7 +132,7 @@ export interface TeamDagEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
 }
 
-interface TeamAgentNodeData extends Record<string, unknown> {
+export interface TeamAgentNodeData extends Record<string, unknown> {
   agentId: string;
   name: string;
   soul: string;
@@ -136,14 +149,75 @@ interface TeamAgentNodeData extends Record<string, unknown> {
   policyState?: PolicyCellState | null;
 }
 
-const HANDLE_STYLE = {
-  width: 8,
-  height: 8,
-  background: 'var(--t-fg-4, #737373)',
-  border: '1px solid var(--t-border, #27272A)',
-} as const;
+/** 节点/边手柄改用 .neo-team-dag-handle 类样式（2026-11-07：hover 放大、连线高亮）。 */
 
 const NODE_TYPES: NodeTypes = { teamAgent: TeamAgentNode };
+
+/**
+ * 边级/节点级删除回调（2026-11-07「删除不顺手」修复）：编辑器把删除动作
+ * 经 context 注入自定义边的「×」钮与节点角上的「×」钮 —— 一键删除、入撤销栈，
+ * 不必先精准点中再按 Delete。
+ */
+export interface TeamDagActions {
+  deleteEdge: (edgeId: string) => void;
+  deleteNode: (nodeId: string) => void;
+}
+export const TeamDagActionCtx = createContext<TeamDagActions | null>(null);
+
+/**
+ * 自定义 smoothstep 边（2026-11-07「DAG 太乱/不好删」修复），注册为全局
+ * smoothstep 类型 —— makeTeamEdge/onConnect/onReconnect 建的边全部走这里：
+ *   - BaseEdge interactionWidth=28：线细难点中，加宽隐形命中区，点选容易
+ *   - EdgeLabelRenderer 药丸：label 文字 + 「×」一键删边（nodrag/nopan，
+ *     不触发节点拖拽/画布平移）；无 label 的审批边补「审批」二字，直接边
+ *     只留 × 圆钮；选中时药丸高亮
+ *   - 虚线/approve 与策略染色仍走 edge.className/style（CSS 钩子不变）
+ */
+export function TeamDagEdge(props: EdgeProps) {
+  const actions = useContext(TeamDagActionCtx);
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX: props.sourceX,
+    sourceY: props.sourceY,
+    sourcePosition: props.sourcePosition,
+    targetX: props.targetX,
+    targetY: props.targetY,
+    targetPosition: props.targetPosition,
+    borderRadius: 14,
+  });
+  const mode = normalizeEdgeMode((props.data as { mode?: unknown } | undefined)?.mode);
+  const label = typeof props.label === 'string' && props.label ? props.label : mode === 'approve' ? '审批' : '';
+  return (
+    <>
+      <BaseEdge path={path} markerEnd={props.markerEnd} style={props.style} interactionWidth={28} />
+      <EdgeLabelRenderer>
+        <div
+          className={`neo-team-dag-edge-chip${props.selected ? ' is-selected' : ''}${label ? '' : ' is-icon-only'}${mode === 'approve' ? ' is-approve' : ''}`}
+          style={{
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: 'all',
+          }}
+        >
+          {label && <span className="neo-team-dag-edge-chip-label">{label}</span>}
+          <button
+            type="button"
+            className="neo-team-dag-edge-chip-del nodrag nopan"
+            title="删除此边"
+            aria-label="删除此边"
+            data-testid={`team-dag-edge-del-${props.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              actions?.deleteEdge(props.id);
+            }}
+          >
+            <X size={10} strokeWidth={2.6} />
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const TEAM_EDGE_TYPES: EdgeTypes = { smoothstep: TeamDagEdge };
 
 /** approve 边的虚线 CSS 标记（颜色由 edge.style.stroke 控制，箭头色随动）。 */
 const APPROVE_EDGE_CLASS = 'neo-team-dag-edge--approve';
@@ -192,7 +266,8 @@ function makeTeamEdge(
 /** 策略态 → 节点描边色（与 TeamDagCanvas / 策略矩阵配色一致；真源在 teamPolicyVisual）。 */
 const POLICY_NODE_COLOR = POLICY_COLOR;
 
-function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: string }) {
+export function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: string }) {
+  const actions = useContext(TeamDagActionCtx);
   const policyStyle =
     data.policyState && POLICY_NODE_COLOR[data.policyState]
       ? { border: `2px solid ${POLICY_NODE_COLOR[data.policyState]}` }
@@ -204,7 +279,23 @@ function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: string }) {
       title={`${data.name || data.agentId} · ${data.agentId}`}
       data-testid={`team-dag-node-${id ?? data.agentId}`}
     >
-      <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
+      <Handle type="target" position={Position.Left} className="neo-team-dag-handle" />
+      {/* 节点角「×」（2026-11-07）：hover 显现，一键删节点（连带清边），nodrag 防误拖 */}
+      {actions && (
+        <button
+          type="button"
+          className="neo-team-dag-node-del nodrag"
+          title="删除节点（连带删除相连的边）"
+          aria-label="删除节点（连带删除相连的边）"
+          data-testid={`team-dag-node-del-${id ?? data.agentId}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.deleteNode(id ?? data.agentId);
+          }}
+        >
+          <X size={11} strokeWidth={2.4} />
+        </button>
+      )}
       <span className="neo-team-dag-node-avatar">
         <AgentAvatar
           name={data.name || data.agentId || '?'}
@@ -217,7 +308,7 @@ function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: string }) {
       <span className="neo-team-dag-node-label" title={data.name}>
         {data.name || data.agentId}
       </span>
-      <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
+      <Handle type="source" position={Position.Right} className="neo-team-dag-handle" />
     </div>
   );
 }
@@ -489,15 +580,18 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
    * workflow 已有的节点按存量坐标铺；roster 里没上画布的成员补成孤立点，
    * 网格排布在既有节点下方（4 列，120×110 间距）。id 规则 n-<agentId> 与
    * addAgentNode 一致，保存后即为持久坐标。
+   * 2026-11-07「DAG 太乱」修复：存量坐标经 computeTeamDagSeedLayout 决策 ——
+   * 缺坐标/退化竖列自动分层展开（左→右流水线），有真实布局才原样保留。
    */
   const seedNodes = useMemo<Node<TeamAgentNodeData>[]>(() => {
-    const placed: Node<TeamAgentNodeData>[] = workflow.nodes.map((n, i) => {
+    const seedPos = computeTeamDagSeedLayout(workflow);
+    const placed: Node<TeamAgentNodeData>[] = workflow.nodes.map((n) => {
       const agentId = n.data?.agentId ?? '';
       return {
         id: n.id,
         type: 'teamAgent',
-        // 无坐标的旧数据给一列种子位，避免全部叠在 (0,0)
-        position: n.position ?? { x: 0, y: i * 106 },
+        // 退化布局（全挤一条竖列）时分层展开，避免边绕成大圈
+        position: seedPos.get(n.id) ?? { x: 0, y: 0 },
         data: {
           agentId,
           name: resolveNodeName(agentId, n.data?.name, n.id),
@@ -641,6 +735,51 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     setErrors([]);
   }, [redoStack, serialize, replayWorkflow]);
 
+  const deleteSelected = useCallback(() => {
+    const nodeIds = new Set(rfNodes.filter((n) => n.selected).map((n) => n.id));
+    const edgeIds = new Set(rfEdges.filter((e) => e.selected).map((e) => e.id));
+    if (nodeIds.size === 0 && edgeIds.size === 0) return;
+    pushHistory();
+    setRfNodes((ns) => ns.filter((n) => !nodeIds.has(n.id)));
+    // 节点删除连带清掉相连的边
+    setRfEdges((es) =>
+      es.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)),
+    );
+    setErrors([]);
+  }, [rfNodes, rfEdges, setRfNodes, setRfEdges, pushHistory]);
+
+  /**
+   * 单边删除（2026-11-07）：自定义边药丸「×」与边属性面板「删除此边」共用，
+   * 入撤销栈。边点不准是高频痛点 —— 现在不必先精准选中再按 Delete。
+   */
+  const deleteEdgeById = useCallback(
+    (edgeId: string) => {
+      if (!rfEdges.some((e) => e.id === edgeId)) return;
+      pushHistory();
+      setRfEdges((es) => es.filter((e) => e.id !== edgeId));
+      setErrors([]);
+    },
+    [rfEdges, setRfEdges, pushHistory],
+  );
+
+  /** 单节点删除：节点角「×」用，连带清掉相连的边，入撤销栈。 */
+  const deleteNodeById = useCallback(
+    (nodeId: string) => {
+      if (!rfNodes.some((n) => n.id === nodeId)) return;
+      pushHistory();
+      setRfNodes((ns) => ns.filter((n) => n.id !== nodeId));
+      setRfEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId));
+      setErrors([]);
+    },
+    [rfNodes, setRfNodes, setRfEdges, pushHistory],
+  );
+
+  /** 注入自定义边/节点「×」钮的删除动作（memo 防止 context 高频重渲）。 */
+  const dagActions = useMemo<TeamDagActions>(
+    () => ({ deleteEdge: deleteEdgeById, deleteNode: deleteNodeById }),
+    [deleteEdgeById, deleteNodeById],
+  );
+
   // reactflow 实例：视口换算（新节点落视口中心）/ fitView（自动排列后收拢）。
   const { screenToFlowPosition, fitView } = useReactFlow();
   // 画布容器 ref：新节点落点取容器中心（window 中心在右栏布局下会偏）。
@@ -685,9 +824,20 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
 
   // 撤销/重做快捷键（2026-11-05 三轮）：Ctrl+Z 撤销、Ctrl+Y / Ctrl+Shift+Z 重做。
   // 输入框聚焦时不拦截（textarea 打字时 Ctrl+Z 应该是输入级撤销）。
+  // 2026-11-07：Delete/Backspace 删除选中也收编进来（走 deleteSelected 入撤销栈，
+  // 替代 reactflow 内置 deleteKeyCode 的无痕删除）。
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) {
+        // 纯 Delete/Backspace（无修饰键）→ 删除选中
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'Delete' || e.key === 'Backspace')) {
+          const el = e.target as HTMLElement | null;
+          if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)) return;
+          e.preventDefault();
+          deleteSelected();
+        }
+        return;
+      }
       const target = e.target as HTMLElement | null;
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (target?.isContentEditable) return;
@@ -702,7 +852,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, deleteSelected]);
 
   // 添加候选逻辑已随「+ 添加成员」下拉移除（2026-11-05 四轮）：roster 全员
   // 由 seedNodes 直接铺成孤立点，无需再挑人添加。
@@ -853,19 +1003,6 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     [setRfEdges, pushHistory, edgePolicy],
   );
 
-  const deleteSelected = useCallback(() => {
-    const nodeIds = new Set(rfNodes.filter((n) => n.selected).map((n) => n.id));
-    const edgeIds = new Set(rfEdges.filter((e) => e.selected).map((e) => e.id));
-    if (nodeIds.size === 0 && edgeIds.size === 0) return;
-    pushHistory();
-    setRfNodes((ns) => ns.filter((n) => !nodeIds.has(n.id)));
-    // 节点删除连带清掉相连的边
-    setRfEdges((es) =>
-      es.filter((e) => !edgeIds.has(e.id) && !nodeIds.has(e.source) && !nodeIds.has(e.target)),
-    );
-    setErrors([]);
-  }, [rfNodes, rfEdges, setRfNodes, setRfEdges, pushHistory]);
-
   /**
    * 自动排列（2026-11-05 顺滑化）：最长路径分层（复用 TeamDagCanvas 纯函数，
    * 环安全）×列内行序，n8n 式从左到右整列排布 + fitView 收拢。三轮起入撤销栈。
@@ -898,32 +1035,31 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   /**
    * 初始图的序列化快照（与 serialize 同构：坐标取整、name 走 roster 回退、
    * mode 归一化），作为脏检查基线 —— 未做任何编辑时 dirty 必须为 false。
+   * 2026-11-07：从 seedNodes/seedEdges 派生而非 workflow 原文 —— 退化竖列的
+   * 分层展开、孤点直铺都发生在 seed 阶段，这些「铺画布」动作不算用户修改，
+   * 打开编辑器不应亮「● 未保存」。
    */
   const initialSerialized = useMemo<TeamWorkflow>(() => {
     return {
-      nodes: workflow.nodes.map((n, i) => {
-        const agentId = n.data?.agentId ?? '';
-        const pos = n.position ?? { x: 0, y: i * 106 };
-        return {
-          id: n.id,
-          type: n.type || 'agentTask',
-          position: { x: Math.round(pos.x), y: Math.round(pos.y) },
-          data: {
-            agentId,
-            name: resolveNodeName(agentId, n.data?.name, n.id),
-            soul: n.data?.soul ?? '',
-          },
-        };
-      }),
-      edges: workflow.edges.map((e) => ({
+      nodes: seedNodes.map((n) => ({
+        id: n.id,
+        type: n.data.nodeType,
+        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+        data: {
+          agentId: n.data.agentId,
+          name: n.data.name,
+          soul: n.data.soul,
+        },
+      })),
+      edges: seedEdges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
-        data: { mode: normalizeEdgeMode(e.data?.mode) },
-        ...(e.label ? { label: e.label } : {}),
+        data: { mode: normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode) },
+        ...(e.label ? { label: String(e.label) } : {}),
       })),
     };
-  }, [workflow, resolveNodeName]);
+  }, [seedNodes, seedEdges]);
 
   const dirty = useMemo(
     () => JSON.stringify(serialize()) !== JSON.stringify(initialSerialized),
@@ -1115,6 +1251,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   }, [aiPrompt, aiBusy, agents, loadWorkflowToCanvas, t, pushHistory]);
 
   return (
+    <TeamDagActionCtx.Provider value={dagActions}>
     <div className="neo-team-dag-editor">
       {errors.length > 0 && (
         <div className="neo-team-dag-errors" role="alert">
@@ -1136,6 +1273,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
           nodes={rfNodes}
           edges={rfEdges}
           nodeTypes={NODE_TYPES}
+          edgeTypes={TEAM_EDGE_TYPES}
           withProvider={false}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
@@ -1147,7 +1285,6 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
           className="neo-team-dag"
           connectionMode={ConnectionMode.Loose}
           reactFlowProps={{
-            deleteKeyCode: ['Delete', 'Backspace'],
             connectionLineType: ConnectionLineType.SmoothStep,
             connectionRadius: 28,
           }}
@@ -1201,7 +1338,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
               <Wand2 size={13} strokeWidth={1.9} />
             </button>
             <span className="neo-team-dag-hint">
-              {t('neo.host.teamDagHint', { defaultValue: '拖手柄连线 · 抓边端点改接 · 松手到空白选目标 · 点边改模式' })}
+              {t('neo.host.teamDagHint', { defaultValue: '拖手柄连线 · 点 × 删边/删节点 · 抓边端点改接 · 点边改模式' })}
             </span>
             <span className="neo-team-dag-toolbar-spacer" />
             {dirty && !saving && (
@@ -1343,7 +1480,10 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
           {activeEdge && (
             <Panel position="top-right" className="neo-team-dag-edge-panel" data-testid="team-dag-edge-panel">
               <div className="neo-team-dag-edge-panel-title">
-                {activeEdge.source} → {activeEdge.target}
+                {/* 显示成员名而非裸 node id（2026-11-07）：id 在面板里没法认人 */}
+                {rfNodes.find((n) => n.id === activeEdge.source)?.data.name ?? activeEdge.source}
+                {' → '}
+                {rfNodes.find((n) => n.id === activeEdge.target)?.data.name ?? activeEdge.target}
               </div>
               <div className="neo-team-dag-edge-modes">
                 <button
@@ -1372,6 +1512,15 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
                       defaultValue: '直接边：上游完成后自动流转到下游',
                     })}
               </div>
+              <button
+                type="button"
+                className="neo-team-dag-btn neo-team-dag-edge-del-btn"
+                onClick={() => deleteEdgeById(activeEdge.id)}
+                data-testid="team-dag-edge-del-btn"
+              >
+                <Trash2 size={12} strokeWidth={1.9} />
+                {t('neo.host.teamDagEdgeDelete', { defaultValue: '删除此边' })}
+              </button>
             </Panel>
           )}
           {/* 空图引导（2026-11-05 三轮）：TeamPanel 空工作流时也渲染编辑器
@@ -1467,6 +1616,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
         />
       )}
     </div>
+    </TeamDagActionCtx.Provider>
   );
 }
 

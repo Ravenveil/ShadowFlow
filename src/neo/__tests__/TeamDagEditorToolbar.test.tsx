@@ -39,6 +39,10 @@ vi.mock('reactflow', () => ({
   addEdge: vi.fn((edge: unknown, eds: unknown[]) => [...(eds as unknown[]), edge]),
   applyEdgeChanges: vi.fn(() => []),
   applyNodeChanges: vi.fn(() => []),
+  BaseEdge: ({ path }: { path?: string }) => React.createElement('path', { d: path }),
+  EdgeLabelRenderer: ({ children }: { children?: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
+  getSmoothStepPath: vi.fn(() => ['M0 0 L0 0', 50, 0]),
   Handle: ({ id, ...rest }: React.HTMLAttributes<HTMLDivElement> & { id?: string }) =>
     React.createElement('div', { 'data-handleid': id, ...rest }),
   Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
@@ -70,8 +74,9 @@ vi.mock('../../api/agents', () => ({
   AgentAvatar: () => null,
 }));
 
-import { TeamDagEditor } from '../projections/TeamDagEditor';
+import { TeamDagEditor, TeamDagEdge, TeamAgentNode, TeamDagActionCtx } from '../projections/TeamDagEditor';
 import { TeamApiError } from '../../api/teams';
+import type { EdgeProps } from 'reactflow';
 import type { AgentRecord } from '../../api/agents';
 import type { TeamWorkflow } from '../../api/teams';
 
@@ -255,5 +260,65 @@ describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三/四轮
     await screen.findByTestId('team-dag-save-btn');
     expect(screen.queryByTestId('team-dag-empty-hint')).not.toBeInTheDocument();
     expect(screen.getByTestId('team-dag-layout-btn')).toBeEnabled();
+  });
+});
+
+describe('TeamDagEditor — 一键删除（2026-11-07 顺手化）', () => {
+  /** 构造自定义边所需的最小 EdgeProps（jsdom 里 getSmoothStepPath 已 mock）。 */
+  const makeEdgeProps = (over: Partial<EdgeProps> = {}): EdgeProps =>
+    ({
+      id: 'e1',
+      source: 'n1',
+      target: 'n2',
+      sourceX: 0,
+      sourceY: 0,
+      targetX: 100,
+      targetY: 0,
+      sourcePosition: 'right',
+      targetPosition: 'left',
+      selected: false,
+      animated: false,
+      data: { mode: 'direct' },
+      ...over,
+    }) as unknown as EdgeProps;
+
+  it('边药丸「×」不选中也可一键删边（context deleteEdge 收到边 id）', () => {
+    const deleteEdge = vi.fn();
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge, deleteNode: vi.fn() }}>
+        <TeamDagEdge {...makeEdgeProps()} />
+      </TeamDagActionCtx.Provider>,
+    );
+    fireEvent.click(screen.getByTestId('team-dag-edge-del-e1'));
+    expect(deleteEdge).toHaveBeenCalledWith('e1');
+  });
+
+  it('审批边无自定义 label 时药丸补「审批」标记（mode 可读）', () => {
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge: vi.fn(), deleteNode: vi.fn() }}>
+        <TeamDagEdge {...makeEdgeProps({ data: { mode: 'approve' } })} />
+      </TeamDagActionCtx.Provider>,
+    );
+    expect(screen.getByText('审批')).toBeInTheDocument();
+  });
+
+  it('有自定义 label 的边药丸显示 label 原文（驳回回炉等）', () => {
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge: vi.fn(), deleteNode: vi.fn() }}>
+        <TeamDagEdge {...makeEdgeProps({ label: '驳回回炉' })} />
+      </TeamDagActionCtx.Provider>,
+    );
+    expect(screen.getByText('驳回回炉')).toBeInTheDocument();
+  });
+
+  it('节点角「×」一键删节点（context deleteNode 收到节点 id）', () => {
+    const deleteNode = vi.fn();
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge: vi.fn(), deleteNode }}>
+        <TeamAgentNode id="n1" data={{ agentId: 'a1', name: '甲', soul: '', nodeType: 'agentTask' }} />
+      </TeamDagActionCtx.Provider>,
+    );
+    fireEvent.click(screen.getByTestId('team-dag-node-del-n1'));
+    expect(deleteNode).toHaveBeenCalledWith('n1');
   });
 });

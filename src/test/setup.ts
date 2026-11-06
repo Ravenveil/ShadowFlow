@@ -44,6 +44,10 @@ vi.mock('reactflow', () => ({
   addEdge: vi.fn(),
   applyEdgeChanges: vi.fn(() => []),
   applyNodeChanges: vi.fn(() => []),
+  BaseEdge: ({ path }: { path?: string }) => React.createElement('path', { d: path }),
+  EdgeLabelRenderer: ({ children }: { children?: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
+  getSmoothStepPath: vi.fn(() => ['M0 0 L0 0', 0, 0]),
   Handle: ({ id, ...rest }: React.HTMLAttributes<HTMLDivElement> & { id?: string }) =>
     React.createElement('div', { 'data-handleid': id, ...rest }),
   Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
