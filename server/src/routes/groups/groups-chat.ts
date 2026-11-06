@@ -745,6 +745,24 @@ async function integrateAndReport(
   }
 }
 
+// ── 寒暄路由（2026-11-07 用户反馈：「hi 后所有 agent 都回复」不合理）────────
+// 整条消息就是一句寒暄/应答（hi/你好/谢谢/收到/晚安…）→ 视为闲聊：只派一位
+// 应答者接话（成员首位），不进 DAG 编排（无计划卡/交接链），像普通群聊一样
+// 一人回复。@ 点名、任务消息行为不变（零回归）。
+const CASUAL_LINE_RE =
+  /^(?:hi+|hiya|hey+|hello+|yo|howdy|sup|hola|hello\s+there|good\s+(?:morning|afternoon|evening)|早上好|早安|早啊|早|中午好|下午好|晚上好|晚安|你好|您好|哈喽|嗨+|在吗|在么|在不在|thanks?|thank\s+(?:you|u)|thx+|tysm|ty|谢谢(?:你|您)?|多谢|感谢(?:你|您)?|辛苦了|麻烦了|ok(?:ay)?|好的?|好嘞|好滴|好哒|收到|明白|了解|没问题|嗯+|哦+|啊+|行|可以|拜拜|再见|88|回见|回头见)(?:[呀啦哦呢嘛呗哇吖!?！。.~～,，]*)$/i;
+
+/**
+ * 寒暄判定（纯函数，可单测）：整条消息是一句寒暄/应答 → true。
+ * 门槛：≤24 字、单行、无 @ 点名；任务/多行/点名消息一律走常规派发。
+ */
+export function isCasualChat(text: string): boolean {
+  const t = (text ?? '').trim();
+  if (!t || t.length > 24) return false;
+  if (/[\n@]/.test(t)) return false;
+  return CASUAL_LINE_RE.test(t);
+}
+
 /**
  * Background fan-out: generate + persist one reply per group agent.
  * Never throws to the caller (errors become sender_kind='system' notices).
@@ -795,7 +813,15 @@ async function runFanout(
   }
   const { mentionedIds, cleanText } = parseMentions(userText, rosterCandidates);
   const mentioned = new Set(mentionedIds);
-  const agentIds = mentioned.size > 0 ? allAgentIds.filter((id) => mentioned.has(id)) : allAgentIds;
+  let agentIds = mentioned.size > 0 ? allAgentIds.filter((id) => mentioned.has(id)) : allAgentIds;
+
+  // ── 寒暄路由（2026-11-07）────────────────────────────────────────────────
+  // 「hi/你好/谢谢」整条寒暄：不全员广播，只派成员首位单人接话（下方 DAG 分支
+  // 同样跳过 → 走单人串行，无计划卡/交接链/派发卡）。@ 点名或任务消息不受影响。
+  const casual = mentioned.size === 0 && isCasualChat(userText);
+  if (casual && agentIds.length > 1) {
+    agentIds = [agentIds[0]];
+  }
 
   // @ 未命中可见提示（零 LLM）：消息里有 @token 但一个都没对上成员 → 用户
   // 以为在点名、系统却全员派发，这是演示里最容易被问「为什么 @ 没生效」的
@@ -827,9 +853,10 @@ async function runFanout(
   try {
     // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
     // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
+    // 2026-11-07 寒暄路由 — casual 消息不进 DAG（单人接话），同样落到串行路径。
     // ⚠ Phase 2b 剩余(本轮已落:并发上限/外部取消/节点超时/重试):B2 中断恢复(run 状态落盘+重启续跑)、
     //   B3 完整插话续跑(本轮只做"新消息→取消上一轮"最小语义)仍待后续。
-    if (shouldRunTeamDag(group)) {
+    if (!casual && shouldRunTeamDag(group)) {
       const { team } = loadTeamForRun(group.team_id!);
       if (team && team.members.length > 0) {
         // ── @ 提及定向派活（OpenBot 语义）─────────────────────────────────

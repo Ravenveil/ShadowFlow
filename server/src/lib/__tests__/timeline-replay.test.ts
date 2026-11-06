@@ -137,6 +137,37 @@ describe('replayTimeline — message + patch replay', () => {
     const stale = applyPatch(out[0], { id: 'plan1', op: 'text_append', chunk: 'x' });
     expect(stale).toBe(out[0]);
   });
+
+  it('2026-11-07 — text_finalize / hop_update 重放不丢（此前被静默丢弃，刷新后 hop 卡永卡「待交接」）', () => {
+    const events: ReplayableEvent[] = [
+      { event: 'message', data: { ...base, id: 'a1', kind: 'assistant_text', body: 'hi' } },
+      { event: 'message-patch', data: { id: 'a1', op: 'text_append', chunk: '!' } },
+      { event: 'message-patch', data: { id: 'a1', op: 'text_finalize' } },
+      {
+        event: 'message',
+        data: {
+          ...base,
+          id: 'h1',
+          kind: 'hop_card',
+          from_agent: 'pm',
+          to_agent: 'dev',
+          from_name: '策划喵',
+          to_name: '码农鸡',
+          status: 'pending',
+        },
+      },
+      {
+        event: 'message-patch',
+        data: { id: 'h1', op: 'hop_update', patch: { status: 'done', output_chars: 120, duration_ms: 800 } },
+      },
+    ];
+    const out = replayTimeline(events);
+    expect(out).toHaveLength(2);
+    // text_finalize：streaming 标记收口（text_append 置 true → finalize 置 false）
+    expect(out[0]).toMatchObject({ id: 'a1', body: 'hi!', streaming: false });
+    // hop_update：终态结算不再退回 pending
+    expect(out[1]).toMatchObject({ id: 'h1', status: 'done', output_chars: 120, duration_ms: 800 });
+  });
 });
 
 describe('chatMessagesToTimeline — group MessageItem adaptation', () => {

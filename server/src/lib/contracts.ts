@@ -262,6 +262,12 @@ export type TimelineMessage =
       kind: 'assistant_text';
       body: string;
       /**
+       * 2026-11-07 — 流式光标（镜像前端 types.ts assistant_text.streaming）：
+       * text_append 置 true、text_finalize 置 false。仅 timeline-replay
+       * applyPatch 回放路径读写；老客户端忽略该字段（additive）。
+       */
+      streaming?: boolean;
+      /**
        * B2 (unified-conversation-core-plan-2026-06-11 §B2) — optional speaker
        * attribution for CHAT-originated messages (group MessageItem has
        * sender_name; run-originated timeline messages don't). Additive: the
@@ -446,6 +452,9 @@ export type MessagePatch =
   // assistant_text message until something orthogonal (tool call, thinking,
   // step transition) closes it.
   | { id: string; op: 'text_append'; chunk: string }
+  // 2026-11-07 — 流式收口（前端 reducer 早有该 op，服务端契约补齐）：回放后
+  // assistant_text 不再残留 streaming 光标。
+  | { id: string; op: 'text_finalize' }
   | { id: string; op: 'diff_append_line'; line: DiffLine }
   | {
       id: string;

@@ -47,6 +47,23 @@
   font-weight: 600;
 }
 
+/* ── 附件 chip（@image#1:name 宿主徽章 → 图片/文件 chip，2026-11-07） ─────── */
+.neo-tl-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  margin: 0 2px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--t-fg, #333) 14%, transparent);
+  background: color-mix(in srgb, var(--t-fg, #333) 5%, transparent);
+  color: var(--t-fg-3, #666);
+  font-size: 11.5px;
+  line-height: 1.7;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 /* ── op 行（running.html .op：gap 9px / padding 7px 8px / r10 / 12.5px） ──── */
 .neo-tl-op {
   display: flex;

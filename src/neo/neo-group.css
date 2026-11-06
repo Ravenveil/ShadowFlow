@@ -1014,3 +1014,44 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* ── 后台过程折叠（2026-11-07 用户反馈：后台流程不在前端显示，默认收起）────
+   聊天流只讲对话；派发卡/过程卡收进回合尾部一条轻量折叠行，点开才展开。 */
+.neo-gc-backstage {
+  margin: 2px 0 6px;
+}
+.neo-gc-backstage-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--t-fg-5);
+  font-size: 11px;
+  cursor: pointer;
+}
+.neo-gc-backstage-head:hover {
+  background: color-mix(in srgb, var(--t-fg) 6%, transparent);
+  color: var(--t-fg-3);
+}
+.neo-gc-backstage-chev {
+  transition: transform 0.15s ease;
+}
+.neo-gc-backstage-chev[data-open] {
+  transform: rotate(90deg);
+}
+.neo-gc-backstage-count {
+  font-variant-numeric: tabular-nums;
+}
+.neo-gc-backstage-body {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, var(--t-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--t-fg) 3%, transparent);
+}
+.neo-gc-backstage-body .neo-gc-proc + .neo-gc-proc {
+  margin-top: 6px;
+}

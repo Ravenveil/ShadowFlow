@@ -45,7 +45,13 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
   switch (patch.op) {
     case 'text_append': {
       if (msg.kind !== 'assistant_text') return msg;
-      return { ...msg, body: msg.body + patch.chunk };
+      return { ...msg, body: msg.body + patch.chunk, streaming: true };
+    }
+    // 2026-11-07 — 流式收口 + hop 生命周期此前缺失（与前端 reducer 对齐）：
+    // 回放后 assistant_text 不残留 streaming 光标、hop_card 不再永卡「待交接」。
+    case 'text_finalize': {
+      if (msg.kind !== 'assistant_text') return msg;
+      return { ...msg, streaming: false };
     }
     case 'append_step': {
       if (msg.kind !== 'step_panel') return msg;
@@ -114,6 +120,12 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
         ...msg,
         tasks: msg.tasks.map((t) => (t.id === patch.task_id ? { ...t, ...patch.patch } : t)),
       };
+    }
+    // 2026-11-07 — hop_card 生命周期推进（running/终态结算）。此前缺失该分支：
+    // 群时间线 REST 回放时 hop_update 被静默丢弃，刷新后交接卡永远停在「待交接」。
+    case 'hop_update': {
+      if (msg.kind !== 'hop_card') return msg;
+      return { ...msg, ...patch.patch };
     }
     default:
       return msg;

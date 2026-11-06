@@ -45,6 +45,7 @@ import {
   Lightbulb,
   Loader2,
   Package,
+  Paperclip,
   Pencil,
   RotateCcw,
   ShieldCheck,
@@ -182,7 +183,77 @@ function Collapse({ open, children }: { open: boolean; children: ReactNode }) {
  */
 const MENTION_SPLIT_RE = /(^|[\s，。！？、：；）】」』》〉【「『,.!?;:)\]])@[^\s，。！？、：；）】」』》〉【「『,.!?;:)\]}"'`@]+/gu;
 
-export function renderUserTextWithMentions(text: string): ReactNode[] {
+/* ── 宿主附件徽章（2026-11-07 用户反馈：「@image#1:tmp2D24.png 还有这些显示」）──
+   宿主/桥接层把粘贴的附件编码进消息正文：`@image#1:tmp2D24.png`、
+   `@file#2:"季度报告.pdf"`。此前原样当字面文本渲染，且 `@image#1` 还被
+   MENTION_SPLIT_RE 误高亮成提及徽章。现在统一解析成附件 chip；正文/提及
+   渲染只处理剩余文本。 */
+const ATTACH_BADGE_RE =
+  /@(image|img|picture|file|doc|docx|video|audio|pdf|sheet|xlsx|slide|pptx|attachment|zip|url|wedrive)#([\w.-]+):(?:"([^"]*)"|([^\s"'`，。！？、：；）】」』》〉【「『]+))/gi;
+
+const ATTACH_KIND_LABEL: Record<string, string> = {
+  image: '图片',
+  img: '图片',
+  picture: '图片',
+  video: '视频',
+  audio: '音频',
+  pdf: 'PDF',
+  doc: '文档',
+  docx: '文档',
+  sheet: '表格',
+  xlsx: '表格',
+  slide: '幻灯片',
+  pptx: '幻灯片',
+  zip: '压缩包',
+  url: '链接',
+  file: '文件',
+  attachment: '附件',
+  wedrive: '网盘文件',
+};
+
+export interface AttachBadge {
+  kind: string;
+  name: string;
+}
+
+/** 附件 chip（徽章 → 人类可读：「图片·tmp2D24.png」，无文件名只出类别）。 */
+const NeoAttachChip = memo(function NeoAttachChip({ badge }: { badge: AttachBadge }) {
+  const label = ATTACH_KIND_LABEL[badge.kind] ?? '附件';
+  return (
+    <span className="neo-tl-attach" title={badge.kind}>
+      <Paperclip size={11} aria-hidden />
+      {badge.name ? `${label}·${badge.name}` : label}
+    </span>
+  );
+});
+
+/**
+ * 切出正文里的附件徽章（纯函数，可单测）：text 段 + badge 段保序返回。
+ * 无徽章 → 单段原文（数组单元素、零 DOM 差异）。
+ */
+export function splitAttachBadges(
+  text: string,
+): Array<{ type: 'text'; text: string } | { type: 'badge'; badge: AttachBadge }> {
+  if (!text || !text.includes('@')) return [{ type: 'text', text }];
+  const out: Array<{ type: 'text'; text: string } | { type: 'badge'; badge: AttachBadge }> = [];
+  let last = 0;
+  ATTACH_BADGE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = ATTACH_BADGE_RE.exec(text)) !== null) {
+    if (m.index > last) out.push({ type: 'text', text: text.slice(last, m.index) });
+    out.push({
+      type: 'badge',
+      badge: { kind: m[1].toLowerCase(), name: (m[3] ?? m[4] ?? '').trim() },
+    });
+    last = m.index + m[0].length;
+  }
+  ATTACH_BADGE_RE.lastIndex = 0;
+  if (last < text.length) out.push({ type: 'text', text: text.slice(last) });
+  return out;
+}
+
+/** 纯 @ 提及切分（正文段 → 徽章/文本；徽章 key 由调用方加前缀防碰撞）。 */
+function renderMentionNodes(text: string, keyPrefix: string): ReactNode[] {
   if (!text.includes('@')) return [text];
   const out: ReactNode[] = [];
   let last = 0;
@@ -193,13 +264,29 @@ export function renderUserTextWithMentions(text: string): ReactNode[] {
     const at = m.index + lead.length;
     if (at > last) out.push(text.slice(last, at));
     out.push(
-      <span key={`mn${m.index}`} className="neo-tl-mention">
+      <span key={`${keyPrefix}-mn${m.index}`} className="neo-tl-mention">
         @{text.slice(at + 1, m.index + m[0].length)}
       </span>,
     );
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/**
+ * 消息正文 → ReactNode：附件徽章 chip + @ 提及徽章 + 普通文本（2026-11-07
+ * 合并两者；附件徽章先切走，剩余正文才做提及高亮，`@image#1` 不再误标）。
+ */
+export function renderUserTextWithMentions(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  splitAttachBadges(text).forEach((seg, i) => {
+    if (seg.type === 'badge') {
+      out.push(<NeoAttachChip key={`at${i}`} badge={seg.badge} />);
+      return;
+    }
+    out.push(...renderMentionNodes(seg.text, `s${i}`));
+  });
   return out;
 }
 
@@ -338,9 +425,9 @@ const NeoAssistantMeta = memo(function NeoAssistantMeta({
 /* ═══ assistant_text — markdown → 类型化子行（文本/bash chip/代码块/小节头） ══
    解析复用旧体系纯函数 extractRows；渲染全部 Neo 化。hover 铅笔 → 行内编辑。 */
 
-/** 行内解析：**bold** / `code` / 路径 / +N -N diff 标记（路径与 diff 规则同旧 TextRow）。 */
+/** 行内解析：**bold** / `code` / 路径 / +N -N diff 标记 / 附件徽章（路径与 diff 规则同旧 TextRow）。 */
 const INLINE_TOKEN_RE =
-  /(\*\*[^*\n]+?\*\*)|(`[^`\n]+?`)|([A-Za-z]:\\[^\s"'`<>|*?]+|~?\/(?:tmp|home|usr|var|etc|opt)\/[^\s"'`<>|*?]+|\+\d+ ?-\d+)/g;
+  /(\*\*[^*\n]+?\*\*)|(`[^`\n]+?`)|([A-Za-z]:\\[^\s"'`<>|*?]+|~?\/(?:tmp|home|usr|var|etc|opt)\/[^\s"'`<>|*?]+|\+\d+ ?-\d+)|(@(?:image|img|picture|file|doc|docx|video|audio|pdf|sheet|xlsx|slide|pptx|attachment|zip|url|wedrive)#[\w.-]+:(?:"[^"\n]*"|[^\s"'`，。！？、：；）】」』》〉【「『]+))/g;
 
 /** 单个文本片段 → ReactNode 序列（bold/code/highlight 交替）。 */
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
@@ -360,6 +447,15 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
           {token.slice(1, -1)}
         </code>,
       );
+    } else if (m[4] !== undefined) {
+      // 附件徽章（@image#1:name）→ chip，不再当字面文本（2026-11-07）。
+      const segs = splitAttachBadges(token);
+      const badge = segs.find((s) => s.type === 'badge');
+      if (badge && badge.type === 'badge') {
+        parts.push(<NeoAttachChip key={`${keyPrefix}-a-${key++}`} badge={badge.badge} />);
+      } else {
+        parts.push(token);
+      }
     } else {
       const isDiff = /^\+\d+ ?-\d+$/.test(token);
       parts.push(

@@ -9,7 +9,7 @@
  *   - 气泡流：agent 消息出头像/名字/角色 badge，system 消息居中弱化条，
  *     用户消息右对齐行；pin/reactions 动作回调仍透传进 NeoTimeline。
  */
-import { render, screen, waitFor } from '../../test/utils';
+import { render, screen, waitFor, fireEvent } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
@@ -200,12 +200,22 @@ describe('NeoGroupChat — 钉钉气泡流', () => {
     expect(container.querySelector('.neo-gc-day-divider')).toBeInTheDocument();
   });
 
-  it('过程卡段仍嵌在对应 turn 下（neo-gc-proc 包裹整段 NeoTimeline）', async () => {
+  it('过程卡段收进「后台过程」折叠行（默认收起），点开才嵌 NeoTimeline', async () => {
     timelineState.messages = [
       { id: 'chat_m1', kind: 'user_turn', text: 'go', turn_id: 't1', ts: now },
       { id: 'p1', kind: 'thinking', label: '想', status: 'streaming', turn_id: 't1', ts: now },
     ] as TimelineMessage[];
     const { container } = renderChat();
+    // 默认收起：聊天流里没有过程卡（2026-11-07 简洁展示）
+    const fold = await waitFor(() => {
+      const el = container.querySelector('.neo-gc-backstage');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(fold).not.toHaveAttribute('data-open');
+    expect(container.querySelector('.neo-gc-proc')).toBeNull();
+    // 展开 → 过程段仍嵌在对应 turn 下（neo-gc-proc 包裹整段 NeoTimeline）
+    fireEvent.click(screen.getByTestId('neo-gc-backstage-toggle'));
     const proc = await waitFor(() => {
       const el = container.querySelector('.neo-gc-proc');
       expect(el).not.toBeNull();
@@ -221,6 +231,10 @@ describe('NeoGroupChat — 钉钉气泡流', () => {
       { id: 'th_done', kind: 'thinking', label: '深度思考', status: 'done', turn_id: 't1', ts: now },
     ] as TimelineMessage[];
     const { container } = renderChat();
+    await waitFor(() => {
+      expect(container.querySelector('.neo-gc-backstage')).not.toBeNull();
+    });
+    fireEvent.click(screen.getByTestId('neo-gc-backstage-toggle'));
     const proc = await waitFor(() => {
       const el = container.querySelector('.neo-gc-proc');
       expect(el).not.toBeNull();
