@@ -175,9 +175,10 @@ describe('统一源列表与三态右栏', () => {
     expect(screen.queryByText('本地仓库')).toBeNull();
   });
 
-  // retry:1 —— 这两条用例依赖「点行 → 异步拉详情/lazy 图谱」，全量并行跑时
-  // 偶发点完不更新（既有 flake，与业务无关）。重试一次可消除假红，真失败仍会报。
-  it('点知识包行 → 包详情(sources/Reindex/Delete)+ 切「图谱」视图渲染嵌入图谱', { retry: 1 }, async () => {
+  // retry:2 —— 这两条用例依赖「点行 → 异步拉详情/lazy 图谱」，全量并行跑时
+  // 偶发点完不更新（既有 flake，与业务无关）。单次等待 6s × retry 2 = 最坏
+  // 18s，留在 20s testTimeout 预算内（此前 10s×2 会把总预算耗尽假红）。
+  it('点知识包行 → 包详情(sources/Reindex/Delete)+ 切「图谱」视图渲染嵌入图谱', { retry: 2 }, async () => {
     renderPage();
     await screen.findByTestId('rail-pack-p1');
     fireEvent.click(screen.getByTestId('rail-pack-p1'));
@@ -192,8 +193,8 @@ describe('统一源列表与三态右栏', () => {
     // 包详情头部 Waypoints 图标进入图谱
     fireEvent.click(screen.getByTestId('pack-graph-btn'));
     // 显式放宽等待：默认 findByTestId 只等 1s，CI 2 核机器上 lazy chunk
-    // 解析 + Suspense 回落经常 >1s，会报 Unable to find 的假红。
-    const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 10000 });
+    // 解析 + Suspense 回落经常 >1s；6s × retry 2 留在 20s testTimeout 预算内。
+    const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 6000 });
     expect(graph.getAttribute('data-pack')).toBe('p1');
     // 返回头切回内容
     fireEvent.click(screen.getByTestId('kv-graph-back'));
@@ -208,11 +209,11 @@ describe('统一源列表与三态右栏', () => {
     expect(await screen.findByTestId('doc-tree-empty')).toBeTruthy();
   });
 
-  it('文件夹源切「图谱」:图谱渲染 + 点节点「打开文件」跳回文件视图并选中', { retry: 1 }, async () => {
+  it('文件夹源切「图谱」:图谱渲染 + 点节点「打开文件」跳回文件视图并选中', { retry: 2 }, async () => {
     mockedFiles.mockResolvedValue({
       data: {
         vault_id: 'v1',
-        path: 'D:\Notes',
+        path: 'D:\\Notes',
         total: 1,
         truncated: false,
         by_type: { doc: 1 },
@@ -230,7 +231,7 @@ describe('统一源列表与三态右栏', () => {
 
     // 工具栏 Waypoints 图标进入图谱(Obsidian 式)
     fireEvent.click(screen.getByTestId('vault-graph-btn'));
-    const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 10000 });
+    const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 6000 });
     expect(graph.getAttribute('data-vault')).toBe('v1');
 
     // 图谱节点「打开文件」→ 回到文件视图且目标文件被选中加载
