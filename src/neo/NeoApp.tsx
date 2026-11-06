@@ -53,13 +53,13 @@ const RAIL_DEFAULT_WIDTH = 180;
 
 /**
  * nav.view → 左栏列表区默认映射；不在表里的（conversation/兜底目标/agent-soul/
- * dashboard/schedules）列表保持不动——Grok 式「内容页不抢侧边栏」：数据看板、
- * 定时任务（2026-11-06 用户反馈：点定时任务左栏依旧显示 agent 列表）都是
- * 阅读态页。os-unified 后 agents/teams 浏览视图移除；memory 分区已随
- * 「记忆折叠进设置」批（#18）下线。 */
+ * dashboard/schedules/knowledge）列表保持不动——Grok 式「内容页不抢侧边栏」：
+ * 数据看板、定时任务（2026-11-06 用户反馈：点定时任务左栏依旧显示 agent 列表）、
+ * 知识库（2026-11-07 用户反馈：知识库左侧边栏要保持成员显示——知识源列表由
+ * 知识页自带 rail 承担）都是阅读态页。os-unified 后 agents/teams 浏览视图移除；
+ * memory 分区已随「记忆折叠进设置」批（#18）下线。 */
 const SECTION_BY_NAV: Partial<Record<NeoNav['view'], RailSection>> = {
   home: 'home',
-  knowledge: 'knowledge',
 };
 
 export function NeoApp() {

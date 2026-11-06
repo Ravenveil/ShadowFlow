@@ -62,9 +62,10 @@ function Harness() {
   const [collapsed, setCollapsed] = useState(false);
   const [nav, setNav] = useState<NeoNav>({ view: 'home' });
   const [section, setSection] = useState<RailSection>('home');
-  // 与 NeoApp.SECTION_BY_NAV 同款映射（os-unified 后 agents/teams 视图已移除）
+  // 与 NeoApp.SECTION_BY_NAV 同款映射（os-unified 后 agents/teams 视图已移除；
+  // 2026-11-07 知识库出表——内容页不抢侧边栏，列表保持成员显示）
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
-    home: 'home', knowledge: 'knowledge',
+    home: 'home',
   };
   return (
     <NeoRail
@@ -141,10 +142,19 @@ describe('NeoRail — 折叠回路（弹出/收回）', () => {
 });
 
 describe('NeoRail — 导航行 onNavigate 上报（跳转收敛契约）', () => {
-  it('点知识库导航行 → 收到对应 nav 变体，列表区同步切换', async () => {
+  it('点知识库导航行 → 进知识页但左栏列表保持成员显示（2026-11-07 用户反馈）', async () => {
     renderRail();
     fireEvent.click(screen.getByTestId('neo-nav-knowledge'));
-    expect(await screen.findByText('还没有知识源')).toBeInTheDocument();
+    // 知识库不抢列表区（与数据看板/定时任务同款）：home 成员/会话列表保持
+    expect(screen.getByTestId('neo-secretary-row')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-plus')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('neo-team-group')).toBeInTheDocument();
+    });
+    // 不再切到知识源分区（知识源列表由知识页自带 rail 承担）
+    expect(screen.queryByText('还没有知识源')).not.toBeInTheDocument();
+    // 导航行高亮跟随 nav.view（不再看 section）
+    expect(screen.getByTestId('neo-nav-knowledge')).toHaveAttribute('aria-pressed', 'true');
     // 记忆行已下线（2026-11-06 折叠进设置）：列表区不会再切到记忆分区
     expect(screen.queryByTestId('neo-nav-memory')).not.toBeInTheDocument();
   });

@@ -1581,9 +1581,9 @@ export function NeoRail({
       <nav className="neo-nav">
         <button
           type="button"
-          className={`neo-nav-row${section === 'knowledge' ? ' on' : ''}`}
+          className={`neo-nav-row${nav.view === 'knowledge' ? ' on' : ''}`}
           onClick={() => onNavigate({ view: 'knowledge' })}
-          aria-pressed={section === 'knowledge'}
+          aria-pressed={nav.view === 'knowledge'}
           data-testid="neo-nav-knowledge"
         >
           <Library size={15} strokeWidth={1.75} aria-hidden />
@@ -1842,7 +1842,11 @@ export function NeoRail({
         )}
 
         {/* 统一知识源列表（2026-08-19 合并批）：本地仓库 + 知识包混排，
-            点行 → 中栏知识页并预选该源（sourceId 深链，rail 常驻）。 */}
+            点行 → 中栏知识页并预选该源（sourceId 深链，rail 常驻）。
+            2026-11-07 用户反馈「知识库左侧边栏要保持成员显示」：知识库导航
+            不再切分区（SECTION_BY_NAV 出表，列表保持 home 成员/会话列表，
+            与 schedules 2026-11-06 同款处理）——本分区渲染保留但导航不可达，
+            知识源列表由知识页自带 rail（neo-kv-rail）承担。 */}
         {section === 'knowledge' && (
           <>
             <div className="neo-section-label">
