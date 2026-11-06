@@ -25,9 +25,9 @@ let cliRouter: express.Router;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let clawInstaller: typeof import('../lib/claw-installer');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let cliDetector: typeof import('../cli-detector');
+let cliDetector: typeof import('../detectors/cli-detector');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let cliRegistry: typeof import('../cli-registry');
+let cliRegistry: typeof import('../detectors/cli-registry');
 let restoreNodePm: () => void;
 
 beforeAll(async () => {
@@ -36,10 +36,10 @@ beforeAll(async () => {
   process.chdir(tmp);
 
   clawInstaller = await import('../lib/claw-installer');
-  cliDetector = await import('../cli-detector');
-  cliRegistry = await import('../cli-registry');
-  clawhubRouter = (await import('../routes/clawhub')).default;
-  cliRouter = (await import('../routes/cli')).default;
+  cliDetector = await import('../detectors/cli-detector');
+  cliRegistry = await import('../detectors/cli-registry');
+  clawhubRouter = (await import('../routes/skills/clawhub')).default;
+  cliRouter = (await import('../routes/system/cli')).default;
 
   // 注入 node 为白名单 pm（真实 spawn 用，与单测同法）
   restoreNodePm = clawInstaller.__testInjectPm('node');

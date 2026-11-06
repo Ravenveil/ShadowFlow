@@ -21,7 +21,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { parseAndExtract, type SseEvent } from '../../parser';
+import { parseAndExtract, type SseEvent } from '../../parsers/parser';
 import {
   callProvider,
   isProviderId,

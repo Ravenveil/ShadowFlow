@@ -20,7 +20,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-let resolveStreamDisposition: typeof import('../run-sessions').resolveStreamDisposition;
+let resolveStreamDisposition: typeof import('../runs/run-sessions').resolveStreamDisposition;
 let origCwd: string;
 let tmp: string;
 
@@ -28,7 +28,7 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-stream-disp-'));
   process.chdir(tmp);
-  ({ resolveStreamDisposition } = await import('../run-sessions'));
+  ({ resolveStreamDisposition } = await import('../runs/run-sessions'));
 });
 
 afterAll(() => {

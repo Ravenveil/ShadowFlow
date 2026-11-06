@@ -18,8 +18,8 @@
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import type { SkillDefinition, SkillMode, PreviewType, SkillSource, SkillKind } from '../skills';
-import { inferKind } from '../skills';
+import type { SkillDefinition, SkillMode, PreviewType, SkillSource, SkillKind } from './skills';
+import { inferKind } from './skills';
 import { loadTeam as loadLegacyTeam } from '../lib/skill-yaml';
 import { loadTeam as loadGlobalTeam } from '../lib/team-yaml';
 // Round 4 PR-C: warm the compile cache in the background for any installed
@@ -36,7 +36,7 @@ import {
 import {
   markCompiling,
   markCompileDone,
-} from '../routes/skills-preview-triage';
+} from '../routes/skills/skills-preview-triage';
 
 const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 // S6.4 — when the Node server is launched from the `server/` subdir

@@ -114,7 +114,7 @@ vi.mock('../../lib/worktree-manager', () => ({
   commitWorktree: vi.fn(async () => null),
 }));
 
-import { runFanoutAsync } from '../groups-chat';
+import { runFanoutAsync } from '../groups/groups-chat';
 
 /** 标签切断在 chunk 边界的流式脚本：开标签 / 闭标签 / 连字符形态都被切开。 */
 const NASTY_STREAM: StreamChunk[] = [

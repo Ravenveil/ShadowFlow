@@ -16,15 +16,15 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { captureBlueprintArtifact, type CapturedArtifact } from '../routes/run-sessions';
+import { captureBlueprintArtifact, type CapturedArtifact } from '../routes/runs/run-sessions';
 
 let tmp: string;
 let origCwd: string;
 let sqlite: typeof import('../storage/sqlite');
 let runsStore: typeof import('../storage/runs');
 let projectsStore: typeof import('../storage/projects');
-let projectsRouter: typeof import('../routes/projects').default;
-let runsRouter: typeof import('../routes/runs').default;
+let projectsRouter: typeof import('../routes/projects/projects').default;
+let runsRouter: typeof import('../routes/runs/runs').default;
 
 beforeAll(async () => {
   // sqlite 数据文件落在 cwd/.shadowflow/ — 切到临时目录跑隔离库。
@@ -35,8 +35,8 @@ beforeAll(async () => {
   sqlite._resetForTests();
   runsStore = await import('../storage/runs');
   projectsStore = await import('../storage/projects');
-  projectsRouter = (await import('../routes/projects')).default;
-  runsRouter = (await import('../routes/runs')).default;
+  projectsRouter = (await import('../routes/projects/projects')).default;
+  runsRouter = (await import('../routes/runs/runs')).default;
 });
 
 afterAll(() => {

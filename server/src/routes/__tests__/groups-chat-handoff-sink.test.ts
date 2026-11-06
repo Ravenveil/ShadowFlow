@@ -15,7 +15,7 @@
  * 由 try/catch + .catch 双兜底保证（调用方 fire-and-forget）。
  */
 import { describe, it, expect } from 'vitest';
-import { buildRoundHandoffPayload } from '../groups-chat';
+import { buildRoundHandoffPayload } from '../groups/groups-chat';
 
 describe('buildRoundHandoffPayload — 会话回合自动沉淀交接包', () => {
   const twoSpeakers = [

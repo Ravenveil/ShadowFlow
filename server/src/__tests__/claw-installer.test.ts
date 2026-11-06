@@ -20,7 +20,7 @@ import {
   startUninstall,
   type InstallSession,
 } from '../lib/claw-installer';
-import { KNOWN_CLIS, findCli } from '../cli-registry';
+import { KNOWN_CLIS, findCli } from '../detectors/cli-registry';
 
 afterAll(() => {
   __resetInstallerForTest();

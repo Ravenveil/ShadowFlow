@@ -28,7 +28,7 @@
  * layer later. Either path is forward-compatible with this bridge.
  */
 
-import type { SseEvent } from '../parser';
+import type { SseEvent } from '../parsers/parser';
 import { LlmCallError, type LlmCallErrorKind, type TurnChunk } from '../workflow/types';
 
 /**

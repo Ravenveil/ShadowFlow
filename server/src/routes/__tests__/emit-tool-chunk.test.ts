@@ -4,7 +4,7 @@
  * gw=null no-op)，与 timeline-projector.onToolUse/onToolResult 对齐。
  */
 import { describe, it, expect } from 'vitest';
-import { emitToolChunk } from '../groups-chat';
+import { emitToolChunk } from '../groups/groups-chat';
 import type { TimelineMessage, MessagePatch } from '../../lib/contracts';
 import type { TurnChunk } from '../../workflow/types';
 

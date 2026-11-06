@@ -17,7 +17,7 @@
  *   npx vitest run --config vitest.server.config.ts server/src/routes/__tests__/groups-chat-thinking-strip.test.ts
  */
 import { describe, it, expect } from 'vitest';
-import { stripThinking, pickDefaultExecutor, createThinkingTagStream } from '../groups-chat';
+import { stripThinking, pickDefaultExecutor, createThinkingTagStream } from '../groups/groups-chat';
 
 describe('stripThinking — 最终回复剥离 <sf:thinking> 思考段', () => {
   it('成对标签整体剥离，正文保留', () => {

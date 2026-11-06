@@ -10,8 +10,8 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { apiGuard, isLoopbackAddress } from '../middleware/api-guard';
-import merchantBoardRouter from '../routes/merchant-board';
-import memoryHandoffRouter from '../routes/memory-handoff';
+import merchantBoardRouter from '../routes/dashboard/merchant-board';
+import memoryHandoffRouter from '../routes/memory/memory-handoff';
 
 const ORIGINAL_TOKEN = process.env.SF_API_TOKEN;
 
