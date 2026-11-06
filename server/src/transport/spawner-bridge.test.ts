@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { sseEventToChunk, bridgeSpawnerStream } from './spawner-bridge';
-import type { SseEvent } from '../parser';
+import type { SseEvent } from '../parsers/parser';
 
 describe('sseEventToChunk — channel mapping', () => {
   it('text → text-delta with the raw text (NOT a wire-encoded line)', () => {

@@ -21,8 +21,8 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type http from 'node:http';
 
-let runsRouter: typeof import('../runs').default;
-let registerGatewayRun: typeof import('../run-sessions').registerGatewayRun;
+let runsRouter: typeof import('../runs/runs').default;
+let registerGatewayRun: typeof import('../runs/run-sessions').registerGatewayRun;
 let server: http.Server;
 let base: string;
 let origCwd: string;
@@ -32,8 +32,8 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-runs-proj-'));
   process.chdir(tmp);
-  ({ default: runsRouter } = await import('../runs'));
-  ({ registerGatewayRun } = await import('../run-sessions'));
+  ({ default: runsRouter } = await import('../runs/runs'));
+  ({ registerGatewayRun } = await import('../runs/run-sessions'));
 
   const app = express();
   app.use(express.json());

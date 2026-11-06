@@ -18,7 +18,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/merchant-board').default;
+let router: typeof import('../routes/dashboard/merchant-board').default;
 let sqlite: typeof import('../storage/sqlite');
 
 function app() {
@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/merchant-board')).default;
+  router = (await import('../routes/dashboard/merchant-board')).default;
   sqlite.getDb();
 });
 

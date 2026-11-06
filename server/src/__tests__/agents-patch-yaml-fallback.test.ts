@@ -97,7 +97,7 @@ beforeAll(async () => {
   writeAgent(agentsDir, 'pm');
   writeAgent(agentsDir, 'dev');
 
-  const mod = await import('../routes/agents');
+  const mod = await import('../routes/agents/agents');
   app = express();
   app.use(express.json());
   app.use('/api/agents', mod.default);

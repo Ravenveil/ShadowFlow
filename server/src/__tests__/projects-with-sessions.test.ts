@@ -12,7 +12,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let projectsRouter: typeof import('../routes/projects').default;
+let projectsRouter: typeof import('../routes/projects/projects').default;
 let sqlite: typeof import('../storage/sqlite');
 let projectsStore: typeof import('../storage/projects');
 let conversationsStore: typeof import('../storage/conversations');
@@ -33,7 +33,7 @@ beforeAll(async () => {
   sqlite._resetForTests();
   projectsStore = await import('../storage/projects');
   conversationsStore = await import('../storage/conversations');
-  projectsRouter = (await import('../routes/projects')).default;
+  projectsRouter = (await import('../routes/projects/projects')).default;
 });
 
 afterAll(() => {

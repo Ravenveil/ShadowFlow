@@ -20,7 +20,7 @@ import {
   parseResultCount,
   extractToolLinks,
   summarizeToolInput,
-} from '../run-sessions';
+} from '../runs/run-sessions';
 
 describe('createToolCallProjector (R2 工具可见 · 左栏投影)', () => {
   it('tool-use → tool-call(running) with tool + title + input_summary', () => {

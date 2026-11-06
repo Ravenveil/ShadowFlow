@@ -5,17 +5,26 @@ artifact handoff 取代 LLM tool_use 多轮编排，LLM 只 emit 状态/思考�
 
 ## 文件
 
+**S7 三相位：**
+
 - `phase-1-analyze.ts` — Team-first phase 1：阅读 `<skill>` 块 → 决定子集 → emit "分析目标需求" + "挑选 Team 蓝图" steps
 - `phase-1-analyze-agent-first.ts` — Agent-first 变体：goal-driven 推 agent，跳「挑选 Team 蓝图」
 - `phase-2-agent.ts` — per-agent 5 substep (identity/persona/model/tools/memory)，daemon 已 emit 蓝图帧，LLM 只 emit substep 状态
 - `phase-3-team.ts` — 设置工具集 + Policy 协作规则；DAG 由 daemon 从 team.yaml 预建，phase 3 只总结
 - `index.ts` — `composeMultiTurnPrompt(flow: 'team-first' | 'agent-first')` 拼装；含 `ASSEMBLER_HEADER`（身份 + 引用纪律）
 
+**8 层 prompt 洋葱（S8 / Story 15.13）：**
+
+- `prompt-assembly.ts` — 多层 system prompt 组合器（静态缓存段 + `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__` + 动态段）
+- `discovery-charter.ts` — Layer 1 DISCOVERY 指令
+- `identity-charter.ts` — Layer 2 反 AI-slop 硬规则
+- `framework-directives.ts` — Layer 7 mode-keyed framework 指令
+
 ## 触发方式
 
-`server/src/assembler.ts` 在 team-backed skill 路径下调 `composeMultiTurnPrompt`，把结果作为 system prompt 喂给 `workflow.scheduler.runDag()`。
+`server/src/assembly/assembler.ts` 在 team-backed skill 路径下调 `composeMultiTurnPrompt`，把结果作为 system prompt 喂给 `workflow.scheduler.runDag()`。
 
-`routes/run-sessions.ts` 根据 `teamSpec` 是否存在自动选 flow：
+`routes/runs/run-sessions.ts` 根据 `teamSpec` 是否存在自动选 flow：
 - 有 teamSpec（BMAD/paper-review 等）→ team-first
 - 无 teamSpec（裸 agent-team-blueprint）→ agent-first
 

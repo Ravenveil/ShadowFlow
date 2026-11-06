@@ -20,7 +20,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/memory-handoff').default;
+let router: typeof import('../routes/memory/memory-handoff').default;
 let sqlite: typeof import('../storage/sqlite');
 let lessons: typeof import('../storage/memory-lessons');
 
@@ -40,7 +40,7 @@ beforeAll(async () => {
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
   lessons = await import('../storage/memory-lessons');
-  router = (await import('../routes/memory-handoff')).default;
+  router = (await import('../routes/memory/memory-handoff')).default;
   sqlite.getDb();
 
   // 三条经验：通用 / 同域 / 跨域（跨域那条绝不能被交接包带走）

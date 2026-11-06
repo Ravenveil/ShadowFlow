@@ -26,7 +26,7 @@ import os from 'os';
 import path from 'path';
 
 let gatewayRun: typeof import('../gateway-run');
-let runSessions: typeof import('../../routes/run-sessions');
+let runSessions: typeof import('../../routes/runs/run-sessions');
 let conversations: typeof import('../../storage/conversations');
 let projects: typeof import('../../storage/projects');
 let sqlite: typeof import('../../storage/sqlite');
@@ -43,7 +43,7 @@ beforeAll(async () => {
   sqlite._resetForTests();
   projects = await import('../../storage/projects');
   conversations = await import('../../storage/conversations');
-  runSessions = await import('../../routes/run-sessions');
+  runSessions = await import('../../routes/runs/run-sessions');
   gatewayRun = await import('../gateway-run');
   timelineReplay = await import('../timeline-replay');
 });

@@ -15,7 +15,7 @@
  *   npx vitest run --config vitest.server.config.ts server/src/routes/__tests__/groups-chat-intent-card.test.ts
  */
 import { describe, it, expect, vi } from 'vitest';
-import { buildIntentCard, emitIntentCard } from '../groups-chat';
+import { buildIntentCard, emitIntentCard } from '../groups/groups-chat';
 import type { TimelineMessage } from '../../lib/contracts';
 
 describe('buildIntentCard — intent 帧 payload 组装', () => {

@@ -112,7 +112,7 @@ beforeAll(async () => {
     delete process.env[envName];
   }
 
-  const mod = await import('../teams');
+  const mod = await import('../agents/teams');
   const app: Express = express();
   app.use(express.json());
   app.use('/api/teams', mod.default);

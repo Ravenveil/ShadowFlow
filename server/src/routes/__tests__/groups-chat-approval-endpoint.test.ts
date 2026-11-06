@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 
 import {
   clearPendingApprovals,
-} from '../groups-chat';
+} from '../groups/groups-chat';
 
 // pendingApprovals 是模块私有 — 通过导出的 clearPendingApprovals 清理 +
 // 文本路径经 tryResolveApprovalFromText 不可直接 import（未导出）。这里把

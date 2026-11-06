@@ -5,7 +5,7 @@ import request from 'supertest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import fsRouter from '../fs-browse';
+import fsRouter from '../system/fs-browse';
 
 let dir: string;
 beforeAll(() => {
