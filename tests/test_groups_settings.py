@@ -128,6 +128,25 @@ class TestPatchGroup:
         )
         assert res.status_code == 422
 
+    def test_patch_group_team_id_link_and_clear(
+        self, client: TestClient, fresh_group: str
+    ):
+        # 2026-11-06 编队补链：建群即建编队 —— 自由群 find-or-create 同名团队
+        # 后回填挂链；空串 = 清除（与 conversation_id 同语义）。
+        res = client.patch(
+            f"/api/groups/{fresh_group}", json={"team_id": "team-heal-1"}
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["data"]["team_id"] == "team-heal-1"
+        res2 = client.get(f"/api/groups/{fresh_group}")
+        assert res2.json()["data"]["team_id"] == "team-heal-1"
+        # 空串清链 → None
+        res3 = client.patch(
+            f"/api/groups/{fresh_group}", json={"team_id": ""}
+        )
+        assert res3.status_code == 200
+        assert res3.json()["data"]["team_id"] is None
+
 
 # ---------------------------------------------------------------------------
 # GET/PUT /api/groups/{id}/user-settings

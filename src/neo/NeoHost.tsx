@@ -1126,6 +1126,7 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
     ) : convTeamEntry ? (
       <TeamPanel
         teamId={convTeamEntry.id}
+        groupId={conversation?.groupId ?? undefined}
         teamName={convTeamEntry.name}
         perNodeChunks={session.perNodeChunks}
         streaming={session.isStreaming}

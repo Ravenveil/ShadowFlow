@@ -39,6 +39,8 @@ vi.mock('../../api/agents', () => ({
 
 vi.mock('../../api/groupApi', () => ({
   resolveDmConversation: vi.fn(),
+  // 2026-11-06 群↔编队双向同步：带 groupId 挂载时 roster 增删回写群成员
+  patchGroup: vi.fn().mockResolvedValue({}),
 }));
 
 // stub 编辑器：只暴露保存/取消回调，验证 TeamPanel 的常驻编辑器契约。
@@ -215,6 +217,50 @@ describe('TeamPanel — 添加成员（2026-11-05 网格尾格微信化）', () 
     fireEvent.click(await screen.findByTestId('team-roster-add'));
     fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
     expect(await screen.findByTestId('team-roster-error')).toBeInTheDocument();
+  });
+
+  it('带 groupId（群会话挂载）→ roster 增删全量回写群成员（2026-11-06 群↔编队同步）', async () => {
+    const { patchTeam } = await import('../../api/teams');
+    const { patchGroup } = await import('../../api/groupApi');
+    vi.mocked(patchTeam).mockResolvedValue({
+      team_id: 't1',
+      name: '测试团队',
+      description: '',
+      workspace_id: 'ws1',
+      agent_ids: ['a1', 'a2', 'a3'],
+      created_at: '',
+      updated_at: '',
+    });
+    render(
+      <TeamPanel teamId="t1" groupId="g1" teamName="测试团队" perNodeChunks={{}} streaming={false} />,
+    );
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
+    await waitFor(() => {
+      expect(patchTeam).toHaveBeenCalledWith('t1', { add_agent_ids: ['a3'] });
+      expect(patchGroup).toHaveBeenCalledWith('g1', { agent_ids: ['a1', 'a2', 'a3'] });
+    });
+  });
+
+  it('不带 groupId（团队 target 直挂）→ 只改团队，不回写群', async () => {
+    const { patchTeam } = await import('../../api/teams');
+    const { patchGroup } = await import('../../api/groupApi');
+    vi.mocked(patchTeam).mockResolvedValue({
+      team_id: 't1',
+      name: '测试团队',
+      description: '',
+      workspace_id: 'ws1',
+      agent_ids: ['a1', 'a2', 'a3'],
+      created_at: '',
+      updated_at: '',
+    });
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
+    await waitFor(() => {
+      expect(patchTeam).toHaveBeenCalledWith('t1', { add_agent_ids: ['a3'] });
+    });
+    expect(patchGroup).not.toHaveBeenCalled();
   });
 
   it('点浮层外空白 → 候选浮层关闭（2026-11-06 用户反馈）', async () => {
