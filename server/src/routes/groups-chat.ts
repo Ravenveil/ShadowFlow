@@ -112,21 +112,30 @@ export function clearPendingApprovals(): void {
   pendingApprovals.clear();
 }
 
-/** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
-function tryResolveApprovalFromText(groupId: string, text: string): boolean {
+/**
+ * 纯函数：解析会话短文本里的审批决定（OpenBot 审批纪律决定路径②）。
+ * 导出供回归测试直打真实实现——此前测试用同正则副本复测，双实现会漂移。
+ */
+export function parseApprovalDecision(text: string): 'approved' | 'rejected' | null {
   const trimmed = text.trim().toLowerCase();
-  const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
-  if (entries.length === 0) return false;
   // 决定消息必须短——「批准」「拒绝」是决定，「继续写代码」这种长句是新一轮
   // 派活，不吞（前缀「继续」会误伤，长度闸门兜住）。中文 ≤6 字；拉丁词按
   // 字符计 ≤10（"approve"/"rejected" 全词各 7-8 字符）。
   const latinChars = (trimmed.match(/[a-z]/g) ?? []).length;
   const lenLimit = latinChars > 0 ? 10 : 6;
-  if (trimmed.length > lenLimit) return false;
+  if (trimmed.length > lenLimit) return null;
   const isApprove = /^(批准|同意|approve|ok|好|通过|allowed|yes)/.test(trimmed);
   const isReject = /^(拒绝|不同意|reject|否|不行|停|驳回|no|deny)/.test(trimmed);
-  if (!isApprove && !isReject) return false;
-  const verdict: 'approved' | 'rejected' = isApprove ? 'approved' : 'rejected';
+  if (!isApprove && !isReject) return null;
+  return isApprove ? 'approved' : 'rejected';
+}
+
+/** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
+export function tryResolveApprovalFromText(groupId: string, text: string): boolean {
+  const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
+  if (entries.length === 0) return false;
+  const verdict = parseApprovalDecision(text);
+  if (!verdict) return false;
   for (const [key, resolve] of entries) {
     pendingApprovals.delete(key);
     try {
@@ -198,6 +207,24 @@ export function sinkRoundHandoff(input: {
     createHandoff(payload);
   })().catch(() => {
     /* 沉淀失败不影响聊天主链路（SQLite 不可用等） */
+  });
+}
+
+/**
+ * 注册一次节点审批挂起，返回等决定的 Promise（决定路径①②③的单一注册真源）。
+ * deps.approval.request 接线与回归测试共用。外部取消（用户插话换轮/停止生成）
+ * 由 swapDagRun 拒收场；这里另挂 30 分钟兜底超时（与 run 超时同量级，避免永久
+ * pending 占内存）——超时视作拒绝，审批 promise 永不悬挂。
+ */
+export function registerPendingApproval(groupId: string, nodeId: string): Promise<'approved' | 'rejected'> {
+  return new Promise<'approved' | 'rejected'>((resolve) => {
+    const key = `${groupId}:${nodeId}`;
+    pendingApprovals.set(key, resolve);
+    setTimeout(() => {
+      if (pendingApprovals.delete(key)) {
+        try { resolve('rejected'); } catch { /* settled */ }
+      }
+    }, 30 * 60_000).unref?.();
   });
 }
 
@@ -1145,19 +1172,7 @@ async function runFanout(
             ? {
                 approval: {
                   request: ({ nodeId, nodeName }: { nodeId: string; nodeName: string; preview: string; signal: AbortSignal }) =>
-                    new Promise<'approved' | 'rejected'>((resolve) => {
-                      const key = `${groupId}:${nodeId}`;
-                      pendingApprovals.set(key, resolve);
-                      // 外部取消（用户插话换轮/停止生成）→ 视作拒绝收场，不悬挂。
-                      // signal 由执行器传入（runTeamDagFanout 的 opts.signal）。
-                      // 这里借 postMessage 之外的通道不好拿 signal —— 挂 30 分钟
-                      // 兜底超时（与 run 超时同量级，避免永久 pending 占内存）。
-                      setTimeout(() => {
-                        if (pendingApprovals.delete(key)) {
-                          try { resolve('rejected'); } catch { /* settled */ }
-                        }
-                      }, 30 * 60_000).unref?.();
-                    }).then((v) => {
+                    registerPendingApproval(groupId, nodeId).then((v) => {
                       // 决定落一条系统消息（审批留痕；postMessage 失败不回传）。
                       void pyPostMessage(groupId, {
                         content: `[approval] ${nodeName} 的审批结果：${v === 'approved' ? '已批准 ✅' : '已拒绝 ❌'}`,
@@ -1628,15 +1643,19 @@ router.post('/:id/messages', (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05）。
+ * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05，决定路径①）。
  * body: { decision: 'approve' | 'reject' }。
  * 命中挂起 → resolve 执行器 promise（执行器会补系统留痕消息 + plan_card blocked）；
  * 未命中 → 409（已决定/超时/无此挂起）。
+ * 处理器导出供回归测试直打（不起真 Express）。
  */
-router.post('/:id/approvals/:nodeId', (req: Request, res: Response) => {
+export function approvalDecisionHandler(
+  req: { params: { id: string; nodeId: string }; body?: unknown },
+  res: { status(code: number): { json(body: unknown): void }; json(body: unknown): void },
+): void {
   const groupId = req.params.id;
   const nodeId = req.params.nodeId;
-  const decision = (req.body ?? {}).decision;
+  const decision = ((req.body ?? {}) as { decision?: unknown }).decision;
   if (decision !== 'approve' && decision !== 'reject') {
     res.status(400).json({
       error: { code: 'BAD_DECISION', message: "decision must be 'approve' or 'reject'" },
@@ -1656,7 +1675,9 @@ router.post('/:id/approvals/:nodeId', (req: Request, res: Response) => {
     resolve(decision === 'approve' ? 'approved' : 'rejected');
   } catch { /* resolver 已 settle — 幂等 */ }
   res.json({ group_id: groupId, node_id: nodeId, decision });
-});
+}
+
+router.post('/:id/approvals/:nodeId', approvalDecisionHandler);
 
 export { router as groupsChatRouter };
 export default router;
