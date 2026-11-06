@@ -35,7 +35,7 @@ import ClawHubPage from '../pages/clawhub/ClawHubPage';
 import { useI18n } from '../common/i18n';
 import { usePythonBackendStatus } from '../core/hooks/usePythonBackendStatus';
 import { useInboxStore } from '../core/store/useInboxStore';
-import { getGroup, postGroupMessage, resolveDmConversation } from '../api/groupApi';
+import { ensureGroupTeam, getGroup, postGroupMessage, resolveDmConversation } from '../api/groupApi';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { SECRETARY_AGENT_ID } from './secretary';
 import { NeoOnboardingModal, ONBOARDING_DONE_KEY } from './NeoOnboardingModal';
@@ -110,6 +110,9 @@ export function NeoApp() {
     teamId: string | null;
     teamName: string | null;
   } | null>(null);
+  // 2026-11-06 建群即建编队（heal）：已补过链的群（无论成败）—— 每群每会话
+  // 只 find-or-create 一次，防 effect 重入（nav/inboxDMs 抖动）双跑建出两个团队。
+  const healedGroupRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (nav.view !== 'conversation') {
       setConvAgent(null);
@@ -136,6 +139,22 @@ export function NeoApp() {
           setConvAgent({ id: g.agent_ids[0], name: g.name ?? '' });
         } else {
           setConvAgent(null);
+        }
+        // 2026-11-06 建群即建编队：非 DM 且无 team 的群（「发起群聊」建出的
+        // 自由群、单聊加人升级成群的会话）→ find-or-create 同名编队挂链，
+        // 否则编队 tab 拿不到 teamId 整块空白（用户反馈：创建群聊后编队不
+        // 显示成员）。补链完成后回写 convGroup.teamId（group 级守卫，防止
+        // 等待期间切走会话被误写）；失败不阻断聊天主链路。
+        if (g && kind !== 'dm' && !g.team_id && !healedGroupRef.current.has(nav.groupId)) {
+          healedGroupRef.current.add(nav.groupId);
+          void ensureGroupTeam(g).then((tid) => {
+            if (!tid) return;
+            setConvGroup((prev) =>
+              prev && prev.groupId === nav.groupId && !prev.teamId
+                ? { ...prev, teamId: tid }
+                : prev,
+            );
+          });
         }
       })
       .catch(() => {
@@ -308,33 +327,54 @@ export function NeoApp() {
     setRunId(null);
   }, [navigate]);
 
-  // ── 默认落地 = 秘书「影」的会话（2026-11-06 用户反馈：不显示首页 hero）────
-  // 每次启动：无恢复的 run（URL ?run= / localStorage）时 find-or-create 影的
-  // DM 并直接进入——打开产品即与影对话。后端对新 DM 预置「Hello World!」问候。
+  // ── 默认落地 = 秘书的会话（2026-11-06 用户反馈：不显示首页 hero）──────────
+  // 每次启动：无恢复的 run（URL ?run= / localStorage）时 find-or-create 秘书的
+  // DM 并直接进入——打开产品即与秘书对话。后端对新 DM 预置欢迎语问候。
   // 有 run 恢复则保持原行为（回到上次运行现场，不被拽走）。
-  // resolve 失败（Python 未起等）静默放弃，留在 home，下次启动重试。
+  // resolve 失败（Python 未起等）有限重试自愈（2026-11-06 用户反馈「拉 main 后
+  // 依旧显示首页」——只试一次时页面开着就永远停首页）；3 次后放弃留 home。
+  const navViewRef = useRef(nav.view);
+  navViewRef.current = nav.view;
   useEffect(() => {
     if (runId) return; // 有恢复的 run → 不抢
     let alive = true;
-    resolveDmConversation(SECRETARY_AGENT_ID, useWorkspaceStore.getState().currentId)
-      .then((gid) => {
-        if (!alive || !gid) return;
-        navigate({ view: 'conversation', groupId: gid });
-      })
-      .catch(() => {
-        /* 后端未起：静默，留在 home */
-      });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    const scheduleRetry = () => {
+      // 后端未起/瞬时失败：1.5s/3s/4.5s 有限重试；3 次后仍失败才放弃，
+      // 留 home，下次启动再试。
+      if (attempts >= 3) return;
+      attempts += 1;
+      timer = setTimeout(tryLand, 1500 * attempts);
+    };
+    function tryLand() {
+      resolveDmConversation(SECRETARY_AGENT_ID, useWorkspaceStore.getState().currentId)
+        .then((gid) => {
+          if (!alive) return;
+          // 用户已自行导航（知识库/会话等）就不抢屏（2026-11-06「不抢」纪律）。
+          if (gid && navViewRef.current === 'home') {
+            navigate({ view: 'conversation', groupId: gid });
+          } else if (!gid) {
+            scheduleRetry();
+          }
+        })
+        .catch(() => {
+          if (alive) scheduleRetry();
+        });
+    }
+    tryLand();
     return () => {
       alive = false;
+      if (timer) clearTimeout(timer);
     };
     // 故意只跑一次（挂载时）；依赖数组留空。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 首访入职问卷（2026-11-06，模仿 ZCode/Codex 对话框弹出形式）────────────
-  // 时序（用户反馈 2026-11-06 15:23）：先进影的会话 → 欢迎语渲染出来 → 问卷
+  // 时序（用户反馈 2026-11-06 15:23）：先进秘书的会话 → 欢迎语渲染出来 → 问卷
   // 再弹（欢迎先行，问卷不抢首屏）。触发条件 = 首访标记缺失 + 已处于会话视图；
-  // 延迟 800ms 让「Hello World!」先上屏。跳过 = 只记完成标记，零副作用。
+  // 延迟 800ms 让欢迎语先上屏。跳过 = 只记完成标记，零副作用。
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   useEffect(() => {
     if (nav.view !== 'conversation') return;
@@ -353,7 +393,7 @@ export function NeoApp() {
     (introMessage: string) => {
       setOnboardingOpen(false);
       if (!introMessage) return;
-      // 影的会话 id：首访 effect 刚 resolve 过；此处从 inbox DM 反查，查不到
+      // 秘书的会话 id：首访 effect 刚 resolve 过；此处从 inbox DM 反查，查不到
       // 就再 resolve 一次（幂等）。发送失败静默——画像已落 localStorage。
       const wsId = useWorkspaceStore.getState().currentId;
       const dmGid = (useInboxStore.getState().agentDMs ?? []).find(
@@ -497,7 +537,7 @@ export function NeoApp() {
       )}
 
       {/* 首访入职问卷（2026-11-06，ZCode/Codex 弹窗式）：提交 → 画像落盘 +
-          自我介绍发进与影的会话；跳过 → 只记标记。 */}
+          自我介绍发进与秘书的会话；跳过 → 只记标记。 */}
       {onboardingOpen && (
         <NeoOnboardingModal
           onFinished={handleOnboardingFinished}

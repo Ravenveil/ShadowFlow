@@ -37,6 +37,11 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Re
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from shadowflow.api._limiter import limiter
+from shadowflow.services.secretary_seed import (
+    SECRETARY_AGENT_ID,
+    SECRETARY_GREETING,
+    SECRETARY_NAME,
+)
 
 router = APIRouter()
 
@@ -326,6 +331,20 @@ async def resolve_dm_conversation(
     for rec in _list_groups_records(workspace_id, kinds=["dm"]):
         ids = rec.get("agent_ids") or []
         if len(ids) == 1 and ids[0] == agent_id:
+            # 秘书「影」问候幂等补种（2026-11-06）：存量老会话建于播种功能
+            # 上线之前，命中时零消息 → 补一条 Hello World!（与新建播种同款），
+            # 保证「点进来就有主控消息」对老会话同样成立；已有消息绝不覆盖。
+            if agent_id == "agent-shadow-secretary" and not (rec.get("messages") or []):
+                rec["messages"] = [
+                    {
+                        "sender_name": "影",
+                        "sender_kind": "agent",
+                        "agent_id": agent_id,
+                        "content": "Hello World!",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                ]
+                _save_group(rec)
             return DmResolveResponse(
                 group_id=rec.get("group_id", ""), agent_id=agent_id, created=False
             )
@@ -343,17 +362,18 @@ async def resolve_dm_conversation(
 
     group_id = uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
-    # 内置秘书「影」首聊预置问候（2026-11-06）：用户第一次点开影的会话不是
-    # 空白流，而是一条 Hello World!（用户钦定开场白）。仅 kind='dm' 且新建
-    # 时写，老会话/普通 agent 零变化。
+    # 内置秘书首聊预置问候（2026-11-06；同日「Hello World!」改常规欢迎语）：
+    # 用户第一次点开秘书的会话不是空白流，而是一条欢迎语。仅 kind='dm' 且
+    # 新建时写，老会话/普通 agent 零变化。sender 名跟随 agent 当前名（拿不到
+    # 记录才回落 SECRETARY_NAME）。
     messages: List[Dict[str, Any]] = []
-    if agent_id == "agent-shadow-secretary":
+    if agent_id == SECRETARY_AGENT_ID:
         messages.append(
             {
-                "sender_name": "影",
+                "sender_name": agent_name if agent_name != agent_id else SECRETARY_NAME,
                 "sender_kind": "agent",
                 "agent_id": agent_id,
-                "content": "Hello World!",
+                "content": SECRETARY_GREETING,
                 "timestamp": created_at,
             }
         )
@@ -884,6 +904,10 @@ class PatchGroupRequest(BaseModel):
     # 2026-11-04 — 会话形态：'dm' 单聊 | 'group' 群聊。单聊加第二个人后前端
     # 显式下发 'group'（加人即成群，产品上没有独立的「新建群聊」入口）。
     kind: Optional[Literal["dm", "group"]] = None
+    # 2026-11-06 — 编队补链（建群即建编队）：自由群打开时前端 find-or-create
+    # 同名团队后回填挂链。空串 = 清除链接；非空 = 挂到该团队（与
+    # conversation_id 同语义）。编队 tab 的 TeamPanel 依赖 group.team_id。
+    team_id: Optional[str] = None
 
 
 class UserGroupSetting(BaseModel):
@@ -960,6 +984,10 @@ async def patch_group(group_id: str, body: PatchGroupRequest) -> Dict[str, Any]:
         record["agent_ids"] = cleaned
     if body.kind is not None:
         record["kind"] = body.kind
+    if body.team_id is not None:
+        # 2026-11-06 编队补链：空串 = 清除；非空 = 挂到该团队（Node 端团队
+        # DAG 调度与前端编队 tab 都按 group.team_id 找编队）。
+        record["team_id"] = body.team_id.strip() or None
     record["updated_at"] = datetime.now(timezone.utc).isoformat()
     _save_group(record)
     return _envelope(record)
