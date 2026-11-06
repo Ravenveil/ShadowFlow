@@ -33,7 +33,7 @@ import { toolApprovals, type PermissionDecision } from '../lib/tool-approval';
 // in shape from the SkillDropdown UI; both call sites now agree on which
 // goal text patterns are recognised as inline-skill tokens.
 import { parseSkillToken } from '../lib/skill-token';
-import { saveRun, type ArtifactType } from '../storage/runs';
+import { saveRun, saveRunArtifacts, type ArtifactType } from '../storage/runs';
 import { getSetting } from '../storage/settings';
 // 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
@@ -874,6 +874,44 @@ function coerceArtifactType(raw: unknown): ArtifactType | null {
     : null;
 }
 
+// ── 多产物登记（2026-11-07）— blueprint 事件捕获器 ──────────────────────────
+// 此前「last blueprint wins」：一个 run 只留最后一件产物（runs 表三字段），
+// 其余产物在产物面板/项目产物里全部不可见。现在每件 blueprint 产物都进
+// captured 列表（storage/runs.ts run_artifacts 表持久化）。
+// 导出为纯函数供 __tests__/run-artifacts.test.ts 直测。
+
+/** 一件捕获到的产物（= storage/runs.ts RunArtifact 的运行时形状）。 */
+export interface CapturedArtifact {
+  type: ArtifactType | null;
+  filename: string | null;
+  url: string | null;
+}
+
+/**
+ * captureBlueprintArtifact — 把一条 blueprint 事件的载荷登记进 captured。
+ *
+ * - 载荷全空（type/filename/url 均无）→ 不登记，返回 null。
+ * - 身份 = filename ?? url：同名产物的重复事件**覆盖**既有行（后值补齐
+ *   缺字段，如先 filename 后带 url 的补发），不产生重复行。
+ * - 返回本次的条目（无论新增还是覆盖）——调用方用它维持「最后一件」的
+ *   主产物语义（critique/回执沿用旧行为）。
+ */
+export function captureBlueprintArtifact(
+  captured: CapturedArtifact[],
+  data: { artifact_type?: unknown; filename?: unknown; artifact_url?: unknown },
+): CapturedArtifact | null {
+  const type = coerceArtifactType(data.artifact_type);
+  const filename = typeof data.filename === 'string' && data.filename ? data.filename : null;
+  const url = typeof data.artifact_url === 'string' && data.artifact_url ? data.artifact_url : null;
+  if (!type && !filename && !url) return null;
+  const entry: CapturedArtifact = { type, filename, url };
+  const key = filename ?? url;
+  const idx = key ? captured.findIndex((a) => (a.filename ?? a.url) === key) : -1;
+  if (idx >= 0) captured[idx] = entry;
+  else captured.push(entry);
+  return entry;
+}
+
 // ── GET /api/run-sessions — M3 三栏融合 ──────────────────────────────────────
 // 轻量列表：右栏「工作区」tab 按 conversation_id 或 group_id（B1 互链换算）
 // 查群关联的 run。status 来自 runBus（内存）；重启后无活跃 run 回落 'idle'。
@@ -1699,6 +1737,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const toolCallProjector = createToolCallProjector({ idSeed: id });
 
   // Story 15.8 — capture run outcome for persistence after generator drains.
+  // 多产物登记（2026-11-07）：capturedArtifacts 登记本 run 的**每一件** blueprint
+  // 产物（持久化到 run_artifacts 表）；artifactInfo 保留「最后一件 = 主产物」
+  // 语义，critique / saveRun 三字段 / 回执摘要的单件行为不变。
+  const capturedArtifacts: CapturedArtifact[] = [];
   let artifactInfo: {
     type: ArtifactType | null;
     filename: string | null;
@@ -2234,19 +2276,18 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         console.error(`[run-sessions] tool-call projection error on event=${event}:`, toolCallErr);
       }
 
-      // Capture latest artifact info (last blueprint wins — usually only one).
+      // 多产物登记（2026-11-07）— 每件 blueprint 产物都进 capturedArtifacts
+      // （同名覆盖去重）；artifactInfo = 最后一件（主产物，沿用旧语义）。
       if (event === 'blueprint' && data && typeof data === 'object') {
-        const d = data as {
-          artifact_type?: unknown;
-          filename?: unknown;
-          artifact_url?: unknown;
-        };
-        const type = coerceArtifactType(d.artifact_type);
-        const filename = typeof d.filename === 'string' ? d.filename : null;
-        const url = typeof d.artifact_url === 'string' ? d.artifact_url : null;
-        if (type || filename || url) {
-          artifactInfo = { type, filename, url };
-        }
+        const entry = captureBlueprintArtifact(
+          capturedArtifacts,
+          data as {
+            artifact_type?: unknown;
+            filename?: unknown;
+            artifact_url?: unknown;
+          },
+        );
+        if (entry) artifactInfo = entry;
       } else if (event === 'error') {
         sawError = true;
         // Story 15.29 — capture error message for the assistant message.
@@ -2474,6 +2515,17 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
               : null,
           },
         );
+        // 多产物登记（2026-11-07）— 本 run 捕获的每件 blueprint 产物独立
+        // 落 run_artifacts（幂等全量重登记）。runs 三字段仍是主产物（最后
+        // 一件）——上面 saveRun 刚写完，这里补全其余产物/同名去重后的全集。
+        saveRunArtifacts(
+          persistedRunId,
+          capturedArtifacts.map((a) => ({
+            artifact_type: a.type,
+            artifact_filename: a.filename,
+            artifact_url: a.url,
+          })),
+        );
       } catch (persistErr) {
         // Don't fail the response just because we couldn't persist the
         // run record — the SSE stream is already over. Log and move on.
@@ -2492,7 +2544,14 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // Writing failure NEVER reaches the client (try/catch + console.error).
     if (session.conversation_id) {
       let summary: string;
-      if (artifactInfo.filename) {
+      // 多产物登记（2026-11-07）— 多件产物在回执里全部点名（此前只提最后
+      // 一件）。单件/无 filename 保持旧文案，链路优先级不变。
+      const artifactNames = capturedArtifacts
+        .map((a) => a.filename ?? a.url)
+        .filter((n): n is string => typeof n === 'string' && !!n);
+      if (artifactNames.length > 1) {
+        summary = `[Generated artifacts: ${artifactNames.join(', ')}]`;
+      } else if (artifactInfo.filename) {
         summary = `[Generated artifact: ${artifactInfo.filename}]`;
       } else if (stripLeakedSseFrames(collectedStreamText).trim().length > 0) {
         // P2 — control-frame channel isolation (root-cure plan §5). NEVER

@@ -15,7 +15,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { listRuns, deleteRun } from '../storage/runs';
+import { listRuns, listAllRunArtifacts, deleteRun } from '../storage/runs';
 import { getRunReplay } from './run-sessions';
 import {
   buildDaemonRunGraph,
@@ -27,18 +27,27 @@ const router = Router();
 // GET /runs → RunRecord[] (raw array, NOT envelope — see contract note above)
 // ?limit= (frontend src/api/runs.ts sends it): parse int, clamp 1..200;
 // absent/invalid → full list (previous behavior, table is already MAX_RUNS-capped).
+//
+// 多产物登记（2026-11-07）— 行内附加 `artifacts` 数组（additive）：该 run
+// 登记的全部产物按捕获序；无登记行的旧 run 给空数组（消费侧回落
+// artifact_* 三字段主产物，形状不破坏 15.1 raw array 契约）。
 router.get('/', (req: Request, res: Response) => {
   const runs = listRuns();
+  const artifactsByRun = listAllRunArtifacts();
+  const withArtifacts = runs.map((r) => ({
+    ...r,
+    artifacts: artifactsByRun.get(r.run_id) ?? [],
+  }));
   const raw = req.query.limit;
   if (typeof raw === 'string' && raw.trim() !== '') {
     const n = parseInt(raw, 10);
     if (!Number.isNaN(n)) {
       const limit = Math.min(Math.max(n, 1), 200);
-      res.json(runs.slice(0, limit));
+      res.json(withArtifacts.slice(0, limit));
       return;
     }
   }
-  res.json(runs);
+  res.json(withArtifacts);
 });
 
 // ── L6（GAP.md:13）— Node daemon run 的投影端点 ─────────────────────────────

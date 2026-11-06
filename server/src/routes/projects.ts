@@ -119,9 +119,16 @@ router.delete('/:id', (req: Request, res: Response) => {
 /**
  * GET /api/projects/:id/artifacts
  *
- * Returns all runs for the project that produced an artifact (artifact_filename IS NOT NULL).
+ * Returns every registered artifact of the project's runs.
+ *
+ * 多产物登记（2026-11-07）：一 run 多件产物时逐件返回一行（此前 runs 三
+ * 字段「last blueprint wins」，一个 run 只能看到最后一件）。数据源两级：
+ *   1. run_artifacts 独立登记表（新）→ 每件产物一行，artifact_id = run_id#seq；
+ *   2. 无登记行的 run 回落 runs.artifact_* 三字段（旧数据兼容）→ 单行，
+ *      artifact_id = run_id（保持旧值，消费侧 key/链接不断）。
+ *
  * Response shape per item:
- *   artifact_id    — run_id
+ *   artifact_id    — run_id#seq（多产物）或 run_id（旧单产物）
  *   title          — artifact_filename (basename) or goal as fallback
  *   file_type      — artifact_type ('html'|'md'|'yaml'|'pdf')
  *   generated_at   — completed_at
@@ -146,28 +153,72 @@ router.get('/:id/artifacts', (req: Request, res: Response) => {
     completed_at: string;
   }
 
-  const rows = getDb()
+  interface RunArtifactRow {
+    run_id: string;
+    seq: number;
+    artifact_type: string | null;
+    artifact_filename: string | null;
+    artifact_url: string | null;
+  }
+
+  const db = getDb();
+  const runRows = db
     .prepare(
       `SELECT run_id, goal, artifact_type, artifact_filename, artifact_url, completed_at
        FROM runs
-       WHERE project_id = ? AND artifact_filename IS NOT NULL
+       WHERE project_id = ?
        ORDER BY completed_at DESC`,
     )
     .all(req.params.id) as ArtifactRow[];
 
-  const artifacts = rows.map((r) => {
-    const ft = (r.artifact_type ?? 'md').toLowerCase().replace('markdown', 'md');
+  // run_artifacts 登记行（join runs 保证项目归属；seq ASC = 捕获序）。
+  const artifactRows = db
+    .prepare(
+      `SELECT ra.run_id, ra.seq, ra.artifact_type, ra.artifact_filename, ra.artifact_url
+       FROM run_artifacts ra
+       JOIN runs r ON r.run_id = ra.run_id
+       WHERE r.project_id = ?
+       ORDER BY ra.seq ASC`,
+    )
+    .all(req.params.id) as RunArtifactRow[];
+  const byRun = new Map<string, RunArtifactRow[]>();
+  for (const a of artifactRows) {
+    const list = byRun.get(a.run_id) ?? [];
+    list.push(a);
+    byRun.set(a.run_id, list);
+  }
+
+  const toRow = (
+    run: ArtifactRow,
+    artifactId: string,
+    artifactType: string | null,
+    filename: string | null,
+    url: string | null,
+  ) => {
+    const ft = (artifactType ?? 'md').toLowerCase().replace('markdown', 'md');
     const isHtml = ft === 'html';
     return {
-      artifact_id: r.run_id,
-      title: r.artifact_filename ?? r.goal,
+      artifact_id: artifactId,
+      title: filename ?? run.goal,
       file_type: ft,
-      generated_at: r.completed_at,
-      download_url: r.artifact_url ?? null,
-      preview_url: isHtml ? (r.artifact_url ?? null) : null,
+      generated_at: run.completed_at,
+      download_url: url ?? null,
+      preview_url: isHtml ? (url ?? null) : null,
       size_bytes: null,
-      run_id: r.run_id,
+      run_id: run.run_id,
     };
+  };
+
+  const artifacts = runRows.flatMap((r) => {
+    const registered = byRun.get(r.run_id);
+    if (registered && registered.length > 0) {
+      // 新式 run：登记了什么就展示什么（含 runs 三字段之外的产物）。
+      return registered.map((a) =>
+        toRow(r, `${r.run_id}#${a.seq}`, a.artifact_type, a.artifact_filename, a.artifact_url),
+      );
+    }
+    // 旧式 run：无登记行 → 回落 runs 三字段单件（保持旧行为/旧 artifact_id）。
+    return r.artifact_filename ? [toRow(r, r.run_id, r.artifact_type, r.artifact_filename, r.artifact_url)] : [];
   });
 
   res.json(artifacts);
