@@ -73,9 +73,17 @@ async function collect(it: AsyncIterable<AssistantEvent>): Promise<AssistantEven
  */
 function patchSdk(scriptedChunks: any[]): {
   restore: () => void;
-  inspect: { createArgs?: any; createOptions?: any; ctorOptions?: any };
+  inspect: {
+    createArgs?: any;
+    createOptions?: any;
+    ctorOptions?: any;
+  };
 } {
-  const inspect: { createArgs?: any; createOptions?: any; ctorOptions?: any } = {};
+  const inspect: {
+    createArgs?: any;
+    createOptions?: any;
+    ctorOptions?: any;
+  } = {};
 
   // Patch the constructor to capture { apiKey, baseURL } too.
   const OrigOpenAI = OpenAI as unknown as new (opts: any) => any;
@@ -98,6 +106,10 @@ function patchSdk(scriptedChunks: any[]): {
     inspect.ctorOptions = {
       apiKey: client?.apiKey,
       baseURL: client?.baseURL,
+      // 2026-11-07 azure 接线回归：query 拆进 defaultQuery、api-key 补进
+      // defaultHeaders（openai v6 SDK 把构造选项平铺在 client._options）。
+      defaultQuery: client?._options?.defaultQuery,
+      defaultHeaders: client?._options?.defaultHeaders,
     };
     return (async function* () {
       for (const chunk of scriptedChunks) yield chunk;
@@ -814,6 +826,58 @@ async function testAzureBaseUrlMissing(): Promise<void> {
 }
 
 /**
+ * 2026-11-07 B1 azure 接线：部署级地址（…/openai/deployments/<name>?api-version=…）
+ * 的 query 必须拆进 SDK defaultQuery（夹在 baseURL 中间会被 SDK 当路径、404），
+ * 并补发 api-key 头（与设置页探针 dualKeyHeaders 同双发策略）。
+ */
+async function testAzureWireShape(): Promise<void> {
+  console.log('\n[openai-compat-api-client] azure 部署地址 query 拆分 + api-key 头');
+  const { restore, inspect } = patchSdk([
+    { choices: [{ delta: { content: 'az' } }] },
+    { choices: [{ delta: {}, finish_reason: 'stop' }] },
+  ]);
+  try {
+    const client = new OpenAiCompatApiClient({
+      providerId: 'azure',
+      apiKey: 'sk-azure-test',
+      baseURL:
+        'https://myres.openai.azure.com/openai/deployments/gpt4o?api-version=2024-06-01',
+      model: 'gpt-4o',
+    });
+    const events = await collect(
+      client.stream({
+        system_prompt: '',
+        messages: [{ role: 'user', blocks: [{ kind: 'text', text: 'go' }] }],
+        tools: [],
+        signal: new AbortController().signal,
+      }),
+    );
+    check(
+      'azure text_delta flows',
+      ['az'],
+      events.filter((e) => e.kind === 'text_delta').map((e) => (e as { text: string }).text),
+    );
+    check(
+      'azure SDK baseURL 不含 query（部署级地址）',
+      'https://myres.openai.azure.com/openai/deployments/gpt4o',
+      inspect.ctorOptions?.baseURL,
+    );
+    check(
+      'azure api-version 拆进 defaultQuery',
+      { 'api-version': '2024-06-01' },
+      inspect.ctorOptions?.defaultQuery,
+    );
+    check(
+      'azure api-key 补进 defaultHeaders',
+      'sk-azure-test',
+      inspect.ctorOptions?.defaultHeaders?.['api-key'],
+    );
+  } finally {
+    restore();
+  }
+}
+
+/**
  * reasoning_content (e.g. zhipu glm-5.x chain-of-thought) must be wrapped in
  * <sf:thinking>...</sf:thinking> so the downstream parser routes it to a
  * dedicated thinking-chunk event rather than mingling with the answer body.
@@ -950,6 +1014,7 @@ async function main(): Promise<void> {
   await testToolCallIdFallback();
   await testUsageEmitOnce();
   await testAzureBaseUrlMissing();
+  await testAzureWireShape();
   await testReasoningWrappedInThinking();
   await testReasoningClosedOnStreamEnd();
   await testContentOnlyUnwrapped();

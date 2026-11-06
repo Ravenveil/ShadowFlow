@@ -83,8 +83,10 @@ export type ProviderChunk =
       type: 'error';
       message: string;
       code?: ProviderErrorCode;
-      /** Provider id that emitted the error (used for prefix). */
-      provider?: ProviderId;
+      /** Provider id that emitted the error (used for prefix).
+       *  2026-11-07：放宽为 string —— settings/byok 的自定义 provider（custom-*）
+       *  同样经 callProvider 出错上报。 */
+      provider?: ProviderId | string;
     };
 
 /** Per-provider implementation. */

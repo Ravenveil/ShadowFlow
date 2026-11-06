@@ -50,7 +50,7 @@ import {
   isProviderId,
   type ProviderId,
 } from '../../../transport/api-clients';
-import { resolveProviderKey } from '../../../transport/byokKey';
+import { resolveProviderKey, isSettingsRegisteredProvider } from '../../../transport/byokKey';
 // Story 15.14 — auto-critique pass after artifact-saved.
 import { runCritique } from '../../../quality/critic';
 // Story 15.29 — multi-turn conversation glue: validate / auto-create
@@ -206,14 +206,17 @@ router.get('/', (req: Request, res: Response) => {
  * 2026-11-04 对话完善 — settings/byok 里第一个 enabled+key 的 provider id
  * （与 groups-chat.pickDefaultExecutor 同一策略）。无可用 BYOK / settings
  * 异常 → null（调用方维持 'anthropic' 历史默认）。NeverThrow。
+ * 2026-11-07：自定义 provider（settings 注册的 custom-*）同样参与——选择器
+ * 里它们与内置 provider 平权，此前被 isProviderId 白名单挡掉后整链回落
+ * anthropic（拿不到 key → Connection error）。
  */
-function pickDefaultProviderId(): ProviderId | null {
+function pickDefaultProviderId(): string | null {
   try {
     const byok = getSetting('byok') as
       | { providers?: Record<string, { apiKey?: string; enabled?: boolean }> }
       | undefined;
     for (const [id, p] of Object.entries(byok?.providers ?? {})) {
-      if (p?.enabled && typeof p.apiKey === 'string' && p.apiKey.trim() && isProviderId(id)) {
+      if (p?.enabled && typeof p.apiKey === 'string' && p.apiKey.trim()) {
         return id;
       }
     }
@@ -341,19 +344,40 @@ router.post('/', (req: Request, res: Response) => {
   // 消息 Connection error，「设置检测通过却无法对话」单聊根因）。改读
   // settings/byok：第一个 enabled+key 的 provider 优先（与群聊网关
   // groups-chat.pickDefaultExecutor 同一策略），无可用 BYOK → 维持 anthropic。
-  let validated_provider: ProviderId = 'anthropic';
-  if (typeof provider === 'string' && provider.trim().length > 0) {
-    const candidate = provider.trim();
-    if (!isProviderId(candidate)) {
+  //
+  // 2026-11-07 模型链路断点全清（两点）：
+  //  1) executor=byok:<provider> 时以 executor 里的 provider 为准——模型选择
+  //     器只落 executor/model，请求里的 provider 字段还是"默认 provider"，
+  //     两者不一致时此前会张冠李戴拿错 key（选 zhipu 模型却发 anthropic key）。
+  //  2) 校验从 PROVIDER_IDS 白名单放宽到"内置 + settings/byok 注册的自定义
+  //     provider（custom-*）"——此前设置页自定义的 provider 在这里 400，
+  //     整条会话链路不可用。
+  const execTrim = typeof executor === 'string' ? executor.trim() : '';
+  const byokExecutorProvider = execTrim.startsWith('byok:')
+    ? execTrim.slice(5).trim()
+    : undefined;
+  const isKnownProvider = (id: string): boolean =>
+    isProviderId(id) || isSettingsRegisteredProvider(id);
+
+  let validated_provider: string = 'anthropic';
+  const explicitProvider =
+    byokExecutorProvider ??
+    (typeof provider === 'string' && provider.trim().length > 0
+      ? provider.trim()
+      : undefined);
+  if (explicitProvider) {
+    if (!isKnownProvider(explicitProvider)) {
       res.status(400).json({
         error: {
           code: 'INVALID_PROVIDER',
-          message: `Unknown provider: "${candidate}". Allowed: ${PROVIDER_IDS.join(', ')}`,
+          message:
+            `Unknown provider: "${explicitProvider}". Allowed: ${PROVIDER_IDS.join(', ')}` +
+            ' + settings/byok 里注册的自定义 provider',
         },
       });
       return;
     }
-    validated_provider = candidate;
+    validated_provider = explicitProvider;
   } else {
     const fallback = pickDefaultProviderId();
     if (fallback) validated_provider = fallback;

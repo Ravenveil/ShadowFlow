@@ -18,7 +18,7 @@
  *
  * 退出码：有任一脚本失败 → 1；全部通过 → 0。
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -76,20 +76,31 @@ if (all.length === 0) {
 
 /**
  * 跑一个脚本，返回 { file, ok, code, ms, tail }。
- * tsx 不是本仓库的 devDependency（这些脚本历史上靠 `npx tsx` 手跑，走 npx 缓存），
- * 所以这里也走 npx；若将来把 tsx 提进 devDependencies，改成直接 spawn bin 更快。
+ * 2026-11-07：优先直接 `node server/node_modules/tsx/dist/cli.mjs <file>`（tsx
+ * 是 server 的 devDependency，`cd server && npm ci` 后必在，免 npx 拉 registry、
+ * 离线可跑）。不走 .bin/tsx.cmd shim——Windows 下 spawn(shell:true) 不给带空格
+ * 路径加引号（"Terry Sun" 会被 cmd 截断成 `C:\Users\Terry`）。找不到本地 tsx
+ * 再退回 `npx --yes tsx`（历史行为）。
  */
 const NPX = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const LOCAL_TSX_CLI = join(REPO_ROOT, 'server', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const USE_LOCAL_TSX = existsSync(LOCAL_TSX_CLI);
 
 function runOne(file) {
   return new Promise((done) => {
     const started = Date.now();
-    const child = spawn(NPX, ['--yes', 'tsx', file], {
-      cwd: REPO_ROOT,
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
-    });
+    const child = USE_LOCAL_TSX
+      ? spawn(process.execPath, [LOCAL_TSX_CLI, file], {
+          cwd: REPO_ROOT,
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+      : spawn(NPX, ['--yes', 'tsx', file], {
+          cwd: REPO_ROOT,
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          shell: process.platform === 'win32',
+        });
     let out = '';
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });

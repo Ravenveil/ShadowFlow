@@ -1,6 +1,37 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { readdirSync, readFileSync } from 'node:fs'
+
+/**
+ * 脚本式测试判定（镜像 scripts/run-script-tests.mjs 的 isScriptStyle 与
+ * vitest.server.config.ts，三处同口径）。2026-11-07：server project 此前
+ * 只圈 `server/src/__tests__/**`（23 文件），transport/routes/lib 等目录下
+ * 66 个 vitest 式用例从来没进过 CI 门禁——回归用例写了不被跑等于没写。
+ * 现 include 扩到 server/src 全量，脚本式（自制 check() + process.exit）
+ * 程序化排除、归 `npm run test:scripts` 管，两轨都确定性。
+ */
+function collectScriptStyleTests(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name)
+    if (entry.isDirectory()) collectScriptStyleTests(p, out)
+    else if (entry.name.endsWith('.test.ts')) {
+      const text = readFileSync(p, 'utf8')
+      const isVitestStyle = /from ['"]vitest['"]/.test(text)
+      const isScriptStyle =
+        !isVitestStyle &&
+        (/function check\s*\(/.test(text) ||
+          /Run:\s+(npx\s+)?tsx/.test(text) ||
+          /process\.exit/.test(text))
+      if (isScriptStyle) out.push(p.replace(/\\/g, '/'))
+    }
+  }
+  return out
+}
+
+const SCRIPT_STYLE_TESTS = collectScriptStyleTests(
+  path.resolve(__dirname, 'server/src'),
+).map((p) => path.relative(path.resolve(__dirname), p).replace(/\\/g, '/'))
 
 export default defineConfig({
   plugins: [react()],
@@ -41,10 +72,13 @@ export default defineConfig({
           name: 'server',
           globals: true,
           environment: 'node',
-          // Only vitest-style tests live in __tests__/. The other *.test.ts
-          // files under server/src are standalone tsx scripts (console
-          // PASS/FAIL output, run ad-hoc) — not vitest-compatible.
-          include: ['server/src/__tests__/**/*.{test,spec}.ts'],
+          // server/src 全量 vitest 式用例（2026-11-07 扩容，见文件头）。
+          // 脚本式测试不在 vitest 跑（void main() 会被 worker 截断、红绿无
+          // 保证），由 `npm run test:scripts` 以 tsx 子进程跑、退出码判结果。
+          include: ['server/src/**/*.{test,spec}.ts'],
+          exclude: [...SCRIPT_STYLE_TESTS],
+          testTimeout: 30000,
+          hookTimeout: 30000,
         },
       },
     ],
