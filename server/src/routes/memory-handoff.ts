@@ -10,7 +10,10 @@
  * POST   /api/memory/handoff/profiles/conflicts/resolve → 裁决冲突（accept 采纳 / dismiss 驳回）
  * GET    /api/memory/handoff/profiles/:subjectId    → 当前画像 + append-only 流水
  * POST   /api/memory/handoff/profiles/writeback     → 长期画像写回（置信度合并，force 可裁决）
- * POST   /api/memory/handoff/profiles/ingest        → 客户反馈规则式自动提炼
+ * POST   /api/memory/handoff/profiles/ingest        → 客户反馈规则式自动提炼（兼容老入口，走同一队列）
+ * GET    /api/memory/handoff/feedback               → 反馈自动写回队列（统计 + 审计记录）
+ * POST   /api/memory/handoff/feedback              → 业务系统投递反馈，自动提炼写回（单条或 items[] 批量）
+ * POST   /api/memory/handoff/feedback/run          → 补跑 pending / failed
  * GET    /api/memory/handoff                       → 交接包列表
  * POST   /api/memory/handoff                       → A 下班建交接包（自动汇总快照）
  * GET    /api/memory/handoff/:id                   → 交接包详情（含快照）
@@ -25,6 +28,7 @@ import {
   acceptHandoff,
   contextFor,
   createHandoff,
+  feedbackQueue,
   getHandoff,
   handoffStats,
   ingestFeedback,
@@ -32,6 +36,8 @@ import {
   listHandoffs,
   profile,
   resolveConflict,
+  runFeedbackQueue,
+  submitFeedback,
   writeback,
 } from '../storage/memory-handoff';
 import { apiGuard } from '../middleware/api-guard';
@@ -150,6 +156,80 @@ router.post('/profiles/ingest', (req: Request, res: Response) => {
   } catch (err) {
     fail(res, err);
   }
+});
+
+// ── 反馈自动写回队列（2026-11-06） ────────────────────────────────────────────
+
+// 审计出口：状态筛选 + 最近 N 条。字面量路径必须排在 /:id 之前。
+router.get('/feedback', (req: Request, res: Response) => {
+  const limit = Number(req.query.limit);
+  res.json(
+    feedbackQueue({
+      status: str(req.query.status, 16) || undefined,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 20,
+    }),
+  );
+});
+
+/**
+ * 业务系统接入点：反馈一投进来就自动提炼写回，不需要人点按钮。
+ * body 既可单条 {subject_id,text}，也可 {items:[...]} 批量（≤50）。
+ * 逐条独立处理 —— 一条脏数据只让那一条 failed，不拖垮整批、也不返回 5xx。
+ */
+router.post('/feedback', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const rawItems: unknown[] = Array.isArray(body.items) ? body.items : [body];
+  if (rawItems.length === 0 || rawItems.length > 50) {
+    res.status(400).json({
+      error: { code: 'INVALID_BODY', message: 'items 需为 1~50 条' },
+    });
+    return;
+  }
+  const summary = {
+    received: rawItems.length,
+    deduped: 0,
+    processed: 0,
+    skipped: 0,
+    failed: 0,
+    conflicts: 0,
+  };
+  const items: Array<Record<string, unknown>> = [];
+  for (const raw of rawItems) {
+    const item = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const subjectId = str(item.subject_id, 64);
+    try {
+      const out = submitFeedback({
+        subject_id: subjectId,
+        text: str(item.text, 1000),
+        subject_type: str(item.subject_type, 32) || 'customer',
+        source: str(item.source, 64) || 'api',
+        source_ref: str(item.source_ref, 120),
+        actor: str(item.actor, 64) || 'system',
+      });
+      items.push({ subject_id: subjectId, ...out });
+      if (out.dedup) summary.deduped++;
+      if (out.status === 'processed') summary.processed++;
+      else if (out.status === 'skipped') summary.skipped++;
+      else if (out.status === 'failed') summary.failed++;
+      summary.conflicts += out.conflicts;
+    } catch (err) {
+      items.push({ subject_id: subjectId, status: 'failed', error: (err as Error).message });
+      summary.failed++;
+    }
+  }
+  res.status(201).json({ ...summary, items });
+});
+
+/** 补跑：服务重启残留的 pending，或之前写回失败的 failed。 */
+router.post('/feedback/run', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const limit = Number(body.limit);
+  res.json(
+    runFeedbackQueue({
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 100,
+      include_failed: body.include_failed !== false,
+    }),
+  );
 });
 
 // ── 交接包 ───────────────────────────────────────────────────────────────────
