@@ -25,6 +25,7 @@ import {
   fetchOrderTimeseries,
   fetchReconcile,
   fetchTrafficCurve,
+  type EvidenceExportKind,
   type EvidenceSummary,
   type FirstOrderChain,
   type Granularity,
@@ -37,6 +38,13 @@ import {
 } from '../api/merchantBoard';
 import './dashboard-neo.css';
 import './merchant-board.css';
+
+/** 三种附件的完成提示，和 api 层的 kind 共用同一组字面量，改一处就够。 */
+const EXPORT_DONE: Record<EvidenceExportKind, string> = {
+  md: 'Markdown 报告',
+  scorecard: '评委速览',
+  csv: '订单 CSV',
+};
 
 /** 分 → ¥，千分位。金额一律整数分，前端只做展示换算。 */
 function fmtYuan(cents: number): string {
@@ -280,11 +288,11 @@ export default function MerchantBoardPanel() {
     }
   }, [kpiRange]);
 
-  const exportFile = useCallback(async (kind: 'md' | 'csv') => {
+  const exportFile = useCallback(async (kind: EvidenceExportKind) => {
     setExportMsg('');
     try {
       await downloadEvidence(kind, kpiWindow(kpiRange));
-      setExportMsg(kind === 'md' ? 'Markdown 报告已导出' : '订单 CSV 已导出');
+      setExportMsg(`${EXPORT_DONE[kind]}已导出`);
     } catch (err) {
       setExportMsg(`导出失败：${msg(err)}`);
     }
@@ -647,7 +655,7 @@ export default function MerchantBoardPanel() {
         <p className="neo-mb-hint">
           {t('neo.merchant.evidenceHint', {
             defaultValue:
-              '把经营口径、账实核对、记忆交接、人工裁决与协作 DAG 的失败/返工/审批留痕合成一份材料，供评委核实业务闭环、人机分工与异常处理；导出只读，不改数据，区间与上方 KPI 一致。',
+              '把经营口径、账实核对、记忆交接、人工裁决与协作 DAG 的失败/返工/审批留痕合成一份材料，供评委核实业务闭环、人机分工与异常处理；新增一页评委速览，按赛题评分维度逐项对应可核实证据（不替评委打分）。导出只读，不改数据，区间与上方 KPI 一致。',
           })}
         </p>
         {evidence && (
@@ -685,6 +693,17 @@ export default function MerchantBoardPanel() {
             {evidenceBusy
               ? t('neo.merchant.evidenceLoading', { defaultValue: '扫描中…' })
               : t('neo.merchant.evidenceScan', { defaultValue: '重新扫描留痕' })}
+          </button>
+          <button
+            type="button"
+            className="neo-db-tab"
+            onClick={() => void exportFile('scorecard')}
+            title={t('neo.merchant.evidenceScorecardHint', {
+              defaultValue: '一页速览：评分维度 → 可核实证据 → 复现端点',
+            })}
+            data-testid="merchant-evidence-scorecard"
+          >
+            {t('neo.merchant.evidenceScorecard', { defaultValue: '评委速览' })}
           </button>
           <button
             type="button"

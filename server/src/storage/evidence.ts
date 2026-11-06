@@ -10,6 +10,10 @@
  *   变成「异常处理」的可核实证据 —— 这一章读的是编排层已落库的表，
  *   **不改编排层任何代码**。
  *
+ * 七章报告是给评委逐项核实的底稿；卷首另给一页「评委速览」，把赛题四个评分
+ * 维度与加分项映射到具体数字和复现端点，并可单独下载。速览**不替评委打分**：
+ * 只列已落库证据，数据为 0 时明说待补，绝不把没跑过的事写成已完成。
+ *
  * 设计约束：
  *   - **纯只读**：只调两条线已有的查询函数，不写表、不触发模型、不改业务状态。
  *     导出前后库里的数据必须一模一样（有专门的测试守这条）。
@@ -442,6 +446,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
         'GET /api/merchant/orders',
         'GET /api/merchant/evidence',
         'GET /api/merchant/evidence.md',
+        'GET /api/merchant/evidence/scorecard.md',
         'GET /api/merchant/evidence/orders.csv',
         'GET /api/memory/handoff/stats',
         'GET /api/memory/handoff/profiles/conflicts',
@@ -453,7 +458,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
         'POST /api/memory/handoff/feedback 投递客户反馈，系统自动提炼写回画像',
         '出现同置信冲突时到「设置 — 记忆」的裁决台人工采纳或驳回',
         '（可选）在已绑团队的群发消息触发 DAG：节点失败、返工与人工审批拒绝会落 agent_hops，导出时自动进入「协作执行留痕」一章',
-        '在商家数据看板点「导出演示证据」，得到本 Markdown 与订单 CSV',
+        '在商家数据看板点「演示证据包」，分别得到评委速览一页、七章 Markdown 报告与订单 CSV',
       ],
     },
   };
@@ -464,6 +469,13 @@ function mdCell(v: unknown): string {
     .replace(/\|/g, '\\|')
     .replace(/\r?\n/g, ' ')
     .slice(0, 160);
+}
+
+/** 七章报告与评委速览共用同一套表格写法，避免两份材料的转义/截断口径漂移。 */
+function appendTable(lines: string[], head: string[], rows: string[][]): void {
+  lines.push(`| ${head.join(' | ')} |`);
+  lines.push(`| ${head.map(() => '---').join(' | ')} |`);
+  for (const row of rows) lines.push(`| ${row.map(mdCell).join(' | ')} |`);
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -501,16 +513,118 @@ const HOP_STATUS_LABEL: Record<string, string> = {
   aborted: '已中止',
 };
 
+/**
+ * 评委速览正文（七章报告卷首与独立一页共用同一份，避免两处口径漂移）。
+ *
+ * 纪律：只做「赛题评分维度 / 加分项 → 已落库证据 → 复现端点」的映射，
+ * **不替评委打分、不自评完成度**；数字全取自 report，计数为 0 时明写「待造数据」，
+ * 绝不把没跑过的功能写成「已展示」。空库上台是最容易当场露馅的地方。
+ */
+function scorecardBody(report: EvidenceReport): string[] {
+  const { merchant: m, memory: mm, collaboration: dag, human_decisions: hd } = report;
+  const lines: string[] = [];
+  const push = (s = '') => lines.push(s);
+  const table = (head: string[], rows: string[][]) => appendTable(lines, head, rows);
+
+  const delta = m.overview.comparison?.delta_pct;
+  const trend = delta
+    ? `；较上一等长区间营收 ${delta.revenue === null ? '新增' : `${delta.revenue}%`}`
+    : '';
+  const unitEconomics = [
+    `营收 ${yuan(m.overview.revenue_cents)}`,
+    `毛利 ${yuan(m.overview.gross_profit_cents)}`,
+    m.overview.gross_margin_pct === null ? '毛利率 —' : `毛利率 ${m.overview.gross_margin_pct}%`,
+    `客单价 ${yuan(m.overview.avg_order_cents)}`,
+    `成交 ${m.overview.paid_orders} 单 / 退款 ${m.overview.refunded_orders} 单`,
+  ].join(' · ') + trend;
+  const firstOrder = m.first_order.complete
+    ? `五步全通 ✓（订单 ${m.first_order.order_id || '—'}）`
+    : '五步未通 ×（需按复现步骤跑通第一单）';
+  const human = `人工裁决 ${hd.resolutions} 次 · 待裁决 ${hd.pending_conflicts} · 人工审批拒绝 ${dag.approval_rejections} · 待补跑反馈 ${hd.failed_feedback + hd.pending_feedback}`;
+  const collab = `交接 hop ${dag.total}（异常 ${dag.failures} / 返工 ${dag.reworks}）`;
+  const balanced = m.reconcile.balanced ? '账实一致' : '账实有差额';
+  const chainSteps = m.first_order.steps.filter((s) => s.ok).length;
+
+  push('**评分维度 → 可核实证据**（分值照抄赛题评分表，本页不打分）');
+  push();
+  table(['维度（分值）', '赛题评分依据', '本材料的可核实证据', '现场复现'], [
+    ['创新性（35）', '公司形态 / 组织设计 / 业务闭环有新意；体现 AI 员工独特价值',
+      `交接包 ${mm.stats.handoffs}（已接班 ${mm.stats.accepted}）· 画像写回 ${mm.audit.total} 事件 · 冲突只留痕不覆盖（待裁决 ${hd.pending_conflicts}）· ${collab}`,
+      '报告第三、四章；GET /api/memory/handoff/stats'],
+    ['商业化潜力（25）', '定价 / 获客方式 / 单位经济合理，业务能持续运行',
+      `${unitEconomics} · ${balanced}`,
+      '报告第一、二章；GET /api/merchant/overview?compare=1、/reconcile'],
+    ['完成度（25）', '产品可访问、闭环可演示、达到真实可用的交付水准',
+      `第一单${firstOrder} · 订单 ${m.overview.orders_total} 单 · ${balanced} · 可复现端点 ${report.reproduction.endpoints.length} 个`,
+      '报告第一、七章；GET /api/merchant/first-order、/orders'],
+    ['原创性（15）', '自己提出并实现方案，而非套用现成工具或仅展示 Agent 编排',
+      '规则式画像写回（零模型消耗）+ 同置信冲突进人工裁决台；退款补负数 expense 冲成本 + reconcile 账实核对；演示证据包纯只读导出',
+      '报告第三、六、七章；GET /api/merchant/evidence'],
+  ]);
+
+  push();
+  push('**加分表现 → 证据状态**（计数为 0 表示尚未造数据，不代表功能已完成）');
+  push();
+  table(['加分项', '可核实证据', '证据状态'], [
+    ['第一单（真实或模拟交易）',
+      `第一单${firstOrder}；区间内订单 ${m.orders.total} 单；营收 ${yuan(m.overview.revenue_cents)}`,
+      m.first_order.complete && m.overview.paid_orders > 0 ? '有数据' : '待跑通'],
+    ['人机分工清晰', human,
+      hd.resolutions + hd.pending_conflicts + dag.approval_rejections > 0 ? '有数据' : '待造数据'],
+    ['跨多个生产力场景形成完整闭环',
+      `落地页 → 下单 → 支付 → 入账 → 看板（${chainSteps}/5 步）；客户反馈 → 画像写回 → 岗位交接；DAG 调度 → 返工 → 审批`,
+      m.first_order.complete && (mm.audit.total > 0 || mm.stats.handoffs > 0 || dag.total > 0)
+        ? '有数据' : '部分待补'],
+    ['项目可被他人复用',
+      `端点清单 ${report.reproduction.endpoints.length} 个 · 复现步骤 ${report.reproduction.steps.length} 步 · 导出只读不脏库`,
+      '材料常驻'],
+  ]);
+
+  push();
+  push('**局限与待补证据**（上台前照此补齐，别拿空库演示）');
+  push();
+  const gaps = ['支付为演示用模拟回调，未接真实支付渠道；金额以整数分记账，展示时换算成元。'];
+  if (!m.first_order.complete) gaps.push('第一单五步链路未通：按第七章步骤建商品 → 埋点 → 下单 → 支付后重新导出。');
+  if (!mm.feedback.available) gaps.push('反馈自动写回队列模块尚未启用（表不存在），队列计数为 0。');
+  if (mm.audit.total === 0 && mm.stats.handoffs === 0) {
+    gaps.push('本区间没有画像写回 / 交接包留痕：投递客户反馈或触发一次岗位交接后重新导出，创新性与人机分工两格才有事实可核。');
+  }
+  if (!dag.available) gaps.push('老库不存在 agent_hops 表，协作留痕计数为 0。');
+  else if (dag.total === 0) gaps.push('本区间没有协作交接：在已绑团队的群触发一次 DAG（含失败 / 返工 / 审批拒绝）后重新导出。');
+  if (!m.reconcile.balanced) gaps.push(`账实有差额：${m.reconcile.issues.slice(0, 3).join('；')}`);
+  for (const g of gaps) push(`- ${g}`);
+  push();
+  push('**材料索引**（同一 Node 服务，不另起端口）');
+  push();
+  push('- 完整七章报告：`GET /api/merchant/evidence.md`');
+  push('- 订单明细 CSV：`GET /api/merchant/evidence/orders.csv`');
+  push('- 机器可读全量：`GET /api/merchant/evidence`');
+  push('- 本页单独下载：`GET /api/merchant/evidence/scorecard.md`');
+  return lines;
+}
+
+/** 一页速览：可单独发给评委，也可当答辩首页打印。 */
+export function evidenceScorecard(report: EvidenceReport): string {
+  const lines = [
+    '# ShadowFlow · 评委速览（一页）',
+    '',
+    `- 生成时间：${stamp(report.generated_at)}（本地时间）`,
+    `- 统计区间：${report.window.label}`,
+    `- 材料版本：${report.schema_version}`,
+    '',
+    '本页只把赛题评分维度与加分项映射到 **已落库、可复现的证据**，不代替评委打分；所有数字与 `GET /api/merchant/evidence` 同源，导出过程只读。',
+    '',
+    ...scorecardBody(report),
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
 /** Markdown 报告：评委不用打开系统也能核实数字与分工，且能当答辩附件。 */
 export function evidenceMarkdown(report: EvidenceReport): string {
   const { merchant: m, memory: mm, collaboration: dag, human_decisions: hd } = report;
   const lines: string[] = [];
   const push = (s = '') => lines.push(s);
-  const table = (head: string[], rows: string[][]) => {
-    push(`| ${head.join(' | ')} |`);
-    push(`| ${head.map(() => '---').join(' | ')} |`);
-    for (const row of rows) push(`| ${row.map(mdCell).join(' | ')} |`);
-  };
+  const table = (head: string[], rows: string[][]) => appendTable(lines, head, rows);
 
   push('# ShadowFlow · 一人公司演示证据包');
   push();
@@ -518,6 +632,13 @@ export function evidenceMarkdown(report: EvidenceReport): string {
   push(`- 统计区间：${report.window.label}`);
   push(`- 数据来源：Node/Express + SQLite 已落库事实；导出只读，不调模型、不改数据`);
   push(`- 材料版本：${report.schema_version}`);
+  push();
+
+  // 卷首一页速览：评委先看这张对照表，再按章节号下钻核实。
+  // 用「〇」不打乱后面一~七的编号，也不让两处速览内容各自漂移。
+  push('## 〇、评委速览（对照赛题评分表）');
+  push();
+  lines.push(...scorecardBody(report));
   push();
 
   push('## 一、业务闭环：第一单与经营口径');
@@ -723,9 +844,10 @@ export function evidenceOrdersCsv(input: EvidenceInput = {}): string {
 }
 
 /** ASCII 文件名，避免 Content-Disposition 的中文编码在浏览器间不一致。 */
-export function evidenceFilename(kind: 'md' | 'csv', generatedAt = Date.now()): string {
+export function evidenceFilename(kind: 'md' | 'csv' | 'scorecard', generatedAt = Date.now()): string {
   const d = new Date(generatedAt);
   const p = (n: number) => String(n).padStart(2, '0');
   const tag = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-  return `shadowflow-evidence-${tag}.${kind === 'md' ? 'md' : 'csv'}`;
+  const base = kind === 'scorecard' ? 'shadowflow-scorecard' : 'shadowflow-evidence';
+  return `${base}-${tag}.${kind === 'csv' ? 'csv' : 'md'}`;
 }

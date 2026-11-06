@@ -17,6 +17,7 @@
  * GET  /api/merchant/reconcile              → 账实对账（差额逐项给出 issues）
  * GET  /api/merchant/evidence               → 演示证据包（①③ 留痕汇总，JSON）
  * GET  /api/merchant/evidence.md            → 同上，可下载的 Markdown 答辩材料
+ * GET  /api/merchant/evidence/scorecard.md → 一页评委速览（评分维度 → 可核实证据）
  * GET  /api/merchant/evidence/orders.csv   → 区间内订单明细 CSV（UTF-8 BOM）
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
@@ -52,6 +53,7 @@ import {
   evidenceFilename,
   evidenceMarkdown,
   evidenceOrdersCsv,
+  evidenceScorecard,
 } from '../storage/evidence';
 import { apiGuard } from '../middleware/api-guard';
 
@@ -170,6 +172,19 @@ router.get('/evidence.md', (req: Request, res: Response) => {
     res.set('Content-Type', 'text/markdown; charset=utf-8');
     res.set('Content-Disposition', `attachment; filename="${evidenceFilename('md', report.generated_at)}"`);
     res.send(evidenceMarkdown(report));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 一页速览与七章报告共用同一份 buildEvidence：数字、窗口、口径完全一致，
+// 不会出现「首页说五步全通、正文说未通」这种现场露馅的两套说法。
+router.get('/evidence/scorecard.md', (req: Request, res: Response) => {
+  try {
+    const report = buildEvidence(evidenceQuery(req));
+    res.set('Content-Type', 'text/markdown; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="${evidenceFilename('scorecard', report.generated_at)}"`);
+    res.send(evidenceScorecard(report));
   } catch (err) {
     fail(res, err);
   }

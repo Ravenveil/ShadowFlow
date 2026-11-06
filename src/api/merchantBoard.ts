@@ -364,9 +364,16 @@ async function download(path: string, qs: string, fallbackName: string): Promise
   }
 }
 
-export function downloadEvidence(kind: 'md' | 'csv', opts: EvidenceWindow = {}): Promise<void> {
+export type EvidenceExportKind = 'md' | 'csv' | 'scorecard';
+
+const EVIDENCE_EXPORT: Record<EvidenceExportKind, { path: string; fallback: string }> = {
+  md: { path: '/evidence.md', fallback: 'shadowflow-evidence.md' },
+  scorecard: { path: '/evidence/scorecard.md', fallback: 'shadowflow-scorecard.md' },
+  csv: { path: '/evidence/orders.csv', fallback: 'shadowflow-orders.csv' },
+};
+
+export function downloadEvidence(kind: EvidenceExportKind, opts: EvidenceWindow = {}): Promise<void> {
   const qs = evidenceQuery(opts);
-  return kind === 'md'
-    ? download('/evidence.md', qs, 'shadowflow-evidence.md')
-    : download('/evidence/orders.csv', qs, 'shadowflow-orders.csv');
+  const { path, fallback } = EVIDENCE_EXPORT[kind];
+  return download(path, qs, fallback);
 }

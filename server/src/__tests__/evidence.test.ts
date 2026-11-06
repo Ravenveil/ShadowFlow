@@ -79,6 +79,32 @@ describe('空库：演示前刚摆好库时材料也不能报错', () => {
     });
     expect(r.notes.length).toBeGreaterThan(3);
     expect(r.reproduction.endpoints).toContain('GET /api/merchant/evidence.md');
+    expect(r.reproduction.endpoints).toContain('GET /api/merchant/evidence/scorecard.md');
+  });
+
+  it('评委速览一页：四个维度与加分项齐备，空库诚实标注待补证据', async () => {
+    const res = await request(app()).get('/api/merchant/evidence/scorecard.md');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/markdown');
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="shadowflow-scorecard-.*\.md"/);
+    const md = res.text;
+    expect(md).toContain('# ShadowFlow · 评委速览（一页）');
+    for (const dim of ['创新性（35）', '商业化潜力（25）', '完成度（25）', '原创性（15）']) {
+      expect(md).toContain(dim);
+    }
+    for (const bonus of [
+      '第一单（真实或模拟交易）', '人机分工清晰',
+      '跨多个生产力场景形成完整闭环', '项目可被他人复用',
+    ]) {
+      expect(md).toContain(bonus);
+    }
+    expect(md).toContain('不代替评委打分');
+    // 空库必须自曝缺口，不能把没跑过的链路写成「已展示」
+    expect(md).toContain('待跑通');
+    expect(md).toContain('第一单五步链路未通');
+    expect(md).toContain('本区间没有协作交接');
+    // 材料只提供证据，绝不替评委给自己打分
+    expect(md).not.toMatch(/得分\s*\d|自评|已获\s*\d+\s*分/);
   });
 
   it('Markdown 与 CSV 都带附件头，空库也给出说明而不是空白文件', async () => {
@@ -235,6 +261,7 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
 
   it('Markdown 是能直接当答辩附件的中文材料', async () => {
     const md = (await request(app()).get('/api/merchant/evidence.md')).text;
+    expect(md).toContain('## 〇、评委速览（对照赛题评分表）');
     expect(md).toContain('## 一、业务闭环：第一单与经营口径');
     expect(md).toContain('## 二、账实核对');
     expect(md).toContain('## 三、人机分工与异常处理');
@@ -259,6 +286,27 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     expect(md).toContain('POST /api/merchant/products');
     // 表格里出现背调过的商品名与裁决操作者
     expect(md).toContain('handoff');
+  });
+
+  it('评委速览与七章报告同源：数字一致、状态不美化', async () => {
+    const report = (await request(app()).get('/api/merchant/evidence')).body;
+    const md = (await request(app()).get('/api/merchant/evidence.md')).text;
+    const card = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+
+    // 卷首速览与独立一页共用 scorecardBody，同一份数字不会漂移
+    expect(md).toContain('## 〇、评委速览（对照赛题评分表）');
+    expect(card).toContain(`营收 ${evidence.yuan(report.merchant.overview.revenue_cents)}`);
+    expect(card).toContain(`客单价 ${evidence.yuan(report.merchant.overview.avg_order_cents)}`);
+    expect(md).toContain(`客单价 ${evidence.yuan(report.merchant.overview.avg_order_cents)}`);
+    expect(card).toContain(`人工裁决 ${report.human_decisions.resolutions} 次`);
+    expect(card).toContain(`交接 hop ${report.collaboration.total}`);
+    expect(card).toContain(`异常 ${report.collaboration.failures}`);
+    expect(card).toContain('第一单五步全通');
+    expect(card).toContain('有数据');
+    // 账实核对的结论在三种材料里必须一致
+    const verdict = report.merchant.reconcile.balanced ? '账实一致' : '账实有差额';
+    expect(card).toContain(verdict);
+    expect(md).toContain(verdict);
   });
 
   it('CSV：UTF-8 BOM + 表头 + 行数正确 + 公式注入被挡 + 数值列可直接求和', async () => {
@@ -299,6 +347,7 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     const beforeHops = hopRows();
     await request(app()).get('/api/merchant/evidence');
     await request(app()).get('/api/merchant/evidence.md');
+    await request(app()).get('/api/merchant/evidence/scorecard.md');
     await request(app()).get('/api/merchant/evidence/orders.csv');
     expect((await request(app()).get('/api/merchant/stats')).body).toEqual(beforeMerchant);
     expect((await request(app()).get('/api/memory/handoff/stats')).body).toEqual(beforeMemory);
@@ -310,6 +359,7 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
       '/api/merchant/evidence?start=not-a-date',
       '/api/merchant/evidence?start=2030-01-01&end=2020-01-01',
       '/api/merchant/evidence.md?start=not-a-date',
+      '/api/merchant/evidence/scorecard.md?start=not-a-date',
       '/api/merchant/evidence/orders.csv?start=not-a-date',
     ];
     for (const url of bad) {

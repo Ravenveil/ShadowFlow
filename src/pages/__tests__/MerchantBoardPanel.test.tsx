@@ -418,6 +418,31 @@ describe('演示证据包（①③ 留痕可核实、可下载）', () => {
     );
   });
 
+  it('评委速览单独下载，且同样跟随 KPI 区间', async () => {
+    renderPanel();
+    await screen.findByTestId('merchant-evidence-summary');
+
+    fireEvent.click(screen.getByTestId('merchant-evidence-scorecard'));
+    await waitFor(() => expect(api.downloadEvidence).toHaveBeenCalledWith('scorecard', {}));
+    await waitFor(() =>
+      expect(screen.getByTestId('merchant-evidence-msg')).toHaveTextContent('评委速览已导出'),
+    );
+
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchEvidence).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+    fireEvent.click(screen.getByTestId('merchant-evidence-scorecard'));
+    await waitFor(() =>
+      expect(api.downloadEvidence).toHaveBeenLastCalledWith(
+        'scorecard',
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
   it('证据摘要失败静默降级不拖垮看板，手动重新扫描才给出原因', async () => {
     vi.mocked(api.fetchEvidence).mockRejectedValue(new Error('evidence boom'));
     renderPanel();
