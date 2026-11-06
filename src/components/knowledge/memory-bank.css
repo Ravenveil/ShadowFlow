@@ -1,0 +1,353 @@
+/* memory-bank.css — MemoryBankPanel 记忆库面板样式（跟随 knowledge-neo.css 变量风格） */
+
+.mbk {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── 左栏：知识包列表 ─────────────────────────────── */
+.mbk-rail {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-right: 1px solid var(--neo-border, rgba(15, 23, 42, 0.08));
+  padding-right: 12px;
+  min-height: 0;
+}
+
+.mbk-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--neo-text, #0f172a);
+}
+
+.mbk-newpack {
+  display: flex;
+  gap: 6px;
+}
+
+.mbk-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  border: 1px solid var(--neo-border, rgba(15, 23, 42, 0.14));
+  border-radius: 8px;
+  background: var(--neo-bg, #fff);
+  color: var(--neo-text, #0f172a);
+}
+
+.mbk-input:focus {
+  outline: none;
+  border-color: var(--neo-accent, #6366f1);
+}
+
+.mbk-input--query {
+  flex: 1;
+}
+
+.mbk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+  border: 1px solid var(--neo-border, rgba(15, 23, 42, 0.14));
+  border-radius: 8px;
+  background: var(--neo-bg, #fff);
+  color: var(--neo-text, #0f172a);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mbk-btn:hover:not(:disabled) {
+  background: var(--neo-hover, rgba(15, 23, 42, 0.04));
+}
+
+.mbk-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mbk-btn--primary {
+  background: var(--neo-accent, #6366f1);
+  border-color: var(--neo-accent, #6366f1);
+  color: #fff;
+}
+
+.mbk-btn--primary:hover:not(:disabled) {
+  background: var(--neo-accent-strong, #4f46e5);
+}
+
+.mbk-packlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.mbk-packrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--neo-text, #0f172a);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mbk-packrow:hover {
+  background: var(--neo-hover, rgba(15, 23, 42, 0.04));
+}
+
+.mbk-packrow.is-active {
+  background: var(--neo-active, rgba(99, 102, 241, 0.1));
+}
+
+.mbk-packrow-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mbk-packrow-del,
+.mbk-srcrow-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--neo-muted, #64748b);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mbk-packrow-del:hover,
+.mbk-srcrow-del:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* ── 右侧主区 ─────────────────────────────────────── */
+.mbk-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mbk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mbk-file {
+  display: none;
+}
+
+.mbk-queryrow {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.mbk-backend {
+  font-size: 11px;
+  color: var(--neo-muted, #64748b);
+  border: 1px solid var(--neo-border, rgba(15, 23, 42, 0.1));
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.mbk-error {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+  font-size: 12.5px;
+}
+
+.mbk-cols {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 1.6fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.mbk-coltitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neo-muted, #64748b);
+  margin: 0 0 6px;
+}
+
+/* 来源列表 */
+.mbk-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mbk-srcrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--neo-border, rgba(15, 23, 42, 0.08));
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.mbk-srcrow-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mbk-pill {
+  font-size: 10.5px;
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: var(--neo-hover, rgba(15, 23, 42, 0.05));
+  color: var(--neo-muted, #64748b);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mbk-pill--done {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+
+.mbk-pill--ver,
+.mbk-pill--kind {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+}
+
+/* 检索结果 */
+.mbk-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mbk-hit {
+  border: 1px solid var(--neo-border, rgba(15, 23, 42, 0.08));
+  border-radius: 10px;
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mbk-hit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.mbk-hit-src {
+  color: var(--neo-muted, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.mbk-hit-score {
+  color: var(--neo-muted, #64748b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mbk-hit-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--neo-text, #0f172a);
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mbk-hit-chan {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--neo-accent, #6366f1);
+}
+
+/* 空态 */
+.mbk-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.mbk-empty-t1 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neo-text, #0f172a);
+  margin: 0;
+}
+
+.mbk-empty-t2 {
+  font-size: 12.5px;
+  color: var(--neo-muted, #64748b);
+  margin: 0;
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+.mbk-hint {
+  font-size: 12px;
+  color: var(--neo-muted, #64748b);
+  margin: 4px 0;
+}
+
+.mbk-spin {
+  animation: mbk-rotate 0.9s linear infinite;
+}
+
+@keyframes mbk-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
