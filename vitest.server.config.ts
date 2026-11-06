@@ -15,6 +15,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['server/src/**/*.{test,spec}.{ts,tsx}'],
+    // ⚠️ 读这个数字时注意：server/src 下 134 个 *.test.ts 里，有 62 个是**脚本风格**
+    // （自制 check()/assert() + 末尾 process.exit，靠 `npx tsx <file>` 跑），它们被
+    // include 进来后不会报错也不会跑断言 —— 靠 passWithNoTests 静默判过。
+    // 所以「N files passed」里的 N 包含这些空壳，真实有断言的只有 ~72 个文件。
+    // 那 62 个脚本由 scripts/run-script-tests.mjs（npm run test:scripts）负责跑，
+    // 不要以为全量绿 = 它们也验过了。
     passWithNoTests: true,
     // server/ is CommonJS: skill-loader.test.ts 专门验 reloadSkills() 里那条
     // `require('./loaders/skill-loader')` 懒加载路径，而 vitest 会把用例转成
