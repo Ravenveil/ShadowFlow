@@ -453,7 +453,8 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
         'GET /api/memory/handoff/feedback',
       ],
       steps: [
-        'POST /api/merchant/products 建商品 → /visits 埋点 → /orders 下单 → /orders/:id/pay 支付',
+        '一键重放：node scripts/first-order-replay.mjs --apply（默认 dry-run 只打印计划；--apply 会往当前库写 1 访客/1 单/1 支付，演示库上台前按纪律 reset）',
+        '或手工复现：POST /api/merchant/products 建商品 → /visits 埋点 → /orders 下单 → /orders/:id/pay 支付',
         '打开商家数据看板核对营收/毛利，再看 /reconcile 是否账实一致',
         'POST /api/memory/handoff/feedback 投递客户反馈，系统自动提炼写回画像',
         '出现同置信冲突时到「设置 — 记忆」的裁决台人工采纳或驳回',
