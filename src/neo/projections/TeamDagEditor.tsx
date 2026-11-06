@@ -86,6 +86,7 @@ import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode, type TeamEdgeMode } from './teamDagValidation';
 import { computeTeamDagColumns } from './TeamDagCanvas';
 import { dagDraftToWorkflow } from './teamDagDraft';
+import { POLICY_COLOR, edgeVisualFor, lookupPairPolicy, type EdgeVisual } from './teamPolicyVisual';
 import { useI18n } from '../../common/i18n';
 import { NeoConfirmModal } from '../NeoConfirmModal';
 
@@ -103,6 +104,13 @@ export interface TeamDagEditorProps {
    * 节点描边按策略染色，与协作策略矩阵即时呼应（草稿态即反映，不需保存）。
    */
   policyColorOf?: Map<string, PolicyCellState> | null;
+  /**
+   * 2026-11-06 边线策略联动：成员对无向键 → 策略态（可选，
+   * TeamPanel 用 buildPairPolicyColor 从矩阵草稿构造）。命中时边线随
+   * 策略染色（允许绿/警告琥珀/拒绝红加粗），与协作策略矩阵即时呼应
+   * （草稿态即反映，不需保存）。
+   */
+  pairPolicy?: Map<string, PolicyCellState> | null;
   /**
    * 2026-11-04 编辑器常驻（TeamPanel 工作流 section 不再有「编辑」开关）：
    * dirty 翻转时上报父组件，驱动 section 头部「● 未保存」徽标。可选，
@@ -137,13 +145,16 @@ const HANDLE_STYLE = {
 
 const NODE_TYPES: NodeTypes = { teamAgent: TeamAgentNode };
 
-/** approve 边的视觉标识：虚线 + 警示色（颜色由 edge.style.stroke 控制，箭头色随动）。 */
+/** approve 边的虚线 CSS 标记（颜色由 edge.style.stroke 控制，箭头色随动）。 */
 const APPROVE_EDGE_CLASS = 'neo-team-dag-edge--approve';
-const APPROVE_EDGE_STYLE = { stroke: 'var(--t-warn, #D97706)' } as const;
 
-/** 按 mode 生成 reactflow 边的展示属性（虚线 className + 描边色）。 */
-function edgeVisual(mode: TeamEdgeMode): Pick<Edge, 'className' | 'style'> {
-  return mode === 'approve' ? { className: APPROVE_EDGE_CLASS, style: { ...APPROVE_EDGE_STYLE } } : {};
+/**
+ * 按 mode × 成员对策略生成边的展示属性（2026-11-06 策略联动）：
+ * 策略色优先（允许绿/警告琥珀/拒绝红加粗），approve 虚线形态保留；
+ * 无策略时沿用 mode 视觉（approve 警示虚线，direct 默认实线）。
+ */
+function edgeVisual(mode: TeamEdgeMode, policy?: PolicyCellState | null): EdgeVisual {
+  return edgeVisualFor(mode, policy, APPROVE_EDGE_CLASS);
 }
 
 /**
@@ -152,10 +163,12 @@ function edgeVisual(mode: TeamEdgeMode): Pick<Edge, 'className' | 'style'> {
  * 建边共用，保证观感一致。
  * 2026-11-05 四轮：reconnectable —— 直接抓线的端点拖到别的手柄即可改接
  * （n8n 式改连），配合 onReconnect 完成端点替换。
+ * 2026-11-06：可选 policyState —— 成员对策略命中时边线随策略染色。
  */
 function makeTeamEdge(
   base: { id: string; source: string; target: string; label?: string },
   mode: TeamEdgeMode = 'direct',
+  policyState?: PolicyCellState | null,
 ): Edge {
   return {
     ...base,
@@ -163,7 +176,7 @@ function makeTeamEdge(
     pathOptions: { borderRadius: 14 },
     reconnectable: true,
     data: { mode },
-    ...edgeVisual(mode),
+    ...edgeVisual(mode, policyState),
     ...(base.label ? { label: base.label } : {}),
   };
 }
@@ -176,12 +189,8 @@ function makeTeamEdge(
  * 卡片左右两侧的 Handle 拉出，节点本身可点选/拖动（SfReactFlowBase 默认
  * nodesDraggable，坐标即持久化载体）。
  */
-/** 策略态 → 节点描边色（与 TeamDagCanvas / 策略矩阵配色一致）。 */
-const POLICY_NODE_COLOR: Record<PolicyCellState, string> = {
-  permit: 'var(--t-ok, #16A34A)',
-  warn: 'var(--t-warn, #D97706)',
-  deny: 'var(--t-err, #DC2626)',
-};
+/** 策略态 → 节点描边色（与 TeamDagCanvas / 策略矩阵配色一致；真源在 teamPolicyVisual）。 */
+const POLICY_NODE_COLOR = POLICY_COLOR;
 
 function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: string }) {
   const policyStyle =
@@ -422,7 +431,7 @@ export function TeamDagEditor(props: TeamDagEditorProps) {
   );
 }
 
-function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, policyColorOf, onDirtyChange }: TeamDagEditorProps) {
+function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, policyColorOf, pairPolicy, onDirtyChange }: TeamDagEditorProps) {
   const { t } = useI18n();
 
   // 放弃未保存修改的二次确认（2026-11-04 用户反馈批）：window.confirm 原生框
@@ -451,6 +460,27 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       };
     },
     [agents],
+  );
+
+  /** nodeId → agentId（策略查询用；画布外无 roster 归属时返回 ''）。 */
+  const agentOfNode = useCallback(
+    (nodeId: string): string => {
+      const n = workflow.nodes.find((w) => w.id === nodeId);
+      if (n?.data?.agentId) return n.data.agentId;
+      // 孤儿节点（roster 铺开的 n-${agent_id}）与新增节点（n-${agent_id} 同构）
+      if (nodeId.startsWith('n-')) return nodeId.slice(2);
+      return agents.find((a) => a.agent_id === nodeId)?.agent_id ?? '';
+    },
+    [workflow, agents],
+  );
+
+  /** 边（nodeId 对）→ 成员对策略态；pairPolicy 未传时恒 null。 */
+  const edgePolicy = useCallback(
+    (source: string, target: string): PolicyCellState | null => {
+      if (!pairPolicy) return null;
+      return lookupPairPolicy(pairPolicy, agentOfNode(source), agentOfNode(target));
+    },
+    [pairPolicy, agentOfNode],
   );
 
   /**
@@ -504,9 +534,13 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     () =>
       workflow.edges.map((e) => {
         const mode = normalizeEdgeMode(e.data?.mode);
-        return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode);
+        return makeTeamEdge(
+          { id: e.id, source: e.source, target: e.target, label: e.label },
+          mode,
+          edgePolicy(e.source, e.target),
+        );
       }),
-    [workflow],
+    [workflow, edgePolicy],
   );
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<TeamAgentNodeData>(seedNodes);
@@ -579,12 +613,12 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       setRfEdges(
         wf.edges.map((e) => {
           const mode = normalizeEdgeMode(e.data?.mode);
-          return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode);
+          return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode, edgePolicy(e.source, e.target));
         }),
       );
       suppressHistoryRef.current = false;
     },
-    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar, policyColorOf],
+    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar, policyColorOf, edgePolicy],
   );
 
   const undo = useCallback(() => {
@@ -699,11 +733,11 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       pushHistory();
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
-        return addEdge(makeTeamEdge({ id: `${from}->${to}`, source: from, target: to }), eds);
+        return addEdge(makeTeamEdge({ id: `${from}->${to}`, source: from, target: to }, 'direct', edgePolicy(from, to)), eds);
       });
       setErrors([]);
     },
-    [setRfEdges, normalizeDirection, pushHistory],
+    [setRfEdges, normalizeDirection, pushHistory, edgePolicy],
   );
 
   /**
@@ -785,12 +819,12 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       pushHistory();
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
-        return [...eds, makeTeamEdge({ id: `${from}->${to}`, source: from, target: to })];
+        return [...eds, makeTeamEdge({ id: `${from}->${to}`, source: from, target: to }, 'direct', edgePolicy(from, to))];
       });
       setPendingConnection(null);
       setErrors([]);
     },
-    [pendingConnection, rfNodes, normalizeDirection, setRfEdges, pushHistory],
+    [pendingConnection, rfNodes, normalizeDirection, setRfEdges, pushHistory, edgePolicy],
   );
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
@@ -807,13 +841,16 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       pushHistory();
       setRfEdges((es) =>
         applyEdgeMode(es, edgeId, mode).map((e) =>
-          // direct 时显式清掉 approve 的 className/style，避免残留虚线
-          e.id === edgeId ? { ...e, className: undefined, style: undefined, ...edgeVisual(mode) } : e,
+          // direct 时显式清掉 approve 的 className/style，避免残留虚线；
+          // 策略色经 edgeVisual(mode, edgePolicy) 保留（策略命中时不清色）。
+          e.id === edgeId
+            ? { ...e, className: undefined, style: undefined, ...edgeVisual(mode, edgePolicy(e.source, e.target)) }
+            : e,
         ),
       );
       setErrors([]);
     },
-    [setRfEdges, pushHistory],
+    [setRfEdges, pushHistory, edgePolicy],
   );
 
   const deleteSelected = useCallback(() => {
@@ -901,6 +938,34 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       onDirtyChange?.(dirty);
     }
   }, [dirty, onDirtyChange]);
+
+  /**
+   * 策略联动实时投影（2026-11-06）。
+   *
+   * 关键背景：useNodesState/useEdgesState 只吃初始值 —— 2026-11-04 编辑器
+   * 常驻化后 TeamPanel 不再重挂编辑器（workflowStateKey 只在保存/取消时递增），
+   * policyColorOf 随矩阵草稿变化的更新从此到不了画布，节点描边联动实际已
+   * 静默失效；边线联动（本次新增 pairPolicy）同理会失效。此 effect 监听
+   * 两张策略表变化，就地把现有节点/边的策略展示字段重投影：不动 position、
+   * selected、data.mode 等一切编辑态（与拖拽/撤销栈零交互），纯视觉。
+   */
+  useEffect(() => {
+    setRfNodes((ns) =>
+      ns.map((n) => {
+        const next = policyColorOf?.get(n.data.agentId) ?? null;
+        return n.data.policyState === next ? n : { ...n, data: { ...n.data, policyState: next } };
+      }),
+    );
+    setRfEdges((es) =>
+      es.map((e) => {
+        const mode = normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode);
+        const visual = edgeVisual(mode, edgePolicy(e.source, e.target));
+        return e.className === visual.className && JSON.stringify(e.style) === JSON.stringify(visual.style)
+          ? e
+          : { ...e, className: visual.className, style: visual.style };
+      }),
+    );
+  }, [policyColorOf, pairPolicy, edgePolicy, setRfNodes, setRfEdges]);
 
   /** 有未保存改动时取消需二次确认，避免误丢拓扑（NeoConfirmModal 弹窗化）。 */
   const handleCancel = useCallback(() => {
@@ -1015,11 +1080,11 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       setRfEdges(
         wf.edges.map((e) => {
           const mode = normalizeEdgeMode(e.data?.mode);
-          return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode);
+          return makeTeamEdge({ id: e.id, source: e.source, target: e.target, label: e.label }, mode, edgePolicy(e.source, e.target));
         }),
       );
     },
-    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar, policyColorOf],
+    [setRfNodes, setRfEdges, resolveNodeName, resolveAvatar, policyColorOf, edgePolicy],
   );
 
   /** AI 生成草稿：NL → POST /dag-draft → dagDraftToWorkflow → 铺画布标脏（不落库）。 */

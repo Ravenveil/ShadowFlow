@@ -1264,8 +1264,18 @@
   line-height: 1.2;
 }
 .neo-host-policy-corner {
-  width: 8px;
-  padding: 0 !important;
+  width: auto;
+  padding: 0 4px 0 0 !important;
+}
+/* 2026-11-06 方向语义提示（行→列）：corner 不再是空白角格，直接标明
+   矩阵的读写方向（行=发起方，列=接收方），与运行时 gate 方向一致。 */
+.neo-host-policy-corner-label {
+  font-size: 9px;
+  line-height: 1.1;
+  color: var(--t-fg-5, #8a8a8a);
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
 }
 .neo-host-policy-table td {
   padding: 2px;
@@ -2541,6 +2551,128 @@
 }
 .neo-gm-cell:hover .neo-gm-cell-name {
   color: var(--t-fg);
+}
+/* 可点成员格（2026-11-06 资料卡微信化三期）：button 外观重置 + pointer，
+   触感与微信/钉钉「点成员出资料卡」一致。 */
+.neo-gm-cell--click {
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.neo-gm-cell--click:focus-visible {
+  outline: 2px solid var(--t-accent, var(--t-fg-4));
+  outline-offset: 1px;
+}
+
+/* ── 成员资料卡（2026-11-06 微信/钉钉式三期；四期改浮层锚定）──────────────
+   点成员格在其下方浮出的小卡：大头像 + 名字 + 角色/状态 + soul 摘要 +
+   「发消息」。无全屏遮罩（微信 PC 群成员资料卡范式），水平锚定由 TS 内联
+   style 提供（防右溢出 clamp）。 */
+.neo-gm-profile {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: 280px;
+  max-width: calc(100vw - 48px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  animation: neo-host-fade var(--dur-2, 160ms) var(--ease-out, ease-out);
+}
+.neo-gm-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.neo-gm-profile-avatar {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+.neo-gm-profile-avatar .neo-gm-dot {
+  width: 12px;
+  height: 12px;
+  right: 0;
+  bottom: 2px;
+}
+.neo-gm-profile-id {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.neo-gm-profile-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-gm-profile-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.neo-gm-profile-role {
+  padding: 1px 7px;
+  border: 1px solid var(--t-border);
+  border-radius: 5px;
+  background: var(--t-panel-2, var(--t-panel));
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t-fg-3);
+}
+.neo-gm-profile-status {
+  font-size: 10.5px;
+  color: var(--t-fg-5);
+}
+.neo-gm-profile-soul {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--t-fg-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  border-top: 1px solid var(--t-border);
+  padding-top: 12px;
+}
+.neo-gm-profile-dm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel-2, transparent);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.neo-gm-profile-dm:hover:not(:disabled) {
+  border-color: var(--t-accent, var(--t-fg-4));
+  background: color-mix(in oklab, var(--t-accent, var(--t-fg-4)) 8%, transparent);
+}
+.neo-gm-profile-dm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.neo-gm-profile-err {
+  font-size: 11.5px;
+  color: var(--t-err, #ef4444);
 }
 
 /* ── TeamPanel 添加成员（2026-11-05 微信化二期）─────────────────────────

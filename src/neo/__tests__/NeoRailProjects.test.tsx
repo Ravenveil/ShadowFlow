@@ -152,7 +152,7 @@ beforeEach(() => {
 describe('NeoRail — 项目顶层分组混排（os-unified 2026-11-04）', () => {
   it('home：新建项目行常驻，项目接口被调用', async () => {
     renderRail('home');
-    expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-plus')).toBeInTheDocument();
     await waitFor(() => expect(listProjectsWithSessions).toHaveBeenCalled());
   });
 
@@ -186,7 +186,9 @@ describe('NeoRail — 项目顶层分组混排（os-unified 2026-11-04）', () =
 
   it('点新建项目行 → 内联输入出现；Enter → createProject(name) 且输入收起', async () => {
     renderRail('home');
-    fireEvent.click(await screen.findByTestId('neo-new-project'));
+    // 2026-11-06「+ 新建」聚合菜单：先点加号展开菜单，再点菜单里的「新建项目」
+    fireEvent.click(await screen.findByTestId('neo-new-plus'));
+    fireEvent.click(screen.getByTestId('neo-new-project'));
     const input = await screen.findByTestId('neo-new-project-input');
     fireEvent.change(input, { target: { value: '  新官网改版  ' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -203,7 +205,8 @@ describe('NeoRail — 项目顶层分组混排（os-unified 2026-11-04）', () =
   it('createProject 失败 → 错误条出现，输入行保留', async () => {
     (createProject as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('500'));
     renderRail('home');
-    fireEvent.click(await screen.findByTestId('neo-new-project'));
+    fireEvent.click(await screen.findByTestId('neo-new-plus'));
+    fireEvent.click(screen.getByTestId('neo-new-project'));
     const input = await screen.findByTestId('neo-new-project-input');
     fireEvent.change(input, { target: { value: 'x' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -214,8 +217,8 @@ describe('NeoRail — 项目顶层分组混排（os-unified 2026-11-04）', () =
   it('项目接口失败 → 降级默认区平铺，不崩', async () => {
     (listProjectsWithSessions as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('down'));
     renderRail('home');
-    // 新建项目行仍常驻；DM 行全部落默认组
-    expect(await screen.findByTestId('neo-new-project')).toBeInTheDocument();
+    // 「+ 新建」聚合行仍常驻；DM 行全部落默认组
+    expect(await screen.findByTestId('neo-new-plus')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByTestId('neo-dm-row')).toHaveLength(2);
     });

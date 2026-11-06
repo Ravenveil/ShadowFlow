@@ -53,6 +53,9 @@ class GroupItem(BaseModel):
     announcement: Optional[str] = None
     agent_ids: List[str] = Field(default_factory=list)
     created_at: Optional[str] = None
+    # 2026-11-06 · 侧栏一次成型批（additive）：成员头像快照，前端首帧直接渲染
+    # 群头像拼贴，不再等 /api/agents 二次到达（消灭「空白→爆发」的一环）。
+    members: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentDMItem(BaseModel):
@@ -66,6 +69,12 @@ class AgentDMItem(BaseModel):
     # 2026-08-19 — DM 底层是单成员 group 记录（kinds=["dm"]）；带上 group_id
     # 让前端「最近会话」行一步跳转 /group/:id 会话页，不再只改选中态。
     group_id: Optional[str] = None
+    # 2026-11-06 · 侧栏一次成型批（additive）：头像四件套随 inbox 一次带回，
+    # rail 行首帧即有真实头像。缺失字段前端回落 DiceBear（零破坏）。
+    avatar_style: Optional[str] = None
+    avatar_seed: Optional[str] = None
+    avatar_image: Optional[str] = None
+    avatar_color: Optional[str] = None
 
 
 class InboxData(BaseModel):
@@ -184,6 +193,35 @@ async def get_workspace_inbox(
     from shadowflow.api.groups import list_groups  # local import avoids cycles
 
     records = list_groups(workspace_id)
+
+    # 2026-11-06 · 侧栏一次成型批：agent 快照索引先行（groups 的 members 与
+    # agent_dms 的头像都从这里取，一次请求带回全部头像/成员数据）。
+    agents_by_id: Dict[str, Dict[str, Any]] = {}
+    try:
+        from shadowflow.api.agents import _list_agents  # local import avoids cycles
+
+        for arec in _list_agents():
+            rec_ws = arec.get("workspace_id")
+            if workspace_id is not None and rec_ws != workspace_id:
+                continue
+            aid = arec.get("agent_id", "")
+            if aid:
+                agents_by_id[aid] = arec
+    except Exception:
+        pass  # agent 快照失败不阻塞 inbox 主体（前端回落 DiceBear）
+
+    def _member_snapshot(aid: str) -> Dict[str, Any]:
+        """成员头像快照（群 members / 拼贴用）：缺记录时只回 id。"""
+        arec = agents_by_id.get(aid) or {}
+        return {
+            "agent_id": aid,
+            "name": arec.get("name") or "",
+            "avatar_style": arec.get("avatar_style"),
+            "avatar_seed": arec.get("avatar_seed"),
+            "avatar_image": arec.get("avatar_image"),
+            "avatar_color": arec.get("avatar_color"),
+        }
+
     groups: List[GroupItem] = []
     for rec in records:
         try:
@@ -198,6 +236,7 @@ async def get_workspace_inbox(
             last_message_preview = (
                 last_msg.get("content", "")[:140] if isinstance(last_msg, dict) else ""
             )
+            rec_agent_ids = list(rec.get("agent_ids", []) or [])
             groups.append(
                 GroupItem(
                     id=rec.get("group_id", ""),
@@ -208,14 +247,16 @@ async def get_workspace_inbox(
                     pendingApprovalsCount=0,
                     lastMessage=last_message_preview,
                     lastActivityAt=last_activity,
-                    metrics={"members": len(rec.get("agent_ids", []) or []),
+                    metrics={"members": len(rec_agent_ids),
                              "activeRuns": 0,
                              "pendingApprovalsCount": 0,
                              "costToday": 0},
                     # 2026-05-28 · Stream L · 群设置 modal 用：透传 record 字段
                     announcement=rec.get("announcement") or None,
-                    agent_ids=list(rec.get("agent_ids", []) or []),
+                    agent_ids=rec_agent_ids,
                     created_at=rec.get("created_at") or None,
+                    # 2026-11-06 · 侧栏一次成型批：成员头像快照随群带回
+                    members=[_member_snapshot(aid) for aid in rec_agent_ids],
                 )
             )
         except Exception:
@@ -287,6 +328,10 @@ async def get_workspace_inbox(
                     lastMessage=dm_last_message.get(agent_id) or (arec.get("soul") or "")[:140],
                     lastActivityAt=dm_last_activity.get(agent_id) or arec.get("created_at") or datetime.now(timezone.utc).isoformat(),
                     group_id=(dm_group_id_by_agent.get(agent_id) or None),
+                    avatar_style=arec.get("avatar_style"),
+                    avatar_seed=arec.get("avatar_seed"),
+                    avatar_image=arec.get("avatar_image"),
+                    avatar_color=arec.get("avatar_color"),
                 )
             )
     except Exception:
@@ -294,7 +339,10 @@ async def get_workspace_inbox(
         agent_dms = []
 
     return InboxResponse(
-        data=InboxData(groups=groups, agent_dms=agent_dms),
+        data=InboxData(
+            groups=groups,
+            agent_dms=agent_dms,
+        ),
         meta={
             "trace_id": uuid4().hex,
             "timestamp": datetime.now(timezone.utc).isoformat(),

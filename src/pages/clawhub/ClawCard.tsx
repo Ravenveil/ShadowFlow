@@ -9,6 +9,7 @@ import { Check, Download, MessageSquare, PawPrint, Search, Trash2 } from 'lucide
 import { useI18n } from '../../common/i18n';
 import type { DetectedCli } from '../../api/cli';
 import { clawCategoryLabel, resolveClawMeta } from '../../config/clawhub';
+import { BrandGlyph } from '../../common/icons/brandIcons';
 
 export interface ClawCardProps {
   item: DetectedCli;
@@ -51,10 +52,13 @@ export const ClawCard = memo(function ClawCard({
           }}
           aria-hidden
         >
-          {brand.monogram}
+          {BrandGlyph({ brandId: item.id, size: 16 }) ?? brand.monogram}
         </span>
+        {/* 2026-11-06 优化：状态徽章移至 meta 行——原先在标题右侧，长 id
+            （gh-copilot 等）被挤成省略号、错误串版本把头部撑爆。标题行
+            现在独占整行宽度。 */}
         <div className="claw-card-title-wrap">
-          <span className="claw-card-title">
+          <span className="claw-card-title" title={item.id}>
             {item.id}
             {item.is_claw && (
               <span className="claw-chip claw-chip--claw">
@@ -67,26 +71,32 @@ export const ClawCard = memo(function ClawCard({
             {item.description ?? item.install_cmd}
           </span>
         </div>
-        {item.installed ? (
-          item.env_set ? (
-            <span className="claw-status claw-status--installed" data-testid={`claw-status-${item.id}`}>
-              <Check size={10} strokeWidth={2.5} aria-hidden />
-              {t('clawhub.status.installed', { defaultValue: '已安装' })}
-              {item.version ? ` · ${item.version.slice(0, 24)}` : ''}
-            </span>
-          ) : (
-            <span className="claw-status claw-status--env" data-testid={`claw-status-${item.id}`}>
-              {t('clawhub.status.envMissing', { defaultValue: '缺环境变量' })}
-            </span>
-          )
-        ) : (
-          <span className="claw-status claw-status--missing" data-testid={`claw-status-${item.id}`}>
-            {t('clawhub.status.notInstalled', { defaultValue: '未安装' })}
-          </span>
-        )}
       </div>
 
       <div className="claw-card-meta">
+        <span
+          className={item.installed && item.env_set ? 'claw-status claw-status--installed' : item.installed ? 'claw-status claw-status--env' : 'claw-status claw-status--missing'}
+          data-testid={`claw-status-${item.id}`}
+        >
+          {item.installed ? (
+            item.env_set ? (
+              <>
+                <Check size={10} strokeWidth={2.5} aria-hidden />
+                {t('clawhub.status.installed', { defaultValue: '已安装' })}
+              </>
+            ) : (
+              t('clawhub.status.envMissing', { defaultValue: '缺环境变量' })
+            )
+          ) : (
+            t('clawhub.status.notInstalled', { defaultValue: '未安装' })
+          )}
+        </span>
+        {/* 版本串可能很长（错误信息/完整 binary 标识）→ 限宽省略，title 悬浮看全 */}
+        {item.installed && item.version && (
+          <span className="claw-version" title={item.version}>
+            {item.version.slice(0, 32)}
+          </span>
+        )}
         <span className="claw-chip">{clawCategoryLabel(item.category)}</span>
         <span className="claw-chip">{item.stream_format}</span>
         {item.needs_env && <span className="claw-chip">env: {item.needs_env}</span>}

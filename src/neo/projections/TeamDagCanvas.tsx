@@ -20,24 +20,26 @@
  * 2026-11-03 策略联动：可选 prop policyColorOf（agentId → 最严策略态），
  * 命中时节点描边按策略染色（permit/warn/deny），与协作策略矩阵即时联动
  * —— 矩阵改一格、保存/草稿即反映到画布节点描边颜色。
+ *
+ * 2026-11-06 边线策略联动：可选 prop pairPolicy（成员对无向键 → 策略态，
+ * buildPairPolicyColor 构造）。运行时 policy-gate 本就按边逐条查矩阵
+ * （gate(matrix, 边source, 边target)），这里把同一张表投到边线颜色上：
+ * 允许绿 / 警告琥珀 / 拒绝红加粗，approve 审批边保留虚线形态、仅颜色随策略。
  */
 import { useMemo } from 'react';
 import { Handle, Position, type Edge, type Node, type NodeTypes } from 'reactflow';
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import type { TeamWorkflow, TeamWorkflowEdge, PolicyCellState } from '../../api/teams';
+import { POLICY_COLOR, edgeVisualFor, lookupPairPolicy, type EdgeVisual } from './teamPolicyVisual';
 
 const COL_GAP = 140;
 /* 节点 2026-11-04 改为「头像在上 + 名字在下」竖排卡片（≈56px 高），
    行距从 52 抬到 78，避免同列节点上下压叠。 */
 const ROW_GAP = 78;
 
-/** 策略态 → 节点描边色（与 TeamPanel 矩阵格配色一致）。 */
-export const POLICY_NODE_COLOR: Record<PolicyCellState, string> = {
-  permit: 'var(--t-ok, #16A34A)',
-  warn: 'var(--t-warn, #D97706)',
-  deny: 'var(--t-err, #DC2626)',
-};
+/** 策略态 → 节点描边色（与 TeamPanel 矩阵格配色一致；真源在 teamPolicyVisual）。 */
+export const POLICY_NODE_COLOR = POLICY_COLOR;
 
 interface TeamDagNodeData extends Record<string, unknown> {
   label: string;
@@ -143,25 +145,25 @@ export function teamWorkflowToFlowNodes(
   });
 }
 
-/** 按边 mode 生成展示属性（虚线 className + 描边色；箭头色随动走 SfReactFlowBase 默认）。 */
-function edgeVisual(mode: string): Pick<Edge, 'className' | 'style'> {
-  if (mode === 'approve') {
-    return {
-      className: 'neo-gm-dag-edge--approve',
-      style: { stroke: 'var(--t-warn, #D97706)' },
-    };
-  }
-  if (mode === 'conditional') {
-    return {
-      className: 'neo-gm-dag-edge--conditional',
-      style: { stroke: 'var(--t-accent, #0891B2)' },
-    };
-  }
-  return {};
+/** 按边 mode × 成员对策略生成展示属性（策略色优先；虚线 className 标记 mode）。 */function edgeVisual(mode: string, policy?: PolicyCellState | null): EdgeVisual {
+  return edgeVisualFor(mode, policy, 'neo-gm-dag-edge--approve', 'neo-gm-dag-edge--conditional');
 }
 
-/** TeamWorkflow 边 → reactflow edges（label = mode 原文）。 */
-export function teamWorkflowToFlowEdges(workflow: TeamWorkflow): Edge[] {
+/**
+ * TeamWorkflow 边 → reactflow edges（label = mode 原文）。
+ * 2026-11-06 策略联动：pairPolicy（成员对无向键 → 策略态，buildPairPolicyColor
+ * 构造）命中时边线按成员对策略染色（允许绿/警告琥珀/拒绝红加粗），矩阵改格
+ * 即反映；approve 审批边保留虚线形态，仅颜色随策略。边的 source/target 是
+ * node id，先经节点表解析成 agentId 再查成员对。
+ */
+export function teamWorkflowToFlowEdges(
+  workflow: TeamWorkflow,
+  pairPolicy?: Map<string, PolicyCellState> | null,
+): Edge[] {
+  const agentOf = new Map<string, string>();
+  for (const n of workflow.nodes) {
+    if (n.data?.agentId) agentOf.set(n.id, n.data.agentId);
+  }
   return workflow.edges.map((e: TeamWorkflowEdge) => {
     const mode = typeof e.data?.mode === 'string' ? e.data.mode : 'direct';
     return {
@@ -170,7 +172,10 @@ export function teamWorkflowToFlowEdges(workflow: TeamWorkflow): Edge[] {
       target: e.target,
       type: 'smoothstep',
       label: mode,
-      ...edgeVisual(mode),
+      ...edgeVisual(
+        mode,
+        lookupPairPolicy(pairPolicy, agentOf.get(e.source) ?? '', agentOf.get(e.target) ?? ''),
+      ),
     };
   });
 }
@@ -178,16 +183,19 @@ export function teamWorkflowToFlowEdges(workflow: TeamWorkflow): Edge[] {
 export function TeamDagCanvas({
   workflow,
   policyColorOf,
+  pairPolicy,
 }: {
   workflow: TeamWorkflow;
   /** agentId → 最严策略态；命中时节点描边按策略染色（矩阵联动）。 */
   policyColorOf?: Map<string, PolicyCellState> | null;
+  /** 成员对无向键 → 策略态（buildPairPolicyColor）；命中时边线随策略染色。 */
+  pairPolicy?: Map<string, PolicyCellState> | null;
 }) {
   const nodes = useMemo(
     () => teamWorkflowToFlowNodes(workflow, policyColorOf),
     [workflow, policyColorOf],
   );
-  const edges = useMemo(() => teamWorkflowToFlowEdges(workflow), [workflow]);
+  const edges = useMemo(() => teamWorkflowToFlowEdges(workflow, pairPolicy), [workflow, pairPolicy]);
 
   return (
     <div className="neo-gm-dag-canvas" data-testid="neo-gm-dag-canvas">

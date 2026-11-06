@@ -230,6 +230,17 @@ from shadowflow.api import runs as _runs_api
 from shadowflow.api import artifacts as _artifacts_api
 from shadowflow.api import opc as _opc_api
 
+# 多模态记忆库（PR #7 设计移植）：单文件 RAG 后端，BM25+向量混合检索。
+# 挂 /api/memory-bank 前缀，与 /api/knowledge、/api/memory 互不冲突；
+# 未注入 Embedder 时退化为 BM25 关键词检索（零额外依赖）。实例全局复用一次。
+from shadowflow.memory.memory_bank import (
+    MemoryBank,
+    create_memory_router as _create_memory_bank_router,
+)
+memory_bank = MemoryBank(
+    root=Path(os.getenv("SHADOWFLOW_KNOWLEDGE_DIR", ".shadowflow/knowledge")),
+)
+
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
     event_bus=run_event_bus,
@@ -282,6 +293,8 @@ app.include_router(_artifacts_api.router)
 # OPC OS（2026-11-04，backend-poc company/orders/pay 移植）：组织 / 项目 /
 # 审批 / 账本 / 商品 / 订单 / 支付网关，独立 opc.sqlite，全部挂 /api/opc 前缀。
 app.include_router(_opc_api.router)
+# 多模态记忆库（PR #7）：/api/memory-bank，Node proxyFallback 自动转发。
+app.include_router(_create_memory_bank_router(memory_bank))
 
 
 @app.exception_handler(ShadowflowError)
@@ -387,6 +400,22 @@ async def _seed_opc_os() -> None:
             logger.info("OPC OS: seeded company %s (%s)", company.get("name"), company.get("id"))
     except Exception as exc:  # noqa: BLE001 — 种子失败不应拖垮 server 启动
         logger.warning("OPC OS: seeding failed: %s", exc)
+
+
+@app.on_event("startup")
+async def _seed_secretary() -> None:
+    """Seed the built-in secretary agent「影」(2026-11-06, GrokBot 主Bot范式).
+
+    幂等：固定 agent_id，已存在（含用户改过）则跳过。失败只告警不阻塞启动。
+    """
+    try:
+        from shadowflow.services.secretary_seed import ensure_secretary
+
+        record = ensure_secretary()
+        if record:
+            logger.info("Secretary: seeded builtin agent %s (%s)", record["name"], record["agent_id"])
+    except Exception as exc:  # noqa: BLE001 — 种子失败不应拖垮 server 启动
+        logger.warning("Secretary: seeding failed: %s", exc)
 
 
 @app.on_event("startup")

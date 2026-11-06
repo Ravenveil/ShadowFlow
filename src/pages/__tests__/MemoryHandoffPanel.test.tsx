@@ -18,10 +18,12 @@ vi.mock('../../api/memoryHandoff', () => ({
   acceptHandoff: vi.fn(),
   getHandoffContext: vi.fn(),
   getProfile: vi.fn(),
-  ingestFeedback: vi.fn(),
   writebackProfile: vi.fn(),
   listProfileConflicts: vi.fn(),
   resolveProfileConflict: vi.fn(),
+  getFeedbackQueue: vi.fn(),
+  submitFeedback: vi.fn(),
+  runFeedbackQueue: vi.fn(),
 }));
 
 const handoff: api.Handoff = {
@@ -92,8 +94,24 @@ beforeEach(() => {
     conflicts: 0,
     pending_conflicts: 0,
   });
-  vi.mocked(api.ingestFeedback).mockResolvedValue({
-    subject_id: 'cust-1', profile_keys: ['preference', 'budget'], extracted: 2, rules: 5,
+  vi.mocked(api.getFeedbackQueue).mockResolvedValue({
+    stats: { total: 2, pending: 0, processed: 1, skipped: 1, failed: 0, conflicts: 0 },
+    items: [{
+      id: 'f1', subject_type: 'customer', subject_id: 'cust-1',
+      text: '客户偏好简洁', source: 'crm', source_ref: 'ticket-1',
+      status: 'processed', profile_keys: ['preference'], actions: ['create'],
+      conflicts: 0, error: '', actor: 'system', created_at: 1, processed_at: 2,
+    }],
+  });
+  vi.mocked(api.submitFeedback).mockResolvedValue({
+    received: 1, deduped: 0, processed: 1, skipped: 0, failed: 0, conflicts: 0,
+    items: [{
+      subject_id: 'cust-1', id: 'f2', dedup: false, status: 'processed',
+      profile_keys: ['preference', 'budget'], actions: ['create', 'create'], conflicts: 0,
+    }],
+  });
+  vi.mocked(api.runFeedbackQueue).mockResolvedValue({
+    scanned: 1, processed: 1, skipped: 0, failed: 0, conflicts: 0,
   });
   vi.mocked(api.listProfileConflicts).mockResolvedValue([]);
   vi.mocked(api.resolveProfileConflict).mockResolvedValue({
@@ -209,5 +227,70 @@ describe('待裁决画像冲突（发现 → 人工定夺）', () => {
     await waitFor(() => expect(screen.getByTestId('handoff-conflicts')).toBeInTheDocument());
     expect(screen.queryByTestId('handoff-conflict')).not.toBeInTheDocument();
     expect(screen.getByTestId('handoff-conflicts')).toHaveTextContent('暂无冲突');
+  });
+});
+
+describe('反馈自动写回队列（2026-11-06）', () => {
+  it('渲染队列统计与最近一条审计记录', async () => {
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByTestId('handoff-feedback-stats')).toHaveTextContent('共 2'),
+    );
+    expect(screen.getByTestId('handoff-feedback-item')).toHaveTextContent('客户偏好简洁');
+    expect(screen.getByTestId('handoff-feedback-item')).toHaveTextContent('命中 preference');
+  });
+
+  it('投递反馈走自动写回端点，并展示命中项与写回结果', async () => {
+    renderPanel();
+    fireEvent.change(screen.getByTestId('handoff-profile-subject'), { target: { value: 'cust-1' } });
+    fireEvent.change(screen.getByTestId('handoff-feedback-text'), { target: { value: '偏好简洁，预算 800' } });
+    fireEvent.click(screen.getByTestId('handoff-feedback-submit'));
+    await waitFor(() =>
+      expect(api.submitFeedback).toHaveBeenCalledWith(
+        expect.objectContaining({ subject_id: 'cust-1', text: '偏好简洁，预算 800', source: 'feedback' }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('handoff-feedback-note')).toHaveTextContent('已自动写回 2 项'),
+    );
+  });
+
+  it('重复投递显示「未重复写回」，不假装又写了一次', async () => {
+    vi.mocked(api.submitFeedback).mockResolvedValue({
+      received: 1, deduped: 1, processed: 0, skipped: 0, failed: 0, conflicts: 0,
+      items: [{
+        subject_id: 'cust-1', id: 'f1', dedup: true, status: 'processed',
+        profile_keys: ['preference'], actions: ['create'], conflicts: 0,
+      }],
+    });
+    renderPanel();
+    fireEvent.change(screen.getByTestId('handoff-profile-subject'), { target: { value: 'cust-1' } });
+    fireEvent.change(screen.getByTestId('handoff-feedback-text'), { target: { value: '偏好简洁' } });
+    fireEvent.click(screen.getByTestId('handoff-feedback-submit'));
+    await waitFor(() =>
+      expect(screen.getByTestId('handoff-feedback-note')).toHaveTextContent('未重复写回'),
+    );
+  });
+
+  it('点「补跑」调用 run 端点并回填处理统计', async () => {
+    renderPanel();
+    // 队列接口没回来前按钮是 disabled，等它可用再点（否则 fireEvent 不会触发）。
+    const btn = await screen.findByTestId('handoff-feedback-run');
+    await waitFor(() => expect(btn).not.toBeDisabled());
+    fireEvent.click(btn);
+    await waitFor(() => expect(api.runFeedbackQueue).toHaveBeenCalledWith({ limit: 100 }));
+    await waitFor(() =>
+      expect(screen.getByTestId('handoff-feedback-note')).toHaveTextContent('补跑 1 条'),
+    );
+  });
+
+  it('旧后端没有队列端点时只降级，不拖垮整张面板', async () => {
+    vi.mocked(api.getFeedbackQueue).mockRejectedValueOnce(new Error('404'));
+    renderPanel();
+    await waitFor(() =>
+      expect(screen.getByTestId('handoff-feedback-stats')).toHaveTextContent('队列不可用'),
+    );
+    expect(screen.getByTestId('handoff-conflicts')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

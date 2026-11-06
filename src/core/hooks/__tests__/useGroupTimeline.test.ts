@@ -72,7 +72,8 @@ vi.mock('../../../api/runSessions', () => ({
   ),
 }));
 
-const { useGroupTimeline, lastTurnId, sseFrameToTimeline } = await import('../useGroupTimeline');
+const { useGroupTimeline, lastTurnId, sseFrameToTimeline, sweepStaleProcessCards } =
+  await import('../useGroupTimeline');
 
 // ── fetch mock helpers ───────────────────────────────────────────────────────
 const fetchMock = vi.fn();
@@ -310,6 +311,64 @@ describe('useGroupTimeline (F2 灰度)', () => {
       expect(runSubs).toHaveLength(1); // runs 状态变化重跑 effect，但终态 run 不再订阅
     });
 
+    // 2026-11-06「消息结束了还在转圈」— run 终态时本地残留的 streaming
+    // 过程卡必须被兜底清扫（服务端缺 finalize patch / SSE 断帧场景）。
+    it('终态兜底清扫：onComplete/onServerError 落定残留 streaming 卡', async () => {
+      fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
+      const { result } = renderHook(() => useGroupTimeline('g1'));
+      await waitFor(() => expect(runSubs).toHaveLength(1));
+      const sub = runSubs[0]!;
+
+      const t0 = Date.now();
+      // 模拟服务端只发了 streaming thinking / running tool_call / running foot，
+      // 没发 finalize 就挂了。
+      act(() => {
+        sub.handlers.onMessage?.({
+          id: 'run_think',
+          kind: 'thinking',
+          turn_id: 'rt1',
+          ts: t0 - 8_000,
+          label: 'Reviewer · 合规审核 正在思考',
+          status: 'streaming',
+        } as TimelineMessage);
+        sub.handlers.onMessage?.({
+          id: 'run_tool',
+          kind: 'tool_call',
+          turn_id: 'rt1',
+          ts: t0,
+          name: 'search',
+          args_summary: '',
+          status: 'running',
+        } as TimelineMessage);
+        sub.handlers.onMessage?.({
+          id: 'run_foot',
+          kind: 'msg_foot',
+          turn_id: 'rt1',
+          ts: t0,
+          status: 'running',
+        } as TimelineMessage);
+      });
+
+      act(() => sub.handlers.onComplete?.({ session_id: 's_run' }));
+
+      const msgs = result.current.messages;
+      expect(msgs.find((m) => m.id === 'run_think')).toMatchObject({
+        kind: 'thinking',
+        status: 'done',
+      });
+      expect(
+        msgs.find((m) => m.id === 'run_think' && m.kind === 'thinking' && typeof m.duration_ms === 'number'),
+      ).toBeTruthy();
+      expect(msgs.find((m) => m.id === 'run_tool')).toMatchObject({
+        kind: 'tool_call',
+        status: 'error',
+      });
+      expect(msgs.find((m) => m.id === 'run_foot')).toMatchObject({
+        kind: 'msg_foot',
+        status: 'done',
+      });
+    });
+
     it('onServerError → 解除订阅 + runs 标 failed', async () => {
       fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
       const { result } = renderHook(() => useGroupTimeline('g1'));
@@ -447,6 +506,80 @@ describe('useGroupTimeline (F2 灰度)', () => {
 
       expect(sseFrameToTimeline('agent.message', { content: '' }, 't1')).toBeNull();
       expect(sseFrameToTimeline('node.started', { content: 'x' }, 't1')).toBeNull();
+    });
+
+    // 2026-11-06 — sweepStaleProcessCards：终态兜底清扫纯函数。
+    it('sweepStaleProcessCards：streaming/running 卡落终态，已落定卡不动', () => {
+      const t0 = 1_000_000;
+      const input: TimelineMessage[] = [
+        { id: 'u1', kind: 'user_turn', turn_id: 'u1', ts: t0, text: 'go' },
+        {
+          id: 'th1',
+          kind: 'thinking',
+          turn_id: 'u1',
+          ts: t0 - 5_000,
+          label: '小张 正在思考',
+          status: 'streaming',
+        },
+        {
+          id: 'th2',
+          kind: 'thinking',
+          turn_id: 'u1',
+          ts: t0 - 9_000,
+          label: 'done',
+          status: 'done',
+          duration_ms: 1_234,
+        },
+        {
+          id: 'tool1',
+          kind: 'tool_call',
+          turn_id: 'u1',
+          ts: t0,
+          name: 'search',
+          args_summary: '',
+          status: 'running',
+        },
+        {
+          id: 'foot1',
+          kind: 'msg_foot',
+          turn_id: 'u1',
+          ts: t0,
+          status: 'running',
+        },
+        {
+          id: 'at1',
+          kind: 'assistant_text',
+          turn_id: 'u1',
+          ts: t0,
+          body: '回复',
+        },
+      ];
+
+      const swept = sweepStaleProcessCards(input, t0 + 2_000);
+      expect(swept).not.toBe(input); // 有残留 → 返回新数组
+      expect(swept.find((m) => m.id === 'th1')).toMatchObject({
+        kind: 'thinking',
+        status: 'done',
+        duration_ms: 7_000, // nowMs - ts
+      });
+      expect(swept.find((m) => m.id === 'tool1')).toMatchObject({
+        kind: 'tool_call',
+        status: 'error',
+      });
+      expect(swept.find((m) => m.id === 'foot1')).toMatchObject({
+        kind: 'msg_foot',
+        status: 'done',
+      });
+      // 已落定/无关卡原样保留（引用不变）。
+      expect(swept.find((m) => m.id === 'th2')).toBe(input[2]);
+      expect(swept.find((m) => m.id === 'u1')).toBe(input[0]);
+      expect(swept.find((m) => m.id === 'at1')).toBe(input[5]);
+
+      // 无残留 → 原样返回同一引用（不触发无谓 re-render）。
+      const clean: TimelineMessage[] = [
+        { id: 'u1', kind: 'user_turn', turn_id: 'u1', ts: t0, text: 'go' },
+      ];
+      expect(sweepStaleProcessCards(clean, t0 + 1)).toBe(clean);
     });
   });
 });

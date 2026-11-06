@@ -45,6 +45,19 @@ export interface GroupItem {
    * 后端 record.created_at（ISO 字符串），FE 自己 format。
    */
   created_at?: string;
+  /**
+   * 2026-11-06 · 侧栏一次成型批（additive）：成员头像快照随 inbox 一次带回，
+   * 群头像拼贴首帧即可渲染，不再等 /api/agents 二次到达。老数据缺失 = 前端
+   * 回落 agent_ids join 本地 agents 列表（零破坏）。
+   */
+  members?: Array<{
+    agent_id: string;
+    name: string;
+    avatar_style?: string | null;
+    avatar_seed?: string | null;
+    avatar_image?: string | null;
+    avatar_color?: string | null;
+  }>;
 }
 
 export interface AgentDMItem {
@@ -57,6 +70,11 @@ export interface AgentDMItem {
   lastActivityAt: string;
   /** 2026-08-19 — DM 底层单成员 group 的 id；有值即可一步跳 /group/:id 会话页。 */
   group_id?: string | null;
+  /** 2026-11-06 · 侧栏一次成型批（additive）：头像四件套随 inbox 带回。 */
+  avatar_style?: string | null;
+  avatar_seed?: string | null;
+  avatar_image?: string | null;
+  avatar_color?: string | null;
 }
 
 export interface InboxData {

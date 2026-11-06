@@ -102,6 +102,8 @@ import type { CompileStatus } from '../components/SkillDropdown';
 import type { NeoNav } from './types';
 // ClawHub（2026-06）：.claw-target-chip / .claw-badge-mini 样式（增量引入）
 import '../pages/clawhub/clawhub.css';
+// 2026-11-06 美化批：官方品牌 logo（选择器 monogram 色块 → 品牌 SVG，未收录回落）
+import { BrandGlyph } from '../common/icons/brandIcons';
 import './neo-composer.css';
 
 export type { UnifiedComposerSubmitPayload };
@@ -489,6 +491,10 @@ function NeoModelPicker({
     const key = it.kind === 'cli' ? `cli:${it.agentId}` : `byok:${it.providerId}:${it.modelId}`;
     const title = it.kind === 'cli' ? it.name : it.modelId;
     const sub = it.kind === 'cli' ? (it.version ? it.version : 'CLI · installed') : it.providerName;
+    // 2026-11-06 美化批：官方品牌 SVG 优先（CLI 按 agentId、API 按 providerId 解析），
+    // 未收录回落 monogram。色块容器着色逻辑不变。
+    const brandId = it.kind === 'cli' ? it.agentId : it.providerId;
+    const glyph = BrandGlyph({ brandId, size: 14 });
     return (
       <button
         key={key}
@@ -497,7 +503,7 @@ function NeoModelPicker({
         onClick={() => select(it)}
         className={`neo-cp-model-item${active ? ' on' : ''}`}
       >
-        {/* monogram 色块：tint 来自数据（CLI/厂商元表），颜色值内联、布局走 class */}
+        {/* 品牌图标/monogram 色块：tint 来自数据（CLI/厂商元表），颜色值内联、布局走 class */}
         <span
           aria-hidden
           className="neo-cp-model-mono"
@@ -507,7 +513,7 @@ function NeoModelPicker({
             color: it.tint,
           }}
         >
-          {it.monogram}
+          {glyph ?? it.monogram}
         </span>
         <span className="neo-cp-model-item-main">
           <span className="neo-cp-model-item-title">{title}</span>
@@ -1047,6 +1053,8 @@ function NeoPlusMenu({
             )}
             {filteredClaws.map((c) => {
               const brand = resolveClawMeta(c.id);
+              // 2026-11-06 美化批：官方品牌 SVG 优先，未收录回落 monogram
+              const glyph = BrandGlyph({ brandId: c.id, size: 14 });
               return (
                 <button
                   key={c.id}
@@ -1064,7 +1072,7 @@ function NeoPlusMenu({
                     }}
                     aria-hidden
                   >
-                    {brand.monogram}
+                    {glyph ?? brand.monogram}
                   </span>
                   <span className="neo-plus-item-main">
                     <span className="neo-plus-item-name">{c.id}</span>
@@ -1082,7 +1090,7 @@ function NeoPlusMenu({
               type="button"
               className="neo-plus-item neo-plus-item--more"
               data-testid="neo-plus-clawhub-more"
-              onClick={() => { onClose(); navigate('/clawhub'); }}
+              onClick={() => { onClose(); navigate('/settings#clawhub'); }}
             >
               <span className="neo-plus-item-icon"><ExternalLink size={13} strokeWidth={2} aria-hidden /></span>
               <span className="neo-plus-item-name">

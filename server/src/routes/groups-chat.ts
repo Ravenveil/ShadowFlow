@@ -1372,16 +1372,14 @@ async function runFanout(
       } catch (e) {
         errMsg = e instanceof Error ? e.message : String(e);
       }
-      // 2026-11-04「停止生成」— 用户经 POST /:id/stop 中断本 agent 的流：
-      // 折叠成静默取消（不记「出错」raw 卡、不发系统消息），直接跳出 for 循环
-      // 结束本轮 fan-out；gateway run 已由 stop 路由经 cancelRunSession 终结。
-      if (ctrl.signal.aborted) break;
-
-      // B3 — 无论成败都收口本 agent 的过程卡（错误以 raw 卡可见）。
+      // B3 — 无论成败（含 2026-11-06 修复：abort 中断）都先收口本 agent 的
+      // 过程卡。此前 abort 时直接 break 跳过收口，thinking 卡永远停在
+      // streaming（刷新后回放依旧转圈）。中断 = 静默收口：finalize +
+      // msg_foot done，但不发错误 raw 卡、不发聊天消息（与停止语义一致）。
       if (gw && thinkingId) {
         const elapsed = Date.now() - startedAt;
         gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
-        if (errMsg) {
+        if (errMsg && !ctrl.signal.aborted) {
           gw.emitMessage({
             id: gw.nextId(),
             kind: 'raw',
@@ -1400,6 +1398,12 @@ async function runFanout(
           elapsed_ms: elapsed,
         });
       }
+
+      // 2026-11-04「停止生成」— 用户经 POST /:id/stop 中断本 agent 的流：
+      // 折叠成静默取消（上面已收口过程卡；不记「出错」raw 卡、不发系统
+      // 消息），直接跳出 for 循环结束本轮 fan-out；gateway run 已由 stop
+      // 路由经 cancelRunSession 终结。
+      if (ctrl.signal.aborted) break;
 
       if (errMsg) {
         await pyPostMessage(groupId, {

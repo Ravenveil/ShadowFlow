@@ -9,8 +9,9 @@
  *   - home 会话区并入员工/团队：团队 = 可折叠分组（组内团队群聊 + 成员
  *     agent 会话项），未归属团队的员工落「成员」组。
  *   - agent 会话项 = DiceBear 头像 + 名称 + 最后消息预览 + 相对时间 + 未读；
- *     头像可点（stopPropagation）→ agent-soul 主机卡片（换头像/定时任务），
- *     行身点击 = 进 DM 会话（openAgentDm 通路不变）。
+ *     整行（含头像）点击 = 进 DM 会话（openAgentDm 通路不变）。灵魂编辑
+ *     不再独立弹出 agent-soul 页（2026-11-06 用户反馈），走会话内右栏
+ *     NeoHost「灵魂」tab（内嵌 NeoAgentSoul）。
  *   - agents/teams 分区同样走会话项/分组形态，视觉行为统一。
  *
  * 展开态结构（复刻 home.html .sidebar）：
@@ -43,21 +44,21 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
+  CalendarClock,
   ChevronDown,
   Folder,
   FolderOpen,
   Library,
   PanelLeft,
   PanelLeftOpen,
-  PawPrint,
   Pencil,
   Plus,
   RotateCcw,
   Search,
   Settings,
-  SquarePen,
   Trash2,
   Users,
+  UsersRound,
 } from 'lucide-react';
 import { listAgents, type AgentRecord } from '../api/agents';
 import { listTeams, type TeamRecord } from '../api/teams';
@@ -81,8 +82,11 @@ import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
 import { listVaults } from '../api/knowledgeVaults';
 import type { KnowledgeVault } from '../common/types/knowledgeVault';
+import { listSchedules, type ScheduleRecord } from '../api/schedules';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
+// 内置秘书「影」（2026-11-06）：固定 id 常量 + 会话去重过滤共用。
+import { SECRETARY_AGENT_ID, SECRETARY_NAME } from './secretary';
 // ClawHub（2026-06，T08）：AgentAvatar 样式（增量引入）
 import '../pages/clawhub/clawhub.css';
 import { useAuth } from '../core/auth/AuthContext';
@@ -92,6 +96,7 @@ import { useInboxStore } from '../core/store/useInboxStore';
 import { useCommandK } from '../core/hooks/useCommandK';
 import type { NeoRailProps } from './types';
 import { NeoCreateAgentModal } from './NeoCreateAgentModal';
+import { NeoCreateGroupModal } from './NeoCreateGroupModal';
 import { NeoRenameModal } from './NeoRenameModal';
 import { NeoConfirmModal } from './NeoConfirmModal';
 
@@ -207,10 +212,16 @@ export function NeoRail({
   const [query, setQuery] = useState('');
   // 「搜索」导航行按需展开过滤输入框（复刻页侧栏无常驻输入框，默认收起）
   const [searchOpen, setSearchOpen] = useState(false);
+  // 「+ 新建」聚合菜单（2026-11-06 用户反馈：三个创建入口收进一个加号，
+  // 点加号弹出 新建 Agent / 新建项目 / 发起群聊 三项菜单）
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
   // 加载失败后的手动重试触发器（+1 重新跑列表 effect）
   const [reloadTick, setReloadTick] = useState(0);
   // A14/B27 新建 Agent 模态开关
   const [createAgentOpen, setCreateAgentOpen] = useState(false);
+  // 发起群聊模态（2026-11-06 重做回归：微信选人式，入口在列表区「新建项目」行后）
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   // 2026-08-22 第二轮 — Agent 创建成功后的「去对话试试」轻提示（auto-dismiss）。
   // 只在调用方/成功回调侧加引导，NeoCreateAgentModal 本体归另一代理。
   const [agentCreatedToast, setAgentCreatedToast] = useState<string | null>(null);
@@ -236,6 +247,19 @@ export function NeoRail({
     setQuery('');
   }, [section]);
 
+  // 「+ 新建」菜单点外关闭（微信/钉钉范式：无遮罩浮层，document mousedown
+  // 点外即收；菜单内部点击不关——选中项自己负责收菜单）。
+  useEffect(() => {
+    if (!plusMenuOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const tgt = e.target as Node;
+      if (plusMenuRef.current?.contains(tgt)) return;
+      setPlusMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [plusMenuOpen]);
+
   // Agent 创建成功 toast 自动消失（2.6s，与 composer toast 同款节奏）。
   useEffect(() => {
     if (!agentCreatedToast) return;
@@ -245,10 +269,24 @@ export function NeoRail({
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [teams, setTeams] = useState<TeamRecord[]>([]);
-  // 知识源（统一:本地仓库 + 知识分包；进入对应分区才拉取）
+  // 侧栏一次成型批（2026-11-06）：agents/teams/inbox 三路 settle 标记——home
+  // 列表在全部 settle 前渲染骨架行而非空白，消灭「先空白、数据到了瞬间全量
+  // 爆发」。projects 不参与判定（慢一路不阻塞列表，到了自然插进分组）。
+  const [agentsSettled, setAgentsSettled] = useState(false);
+  const [teamsSettled, setTeamsSettled] = useState(false);
+  // workspace 切换 = 新一轮加载：settle 标记复位，骨架重新接管（旧数据仍显示，
+  // 只是不再判「空态」——避免切工作区时闪错误空文案）。
+  useEffect(() => {
+    setAgentsSettled(false);
+    setTeamsSettled(false);
+  }, [workspaceId]);
+  // 知识源（统一:本地仓库 + 知识分包）/ 记忆条目（左栏分区列表;进入对应分区才拉取）
   const [packs, setPacks] = useState<KnowledgePack[] | null>(null);
   const [vaults, setVaults] = useState<KnowledgeVault[] | null>(null);
   const [packsState, setPacksState] = useState<LoadState>('loading');
+  // 定时任务（2026-11-06 /routines 对齐）：进入 schedules 分区拉全量计划
+  const [schedules, setSchedules] = useState<ScheduleRecord[] | null>(null);
+  const [schedulesState, setSchedulesState] = useState<LoadState>('loading');
 
   // 会话条目（最近单聊，数据源同 PersonalChatView）；Python 宕机时 store 降级
   // 为空数组，渲染干净空态即可。
@@ -256,6 +294,9 @@ export function NeoRail({
   // 群列表（Polynoia 对标 2026-08-15）— 团队的干活现场（群聊网关按
   // group.team_id 触发团队 DAG），点击中栏内嵌打开。
   const groups = useInboxStore((s) => s.groups) ?? [];
+  // inbox 加载态（侧栏一次成型批）：参与 home 骨架判定。首轮 loading 期间
+  // agentDMs/groups 都是空数组，不判它会把「加载中」误判成「没有会话」。
+  const inboxLoading = useInboxStore((s) => s.loading);
 
   const toggleCollapsed = onToggleCollapsed;
 
@@ -266,10 +307,12 @@ export function NeoRail({
       .then((rows) => {
         if (!alive) return;
         setAgents(rows);
+        setAgentsSettled(true);
       })
       .catch(() => {
         if (!alive) return;
         setAgents([]);
+        setAgentsSettled(true);
       });
     return () => {
       alive = false;
@@ -284,10 +327,12 @@ export function NeoRail({
       .then((rows) => {
         if (!alive) return;
         setTeams(rows);
+        setTeamsSettled(true);
       })
       .catch(() => {
         if (!alive) return;
         setTeams([]);
+        setTeamsSettled(true);
       });
     return () => {
       alive = false;
@@ -296,6 +341,7 @@ export function NeoRail({
 
   // 项目分组（GAP A3）：home 分区拉取项目+会话；失败降级 null（全落默认组，
   // 不影响既有列表渲染）。os-unified 后常驻加载（home 是唯一会话分区）。
+  // 不参与骨架判定（projects 慢一路不阻塞列表渲染）。
   useEffect(() => {
     let alive = true;
     listProjectsWithSessions()
@@ -331,6 +377,28 @@ export function NeoRail({
         setPacks([]);
         setVaults([]);
         setPacksState('error');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [section, reloadTick]);
+
+  // 定时任务列表（2026-11-06：进入 schedules 分区拉全量计划；Python 后端，
+  // 宕机时 error 态 + 重试钮，与 knowledge/memory 分区同款降级）
+  useEffect(() => {
+    if (section !== 'schedules') return;
+    let alive = true;
+    setSchedulesState('loading');
+    listSchedules()
+      .then((rows) => {
+        if (!alive) return;
+        setSchedules(rows);
+        setSchedulesState('ready');
+      })
+      .catch(() => {
+        if (!alive) return;
+        setSchedules([]);
+        setSchedulesState('error');
       });
     return () => {
       alive = false;
@@ -460,22 +528,37 @@ export function NeoRail({
     return m;
   }, [teams, groupByTeamId, projectByGroupId]);
 
-  // 散养成员的 DM（归属团队的成员 DM 不单独渲染，行已收进团队分组）
+  // 散养成员的 DM（归属团队的成员 DM 不单独渲染，行已收进团队分组）。
+  // 内置秘书「影」单独前置渲染（常驻行），不进散养 DM 桶（去重）。
   const soloDms = useMemo(
-    () => recentDMs.filter((d) => !teamAgentIds.has(d.agentId)),
+    () => recentDMs.filter((d) => !teamAgentIds.has(d.agentId) && d.agentId !== SECRETARY_AGENT_ID),
     [recentDMs, teamAgentIds],
   );
   const soloDmBuckets = useMemo(
     () => bucketByProject(soloDms, (d) => d.group_id),
     [bucketByProject, soloDms],
   );
-  // 无团队且无 DM 的成员（纯「成员」区行，点行自动 find-or-create DM）
+  // 无团队且无 DM 的成员（纯「成员」区行，点行自动 find-or-create DM）。
+  // 影固定 id 已被常驻行渲染，从散养成员里排除。
   const loneAgents = useMemo(
     () =>
       filteredAgents.filter(
-        (a) => !teamAgentIds.has(a.agent_id) && !dmByAgentId.has(a.agent_id),
+        (a) =>
+          !teamAgentIds.has(a.agent_id) &&
+          !dmByAgentId.has(a.agent_id) &&
+          a.agent_id !== SECRETARY_AGENT_ID,
       ),
     [filteredAgents, teamAgentIds, dmByAgentId],
+  );
+  // 内置秘书「影」的 agent 记录（后端启动播种；未拉到时用固定 id/名兜底渲染）。
+  const secretaryAgent = useMemo(
+    () => agents.find((a) => a.agent_id === SECRETARY_AGENT_ID) ?? null,
+    [agents],
+  );
+  // 影的 inbox DM 条目（有会话时行尾显示最后消息/时间；无会话时预览为引导文案）。
+  const secretaryDm = useMemo(
+    () => dmByAgentId.get(SECRETARY_AGENT_ID) ?? null,
+    [dmByAgentId],
   );
   // 已被团队分组收编的群聊 id（不进散群列表，避免团队分组内外双渲染）
   const teamGroupIdSet = useMemo(() => {
@@ -515,7 +598,11 @@ export function NeoRail({
     () => filteredTeams.filter((tm) => !projectByTeamId.has(tm.team_id)),
     [filteredTeams, projectByTeamId],
   );
+  // home 空态判定（侧栏一次成型批）：只在 agents/teams/inbox 三路全部 settle
+  // 后才允许判空——加载中一律走骨架，不闪「还没有会话」。
+  const homeLoading = !agentsSettled || !teamsSettled || inboxLoading;
   const railEmpty =
+    !homeLoading &&
     teams.length === 0 &&
     recentGroups.length === 0 &&
     recentDMs.length === 0 &&
@@ -559,17 +646,8 @@ export function NeoRail({
   );
 
   // ── os-unified（2026-11-03）：agent 会话项「点头像 = 主机卡片」────────────
-  // Grok Bot 范式：会话行头像即可点，点头像不进会话而是打开 agent 主机
-  // （灵魂编辑 + 头像更换 + 定时任务），点行身其余部分才进会话。stopPropagation
-  // 防止冒泡触发行点击。
-  const openAgentHost = useCallback(
-    (agentId: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      onNavigate({ view: 'agent-soul', agentId });
-    },
-    [onNavigate],
-  );
+  // 2026-11-06 用户反馈：点头像不再弹独立灵魂页（agent-soul），整行（含头像）
+  // 一律走 openAgentDm 进单聊；灵魂编辑由会话内右栏 NeoHost「灵魂」tab 承接。
 
   // 团队分组折叠状态（Grok Bot 分组范式：组标题可折叠，默认全展开）
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -887,6 +965,51 @@ export function NeoRail({
   // 归组，行内浮层入口冗余）。底层 moveConversation PATCH 通路保留——拖拽
   // drop（handleDropOnProject）仍复用它完成归属回写。
 
+  // ── 内置秘书「影」常驻行（2026-11-06，GrokBot 主Bot范式）─────────────────
+  // home 列表区第一位常驻：无论有没有会话，老板随时能找到秘书。点击 =
+  // openAgentDm（find-or-create DM；后端对新 DM 预置 Hello World! 问候）。
+  // 无 inbox 记录时预览显示引导文案；agent 记录未拉到时也用固定 id/名渲染。
+  const renderSecretaryRow = () => {
+    const rec = secretaryAgent;
+    const dm = secretaryDm;
+    const preview = dm?.lastMessage || (language === 'zh' ? '你的贴身秘书，随时吩咐' : 'Your secretary, at your service');
+    const rel = dm ? relativeTime(dm.lastActivityAt, nowTick, t) : null;
+    return (
+      <div className="neo-agent-row" data-testid="neo-secretary-row">
+        <button
+          type="button"
+          className={`neo-row neo-sess-row neo-secretary-row${dm && isConversation(dm.group_id) ? ' on' : ''}`}
+          onClick={() => openAgentDm(SECRETARY_AGENT_ID, rec?.name ?? SECRETARY_NAME)}
+          title={preview}
+        >
+          <span className="neo-sess-avatar">
+            <AgentAvatar
+              name={rec?.name ?? SECRETARY_NAME}
+              style={rec?.avatar_style ?? 'bottts-neutral'}
+              seed={rec?.avatar_seed ?? 'shadow-secretary'}
+              image={rec?.avatar_image ?? null}
+              size={32}
+              fallback={
+                <NeoAgentAvatar
+                  seed={SECRETARY_AGENT_ID}
+                  name={SECRETARY_NAME}
+                  color={rec?.avatar_color ?? null}
+                  status={rec ? agentStatusToDot(rec.status) : undefined}
+                />
+              }
+            />
+          </span>
+          <span className="neo-sess-text">
+            <span className="neo-sess-name">{rec?.name ?? SECRETARY_NAME}</span>
+            <span className="neo-sess-preview">{preview}</span>
+          </span>
+          {rel && <span className="neo-row-time">{rel}</span>}
+          {dm && dm.unreadCount > 0 && <span className="neo-row-badge">{dm.unreadCount}</span>}
+        </button>
+      </div>
+    );
+  };
+
   // DM 会话行 / 群聊现场行渲染器（home 默认组与项目分组桶共用，行为不变：
   // 点击 = 中栏打开会话；DM 无 group_id 时走 find-or-create resolve 通路）。
   // 管理面闭环（2026-08-23）：有 group_id 的行追加 hover 重命名/删除钮
@@ -898,6 +1021,25 @@ export function NeoRail({
     // 行尾 hover 钮（重命名/删除）保留；移入项目钮已删（拖拽归组取代）。
     const dmAgent = agentsById.get(d.agentId) ?? null;
     const dmAgentClaw = dmAgent?.claw_id ?? null;
+    // 侧栏一次成型批：头像优先 inbox 自带四件套（首帧即有），agents 记录
+    // 到达后再接管（claw 徽章/状态点等富信息仍以 agents 记录为准）。
+    const dmAvatar = (
+      <AgentAvatar
+        name={d.agentName}
+        style={d.avatar_style ?? dmAgent?.avatar_style}
+        seed={d.avatar_seed ?? dmAgent?.avatar_seed ?? d.agentName}
+        image={d.avatar_image ?? dmAgent?.avatar_image ?? null}
+        size={32}
+        fallback={
+          <NeoAgentAvatar
+            seed={d.agentId}
+            name={d.agentName}
+            color={d.avatar_color ?? dmAgent?.avatar_color ?? null}
+            status={dmAgent ? agentStatusToDot(dmAgent.status) : undefined}
+          />
+        }
+      />
+    );
     const openDm = () => {
       if (d.group_id) onNavigate({ view: 'conversation', groupId: d.group_id });
       else openAgentDm(d.agentId, d.agentName);
@@ -915,25 +1057,7 @@ export function NeoRail({
           title={d.lastMessage || d.agentName}
         >
           <span className="neo-sess-avatar">
-            {dmAgent ? (
-              <AgentAvatar
-                name={dmAgent.name}
-                style={dmAgent.avatar_style}
-                seed={dmAgent.avatar_seed ?? dmAgent.name}
-                image={dmAgent.avatar_image ?? null}
-                size={32}
-                fallback={
-                  <NeoAgentAvatar
-                    seed={d.agentId}
-                    name={d.agentName}
-                    color={dmAgent.avatar_color ?? null}
-                    status={agentStatusToDot(dmAgent.status)}
-                  />
-                }
-              />
-            ) : (
-              <NeoAgentAvatar seed={d.agentId} name={d.agentName} color={null} />
-            )}
+            {dmAvatar}
           </span>
           <span className="neo-sess-text">
             <span className="neo-sess-name">{d.agentName}</span>
@@ -992,11 +1116,20 @@ export function NeoRail({
 
   const renderGroupRow = (g: GroupItem) => {
     const rel = relativeTime(g.lastActivityAt, nowTick, t);
-    // os-unified 2026-11-04 用户反馈批：群头像 = 成员头像组合（Grok/微信范式），
-    // agent_ids join agents 记录 → 2×2 拼贴；空群回退剪影圆块。
-    const gMembers = (g.agent_ids ?? [])
-      .map((id) => agentsById.get(id))
-      .filter((a): a is AgentRecord => !!a);
+    // os-unified 2026-11-04 用户反馈批：群头像 = 成员头像组合（Grok/微信范式）。
+    // 侧栏一次成型批：优先 inbox 自带 members 快照（首帧即拼贴完整），快照
+    // 缺失（老数据）回落 agent_ids join 本地 agents 列表。
+    const gMembers: Array<{
+      agent_id?: string;
+      name: string;
+      avatar_style?: string | null;
+      avatar_seed?: string | null;
+      avatar_image?: string | null;
+    }> = g.members?.length
+      ? g.members
+      : (g.agent_ids ?? [])
+          .map((id) => agentsById.get(id))
+          .filter((a): a is AgentRecord => !!a);
     return (
       <div key={g.id} className="neo-agent-row">
         <button
@@ -1048,8 +1181,8 @@ export function NeoRail({
   };
 
   // ── os-unified：agent 会话行渲染器（Grok Bot 范式）────────────────────────
-  // 头像（DiceBear，可点击 → agent-soul 主机卡片）+ 名称 + 最后消息预览 +
-  // 相对时间 + 未读徽标。点击行身 = 进 DM 会话（openAgentDm 同既有通路）。
+  // 头像（DiceBear）+ 名称 + 最后消息预览 + 相对时间 + 未读徽标。
+  // 点击整行（含头像）= 进 DM 会话（openAgentDm 同既有通路）。
   const renderAgentSessionRow = (a: AgentRecord) => {
     const dm = dmByAgentId.get(a.agent_id);
     const rel = relativeTime(dm?.lastActivityAt, nowTick, t);
@@ -1070,17 +1203,7 @@ export function NeoRail({
         >
           <span
             className="neo-sess-avatar"
-            role="button"
-            tabIndex={0}
-            data-testid="neo-agent-host-btn"
-            aria-label={t('neo.host.title', { defaultValue: language === 'zh' ? 'Agent 的主机' : 'Agent host' })}
-            title={t('neo.host.title', { defaultValue: language === 'zh' ? 'Agent 的主机' : 'Agent host' })}
-            onClick={(e) => openAgentHost(a.agent_id, e)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                openAgentHost(a.agent_id, e as unknown as React.MouseEvent);
-              }
-            }}
+            aria-hidden
             draggable={false}
           >
             <AgentAvatar
@@ -1117,9 +1240,14 @@ export function NeoRail({
     const key = `team-${tm.team_id}`;
     const open = !collapsedGroups[key];
     const group = groupByTeamId.get(tm.team_id);
+    // 团队分组内的成员行仍以 teams.roster join agents 为准（含状态点）；
+    // 群头像拼贴优先 group.members 快照（首帧完整），缺失回落 roster join。
     const members = (tm.agent_ids ?? [])
       .map((id) => agentsById.get(id))
       .filter((a): a is AgentRecord => !!a);
+    const stackMembers = group?.members?.length
+      ? group.members
+      : members;
     return (
       <div key={key} data-testid="neo-team-group" data-team-id={tm.team_id}>
         <div className="neo-agent-row">
@@ -1161,7 +1289,7 @@ export function NeoRail({
                 >
                   <span className="neo-sess-avatar">
                     {/* os-unified 2026-11-04 用户反馈批：团队群头像 = 成员头像组合 */}
-                    <GroupStackAvatar members={members} size={32} />
+                    <GroupStackAvatar members={stackMembers} size={32} />
                   </span>
                   <span className="neo-sess-text">
                     <span className="neo-sess-name">{group.name}</span>
@@ -1221,6 +1349,8 @@ export function NeoRail({
   // 「成员 vs 团队」的分区感。分组语义交给项目/团队折叠组表达。
   const renderProjectBody = () => (
     <>
+      {/* 秘书「影」不在这里渲染（2026-11-06 修复重复）：常驻行由列表区
+          「+ 新建」之下统一渲染一次（项目分组之上），默认组只含普通会话。 */}
       {defaultTeams.map(renderTeamGroup)}
       {looseGroupBuckets.unassigned.map(renderGroupRow)}
       {soloDmBuckets.unassigned.map(renderDmRow)}
@@ -1354,16 +1484,7 @@ export function NeoRail({
             <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
-        <button
-          type="button"
-          className="neo-icon-btn neo-newtask-icon"
-          onClick={onNewTask}
-          aria-label={t('neo.newTask')}
-          title={t('neo.newTask')}
-          data-testid="neo-new-task"
-        >
-          <SquarePen size={15} strokeWidth={1.75} aria-hidden />
-        </button>
+        {/* 「新任务」图标钮已收起（2026-11-06 用户反馈，⌘K 快捷键保留） */}
         <div className="neo-rail-icons" role="list">
           {filteredAgents.map((a) => (
             <button
@@ -1432,20 +1553,12 @@ export function NeoRail({
       </div>
 
       {/* 一级导航（全部经 onNavigate/onNewTask 上报，NeoApp 统一映射列表区）：
-          os-unified（2026-11-04 Grok Bot 范式批）：只留全局动作（新任务/知识库/
+          os-unified（2026-11-04 Grok Bot 范式批）：只留全局动作（知识库/
           记忆/搜索/ClawHub）——团队/员工/历史按钮移除，成员即会话、团队即
-          home 列表区分组，历史由会话列表本身承担。 */}
+          home 列表区分组，历史由会话列表本身承担。
+          2026-11-06 用户反馈：「新任务」入口收起不展示（主控对话由秘书「影」
+          承担，⌘K 快捷键保留）。 */}
       <nav className="neo-nav">
-        <button
-          type="button"
-          className={`neo-nav-row${section === 'home' ? ' on' : ''}`}
-          onClick={onNewTask}
-          aria-pressed={section === 'home'}
-          data-testid="neo-new-task"
-        >
-          <SquarePen size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">{t('neo.newTask')}</span>
-        </button>
         <button
           type="button"
           className={`neo-nav-row${section === 'knowledge' ? ' on' : ''}`}
@@ -1474,6 +1587,21 @@ export function NeoRail({
             {t('neo.dashboard', { defaultValue: language === 'zh' ? '数据看板' : 'Dashboard' })}
           </span>
         </button>
+        {/* 定时任务（2026-11-06，GrokBot 教程「定时任务」章节 + OpenBot /routines
+            surface 对齐）：全局计划管理面入口，中栏 SchedulesPage + 左栏
+            schedules 列表区。 */}
+        <button
+          type="button"
+          className={`neo-nav-row${nav.view === 'schedules' ? ' on' : ''}`}
+          onClick={() => onNavigate({ view: 'schedules' })}
+          aria-pressed={nav.view === 'schedules'}
+          data-testid="neo-nav-schedules"
+        >
+          <CalendarClock size={15} strokeWidth={1.75} aria-hidden />
+          <span className="neo-nav-row-name">
+            {t('neo.schedules.nav', { defaultValue: language === 'zh' ? '定时任务' : 'Schedules' })}
+          </span>
+        </button>
         <button
           type="button"
           className="neo-nav-row"
@@ -1484,20 +1612,6 @@ export function NeoRail({
           <Search size={15} strokeWidth={1.75} aria-hidden />
           <span className="neo-nav-row-name">
             {t('neo.nav.search', { defaultValue: language === 'zh' ? '搜索' : 'Search' })}
-          </span>
-        </button>
-        {/* ClawHub（2026-10-30 内嵌化）— 导航切换（左栏常驻），不再跳独立路由 */}
-        <button
-          type="button"
-          className={`neo-nav-row${nav.view === 'clawhub' ? ' on' : ''}`}
-          data-testid="neo-nav-clawhub"
-          title={t('clawhub.title', { defaultValue: language === 'zh' ? 'ClawHub · Claw 集合平台' : 'ClawHub' })}
-          onClick={() => onNavigate({ view: 'clawhub' })}
-          aria-pressed={nav.view === 'clawhub'}
-        >
-          <PawPrint size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">
-            {t('clawhub.navEntry', { defaultValue: language === 'zh' ? 'ClawHub' : 'ClawHub' })}
           </span>
         </button>
       </nav>
@@ -1530,37 +1644,74 @@ export function NeoRail({
         )}
         {section === 'home' && (
           <>
-            {/* os-unified 2026-11-04 用户反馈批：「新建 Agent」入口前置到列表区
-                顶部（用户：创建入口「应该要往前放」）。Grok 范式：造 Bot 是
-                最高频动作，放最顺手的位置。 */}
-            <button
-              type="button"
-              className="neo-row"
-              onClick={() => setCreateAgentOpen(true)}
-              data-testid="neo-new-agent"
-            >
-              <Plus size={15} strokeWidth={1.75} aria-hidden />
-              <span className="neo-row-name">
-                {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
-              </span>
-            </button>
-
-            {/* os-unified 2026-11-04（Grok Bot 范式 + 用户反馈批）：
-                home = 唯一会话区。项目 = 顶层分组（Grok「工作/生活」范式，
-                「不同项目里是不同的规划」），组内混排该项目群聊/团队分组/成员会话；
-                未归项目的（团队/群聊/DM/孤儿成员）落默认区，同构混排。 */}
-            <button
-              type="button"
-              className="neo-row"
-              onClick={() => setCreateProjectOpen((o) => !o)}
-              aria-expanded={createProjectOpen}
-              data-testid="neo-new-project"
-            >
-              <Plus size={15} strokeWidth={1.75} aria-hidden />
-              <span className="neo-row-name">
-                {t('neo.newProject', { defaultValue: language === 'zh' ? '新建项目' : 'New Project' })}
-              </span>
-            </button>
+            {/* 「+ 新建」聚合入口（2026-11-06 用户反馈）：三个创建入口
+                （新建 Agent / 新建项目 / 发起群聊）收进一个加号行，点加号
+                弹出三项菜单（Grok/微信「+」范式，列表区收干净）。
+                造 Bot 仍是最高频动作排菜单第一位。 */}
+            <div className="neo-plus-wrap" ref={plusMenuRef}>
+              <button
+                type="button"
+                className={`neo-row${plusMenuOpen ? ' on' : ''}`}
+                onClick={() => setPlusMenuOpen((o) => !o)}
+                aria-haspopup="menu"
+                aria-expanded={plusMenuOpen}
+                data-testid="neo-new-plus"
+              >
+                <Plus size={15} strokeWidth={1.75} aria-hidden />
+                <span className="neo-row-name">
+                  {t('neo.newPlus', { defaultValue: language === 'zh' ? '新建' : 'New' })}
+                </span>
+              </button>
+              {plusMenuOpen && (
+                <div className="neo-plus-menu" role="menu" data-testid="neo-plus-menu">
+                  <button
+                    type="button"
+                    className="neo-row neo-plus-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setPlusMenuOpen(false);
+                      setCreateAgentOpen(true);
+                    }}
+                    data-testid="neo-new-agent"
+                  >
+                    <Plus size={15} strokeWidth={1.75} aria-hidden />
+                    <span className="neo-row-name">
+                      {t('neo.newAgent', { defaultValue: language === 'zh' ? '新建 Agent' : 'New Agent' })}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="neo-row neo-plus-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setPlusMenuOpen(false);
+                      setCreateProjectOpen(true);
+                    }}
+                    data-testid="neo-new-project"
+                  >
+                    <Plus size={15} strokeWidth={1.75} aria-hidden />
+                    <span className="neo-row-name">
+                      {t('neo.newProject', { defaultValue: language === 'zh' ? '新建项目' : 'New Project' })}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="neo-row neo-plus-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setPlusMenuOpen(false);
+                      setCreateGroupOpen(true);
+                    }}
+                    data-testid="neo-new-group"
+                  >
+                    <UsersRound size={15} strokeWidth={1.75} aria-hidden />
+                    <span className="neo-row-name">
+                      {t('neo.newGroup.entry', { defaultValue: language === 'zh' ? '发起群聊' : 'New Group' })}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
             {createProjectOpen && (
               <>
                 <div className="neo-search">
@@ -1622,17 +1773,36 @@ export function NeoRail({
               </div>
             )}
 
+            {/* 秘书「影」常驻行（2026-11-06 位置调整）：「+ 新建」之下、
+                项目分组之上——老板进门先看到秘书，再往下翻项目与会话。
+                只渲染这一次（默认组 renderProjectBody 内不再重复）。 */}
+            {renderSecretaryRow()}
+
             {projectSections.map(renderProjectSection)}
 
             {/* 默认区：未归项目的团队分组 / 散群 / 成员 DM / 孤儿成员
-                (os-unified 2026-11-04：也是拖拽归组的投放目标——拖到这里 = 移回默认项目） */}
+                (os-unified 2026-11-04：也是拖拽归组的投放目标——拖到这里 = 移回默认项目）
+                侧栏一次成型批（2026-11-06）：四路数据 settle 前渲染骨架行占位，
+                数据到齐后一次性原位替换——加载过程不再「空白→全量爆发」。 */}
             {railEmpty ? (
               <div className="neo-list-note">
                 {t('neo.sessionsEmpty', {
                   defaultValue: language === 'zh'
-                    ? '还没有会话，发一条消息开始'
-                    : 'No conversations yet',
+                    ? '还没有其他会话，向「影」吩咐第一件事吧'
+                    : 'No conversations yet — tell Ying your first task',
                 })}
+              </div>
+            ) : homeLoading ? (
+              <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')} data-testid="neo-rail-home-skeleton">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="neo-rail-sess-skeleton">
+                    <span className="sf-skeleton neo-rail-skel-avatar" />
+                    <span className="sf-skeleton neo-rail-skel-lines">
+                      <span className="sf-skeleton neo-rail-skel-line" />
+                      <span className="sf-skeleton neo-rail-skel-line neo-rail-skel-line--short" />
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div
@@ -1719,6 +1889,81 @@ export function NeoRail({
               ))}
           </>
         )}
+
+        {/* 定时任务列表（2026-11-06 /routines 对齐）：行 = 频率 + 任务摘要 +
+            下次运行；点行进中栏管理页（启停/删除在页内做，列表区保持轻）。
+            折叠态摘要：启用数/总数。 */}
+        {section === 'schedules' && (
+          <>
+            <div className="neo-section-label">
+              {t('neo.schedules.nav', { defaultValue: language === 'zh' ? '定时任务' : 'Schedules' })}
+              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
+            </div>
+            {schedulesState === 'loading' && (
+              <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')}>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="sf-skeleton neo-rail-skeleton" />
+                ))}
+              </div>
+            )}
+            {schedulesState === 'error' && (
+              <div className="neo-list-note neo-list-error">
+                <span className="neo-list-error-text">{t('team.loadError')}</span>
+                <button
+                  type="button"
+                  className="neo-list-retry"
+                  onClick={() => setReloadTick((n) => n + 1)}
+                >
+                  <RotateCcw size={11} strokeWidth={2} aria-hidden />
+                  {t('common.retry')}
+                </button>
+              </div>
+            )}
+            {schedulesState === 'ready' && (schedules?.length ?? 0) === 0 && (
+              <div className="neo-list-note" data-testid="neo-rail-schedules-empty">
+                {t('neo.schedules.emptyShort', {
+                  defaultValue: language === 'zh'
+                    ? '还没有计划，到 Agent 主机卡片或 /schedule 新建'
+                    : 'No schedules yet',
+                })}
+              </div>
+            )}
+            {schedulesState === 'ready' &&
+              (schedules ?? []).map((s) => (
+                <button
+                  key={s.schedule_id}
+                  type="button"
+                  className={`neo-row${nav.view === 'schedules' ? ' on' : ''}`}
+                  onClick={() => onNavigate({ view: 'schedules' })}
+                  data-testid="neo-rail-schedule-row"
+                  title={`${s.cron_expression || s.start_at || ''}\n${s.task_description}`}
+                >
+                  <CalendarClock size={15} strokeWidth={1.75} aria-hidden />
+                  <span className="neo-row-name">{s.task_description || s.cron_expression || '—'}</span>
+                  {s.enabled === false && (
+                    <span className="neo-row-meta">
+                      {t('neo.schedules.disabledShort', { defaultValue: language === 'zh' ? '停用' : 'off' })}
+                    </span>
+                  )}
+                </button>
+              ))}
+            {schedulesState === 'ready' && (schedules?.length ?? 0) > 0 && (
+              <button
+                type="button"
+                className="neo-row"
+                onClick={() => onNavigate({ view: 'schedules' })}
+                data-testid="neo-rail-schedules-manage"
+              >
+                <Plus size={15} strokeWidth={1.75} aria-hidden />
+                <span className="neo-row-name">
+                  {t('neo.schedules.manageAll', {
+                    defaultValue: language === 'zh' ? '管理全部…' : 'Manage all…',
+                  })}
+                </span>
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {/* 底部账户行：ShadowFlow 徽章头像（白底 S 字母）+ 名 + 设置（直达
@@ -1755,6 +2000,21 @@ export function NeoRail({
             setAgentCreatedToast(
               t('neo.agent.createdToast', { defaultValue: `已创建「${a.name}」，去对话试试` }),
             );
+          }}
+        />
+      )}
+
+      {/* 发起群聊模态（2026-11-06 选人式重做）：成功 → 跳群聊现场 + 刷新 inbox
+          （新群即时出现在列表）+ 重拉项目分组（会话可能已归属项目桶）。 */}
+      {createGroupOpen && (
+        <NeoCreateGroupModal
+          workspaceId={workspaceId ?? null}
+          onClose={() => setCreateGroupOpen(false)}
+          onCreated={(g) => {
+            setCreateGroupOpen(false);
+            onNavigate({ view: 'conversation', groupId: g.groupId });
+            void useInboxStore.getState().fetchWorkspaceInbox(workspaceId ?? null);
+            setReloadTick((n) => n + 1);
           }}
         />
       )}

@@ -7,6 +7,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+// 2026-11-06 美化批：官方品牌 logo（首字母 monogram 太丑，用户反馈）
+import { BrandGlyph } from '../../../common/icons/brandIcons';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
@@ -87,6 +89,7 @@ function syncSelection(id: string) {
 
 function CLILogo({ id, size = 32, active = false }: { id: string; size?: number; active?: boolean }) {
   const m = CLI_META[id] ?? { tint: '#71717A', monogram: id.slice(0, 2).toUpperCase() };
+  const glyph = BrandGlyph({ brandId: id, size: Math.round(size * 0.58) });  // 2026-11-06 美化批：官方品牌 SVG 优先，未收录回落首字母 monogram。
   return (
     <div style={{
       width: size, height: size, borderRadius: Math.round(size * 0.26), flexShrink: 0,
@@ -98,7 +101,7 @@ function CLILogo({ id, size = 32, active = false }: { id: string; size?: number;
       letterSpacing: '-0.04em', userSelect: 'none',
       boxShadow: active ? `0 0 0 1px ${m.tint}55, 0 0 12px -2px ${m.tint}66` : 'none',
     }}>
-      {m.monogram}
+      {glyph ?? m.monogram}
     </div>
   );
 }

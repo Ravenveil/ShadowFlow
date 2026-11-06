@@ -184,6 +184,90 @@ describe('emit → runBus 事件日志 → B2 读回', () => {
     gw.finish('succeeded'); // runBus.finish 终态守卫 → 状态不变
     expect(runSessions.getRunReplay(gw.sessionId)!.status).toBe('failed');
   });
+
+  // 2026-11-06「消息结束了还在转圈」— 生产者漏发 finalize（崩溃/中断路径）时，
+  // run 终态清扫必须把残留的 streaming 过程卡就地收口，回放不再永远转圈。
+  it('finish 兜底清扫：未 finalize 的 thinking/tool_call/msg_foot 落终态', () => {
+    const groupId = 'g-sweep-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '中断轮')!;
+
+    const tid = gw.nextId();
+    gw.emitMessage({
+      id: tid,
+      kind: 'thinking',
+      turn_id: gw.turnId,
+      ts: Date.now() - 5_000,
+      label: '小张 正在思考',
+      status: 'streaming',
+    });
+    const toolId = gw.nextId();
+    gw.emitMessage({
+      id: toolId,
+      kind: 'tool_call',
+      turn_id: gw.turnId,
+      ts: Date.now(),
+      name: 'web_search',
+      args_summary: 'q=测试',
+      status: 'running',
+    });
+    const footId = gw.nextId();
+    gw.emitMessage({
+      id: footId,
+      kind: 'msg_foot',
+      turn_id: gw.turnId,
+      ts: Date.now(),
+      status: 'running',
+    });
+
+    // finish 前：回放仍是三张未收口卡。
+    const before = timelineReplay.replayTimeline(
+      runSessions.getRunReplay(gw.sessionId)!.events,
+    );
+    expect(before.find((m) => m.id === tid && m.kind === 'thinking'))
+      .toMatchObject({ status: 'streaming' });
+
+    gw.finish('canceled');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    expect(replay.status).toBe('canceled');
+    const after = timelineReplay.replayTimeline(replay.events);
+    const think = after.find((m) => m.id === tid)!;
+    expect(think).toMatchObject({ kind: 'thinking', status: 'done' });
+    if (think.kind === 'thinking') {
+      expect(typeof think.duration_ms === 'number').toBe(true);
+    }
+    expect(after.find((m) => m.id === toolId)).toMatchObject({
+      kind: 'tool_call',
+      status: 'error',
+    });
+    expect(after.find((m) => m.id === footId)).toMatchObject({
+      kind: 'msg_foot',
+      status: 'done',
+    });
+  });
+
+  it('终态清扫幂等：已 finalize 的卡不被重复改写', () => {
+    const groupId = 'g-sweep-idem-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '正常轮')!;
+    const tid = gw.nextId();
+    gw.emitMessage({
+      id: tid,
+      kind: 'thinking',
+      turn_id: gw.turnId,
+      ts: Date.now() - 1_000,
+      label: '小张 正在思考',
+      status: 'streaming',
+    });
+    gw.emitPatch({ id: tid, op: 'thinking_finalize', duration_ms: 999 });
+    gw.finish('succeeded');
+
+    const after = timelineReplay.replayTimeline(
+      runSessions.getRunReplay(gw.sessionId)!.events,
+    );
+    const think = after.find((m) => m.id === tid);
+    expect(think).toMatchObject({ kind: 'thinking', status: 'done', duration_ms: 999 });
+    // 清扫没有追加任何额外 thinking_finalize（duration_ms 仍是生产者的 999）。
+  });
 });
 
 describe('失败语义 — 绝不反向破坏聊天主链路', () => {
