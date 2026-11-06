@@ -15,6 +15,14 @@
  *     quickCreateAgent 落库（复用 NeoCreateAgentModal 同款创建链路）；
  *     LLM 失败降级为问卷答案直拼的模板 persona——创建永不因 LLM 挂掉。
  *     成功经 onAgentCreated 上报（NeoApp 刷新左栏列表）。
+ *
+ * 链路健壮性（2026-11-07，防挂死 + 失败可见）：
+ *  - persona 生成 / 助理创建各自套 withDeadline 超时（20s / 15s，abort +
+ *    竞速双保险）——LLM/后端挂起不再把弹窗永远卡在「正在生成/正在创建」。
+ *  - 创建失败或超时不再静默吞：进失败态给内联错误条 +「重试创建」（persona
+ *    保留，只重跑落库）/「先跳过」（走 onFinished 收口，不阻塞画像与自我介绍）。
+ *  - 助理命名取「最想甩掉的重活」首项（assistantNameFrom），多选拼接串不再
+ *    被截断出「整理资讯、回邮件、做表助理」式怪名。
  */
 import { useState } from 'react';
 import { Loader2, Sparkles, X } from 'lucide-react';
@@ -90,6 +98,48 @@ const QUIZ_FIELDS: QuizField[] = [
   },
 ];
 
+/** 防挂死超时（2026-11-07）：persona 生成 20s、助理落库 15s。 */
+const PERSONA_TIMEOUT_MS = 20_000;
+const CREATE_TIMEOUT_MS = 15_000;
+
+/**
+ * 「最想甩掉的重活」→ 助理名：取首项防多选拼接串被截断出怪名
+ * （「整理资讯、回邮件、做表格」旧逻辑 slice(0,12) 得「整理资讯、回邮件、做表助理」）。
+ * 导出供直测。
+ */
+export function assistantNameFrom(delegate: string): string {
+  const first =
+    delegate
+      .split(/[、,，;；/]/)
+      .map((s) => s.trim())
+      .find(Boolean) ?? '';
+  const base = first.slice(0, 12);
+  return base ? `${base}助理` : '专属助理';
+}
+
+/**
+ * 防挂死：给一次异步调用套超时 deadline。abort + 竞速双保险——目标实现
+ * 若不响应 signal（挂起的 fetch 之外的黑盒），Promise.race 也能让 UI 脱身。
+ * 超时抛 Error('TIMEOUT')，由调用方降级/收口。
+ */
+function withDeadline<T>(fn: (signal: AbortSignal) => Promise<T>, ms: number): Promise<T> {
+  const ac = new AbortController();
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => ac.abort(), ms);
+    const settle = (done: () => void) => {
+      clearTimeout(timer);
+      ac.signal.removeEventListener('abort', onAbort);
+      done();
+    };
+    const onAbort = () => settle(() => reject(new Error('TIMEOUT')));
+    ac.signal.addEventListener('abort', onAbort, { once: true });
+    fn(ac.signal).then(
+      (v) => settle(() => resolve(v)),
+      (e) => settle(() => reject(e)),
+    );
+  });
+}
+
 export function NeoOnboardingModal({
   onFinished,
   onSkipped,
@@ -107,8 +157,11 @@ export function NeoOnboardingModal({
   const [chips, setChips] = useState<Record<string, string[]>>({});
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  // Agent 生成阶段提示（submit 内逐步 setState，UI 实时反馈进度）
-  const [phase, setPhase] = useState<'idle' | 'persona' | 'saving'>('idle');
+  // Agent 生成阶段提示（submit 内逐步 setState，UI 实时反馈进度）；
+  // failed = 创建失败/超时（2026-11-07 失败可见：内联错误 + 重试/先跳过）。
+  const [phase, setPhase] = useState<'idle' | 'persona' | 'saving' | 'failed'>('idle');
+  // 失败态保留待创建的助理（name+soul），「重试创建」只重跑落库不重生成。
+  const [pending, setPending] = useState<{ name: string; soul: string } | null>(null);
 
   const field = QUIZ_FIELDS[step];
   const total = QUIZ_FIELDS.length;
@@ -143,8 +196,8 @@ export function NeoOnboardingModal({
     return { name, soul: lines.join('\n') };
   };
 
-  const submit = async () => {
-    setSubmitting(true);
+  /** 自我介绍消息（问卷答案拼接；全空 = '' 不发消息）。 */
+  const buildIntro = (): string => {
     const answerLines: string[] = [];
     for (const f of QUIZ_FIELDS) {
       const v = (values[f.key] ?? '').trim();
@@ -152,6 +205,22 @@ export function NeoOnboardingModal({
       const combined = [...cs, v].filter(Boolean).join('、');
       if (combined) answerLines.push(`${f.label}：${combined}`);
     }
+    return answerLines.length
+      ? `（认识一下）你好，总经理，先自我介绍：\n${answerLines.join('\n')}\n请记住这些，之后按我习惯的方式跟我协作。`
+      : '';
+  };
+
+  /** 助理落库（15s 防挂死）；成功回报 onAgentCreated，失败抛出由调用方收口。 */
+  const createAssistant = async (name: string, soul: string): Promise<void> => {
+    const agent = await withDeadline(
+      (signal) => quickCreateAgent({ name, soul }, { signal }),
+      CREATE_TIMEOUT_MS,
+    );
+    onAgentCreated?.({ agent_id: agent.agent_id, name: agent.name || name });
+  };
+
+  const submit = async () => {
+    setSubmitting(true);
     // 持久化画像（秘书后续对话可引用；设置页后续可展示/编辑）
     try {
       localStorage.setItem(
@@ -167,16 +236,22 @@ export function NeoOnboardingModal({
       /* ignore */
     }
     // ── 专属助理 Agent（2026-11-06：问完直接做一个 Agent 给用户）──────────
-    // 以「最想甩掉的重活」为种子：LLM 生成人设，失败降级问卷直拼模板；
-    // 创建失败也不阻塞（onboarding 本体的价值在画像 + 自我介绍）。
+    // 以「最想甩掉的重活」为种子：LLM 生成人设（20s 防挂死），失败降级问卷
+    // 直拼模板；创建失败/超时不再静默吞（2026-11-07）——进失败态让用户
+    // 「重试创建」或「先跳过」，onboarding 本体（画像 + 自我介绍）不受阻。
     const delegate = answerOf('delegate');
     if (delegate) {
       setPhase('persona');
+      const agentName = assistantNameFrom(delegate);
       let persona = '';
-      const agentName = `${delegate.slice(0, 12)}助理`;
       try {
-        persona = await generateAgentPersona(
-          `帮我招一个助理 Agent，主责替我分担：${delegate}。${answerOf('identity') ? `我是${answerOf('identity')}。` : ''}${answerOf('style') ? `沟通风格：${answerOf('style')}。` : ''}`,
+        persona = await withDeadline(
+          (signal) =>
+            generateAgentPersona(
+              `帮我招一个助理 Agent，主责替我分担：${delegate}。${answerOf('identity') ? `我是${answerOf('identity')}。` : ''}${answerOf('style') ? `沟通风格：${answerOf('style')}。` : ''}`,
+              { signal },
+            ),
+          PERSONA_TIMEOUT_MS,
         );
       } catch {
         const fb = buildFallbackPersona();
@@ -184,17 +259,40 @@ export function NeoOnboardingModal({
       }
       setPhase('saving');
       try {
-        const agent = await quickCreateAgent({ name: agentName, soul: persona });
-        onAgentCreated?.({ agent_id: agent.agent_id, name: agent.name || agentName });
+        await createAssistant(agentName, persona);
       } catch {
-        /* 创建失败不阻塞 onboarding 完成（下次可手动建） */
+        setPending({ name: agentName, soul: persona });
+        setPhase('failed');
+        setSubmitting(false);
+        return;
       }
     }
     setPhase('idle');
-    const intro = answerLines.length
-      ? `（认识一下）你好，总经理，先自我介绍：\n${answerLines.join('\n')}\n请记住这些，之后按我习惯的方式跟我协作。`
-      : '';
-    onFinished(intro);
+    onFinished(buildIntro());
+  };
+
+  /** 失败态「重试创建」：persona 保留，只重跑落库。 */
+  const retryCreate = async () => {
+    if (!pending) return;
+    setSubmitting(true);
+    setPhase('saving');
+    try {
+      await createAssistant(pending.name, pending.soul);
+    } catch {
+      setPhase('failed');
+      setSubmitting(false);
+      return;
+    }
+    setPending(null);
+    setPhase('idle');
+    onFinished(buildIntro());
+  };
+
+  /** 失败态「先跳过」：放弃创建（可稍后手动建），画像与自我介绍照常收口。 */
+  const skipCreate = () => {
+    setPending(null);
+    setPhase('idle');
+    onFinished(buildIntro());
   };
 
   return (
@@ -278,7 +376,38 @@ export function NeoOnboardingModal({
                 {t('common.back', { defaultValue: '上一步' })}
               </button>
             )}
-            {isLast ? (
+            {phase === 'failed' ? (
+              // 失败可见（2026-11-07）：创建失败/超时 → 内联错误 + 重试/先跳过，
+              // 不再静默吞掉「正在创建助理 Agent…」的结果。
+              <>
+                <span
+                  className="neo-onb-step"
+                  style={{ color: '#c0392b', maxWidth: 260 }}
+                  role="alert"
+                  data-testid="neo-onb-create-fail"
+                >
+                  {t('neo.onboarding.createFailed', {
+                    defaultValue: '专属助理创建失败（超时或后端异常），可重试；跳过也可稍后手动创建',
+                  })}
+                </span>
+                <button
+                  type="button"
+                  className="neo-onb-btn primary"
+                  onClick={retryCreate}
+                  data-testid="neo-onb-retry-create"
+                >
+                  {t('neo.onboarding.retryCreate', { defaultValue: '重试创建' })}
+                </button>
+                <button
+                  type="button"
+                  className="neo-onb-btn"
+                  onClick={skipCreate}
+                  data-testid="neo-onb-skip-create"
+                >
+                  {t('neo.onboarding.skipCreate', { defaultValue: '先跳过' })}
+                </button>
+              </>
+            ) : isLast ? (
               <button
                 type="button"
                 className="neo-onb-btn primary"

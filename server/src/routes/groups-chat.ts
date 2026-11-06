@@ -58,6 +58,7 @@ import { createHopBroadcaster } from '../lib/chat-dag/hop-broadcast';
 import { decomposeWithLlm, type ParsedTask } from '../lib/orchestrator-parse';
 // 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
 import { coercePackIds, knowledgeBlock } from '../lib/memory-bank';
+import { promptBlock } from '../storage/memory-lessons';
 import {
   commitWorktree,
   integrateAll,
@@ -145,6 +146,25 @@ export function tryResolveApprovalFromText(groupId: string, text: string): boole
     }
   }
   return true;
+}
+
+// ── 2026-11-07 记忆闭环 — 聊天 agent 提示词注入经验记忆（recall）──────────────
+// 走查发现：memory_lessons 写入侧（chat 回合失败/中断 → recordRunLesson，域
+// 'chat-gateway'）早已接通，但聊天两条派发路径的 system 只有 soul，沉淀的经验
+// 永远读不回来（recallTopK 在聊天面从未生效）。这里补上召回闭环。
+
+/** 聊天回合沉淀的固定域（run-sessions registerGatewayRun 的 skill_name 同值）。 */
+export const CHAT_LESSON_SCOPE = 'chat-gateway';
+
+/**
+ * 聊天轮经验块（挂 system，soul 之后）。召回域合并去重：
+ *   - agent 专属（手记/按 bot 沉淀，scope_key=agentId）
+ *   - CHAT_LESSON_SCOPE（聊天回合失败/中断自动沉淀）
+ *   - 通用（域空，天然双域命中，按 id 去重）
+ * 开关 memory.autoLearn（关=不召回）、条数 memory.recallTopK；空块返回 ''。
+ */
+export function chatLessonsBlock(agentId: string): string {
+  return promptBlock([agentId, CHAT_LESSON_SCOPE], '');
 }
 
 // ── 2026-11-05 GrokBot「记忆交接」— 会话回合跑完自动沉淀交接包 ─────────────────
@@ -1165,7 +1185,8 @@ async function runFanout(
             try {
               const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
               for await (const chunk of callable.turn({
-                system: soul,
+                // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
+                system: soul + chatLessonsBlock(agentId),
                 prompt: basePrompt + kbText + upstreamText,
                 history: history0.slice(0, -1),
                 signal,
@@ -1408,7 +1429,8 @@ async function runFanout(
       try {
         const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
         for await (const chunk of callable.turn({
-          system: soul,
+          // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
+          system: soul + chatLessonsBlock(agentId),
           prompt: prompt + kbText,
           history: history.slice(0, -1), // exclude the just-read latest user (it's the prompt)
           signal: ctrl.signal,

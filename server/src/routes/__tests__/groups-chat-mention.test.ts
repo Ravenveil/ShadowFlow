@@ -79,9 +79,10 @@ const turnPrompts: Array<{ agentId: string; prompt: string }> = [];
 vi.mock('../../transport/dispatcher', () => ({
   resolveCallable: (_executor: string) => ({
     turn: async function* (args: { system: string; prompt: string }) {
-      // soul 形如 soul-<id> → 反查 agentId（测试观测用）。
+      // soul 形如 soul-<id> → 反查 agentId（测试观测用）。前缀匹配：2026-11-07
+      // 起 system = soul + 过经验块（chatLessonsBlock），不能再整串精确相等。
       const agentId = Object.entries(agentRecords).find(
-        ([, a]) => a.soul === args.system,
+        ([, a]) => a.soul && args.system.startsWith(a.soul),
       )?.[0] ?? 'unknown';
       turnPrompts.push({ agentId, prompt: args.prompt });
       yield { type: 'text-delta', value: `${agentId} 收到` };

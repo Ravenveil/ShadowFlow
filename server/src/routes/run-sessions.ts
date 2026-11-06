@@ -37,7 +37,7 @@ import { saveRun, saveRunArtifacts, type ArtifactType } from '../storage/runs';
 import { getSetting } from '../storage/settings';
 // 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
-import { remember, contextBlock } from '../storage/memory-lessons';
+import { remember, promptBlock } from '../storage/memory-lessons';
 import { coercePackIds, knowledgeBlock } from '../lib/memory-bank';
 import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
@@ -813,17 +813,10 @@ const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'mark
 /**
  * 经验记忆召回块（run 提示词注入用）。按 skill_name 分域，空块返回 ''。
  * 开关：settings.memory.autoLearn（默认开）；settings.memory.recallTopK（默认 4）。
+ * 2026-11-07 — 开关/条数/格式统一走 storage/memory-lessons.promptBlock。
  */
 function lessonsBlockForSession(skillName: string): string {
-  try {
-    if (getSetting('memory.autoLearn') === false) return '';
-    const topK = getSetting('memory.recallTopK');
-    const k = typeof topK === 'number' && topK > 0 ? Math.min(Math.round(topK), 12) : 4;
-    const block = contextBlock(skillName ?? '', '', k);
-    return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
-  } catch {
-    return '';
-  }
+  return promptBlock(skillName ?? '', '');
 }
 
 /** skill 层内容 + 经验块拼接（两者都可能为空）。 */
