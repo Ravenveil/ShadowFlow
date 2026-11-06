@@ -73,7 +73,7 @@ _MEDIA_PROVIDERS = [
 ]
 
 _VALID_THEMES = {"dark", "light", "system"}
-_VALID_PROVIDERS = {"anthropic", "openai", "google", "deepseek", "azure", "zhipu"}
+_VALID_PROVIDERS = {"anthropic", "openai", "google", "deepseek", "azure", "zhipu", "mimo"}
 _DEFAULT_MODEL = "claude-sonnet-4-6"
 
 BYOK_MODELS: List[Dict[str, Any]] = [
@@ -98,6 +98,10 @@ BYOK_MODELS: List[Dict[str, Any]] = [
     {"id": "glm-4-flash",                "name": "GLM-4 Flash",           "provider": "zhipu"},
     {"id": "glm-4-plus",                 "name": "GLM-4 Plus",            "provider": "zhipu"},
     {"id": "glm-4",                      "name": "GLM-4",                 "provider": "zhipu"},
+    # Xiaomi MiMo
+    {"id": "mimo-v2.6-pro",              "name": "MiMo V2.6 Pro",         "provider": "mimo"},
+    {"id": "mimo-v2.6-flash",            "name": "MiMo V2.6 Flash",       "provider": "mimo"},
+    {"id": "mimo-v2.5-pro",              "name": "MiMo V2.5 Pro",         "provider": "mimo"},
     # Azure
     {"id": "azure-gpt-4o",               "name": "Azure GPT-4o",          "provider": "azure"},
     {"id": "azure-gpt-4o-mini",          "name": "Azure GPT-4o Mini",     "provider": "azure"},

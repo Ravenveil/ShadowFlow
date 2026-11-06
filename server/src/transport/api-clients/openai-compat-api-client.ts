@@ -82,6 +82,9 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   // default for most users. Override via settings → BYOK → API 地址 if you're
   // on per-token billing only (paas/v4). 2026-05-24 default flipped to coding.
   zhipu: 'https://open.bigmodel.cn/api/coding/paas/v4',
+  // 小米 MiMo — OpenAI Chat Completions 兼容；另有 Anthropic 兼容端点
+  // https://api.xiaomimimo.com/anthropic（本 client 走 OpenAI 协议）。
+  mimo: 'https://api.xiaomimimo.com/v1',
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   moonshot: 'https://api.moonshot.cn/v1',
   mistral: 'https://api.mistral.ai/v1',

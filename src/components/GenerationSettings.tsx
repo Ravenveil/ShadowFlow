@@ -69,6 +69,7 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   zhipu: 'Zhipu (智谱)',
+  mimo: 'Xiaomi MiMo',
   google: 'Google',
   qwen: 'Qwen (通义)',
   moonshot: 'Moonshot (Kimi)',

@@ -40,6 +40,7 @@ export const PICKER_PROVIDER_META: Record<string, { name: string; tint: string; 
   google:    { name: 'Google Gemini',   tint: '#4285F4', monogram: 'G'  },
   deepseek:  { name: 'DeepSeek',        tint: '#3D8BFD', monogram: 'DS' },
   zhipu:     { name: 'Zhipu GLM',       tint: '#1447E6', monogram: 'ZP' },
+  mimo:      { name: 'Xiaomi MiMo',     tint: '#FF6900', monogram: 'MI' },
   qwen:      { name: 'Qwen',            tint: '#1447E6', monogram: 'Qw' },
   moonshot:  { name: 'Moonshot · Kimi', tint: '#06B6D4', monogram: 'MK' },
   mistral:   { name: 'Mistral',         tint: '#FB923C', monogram: 'Mi' },

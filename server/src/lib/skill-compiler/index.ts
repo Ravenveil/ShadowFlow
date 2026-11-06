@@ -79,6 +79,7 @@ const COMPILE_PROVIDER_ORDER: ReadonlyArray<ProviderId> = [
   'qwen',
   'moonshot',
   'openrouter',
+  'mimo',
 ];
 
 /**
@@ -96,6 +97,7 @@ const COMPILE_DEFAULT_MODEL: Record<ProviderId, string> = {
   google: 'gemini-1.5-flash',
   qwen: 'qwen-max',
   moonshot: 'moonshot-v1-8k',
+  mimo: 'mimo-v2.6-pro',
   mistral: 'mistral-large-latest',
   groq: 'llama-3.1-70b-versatile',
   openrouter: 'anthropic/claude-3.5-sonnet',
