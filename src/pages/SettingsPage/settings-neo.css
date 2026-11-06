@@ -1,0 +1,227 @@
+/* ===== SettingsPage Neo 化（2026-11-06）=====
+   与 dashboard-neo.css / memory-neo.css 同一套作用域 token 策略：
+   颜色一律 var(--t-*)，day/night 双主题安全；类名 neo-st-* 前缀避免冲突。
+   布局 = NeoApp 同款 clawsgo 层次：左栏灰底（--t-bg）+ 内容区纯白（--t-panel）+
+   hairline 分隔；导航行复刻 .neo-nav-row（图标 15px + 文字 12.5px，选中灰底 600）。
+   顶栏移除（用户 2026-11-06）；返回入口 = 侧栏头部行式按钮（Z Code 式）。 */
+
+.neo-settings {
+  display: flex;
+  width: 100%;
+  /* 定高全屏壳：zoom-shell 公式抵消 html zoom（同 .neo-app） */
+  height: calc(100vh / var(--app-zoom, 1));
+  min-height: 0;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  /* clawsgo 单色策略：Neo 作用域内 accent = 近黑，night 保持蓝（同 .neo-app） */
+  --t-accent: #171717;
+  --t-accent-bright: #000000;
+  --t-accent-tint: rgba(23, 23, 23, 0.08);
+  --t-accent-ink: #FAFAFA;
+}
+[data-theme="night"] .neo-settings {
+  --t-accent: #3B82F6;
+  --t-accent-bright: #93C5FD;
+  --t-accent-tint: rgba(59, 130, 246, 0.14);
+  --t-accent-ink: #0A0A0A;
+}
+
+/* ── 左侧导航栏 ─────────────────────────────────────────────────────────── */
+.neo-st-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 212px;
+  padding: 10px 8px 8px;
+  /* 栏体浅灰（--t-bg），内容区纯白——层次靠底色对比，不靠边框 */
+  background: var(--t-bg);
+  border-right: 1px solid var(--t-border);
+  overflow: hidden;
+}
+
+/* 侧栏头部：返回按钮（Z Code 式行钮，替代原「设置」标题块） */
+.neo-st-back {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 2px 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-st-back svg {
+  flex-shrink: 0;
+  color: var(--t-fg-3);
+  transition: color var(--dur-1) var(--ease-out);
+}
+.neo-st-back:hover {
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+}
+.neo-st-back:hover svg {
+  color: var(--t-fg);
+}
+
+/* 导航滚动区（滚动条策略同 .neo-rail-body：细条 hover 显形） */
+.neo-st-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.neo-st-nav:hover {
+  scrollbar-color: color-mix(in srgb, var(--t-fg) 22%, transparent) transparent;
+}
+.neo-st-nav::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.neo-st-nav::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.neo-st-nav:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg) 22%, transparent);
+}
+
+/* 分组标签（复刻 .neo-section-label：11px 小灰字） */
+.neo-st-group {
+  margin-bottom: 6px;
+}
+.neo-st-group-label {
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t-fg-5);
+}
+
+/* 导航行（复刻 .neo-nav-row：图标 15px 次级灰 + 文字 12.5px/500，
+   hover 浅灰底圆角 10px；选中 = 灰底 600，无彩色指示条——clawsgo 单色） */
+.neo-st-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 1px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-st-row svg {
+  flex-shrink: 0;
+  color: var(--t-fg-3);
+  transition: color var(--dur-1) var(--ease-out);
+}
+.neo-st-row:hover {
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+}
+.neo-st-row.on {
+  background: var(--t-row-sel, var(--t-panel-3));
+  font-weight: 600;
+}
+.neo-st-row.on svg {
+  color: var(--t-fg);
+}
+/* 键盘 ↑/↓ 聚焦可见性（可达性）：focus 时给细描边 */
+.neo-st-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--t-border-2, var(--t-border));
+}
+.neo-st-back:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--t-border-2, var(--t-border));
+}
+.neo-st-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* SOON 徽章（mono 小字描边块，同 hf-kbd 口径） */
+.neo-st-soon {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--t-fg-5);
+  padding: 1px 5px;
+  border: 1px solid var(--t-border);
+  border-radius: 3px;
+  background: var(--t-panel);
+}
+
+/* ── 右侧内容区 ─────────────────────────────────────────────────────────── */
+.neo-st-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--t-panel);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.neo-st-main:hover {
+  scrollbar-color: color-mix(in srgb, var(--t-fg) 22%, transparent) transparent;
+}
+.neo-st-main::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.neo-st-main::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.neo-st-main:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--t-fg) 22%, transparent);
+}
+/* local-cli / byok：全高 section 自带布局与滚动，外壳不滚不留白 */
+.neo-settings.st-bare .neo-st-main {
+  overflow: hidden;
+}
+.neo-st-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 26px 32px 40px;
+}
+.neo-st-content.bare {
+  padding: 0;
+}
+/* section 切换渐入（content 以 key 重挂载触发） */
+.neo-st-content > * {
+  animation: neo-st-fade var(--dur-2) var(--ease-out);
+}
+@keyframes neo-st-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
