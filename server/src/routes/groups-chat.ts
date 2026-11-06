@@ -409,6 +409,87 @@ export function stripThinking(s: string): string {
     .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*$/g, '');
 }
 
+// ── 2026-11-07 流式标签剥离 ──────────────────────────────────────────────
+/** 完整标签名（开/闭 × 冒号/连字符），与 stripThinking 双分隔符规则一致。 */
+const THINK_TAG_NAMES = ['sf:thinking', 'sf-thinking', '/sf:thinking', '/sf-thinking'];
+/** 完整开/闭标签（属性可选）——整体即「定界符」，从流里消失。 */
+const THINK_TAG_DELIM_RE = /<\/?sf[:-]thinking(?:\s[^>]*)?>/g;
+
+/**
+ * 尾部疑似「被切断的标签开头」→ 返回该后缀起点（最长存活后缀），否则 -1。
+ *
+ * 存活判定（core = 最后候选 `<` 之后的文本）：
+ *   - 裸 `<` / `</` 等名字尚未跑偏的前缀 → 存活（等后续 chunk 补全）；
+ *   - 名字段被空白提前终结（`<sf:thi x`）→ 名字必须**完整等于**标签名且
+ *     属性段未出现 `>` 才存活，否则字面文本；
+ *   - 无空白的名字段是完整标签名的前缀即存活；含 `>` 自然出局。
+ * 取**最早**存活的 `<`（最长后缀）——`<sf:thinking x=<sf:thi` 这类属性段里
+ * 带 `<` 的形态要整体 hold，不能只 hold 尾巴。
+ */
+function partialTagStart(rest: string): number {
+  for (let i = rest.indexOf('<'); i >= 0; i = rest.indexOf('<', i + 1)) {
+    const core = rest.slice(i + 1);
+    if (!core) return i; // 裸 '<' 结尾 — 可能是标签第一字节
+    if (/\s/.test(core[0])) continue; // `< x` 不可能是标签
+    const ws = core.search(/\s/);
+    const name = ws < 0 ? core : core.slice(0, ws);
+    const alive = ws < 0
+      ? THINK_TAG_NAMES.some((n) => n.startsWith(name))
+      : THINK_TAG_NAMES.includes(name) && !core.slice(ws).includes('>');
+    if (alive) return i;
+  }
+  return -1;
+}
+
+/**
+ * 逐 chunk 流式剥 `<sf[:-]thinking>` **定界符**（思考内容保留）——B3 过程卡
+ * 把 text-delta 逐片点亮进卡体，模型（zhipu reasoning 包装 / 模型模仿 sf:
+ * 协议）会在正文流里写思考标签，原样 append 会让流式卡体「原始标签与正文
+ * 混排」（2026-11-07 截图反馈）。
+ *
+ * 与 stripThinking 的分工：
+ *   - stripThinking：**整段**替换，落库前剥最终回复（思考内容整段丢弃，
+ *     气泡只留正文）；
+ *   - 本状态机：**逐 chunk**，只剥定界符、思考内容保留在卡体——与结构化
+ *     thinking-delta 通道（纯思考文本点亮同一张卡）对齐，过程细节不丢。
+ *
+ * 跨 chunk 边界：标签会被切断在任意字节（`<sf:thin` | `king>…`），疑似
+ * 标签前缀 hold 住等后续 chunk 补全再判，绝不闪现半截标签；流结束时
+ * flush() 丢弃仍未补全的残段（未完成的开标签不该以碎片形态进卡体）。
+ */
+export function createThinkingTagStream(): {
+  push(piece: string): string;
+  flush(): void;
+} {
+  let pending = '';
+  return {
+    push(piece: string): string {
+      const s = pending + piece;
+      pending = '';
+      let out = '';
+      let last = 0;
+      THINK_TAG_DELIM_RE.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = THINK_TAG_DELIM_RE.exec(s)) !== null) {
+        out += s.slice(last, m.index);
+        last = m.index + m[0].length;
+      }
+      const rest = s.slice(last);
+      const hold = partialTagStart(rest);
+      if (hold >= 0) {
+        out += rest.slice(0, hold);
+        pending = rest.slice(hold);
+      } else {
+        out += rest;
+      }
+      return out;
+    },
+    flush(): void {
+      pending = '';
+    },
+  };
+}
+
 /**
  * G1（2026-06-13）— 网关 fanout 把 callable.turn() 吐出的 tool-use/tool-result
  * chunk 投影成 tool_call/tool_echo TimelineMessage，让会话 Timeline 真显示工具
@@ -1079,6 +1160,8 @@ async function runFanout(
             }
             let buf = '';
             let errMsg = '';
+            // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
+            const thinkStream = createThinkingTagStream();
             try {
               const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
               for await (const chunk of callable.turn({
@@ -1093,7 +1176,10 @@ async function runFanout(
                   buf += piece;
                   // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
                   if (gw && thinkingId && piece) {
-                    gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
+                    const shown = thinkStream.push(piece);
+                    if (shown) {
+                      gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+                    }
                   }
                 } else if (chunk.type === 'thinking-delta') {
                   // 2026-11-04 — API 路结构化思考通道：只点亮过程卡，不进 buf。
@@ -1113,6 +1199,8 @@ async function runFanout(
               errMsg = e instanceof Error ? e.message : String(e);
             }
             if (gw && thinkingId) {
+              // 流收口：未补全的疑似标签残段丢弃，不以碎片形态进卡体。
+              thinkStream.flush();
               const elapsed = Date.now() - startedAt;
               gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
               if (errMsg) {
@@ -1313,6 +1401,8 @@ async function runFanout(
       const ctrl = swapDagRun(groupId, activeDagRuns);
       let buf = '';
       let errMsg = '';
+      // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
+      const thinkStream = createThinkingTagStream();
       // worktree 隔离 — 该 agent 专属目录（git 仓库 workspace 时）。
       const wt = serialWt.get(agentId);
       try {
@@ -1329,7 +1419,10 @@ async function runFanout(
             buf += piece;
             // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
             if (gw && thinkingId && piece) {
-              gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
+              const shown = thinkStream.push(piece);
+              if (shown) {
+                gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+              }
             }
           } else if (chunk.type === 'thinking-delta') {
             // 2026-11-04 — API 路结构化思考通道（ApiClientCallable reasoning_content
@@ -1354,6 +1447,8 @@ async function runFanout(
       // streaming（刷新后回放依旧转圈）。中断 = 静默收口：finalize +
       // msg_foot done，但不发错误 raw 卡、不发聊天消息（与停止语义一致）。
       if (gw && thinkingId) {
+        // 流收口：未补全的疑似标签残段丢弃，不以碎片形态进卡体。
+        thinkStream.flush();
         const elapsed = Date.now() - startedAt;
         gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
         if (errMsg && !ctrl.signal.aborted) {
