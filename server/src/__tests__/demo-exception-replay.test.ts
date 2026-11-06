@@ -57,6 +57,15 @@ interface DemoSummary {
     hop_approval_rejections: number;
     failed_feedback: number;
   };
+  feedback: {
+    total: number;
+    processed: number;
+    skipped: number;
+    failed: number;
+    failed_before_rerun: number;
+    rerun_scanned: number;
+    rerun_processed: number;
+  };
   feedback_module_available: boolean;
   reproduction_has_demo_step: boolean;
   verdict: { ok: boolean; problems: string[] };
@@ -108,10 +117,13 @@ describe('demo-exception-replay 演示证据包', () => {
       expect(s.collaboration.approval_rejections).toBe(1);
       expect(s.human_decisions.hop_approval_rejections).toBe(1);
 
-      // 不造反馈队列假表：PR #19 未合并时模块不可用，报告必须如实记 0；
-      // 将来 #19 合并后模块自动可用，这里不断言「必须不可用」，避免无关 PR 把测试弄红。
-      expect(typeof s.feedback_module_available).toBe('boolean');
-      if (!s.feedback_module_available) expect(s.human_decisions.failed_feedback).toBe(0);
+      // 反馈队列（PR #19 已合并，真表真路径）：失败反馈留痕 → 人工补跑重放，
+      // 速览「待补跑反馈」不再是 0。失败态是演示模拟，补跑走真实 runFeedbackQueue。
+      expect(s.feedback_module_available).toBe(true);
+      expect(s.feedback.failed_before_rerun).toBeGreaterThanOrEqual(1);
+      expect(s.feedback.rerun_scanned).toBeGreaterThanOrEqual(1);
+      expect(s.feedback.rerun_processed).toBeGreaterThanOrEqual(1);
+      expect(s.human_decisions.failed_feedback).toBeGreaterThanOrEqual(1);
     } finally {
       try { rmSync(outDir, { recursive: true, force: true }); } catch { /* Windows EBUSY，忽略 */ }
     }
@@ -145,10 +157,10 @@ describe('demo-exception-replay 演示证据包', () => {
       // 画像写回 / 交接包已有事实，空库提示应当消失。
       expect(card).not.toContain('本区间没有画像写回');
       expect(card).not.toContain('本区间没有协作交接');
-      // 模拟支付如实标注，不粉饰。反馈队列：PR #19 已合并（ingestFeedback
-      // 幂等建表），demo 造数后 feedback.available=true → 速览不再输出
-      // 「尚未启用」提示；断言跟进（2026-11-06 CI 修复）。
+      // 模拟支付如实标注，不粉饰。反馈队列（#19 已合并）：造数后 feedback.available=true，
+      // 速览不输出「尚未启用」提示；「待补跑反馈」是非零真实数字（留一条失败待补跑）。
       expect(card).not.toContain('反馈自动写回队列模块尚未启用');
+      expect(card).toMatch(/待补跑反馈 [1-9]/);
       expect(card).toContain('支付为演示用模拟回调');
     } finally {
       try { rmSync(outDir, { recursive: true, force: true }); } catch { /* best-effort */ }

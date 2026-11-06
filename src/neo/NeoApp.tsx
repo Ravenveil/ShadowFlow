@@ -14,7 +14,8 @@
  * runId 刷新恢复：URL ?run=<id> 为主、localStorage 'sf.last-run-id' 兜底，
  * 恢复后由 useRunSession 重订 /stream（增量续传 / 只读重放见组件内注释）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Loader2, PanelRightClose, PanelRightOpen, RotateCcw } from 'lucide-react';
 import { NeoRail } from './NeoRail';
@@ -44,14 +45,21 @@ import './neo.css';
 const HOST_COLLAPSED_KEY = 'sf.neo.hostCollapsed';
 const LAST_RUN_KEY = 'sf.last-run-id';
 const RAIL_COLLAPSED_KEY = 'sf.neo.railCollapsed';
+// 左栏拖宽（2026-11-06）：持久化 key + 夹取范围（折叠态 56px 不受此影响）
+const RAIL_WIDTH_KEY = 'sf.neo.railWidth';
+const RAIL_MIN_WIDTH = 120;
+const RAIL_MAX_WIDTH = 360;
+const RAIL_DEFAULT_WIDTH = 180;
 
-/** nav.view → 左栏列表区默认映射；不在表里的（conversation/兜底目标/agent-soul）
- *  列表保持不动（agent-soul 从 rail 头像进入时，左栏保持当前列表——Grok 式
- *  「点头像开 Bot 页，侧边栏不动」）。os-unified 后 agents/teams 浏览视图移除。 */
+/**
+ * nav.view → 左栏列表区默认映射；不在表里的（conversation/兜底目标/agent-soul/
+ * dashboard/schedules）列表保持不动——Grok 式「内容页不抢侧边栏」：数据看板、
+ * 定时任务（2026-11-06 用户反馈：点定时任务左栏依旧显示 agent 列表）都是
+ * 阅读态页。os-unified 后 agents/teams 浏览视图移除；memory 分区已随
+ * 「记忆折叠进设置」批（#18）下线。 */
 const SECTION_BY_NAV: Partial<Record<NeoNav['view'], RailSection>> = {
   home: 'home',
   knowledge: 'knowledge',
-  schedules: 'schedules',
 };
 
 export function NeoApp() {
@@ -225,6 +233,75 @@ export function NeoApp() {
     });
   }, []);
 
+  // ── 左栏拖宽（2026-11-06 用户反馈：侧边栏可左右拉动）────────────────────
+  // 宽度持久化 localStorage（'sf.neo.railWidth'），120–360px 夹取；拖拽经
+  // NeoRail 右缘热区 onResizeStart 上报，move/up 挂 window 跟随；起点宽度
+  // 在 pointerdown 时冻结（startWidth + 位移差值），避免事件间累加漂移。
+  const [railWidth, setRailWidth] = useState<number | null>(() => {
+    try {
+      const v = Number(localStorage.getItem(RAIL_WIDTH_KEY));
+      return Number.isFinite(v) && v >= RAIL_MIN_WIDTH && v <= RAIL_MAX_WIDTH ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const railResizingRef = useRef(false);
+  const handleRailResizeStart = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    railResizingRef.current = true;
+    document.body.classList.add('neo-rail-resizing');
+    // 起点宽度：当前生效值（null = CSS 默认 180）；起点指针 X。
+    const startWidth =
+      railWidth ??
+      (() => {
+        try {
+          const v = Number(localStorage.getItem(RAIL_WIDTH_KEY));
+          return Number.isFinite(v) && v >= RAIL_MIN_WIDTH && v <= RAIL_MAX_WIDTH
+            ? v
+            : RAIL_DEFAULT_WIDTH;
+        } catch {
+          return RAIL_DEFAULT_WIDTH;
+        }
+      })();
+    const startX = e.clientX;
+    // 全局 zoom 抵消（index.css html{zoom:var(--app-zoom)}）：clientX 是物理
+    // 像素，栏宽是逻辑像素，位移要除回 zoom 才是真实拖拽量。
+    const zoomRaw = Number(
+      getComputedStyle(document.documentElement).getPropertyValue('--app-zoom') || 1,
+    );
+    const zoom = Number.isFinite(zoomRaw) && zoomRaw > 0 ? zoomRaw : 1;
+    const move = (ev: PointerEvent) => {
+      if (!railResizingRef.current) return;
+      const next = Math.min(
+        RAIL_MAX_WIDTH,
+        Math.max(RAIL_MIN_WIDTH, Math.round(startWidth + (ev.clientX - startX) / zoom)),
+      );
+      setRailWidth(next);
+      try {
+        localStorage.setItem(RAIL_WIDTH_KEY, String(next));
+      } catch {
+        // localStorage 不可用就只用内存态
+      }
+    };
+    const up = () => {
+      railResizingRef.current = false;
+      document.body.classList.remove('neo-rail-resizing');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    // railWidth 只在冻结起点时读一次，故意不进依赖。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const railWidthStyle = useMemo(
+    () => (railWidth === null ? undefined : ({ '--rail-w': `${railWidth}px` } as CSSProperties)),
+    [railWidth],
+  );
+
   // 「+ 新任务」：回 home hero 并清掉当前 run 关联（左栏列表切回会话）。
   const handleNewTask = useCallback(() => {
     navigate({ view: 'home' });
@@ -351,6 +428,9 @@ export function NeoApp() {
         onNewTask={handleNewTask}
         collapsed={railCollapsed}
         onToggleCollapsed={toggleRail}
+        width={railWidth}
+        onResizeStart={handleRailResizeStart}
+        style={railWidthStyle}
       />
 
       <main className={`neo-main${runLayout ? ' neo-main--run' : ''}`}>

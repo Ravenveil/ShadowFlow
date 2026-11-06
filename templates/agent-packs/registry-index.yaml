@@ -14,7 +14,3 @@ packs:
   - id: "shadowsoul-reviewer"
     path: "shadowsoul-reviewer/agent-manifest.yaml"
     tags: ["review", "security", "quality", "api"]
-
-  - id: "0g-compute-analyst"
-    path: "0g-compute-analyst/agent-manifest.yaml"
-    tags: ["0g", "blockchain", "analytics", "acp"]

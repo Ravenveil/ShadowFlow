@@ -191,7 +191,9 @@ describe('统一源列表与三态右栏', () => {
     // 内容 | 图谱 视图切换
     // 包详情头部 Waypoints 图标进入图谱
     fireEvent.click(screen.getByTestId('pack-graph-btn'));
-    const graph = await screen.findByTestId('graph-embedded');
+    // 显式放宽等待：默认 findByTestId 只等 1s，CI 2 核机器上 lazy chunk
+    // 解析 + Suspense 回落经常 >1s，会报 Unable to find 的假红。
+    const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 10000 });
     expect(graph.getAttribute('data-pack')).toBe('p1');
     // 返回头切回内容
     fireEvent.click(screen.getByTestId('kv-graph-back'));
@@ -228,7 +230,7 @@ describe('统一源列表与三态右栏', () => {
 
     // 工具栏 Waypoints 图标进入图谱(Obsidian 式)
     fireEvent.click(screen.getByTestId('vault-graph-btn'));
-    const graph = await screen.findByTestId('graph-embedded');
+    const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 10000 });
     expect(graph.getAttribute('data-vault')).toBe('v1');
 
     // 图谱节点「打开文件」→ 回到文件视图且目标文件被选中加载

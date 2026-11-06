@@ -11,7 +11,7 @@ services:
   shadowflow-api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: docker/Dockerfile.api
     image: shadowflow/api:dev
     container_name: shadowflow-api
     ports:
@@ -62,7 +62,7 @@ services:
   shadowflow-web:
     build:
       context: .
-      dockerfile: Dockerfile.web
+      dockerfile: docker/Dockerfile.web
     image: shadowflow/web:dev
     container_name: shadowflow-web
     ports:

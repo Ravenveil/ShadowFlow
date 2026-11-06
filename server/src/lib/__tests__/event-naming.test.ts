@@ -18,16 +18,19 @@ import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
 
 /**
- * 定位仓库根：从 cwd 逐级向上找，直到看见 docs/EVENT_NAMING.md。
+ * 定位仓库根：从 cwd 逐级向上找，以 server/package.json 为锚点。
  * 这个脚本既会被 `npx tsx src/...`（cwd=server/）跑，也会被 vitest
  * （cwd=仓库根）跑，写死 `../docs` 只有前者成立，后者会指到仓库外。
+ *
+ * 注意锚点不能用 docs/EVENT_NAMING.md：docs/ 已从版本控制移除（见下），
+ * 干净克隆里没有这个文件，用它当锚点会直接抛异常。
  */
 function findRepoRoot(from: string): string {
   let cur = path.resolve(from);
   for (;;) {
-    if (existsSync(path.join(cur, 'docs', 'EVENT_NAMING.md'))) return cur;
+    if (existsSync(path.join(cur, 'server', 'package.json'))) return cur;
     const up = path.dirname(cur);
-    if (up === cur) throw new Error(`docs/EVENT_NAMING.md not found above ${from}`);
+    if (up === cur) throw new Error(`server/package.json not found above ${from}`);
     cur = up;
   }
 }
@@ -37,8 +40,16 @@ const SERVER_ROOT = path.join(REPO_ROOT, 'server');
 
 let pass = 0;
 let fail = 0;
+let skipped = 0;
+/** 命名表是否在仓库里（docs/ 已从版本控制移除，干净克隆没有）。在下方赋值。 */
+let docTracked = false;
 
 function check(label: string, cond: boolean, detail?: string): void {
+  if (!docTracked) {
+    skipped++;
+    console.log(`  SKIP  ${label}（命名表不在仓库里）`);
+    return;
+  }
   if (cond) {
     pass++;
     console.log(`  PASS  ${label}`);
@@ -60,7 +71,15 @@ const WIRE_EMITTERS = [
 ];
 
 const docPath = path.join(REPO_ROOT, 'docs', 'EVENT_NAMING.md');
-const doc = readFileSync(docPath, 'utf-8');
+
+/**
+ * docs/ 自 7240d96（chore(repo): slim tracked tree）起不再纳入版本控制——协作者把
+ * 历史遗留的 docs/ 从 tracked tree 摘掉，docs/ 本就在 .gitignore 里。干净克隆没有
+ * 命名表，四向对账无从对起；此时逐条 SKIP 而不是让 readFileSync 直接抛异常或让
+ * A/B 方向对比空表而全红。
+ */
+docTracked = existsSync(docPath);
+const doc = docTracked ? readFileSync(docPath, 'utf-8') : '';
 
 // §1 主表区域（供 B 方向精确解析）。
 const sec1 = doc.split('## 1.')[1]?.split('## 2.')[0] ?? '';
@@ -126,5 +145,6 @@ check(
   missingKinds.length ? `未登记: ${missingKinds.join(', ')}` : undefined,
 );
 
-console.log(`\nevent-naming: ${pass} passed, ${fail} failed`);
+const skipNote = docTracked ? '' : `, ${skipped} skipped（docs/EVENT_NAMING.md 不在仓库里）`;
+console.log(`\nevent-naming: ${pass} passed, ${fail} failed${skipNote}`);
 if (fail > 0) process.exit(1);

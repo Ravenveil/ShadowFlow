@@ -13,8 +13,9 @@
  *     不需要 dev 栈、不另起端口、不调模型、不改任何业务表结构。
  *   - 产物是**演示样例**，不是服务当前库的导出；文件名带 `-sample-decisions`，
  *     报告卷首也会标注，绝不允许拿它冒充线上数字。
- *   - 不造反馈队列的假表：PR #19 尚未合并，模块未启用时报告如实记 0 并注明，
- *     上线后自动带真实数据。宁可少一项，也不伪造「待补跑反馈」。
+ *   - 反馈队列是真模块真表（PR #19 已合并）：「失败反馈 → 人工补跑」走真实的
+ *     runFeedbackQueue 重放路径；演示只模拟「写回失败」的现场（公开 API 无法
+ *     确定性逼出写回异常），绝不伪造整个队列表。
  *
  * 运行（仓库根目录，需先 `cd server && npm ci` 装 tsx）：
  *   node server/node_modules/tsx/dist/cli.mjs scripts/demo-exception-replay.mjs
@@ -64,11 +65,11 @@ const NOTICE_BODY = [
   `| \`${OUTPUT_FILES.csv}\` | 订单明细 CSV，UTF-8 BOM；为保持格式干净不加注释行，**同样是样例数据** |`,
   '',
   '脚本在临时库里造的事实：一单成交 + 一单退款（冲成本、账实一致）、客户反馈规则式画像写回、',
-  '两条同置信冲突（一条留待裁决、一条人工裁决）、岗位交接包并接班、',
-  '协作 hop 的正常/失败/返工/人工审批拒绝/策略拦截/悬挂。',
+  '反馈写回失败留痕 + 人工补跑重放（另留一条待补跑）、两条同置信冲突（一条留待裁决、一条人工裁决）、',
+  '岗位交接包并接班、协作 hop 的正常/失败/返工/人工审批拒绝/策略拦截/悬挂。',
   '不碰演示库、不碰主库、不需要 dev 栈、不调模型、不改表结构。',
   '',
-  'PR #19 未合并时反馈队列模块不可用，报告如实记 0；不造假表。模块上线后重跑即自动带真实计数。',
+  '反馈队列的「失败」态是演示模拟（公开 API 无法确定性逼出写回异常）；补跑走真实的 runFeedbackQueue 重放路径，幂等不重复写回。',
   '',
 ].join('\n');
 
@@ -97,6 +98,37 @@ export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shad
     text: '客户偏好简洁的文案，不要长篇；预算 2 万以内；下周五截止',
     actor: 'client',
   });
+
+  // ③ 反馈写回失败的留痕 + 人工补跑（队列规定三：失败可重跑）。
+  // 线上失败态由 processFeedbackRow 的 catch 落库（status='failed' + error 等补跑）；
+  // 演示没法从公开 API 确定性逼出写回异常，直接把「上次自动写回挂了」的失败态种进
+  // 同一条真表（不造假表、不改结构），补跑则走真实的 runFeedbackQueue 重放路径。
+  const sqlite = await import('../server/src/storage/sqlite');
+  const plantFailedFeedback = (id, subjectId, text, error) =>
+    sqlite.getDb()
+      .prepare(
+        `INSERT INTO memory_feedback_queue
+           (id, subject_type, subject_id, text_hash, text, source, source_ref,
+            status, keys_json, actions_json, conflicts, error, actor, created_at)
+         VALUES (?, 'customer', ?, ?, ?, 'demo-replay', 'demo-exception-replay',
+                 'failed', '[]', '[]', 0, ?, 'system', ?)`,
+      )
+      .run(id, subjectId, `demo-fail-${id}`, text, error, Date.now());
+  plantFailedFeedback(
+    'demo-feedback-failed-1', 'demo-customer-2',
+    '行业做的是烘焙，主营线下门店',
+    '模拟写回失败：库忙超时（演示补跑场景）',
+  );
+  const failedBeforeRerun = memory.feedbackQueue({ status: 'failed', limit: 10 }).stats.failed;
+  // 人点「补跑」→ runFeedbackQueue({ include_failed: true }) 重放失败记录，幂等。
+  const rerun = memory.runFeedbackQueue({ include_failed: true, limit: 10 });
+  // 再留一条失败记录不补跑：速览的「待补跑反馈」要有真实数字，而不是 0。
+  plantFailedFeedback(
+    'demo-feedback-failed-2', 'demo-customer-3',
+    '返工太多，客户不满意，反复改太慢',
+    '模拟写回失败：写回流水表锁等待（演示待补跑）',
+  );
+  const queueAfter = memory.feedbackQueue({ limit: 20 }).stats;
 
   // ③ 两次「同置信、不同说法」的写回 → 系统记 conflict 且不覆盖原值。
   // 一条留给评委看见「待裁决」，一条由人拍板采纳，两种状态同框。
@@ -187,6 +219,15 @@ export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shad
       hop_approval_rejections: report.human_decisions.hop_approval_rejections,
       failed_feedback: report.human_decisions.failed_feedback,
     },
+    feedback: {
+      total: queueAfter.total,
+      processed: queueAfter.processed,
+      skipped: queueAfter.skipped,
+      failed: queueAfter.failed,
+      failed_before_rerun: failedBeforeRerun,
+      rerun_scanned: rerun.scanned,
+      rerun_processed: rerun.processed,
+    },
     feedback_module_available: report.memory.feedback.available,
     // 材料与现场操作必须一一对应：报告里得能找到这条命令，否则评委拿到报告也重放不了。
     reproduction_has_demo_step: report.reproduction.steps.some((s) => String(s).includes(SCRIPT_NAME)),
@@ -211,6 +252,11 @@ export function verifyDemoEvidence(summary) {
   need(summary.collaboration.approval_rejections >= 1, '人工审批拒绝为 0');
   need(summary.human_decisions.resolutions + summary.human_decisions.pending_conflicts
     + summary.human_decisions.hop_approval_rejections >= 3, '三次人工决策没有同框');
+  const fb = summary.feedback ?? {};
+  need(summary.feedback_module_available === true, '反馈自动写回队列模块不可用（表没建出来）');
+  need((fb.failed_before_rerun ?? 0) >= 1, '没有造出失败反馈留痕');
+  need((fb.rerun_processed ?? 0) >= 1, '人工补跑没有重放失败反馈');
+  need(((summary.human_decisions ?? {}).failed_feedback ?? 0) >= 1, '速览「待补跑反馈」为 0（失败留痕没进报告）');
   need(summary.reproduction_has_demo_step === true, '报告复现步骤没有列出本演示脚本');
   return { ok: problems.length === 0, problems };
 }
@@ -221,7 +267,9 @@ function printHuman(summary, verdict) {
   console.log(`① 第一单 ${summary.merchant.first_order_complete ? '五步全通 ✓' : '未通 ×'} · 订单 ${summary.merchant.orders_total}（成交 ${summary.merchant.paid_orders} / 退款 ${summary.merchant.refunded_orders}）· 营收 ${summary.merchant.revenue_cents} 分 · 账实一致 ${summary.merchant.balanced ? '✓' : '×'}`);
   console.log(`③ 写回事件 ${summary.memory.audit_total} · 人工裁决 ${summary.memory.resolutions} · 待裁决 ${summary.memory.pending_conflicts} · 交接包 ${summary.memory.handoffs}（已接班 ${summary.memory.accepted_handoffs}）`);
   console.log(`协作 hop ${summary.collaboration.total} · 异常 ${summary.collaboration.failures} · 返工 ${summary.collaboration.reworks} · 人工审批拒绝 ${summary.collaboration.approval_rejections} · 悬挂 ${summary.collaboration.open}`);
-  console.log(`反馈自动写回队列模块：${summary.feedback_module_available ? '已启用' : '未启用（PR #19 未合并，报告如实记 0，不造假表）'}`);
+  console.log(`反馈自动写回队列：${summary.feedback_module_available
+    ? `已启用 · 累计 ${summary.feedback.total}（已处理 ${summary.feedback.processed} / 跳过 ${summary.feedback.skipped} / 失败待补跑 ${summary.feedback.failed}）· 人工补跑重放 ${summary.feedback.rerun_processed} 条`
+    : '不可用（表不存在），报告如实记 0，不造假表'}`);
   for (const [k, v] of Object.entries(summary.files)) console.log(`  ${k}: ${v}`);
   console.log(`自检：${verdict.ok ? 'PASS' : `FAIL — ${verdict.problems.join('；')}`}`);
 }

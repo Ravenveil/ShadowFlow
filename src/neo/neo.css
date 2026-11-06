@@ -140,26 +140,62 @@
 
 /* ── 左栏 NeoRail ───────────────────────────────────────────────────────── */
 .neo-rail {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* 2026-08-18 clawsgo 收敛：180px 窄栏 + 10/8 紧凑内距（复刻 home.html .sidebar） */
-  width: 180px;
+  /* 2026-08-18 clawsgo 收敛：180px 窄栏 + 10/8 紧凑内距（复刻 home.html .sidebar）
+     2026-11-06 拖宽批：width 走 --rail-w 变量（NeoApp 拖拽时行内注入），
+     未注入回落 180px；min/max 夹取在 JS 侧做，CSS 兜底防极端值。 */
+  width: var(--rail-w, 180px);
+  min-width: 120px;
+  max-width: 360px;
   padding: 10px 8px 8px;
   gap: 2px;
   /* 栏体浅灰（--t-bg），内容区纯白——竞品的层次靠底色对比，不靠边框 */
   background: var(--t-bg);
   border-right: 1px solid var(--t-border);
   overflow: hidden;
-  /* clawsgo 折叠手感：240ms spring 宽度过渡 */
+  /* clawsgo 折叠手感：240ms spring 宽度过渡（拖拽中由 body 级 .neo-rail-resizing 关掉） */
   transition: width 240ms var(--ease-spring), padding 240ms var(--ease-spring);
 }
+/* 折叠态宽度优先级高于拖宽变量：56px 固定，不被 --rail-w 撑开 */
 .neo-rail.collapsed {
   width: 56px;
+  min-width: 0;
+  max-width: none;
   padding: 10px 6px 8px;
   align-items: center;
   gap: 4px;
+}
+/* 拖拽进行中：关宽度过渡（每帧跟随指针）、禁文本选择（pointermove 快速
+   划过列表时会选中行文字），全局 cursor 强制 col-resize 手感。 */
+body.neo-rail-resizing,
+body.neo-rail-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+body.neo-rail-resizing .neo-rail {
+  transition: none;
+}
+
+/* 右缘拖宽热区（2026-11-06）：6px 命中条贴右缘内側（rail overflow:hidden
+   裁不掉），视觉上由 hover 高亮条呈现；折叠态不渲染手柄。 */
+.neo-rail-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 30;
+  border-radius: 3px;
+  touch-action: none;
+}
+.neo-rail-resize-handle:hover,
+.neo-rail-resize-handle:active {
+  background: var(--t-accent-tint);
 }
 
 /* 栏顶导航簇（ZCode 式 ←/→/折叠；2026-08-19 从顶栏移入，工作区头移除） */
