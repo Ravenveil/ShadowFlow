@@ -338,6 +338,10 @@ export type TimelineMessage =
       files?: CommitFileEntry[];
       /** Optional external link (e.g. web UI commit page). */
       url?: string;
+      /** 2026-11-07 检查器产出归属 — 提交者 agent（additive；无归属 = 老数据 /
+       *  编排者合并提交，检查器对无归属卡不进流）。 */
+      agent_id?: string;
+      agent_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'file_diff';
@@ -347,6 +351,9 @@ export type TimelineMessage =
       added: number;
       removed: number;
       lines: DiffLine[];
+      /** 2026-11-07 检查器产出归属 — 同 commit_record.agent_id（与其成对出现）。 */
+      agent_id?: string;
+      agent_name?: string;
     })
   | (TimelineMessageBase & {
       kind: 'table_panel';
