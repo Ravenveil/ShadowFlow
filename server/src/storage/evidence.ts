@@ -454,6 +454,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
       ],
       steps: [
         '一键重放：node scripts/first-order-replay.mjs --apply（默认 dry-run 只打印计划；--apply 会往当前库写 1 访客/1 单/1 支付，演示库上台前按纪律 reset）',
+        '异常处理 / 老板决策演示样例：node server/node_modules/tsx/dist/cli.mjs scripts/demo-exception-replay.mjs（临时独立库造数，不碰演示库；产物带 -sample-decisions 标记，不可冒充线上导出）',
         '或手工复现：POST /api/merchant/products 建商品 → /visits 埋点 → /orders 下单 → /orders/:id/pay 支付',
         '打开商家数据看板核对营收/毛利，再看 /reconcile 是否账实一致',
         'POST /api/memory/handoff/feedback 投递客户反馈，系统自动提炼写回画像',
