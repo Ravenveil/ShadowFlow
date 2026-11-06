@@ -1,6 +1,10 @@
 import { render, screen } from './test/utils';
 import { describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+
+vi.mock('./pages/SettingsPage', () => ({
+  default: () => <div data-testid="settings-page">SettingsPage</div>,
+}));
 
 vi.mock('./pages/ChatPage', () => ({
   default: () => <div data-testid="chat-page">ChatPage</div>,
@@ -32,6 +36,12 @@ vi.mock('./neo/NeoGroupChat', () => ({
 
 import { AppRoutes } from './AppRoutes';
 
+/** 把 react-router 内部 location 暴露成文本，便于断言重定向落点。 */
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="loc">{`${loc.pathname}${loc.hash}`}</div>;
+}
+
 // Neo 重构（2026-08-15）后 /chat、/agent-dm 等旧路由下架，一律 redirect 到
 // `/`（NeoApp）。群聊体验由新路由 /group/:groupId（NeoGroupChat）承接。
 describe('AppRoutes — new routes', () => {
@@ -61,5 +71,16 @@ describe('AppRoutes — new routes', () => {
       </MemoryRouter>
     );
     expect(await screen.findByTestId('neo-group-chat')).toBeInTheDocument();
+  });
+
+  it('/memory redirects into settings 记忆分区（2026-11-06 折叠批）', async () => {
+    render(
+      <MemoryRouter initialEntries={['/memory']}>
+        <AppRoutes />
+        <LocationProbe />
+      </MemoryRouter>
+    );
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    expect(screen.getByTestId('loc')).toHaveTextContent('/settings#memory-entries');
   });
 });

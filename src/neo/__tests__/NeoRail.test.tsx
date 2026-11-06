@@ -28,9 +28,6 @@ vi.mock('../../api/knowledge', () => ({
 vi.mock('../../api/knowledgeVaults', () => ({
   listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
-vi.mock('../../api/memoryEntries', () => ({
-  listMemoryEntries: vi.fn().mockResolvedValue([]),
-}));
 vi.mock('../../core/auth/AuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
@@ -67,7 +64,7 @@ function Harness() {
   const [section, setSection] = useState<RailSection>('home');
   // 与 NeoApp.SECTION_BY_NAV 同款映射（os-unified 后 agents/teams 视图已移除）
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
-    home: 'home', knowledge: 'knowledge', memory: 'memory',
+    home: 'home', knowledge: 'knowledge',
   };
   return (
     <NeoRail
@@ -106,7 +103,8 @@ describe('NeoRail — 折叠回路（弹出/收回）', () => {
     // 「新任务」入口已收起（主控对话由秘书「影」承担，⌘K 保留）
     expect(screen.queryByTestId('neo-new-task')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-knowledge')).toBeInTheDocument();
-    expect(screen.getByTestId('neo-nav-memory')).toBeInTheDocument();
+    // 2026-11-06 折叠批：记忆入口已并入「设置 → 记忆」，左栏不再有一级导航行
+    expect(screen.queryByTestId('neo-nav-memory')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-teams')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-agents')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-runs')).not.toBeInTheDocument();
@@ -143,13 +141,12 @@ describe('NeoRail — 折叠回路（弹出/收回）', () => {
 });
 
 describe('NeoRail — 导航行 onNavigate 上报（跳转收敛契约）', () => {
-  it('点知识库/记忆导航行 → 收到对应 nav 变体，列表区同步切换', async () => {
+  it('点知识库导航行 → 收到对应 nav 变体，列表区同步切换', async () => {
     renderRail();
     fireEvent.click(screen.getByTestId('neo-nav-knowledge'));
     expect(await screen.findByText('还没有知识源')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('neo-nav-memory'));
-    expect(await screen.findByText('还没有记忆条目')).toBeInTheDocument();
+    // 记忆行已下线（2026-11-06 折叠进设置）：列表区不会再切到记忆分区
+    expect(screen.queryByTestId('neo-nav-memory')).not.toBeInTheDocument();
   });
 
   it('数据看板导航行（2026-11-05 整合批）：点击上报 dashboard nav，行高亮，左栏列表区保持', () => {
@@ -183,7 +180,6 @@ describe('NeoRail — 导航行 onNavigate 上报（跳转收敛契约）', () =
       </MemoryRouter>,
     );
     expect(screen.getByTestId('neo-nav-dashboard')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('neo-nav-memory')).toHaveAttribute('aria-pressed', 'false');
   });
 });
 

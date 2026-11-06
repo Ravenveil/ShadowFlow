@@ -24,7 +24,7 @@ import { NeoGroupChat } from './NeoGroupChat';
 import { NeoAgentSoul } from './NeoAgentSoul';
 import { NeoRunHistory } from './NeoRunHistory';
 import KnowledgePage, { parseSourceId } from '../pages/KnowledgePage';
-import MemoryPage from '../pages/MemoryPage';
+// 记忆页（2026-11-06 折叠批）：已并入「设置 → 记忆」，NeoApp 不再内嵌。
 // 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）
 import DashboardPage from '../pages/DashboardPage';
 // 定时任务管理页（2026-11-06，GrokBot/OpenBot /routines 对齐批）
@@ -51,7 +51,6 @@ const RAIL_COLLAPSED_KEY = 'sf.neo.railCollapsed';
 const SECTION_BY_NAV: Partial<Record<NeoNav['view'], RailSection>> = {
   home: 'home',
   knowledge: 'knowledge',
-  memory: 'memory',
   schedules: 'schedules',
 };
 
@@ -306,10 +305,11 @@ export function NeoApp() {
   // 右项目文件）。纯首页/浏览态（agents/teams/knowledge/memory）不渲染右栏。
   const hostActive =
     runId !== null || nav.view === 'conversation' || target !== null;
-  // 知识库/记忆/灵魂/历史/数据看板页是内容阅读态：不套 440px 窄聊天列布局（neo-main--run），
+  // 知识库/灵魂/历史/数据看板页是内容阅读态：不套 440px 窄聊天列布局（neo-main--run），
   // 中栏按默认 flex 自然展开。dashboard 也不改左栏列表（section 保持不变）。
+  // 记忆页（2026-11-06 折叠批）已整体并入设置，不再是中栏视图。
   const pageView =
-    nav.view === 'knowledge' || nav.view === 'memory' || nav.view === 'agent-soul' ||
+    nav.view === 'knowledge' || nav.view === 'agent-soul' ||
     nav.view === 'runs' || nav.view === 'clawhub' || nav.view === 'dashboard' ||
     nav.view === 'schedules';
   // 主机未折叠 → 聊天列收窄，主机占满（clawsgo 运行态三栏）
@@ -366,8 +366,6 @@ export function NeoApp() {
             embedded
             initialSource={parseSourceId(nav.sourceId)}
           />
-        ) : nav.view === 'memory' ? (
-          <MemoryPage embedded />
         ) : nav.view === 'dashboard' ? (
           <DashboardPage embedded />
         ) : nav.view === 'schedules' ? (

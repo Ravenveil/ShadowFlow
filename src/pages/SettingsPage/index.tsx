@@ -47,6 +47,9 @@ import {
   Waves,
   Bell,
   Wrench,
+  Brain,
+  IdCard,
+  ArrowRightLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
@@ -70,6 +73,12 @@ import { MemorySection } from '../../core/components/settings/MemorySection';
 import { SchedulesSection } from './SchedulesSection';
 // ClawHub（2026-11-06 自 Neo 侧边栏迁入设置）：目录/安装/卸载整页复用
 import { ClawHubPage } from '../clawhub/ClawHubPage';
+// 记忆折叠批（2026-11-06）：原左栏一级「记忆」页整体并入设置。
+// 与 main 的 Neo 重构合并后仍按裸组件渲染：不套 LegacySectionWrap，
+// 它的 760 上限会把「交接与写回」的一行四输入挤到换行。
+import MemoryPage from '../MemoryPage';
+import MemoryProfilePanel from '../MemoryProfilePanel';
+import MemoryHandoffPanel from '../MemoryHandoffPanel';
 import './settings-neo.css';
 
 // ---------------------------------------------------------------------------
@@ -97,6 +106,9 @@ type SectionId =
   // 0G（停用保留）
   | 'wallet'       // backed by /api/wallet/*
   // 记忆
+  | 'memory-entries'   // 记忆条目（手动条目 + 经验沉淀，原 /memory 主列表）
+  | 'memory-profile'   // 记忆画像（Agent 运行时画像）
+  | 'memory-handoff'   // 交接与写回（A→B 交接、长期画像写回、冲突裁决）
   | 'memory-river'
   // 数据
   | 'schedules'
@@ -150,6 +162,9 @@ const STATIC_NAV_GROUPS: Array<{ group: string; items: Array<{ id: SectionId }> 
   {
     group: 'Memory',
     items: [
+      { id: 'memory-entries' },
+      { id: 'memory-profile' },
+      { id: 'memory-handoff' },
       { id: 'memory-river' },
     ],
   },
@@ -202,7 +217,10 @@ function buildNavGroups(t: (key: string, options?: Record<string, unknown>) => s
     {
       group: t('settings.groupMemory'),
       items: [
-        { id: 'memory-river', label: t('settings.navRiverMemory'), icon: Waves },
+        { id: 'memory-entries', label: t('settings.navMemoryEntries', { defaultValue: 'Memory Entries' }), icon: Brain },
+        { id: 'memory-profile', label: t('settings.navMemoryProfile', { defaultValue: 'Memory Profile' }), icon: IdCard },
+        { id: 'memory-handoff', label: t('settings.navMemoryHandoff', { defaultValue: 'Handoff & Writeback' }), icon: ArrowRightLeft },
+        { id: 'memory-river',   label: t('settings.navRiverMemory'), icon: Waves },
       ],
     },
     {
@@ -383,8 +401,14 @@ export default function SettingsPage() {
           {/* 0G（停用保留，仅 hash 深链可达） */}
           {activeSection === 'wallet'  && <WalletSection />}
 
-          {/* 记忆 */}
-          {activeSection === 'memory-river' && <LegacySectionWrap><MemorySection /></LegacySectionWrap>}
+          {/* 记忆（2026-11-06 折叠批）：左栏一级「记忆」入口下线，整体并入设置。
+              memory-entries 自带 0 padding，右栏留白直接复用。 */}
+          {activeSection === 'memory-entries' && <MemoryPage settings />}
+          {/* 画像区块自带 860 上限；交接卡片按设置右栏整宽（原记忆页也是整宽），
+              套 760 会把一行四输入 + 按钮挤到换行。 */}
+          {activeSection === 'memory-profile' && <MemoryProfilePanel />}
+          {activeSection === 'memory-handoff' && <MemoryHandoffPanel />}
+          {activeSection === 'memory-river'   && <LegacySectionWrap><MemorySection /></LegacySectionWrap>}
 
           {/* 数据 */}
           {activeSection === 'schedules'        && <LegacySectionWrap><SchedulesSection /></LegacySectionWrap>}

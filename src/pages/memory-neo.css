@@ -148,6 +148,10 @@
   font-size: 12.5px;
   cursor: pointer;
   transition: all 0.15s ease;
+  /* 表单行里输入框 width:100% 会把同排按钮挤到换行（设置内嵌后容器变窄更明显），
+     按钮不参与收缩、文字不折行 */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .neo-mm-btn:hover { border-color: var(--t-fg-3); }
 .neo-mm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -259,6 +263,24 @@
 }
 .neo-mm--inline .neo-mm-header {
   margin-bottom: 12px;
+}
+
+/* 设置内嵌变体（2026-11-06 折叠批）：记忆不再是左栏一级页，主入口搬到设置。
+   设置右栏已有 24/32 padding，这里去掉自己的一层留白与满屏高，避免双 padding
+   与空白拖出滚动条。 */
+.neo-mm--settings {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  max-width: 860px;
+}
+.neo-mm--settings .neo-mm-header {
+  margin-bottom: 16px;
+  align-items: center;
+}
+.neo-mm--settings .neo-mm-sub {
+  margin: 0;
+  max-width: 560px;
 }
 
 /* ── 记忆画像面板（MemoryProfilePanel，2026-08-23 补齐 Story 9.3 前端）───── */
