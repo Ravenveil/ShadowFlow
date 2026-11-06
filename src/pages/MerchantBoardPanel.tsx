@@ -24,6 +24,7 @@ import {
   fetchMerchantOrders,
   fetchMerchantOverview,
   fetchOrderTimeseries,
+  fetchProductEconomics,
   fetchReconcile,
   fetchTrafficCurve,
   type ChannelEconomics,
@@ -35,6 +36,7 @@ import {
   type MerchantOrderRow,
   type MerchantOverview,
   type OrderTimeseries,
+  type ProductEconomics,
   type ReconcileResult,
   type TrafficCurve,
 } from '../api/merchantBoard';
@@ -192,6 +194,8 @@ export default function MerchantBoardPanel() {
   const [traffic, setTraffic] = useState<TrafficCurve | null>(null);
   /** 渠道获客经济性：与 KPI 同一窗口取数（合计=看板数字），失败降级为空卡 */
   const [channelEcon, setChannelEcon] = useState<ChannelEconomics | null>(null);
+  /** 产品贡献与定价：与 KPI 同一窗口取数（合计=看板数字），失败降级为空卡 */
+  const [productEcon, setProductEcon] = useState<ProductEconomics | null>(null);
   const [chain, setChain] = useState<FirstOrderChain | null>(null);
   const [reconcile, setReconcile] = useState<ReconcileResult | null>(null);
   const [orderPage, setOrderPage] = useState<MerchantOrderPage | null>(null);
@@ -215,13 +219,15 @@ export default function MerchantBoardPanel() {
     setErrorMsg('');
     try {
       const win = kpiWindow(kpiRange);
-      const [ov, ts, tc, ce, rec, ch, od, ev] = await Promise.all([
+      const [ov, ts, tc, ce, pe, rec, ch, od, ev] = await Promise.all([
         fetchMerchantOverview(win),
         fetchOrderTimeseries({ granularity, start: windowStart(granularity) }),
         fetchTrafficCurve({ granularity, start: windowStart(granularity) }),
         // 渠道经济性与 KPI 共用 win：切到「今天」时合计还是今天的，两边对得上。
         // 失败只降级成空卡（和证据摘要一样），不能让整页看板变空白。
         fetchChannelEconomics({ start: win.start }).catch(() => null),
+        // 产品贡献与定价同窗口同降级：它和渠道卡是同一本账的两个维度。
+        fetchProductEconomics({ start: win.start }).catch(() => null),
         fetchReconcile(),
         fetchFirstOrderChain(''),
         fetchMerchantOrders({ limit: ORDER_PAGE_SIZE, status: orderFilter, start: win.start }),
@@ -233,6 +239,7 @@ export default function MerchantBoardPanel() {
       setFlow(ts);
       setTraffic(tc);
       setChannelEcon(ce);
+      setProductEcon(pe);
       setReconcile(rec);
       setChain(ch);
       setOrderPage(od);
@@ -573,6 +580,100 @@ export default function MerchantBoardPanel() {
           ) : (
             <p className="neo-db-chart-empty">
               {t('neo.merchant.channelEconEmpty', { defaultValue: '该区间内还没有订单与流水' })}
+            </p>
+          )
+        ) : (
+          <p className="neo-db-chart-empty">—</p>
+        )}
+      </div>
+
+      {/* ── 产品贡献与定价：产品维度的钱口径 + 标价对照，回答「哪个产品挣钱、定价兑现了多少」 ── */}
+      <div className="neo-db-panel" style={{ marginTop: 12 }} data-testid="merchant-product-econ">
+        <p className="neo-db-card-label">
+          {t('neo.merchant.productEcon', { defaultValue: '产品贡献与定价' })}
+        </p>
+        <p className="neo-mb-hint">
+          {t('neo.merchant.productEconHint', {
+            defaultValue:
+              '标价是产品档案价，单均实收 = 营收 ÷ 成交单数（成 = 已付、退 = 已退都算成交），纸面价和到手价差多少就是退款吃掉的水分；钱按记账时间、单按下单时间切窗，口径与上方 KPI 同源，合计可当场对账。',
+          })}
+        </p>
+        {productEcon ? (
+          productEcon.products.length > 0 ? (
+            <table className="neo-db-table neo-mb-table" data-testid="merchant-product-econ-table">
+              <thead>
+                <tr>
+                  <th>{t('neo.merchant.product', { defaultValue: '产品' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.channelOrders', { defaultValue: '单数' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.listPrice', { defaultValue: '标价' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.revenue', { defaultValue: '营收' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.cost', { defaultValue: '成本' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.grossShort', { defaultValue: '毛利' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.channelMargin', { defaultValue: '毛利率' })}</th>
+                  <th className="neo-mb-num">{t('neo.merchant.channelShare', { defaultValue: '营收占比' })}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productEcon.products.map((p) => (
+                  <tr key={p.product_id} data-testid="merchant-product-econ-row">
+                    <td>{p.product_name}</td>
+                    <td className="neo-mb-num">
+                      {p.orders_total}
+                      <span className="neo-mb-cell-sub">成 {p.paid_orders} · 退 {p.refunded_orders}</span>
+                    </td>
+                    <td className="neo-mb-num">
+                      {p.list_price_cents === null ? '—' : fmtYuan(p.list_price_cents)}
+                      <span className="neo-mb-cell-sub">
+                        {p.avg_realized_price_cents === null
+                          ? '单均实收 —'
+                          : `单均实收 ${fmtYuan(p.avg_realized_price_cents)}`}
+                      </span>
+                    </td>
+                    <td className="neo-mb-num">{fmtYuan(p.revenue_cents)}</td>
+                    <td className="neo-mb-num">{fmtYuan(p.cost_cents)}</td>
+                    <td className="neo-mb-num">
+                      {fmtYuan(p.gross_profit_cents)}
+                      <span className="neo-mb-cell-sub">
+                        {p.unit_gross_profit_cents === null
+                          ? '单均 —'
+                          : `单均 ${fmtYuan(p.unit_gross_profit_cents)}`}
+                      </span>
+                    </td>
+                    <td className="neo-mb-num">{fmtPct(p.gross_margin_pct)}</td>
+                    <td className="neo-mb-num">{fmtPct(p.revenue_share_pct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr data-testid="merchant-product-econ-total">
+                  <td>{t('neo.merchant.channelTotal', { defaultValue: '合计' })}</td>
+                  <td className="neo-mb-num">{productEcon.total.orders_total}</td>
+                  <td className="neo-mb-num">
+                    —
+                    <span className="neo-mb-cell-sub">
+                      {productEcon.total.avg_realized_price_cents === null
+                        ? '单均实收 —'
+                        : `单均实收 ${fmtYuan(productEcon.total.avg_realized_price_cents)}`}
+                    </span>
+                  </td>
+                  <td className="neo-mb-num">{fmtYuan(productEcon.total.revenue_cents)}</td>
+                  <td className="neo-mb-num">{fmtYuan(productEcon.total.cost_cents)}</td>
+                  <td className="neo-mb-num">
+                    {fmtYuan(productEcon.total.gross_profit_cents)}
+                    <span className="neo-mb-cell-sub">
+                      {productEcon.total.unit_gross_profit_cents === null
+                        ? '单均 —'
+                        : `单均 ${fmtYuan(productEcon.total.unit_gross_profit_cents)}`}
+                    </span>
+                  </td>
+                  <td className="neo-mb-num">{fmtPct(productEcon.total.gross_margin_pct)}</td>
+                  <td className="neo-mb-num">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            <p className="neo-db-chart-empty">
+              {t('neo.merchant.productEconEmpty', { defaultValue: '该区间内还没有订单与流水' })}
             </p>
           )
         ) : (

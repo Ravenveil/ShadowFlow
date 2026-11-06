@@ -842,3 +842,197 @@ describe('渠道获客经济性（渠道的钱口径，合计=概览）', () => 
     expect(inverted.status).toBe(400);
   });
 });
+
+describe('产品贡献与定价（产品的钱口径 + 标价对照，合计=概览）', () => {
+  it('标价对照单均实收：卖两单退一单，退款吃掉的水分一眼可见；合计与 overview 同窗口逐字段一致', async () => {
+    // 定价测试课 21900/4300：卖两单退一单 —— 营收 21900、成本 4300、毛利 17600
+    const course = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '定价测试课', price_cents: 21900, cost_cents: 4300 });
+    const c1 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: course.body.id, trace_id: 'pe-1' });
+    await request(app()).post(`/api/merchant/orders/${c1.body.id}/pay`).send({ pay_txn_id: 'txn-pe-1' });
+    const c2 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: course.body.id, trace_id: 'pe-2' });
+    await request(app()).post(`/api/merchant/orders/${c2.body.id}/pay`).send({ pay_txn_id: 'txn-pe-2' });
+    await request(app()).post(`/api/merchant/orders/${c2.body.id}/refund`);
+
+    // 定价测试卡 5000/1000：卖一单全退 —— 钱没留住
+    const card = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '定价测试卡', price_cents: 5000, cost_cents: 1000 });
+    const k1 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: card.body.id, trace_id: 'pe-3' });
+    await request(app()).post(`/api/merchant/orders/${k1.body.id}/pay`).send({ pay_txn_id: 'txn-pe-3' });
+    await request(app()).post(`/api/merchant/orders/${k1.body.id}/refund`);
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    const courseRow = res.body.products.find((p: { product_id: string }) => p.product_id === course.body.id);
+    expect(courseRow).toBeTruthy();
+    expect(courseRow).toMatchObject({
+      product_name: '定价测试课',
+      list_price_cents: 21900,
+      orders_total: 2,
+      paid_orders: 1,
+      refunded_orders: 1,
+      revenue_cents: 21900,
+      cost_cents: 4300,
+      gross_profit_cents: 17600,
+    });
+    expect(courseRow.gross_margin_pct).toBe(80.4);
+    // 单均实收 = 21900 ÷ 成交 2 单 = 10950，只有标价的一半 —— 差额就是退款吃掉的水分
+    expect(courseRow.avg_realized_price_cents).toBe(10950);
+    expect(courseRow.unit_gross_profit_cents).toBe(8800);
+
+    const cardRow = res.body.products.find((p: { product_id: string }) => p.product_id === card.body.id);
+    expect(cardRow).toBeTruthy();
+    expect(cardRow).toMatchObject({
+      list_price_cents: 5000,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    // 全退成交过：单均实收如实是 0（钱确实没留住），不是 null；营收 0 时毛利率不编数
+    expect(cardRow.gross_margin_pct).toBeNull();
+    expect(cardRow.avg_realized_price_cents).toBe(0);
+    expect(cardRow.unit_gross_profit_cents).toBe(0);
+    expect(cardRow.revenue_share_pct).toBe(0);
+
+    // 合计与概览同窗口逐字段一致：产品表不是另算一套，是同一本账换维度看
+    const ov = await request(app()).get(
+      `/api/merchant/overview?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.body.total.revenue_cents).toBe(ov.body.revenue_cents);
+    expect(res.body.total.cost_cents).toBe(ov.body.cost_cents);
+    expect(res.body.total.gross_profit_cents).toBe(ov.body.gross_profit_cents);
+    expect(res.body.total.orders_total).toBe(ov.body.orders_total);
+    expect(res.body.total.paid_orders).toBe(ov.body.paid_orders);
+    expect(res.body.total.refunded_orders).toBe(ov.body.refunded_orders);
+    expect(res.body.total.gross_margin_pct).toBe(ov.body.gross_margin_pct);
+    // 合计单均实收的分母是成交单数（与 overview 的客单价分母不同，口径写在字段注释里）
+    expect(res.body.total.avg_realized_price_cents).toBe(
+      Math.round(res.body.total.revenue_cents / (res.body.total.paid_orders + res.body.total.refunded_orders)),
+    );
+    expect(res.body.total.unit_gross_profit_cents).toBe(
+      Math.round(res.body.total.gross_profit_cents / (res.body.total.paid_orders + res.body.total.refunded_orders)),
+    );
+  });
+
+  it('营收占比合计约 100%；无归属流水归 (unknown) 不编名字/标价，缺档案产品同样不编', async () => {
+    // 手工流水没有对应订单 → 归 '(unknown)'，钱和单都不丢
+    sqlite.getDb()
+      .prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES ('pe-orphan', 'income', 777, 'pe-no-order', 'pe-orphan', ?)`,
+      )
+      .run(Date.now());
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    // 每行四舍五入到 0.1%，合计允许 1 个百分点内的舍入误差
+    const shareSum = res.body.products.reduce(
+      (a: number, p: { revenue_share_pct: number | null }) => a + (p.revenue_share_pct ?? 0),
+      0,
+    );
+    expect(Math.abs(shareSum - 100)).toBeLessThanOrEqual(1);
+
+    const unk = res.body.products.find((p: { product_id: string }) => p.product_id === '(unknown)');
+    expect(unk).toBeTruthy();
+    expect(unk.product_name).toBe('(unknown)');
+    expect(unk.list_price_cents).toBeNull();
+    expect(unk.revenue_cents).toBe(777);
+
+    // 环比用例手工插入的老单 'cmp-product' 从来不在产品档案里：名字/标价都不编数
+    const noCat = res.body.products.find((p: { product_id: string }) => p.product_id === 'cmp-product');
+    expect(noCat).toBeTruthy();
+    expect(noCat.product_name).toBe('(unknown)');
+    expect(noCat.list_price_cents).toBeNull();
+  });
+
+  it('隔离窗口缺档案的全退单：单均实收如实 0，毛利率/占比是 null 不编 0%', async () => {
+    // 20 天前（±1 天主窗口与 30 天前渠道用例的数据都不在这段），一单买完即全退
+    const db = sqlite.getDb();
+    const T = Date.now() - 20 * 86400_000;
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('pe-nocat-order', 'pe-nocat-p', '', 500, 100, 'refunded', 'txn-pe-nocat', 'pe-nocat', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    for (const [id, kind, amt] of [
+      ['pn-1', 'income', 500],
+      ['pn-2', 'expense', 100],
+      ['pn-3', 'refund', 500],
+      ['pn-4', 'expense', -100],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES (?, ?, ?, 'pe-nocat-order', 'pe-nocat', ?)`,
+      ).run(id, kind, amt, T + 60000);
+    }
+
+    const isolated = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(new Date(T).toISOString())}&end=${encodeURIComponent(new Date(T + 3600_000).toISOString())}`,
+    );
+    expect(isolated.status).toBe(200);
+    expect(isolated.body.products).toHaveLength(1);
+    const row = isolated.body.products[0];
+    expect(row.product_id).toBe('pe-nocat-p');
+    // 产品已不在档案里：名字/标价不编数
+    expect(row.product_name).toBe('(unknown)');
+    expect(row.list_price_cents).toBeNull();
+    expect(row).toMatchObject({
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 1,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    // 全退成交过：单均实收如实是 0 不是 null；营收为 0：毛利率/占比是 null 不编 0%
+    expect(row.avg_realized_price_cents).toBe(0);
+    expect(row.unit_gross_profit_cents).toBe(0);
+    expect(row.gross_margin_pct).toBeNull();
+    expect(row.revenue_share_pct).toBeNull();
+    expect(isolated.body.total.gross_margin_pct).toBeNull();
+    expect(isolated.body.total.avg_realized_price_cents).toBe(0);
+    expect(isolated.body.total.unit_gross_profit_cents).toBe(0);
+  });
+
+  it('区间隔离与脏参数：未来窗口全零且单均为 null，非法时间 400 不 5xx', async () => {
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const empty = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}`,
+    );
+    expect(empty.status).toBe(200);
+    expect(empty.body.products).toEqual([]);
+    expect(empty.body.total).toMatchObject({
+      orders_total: 0,
+      paid_orders: 0,
+      refunded_orders: 0,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    // 没成交过：单均是 null 不是 0；营收为 0：毛利率是 null
+    expect(empty.body.total.gross_margin_pct).toBeNull();
+    expect(empty.body.total.avg_realized_price_cents).toBeNull();
+    expect(empty.body.total.unit_gross_profit_cents).toBeNull();
+
+    expect((await request(app()).get('/api/merchant/products/economics?start=not-a-date')).status).toBe(400);
+    const inverted = await request(app()).get('/api/merchant/products/economics?start=2026-01-02&end=2026-01-01');
+    expect(inverted.status).toBe(400);
+  });
+});

@@ -123,6 +123,34 @@ export interface ChannelEconomics {
   total: Omit<ChannelEconomicRow, 'channel' | 'revenue_share_pct'>;
 }
 
+/** 产品贡献与定价一行：产品维度的钱口径 + 标价对照（定价兑现了多少）。 */
+export interface ProductEconomicRow {
+  product_id: string;
+  product_name: string;
+  /** 标价（产品档案 price_cents）；产品已不在档案里时为 null，不编数 */
+  list_price_cents: number | null;
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+  /** 单均实收 = 营收 ÷ 成交单数（已付+已退）；没成交过是 null */
+  avg_realized_price_cents: number | null;
+  /** 单均毛利 = 毛利 ÷ 成交单数；没成交过是 null */
+  unit_gross_profit_cents: number | null;
+  /** 该产品营收占比（%）；全量营收为 0 时为 null */
+  revenue_share_pct: number | null;
+}
+
+export interface ProductEconomics {
+  range: { from: number | null; to: number | null };
+  products: ProductEconomicRow[];
+  /** 各产品合计，与 overview 同窗口逐字段一致 */
+  total: Omit<ProductEconomicRow, 'product_id' | 'product_name' | 'list_price_cents' | 'revenue_share_pct'>;
+}
+
 export interface ReconcileResult {
   ledger: { income: number; refund: number; expense: number };
   orders: { amount: number; cost: number };
@@ -209,6 +237,12 @@ export function fetchTrafficCurve(opts: { granularity?: Granularity; start?: str
 export function fetchChannelEconomics(opts: { start?: string; end?: string } = {}): Promise<ChannelEconomics> {
   const qs = windowQuery(opts);
   return fetch(`${BASE}/channels${qs ? `?${qs}` : ''}`).then((r) => handle(r));
+}
+
+/** 产品贡献与定价。与概览共用同一组 start/end，合计才能和 KPI 对上。 */
+export function fetchProductEconomics(opts: { start?: string; end?: string } = {}): Promise<ProductEconomics> {
+  const qs = windowQuery(opts);
+  return fetch(`${BASE}/products/economics${qs ? `?${qs}` : ''}`).then((r) => handle(r));
 }
 
 export function fetchMerchantLedger(limit = 100, kind = ''): Promise<Array<{
