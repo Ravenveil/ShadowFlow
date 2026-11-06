@@ -22,8 +22,6 @@ export type NeoNav =
   /** 知识库内嵌页（左栏列表 = 统一知识源：本地仓库 + 知识包）。
    *  sourceId = 'vault:<id>' | 'pack:<id>' 深链预选（2026-08-19 知识库统一批）。 */
   | { view: 'knowledge'; sourceId?: string }
-  /** 记忆内嵌页（左栏列表 = 记忆条目）。 */
-  | { view: 'memory' }
   /** 数据看板内嵌页（2026-11-05，整合 OPC-OS PR#3 看板设计；左栏列表保持不动）。 */
   | { view: 'dashboard' }
   /** ClawHub 内嵌页（2026-10-30，左栏常驻；中栏 = Claw 目录/安装/卸载）。 */
@@ -47,8 +45,9 @@ export type NeoNav =
  * 左栏列表区内容（由 NeoApp 按 nav 派生并下发给 NeoRail）。
  * os-unified（2026-11-04 Grok Bot 范式批）：agents/teams 分区移除——成员即会话、
  * 团队即分组，全部并入 home 列表区。
+ * 2026-11-06 折叠批：memory 分区移除（记忆整体并入「设置 → 记忆」）。
  */
-export type RailSection = 'home' | 'knowledge' | 'memory';
+export type RailSection = 'home' | 'knowledge';
 
 /** NeoRail props — 左栏导航（纯受控：状态全部来自 NeoApp）。 */
 export interface NeoRailProps {
