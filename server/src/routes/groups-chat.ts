@@ -35,6 +35,7 @@ import { resolveCallable } from '../transport/dispatcher';
 import { resolveProviderKey } from '../transport/byokKey';
 import { isProviderId } from '../transport/api-clients';
 import type { ConversationMessage } from '../lib/conversation-types';
+import { buildTurnThread } from '../lib/turn-thread';
 import { loadTeamForRun } from '../lib/team-source';
 import { runTeamDagFanout, type RunTeamDagDeps, type HopRecorder } from '../lib/chat-dag/run-team-dag';
 import { computeDagLayers } from '../lib/chat-dag/dag-layers';
@@ -1159,6 +1160,10 @@ async function runFanout(
             // 无拆解（无 key/失败/未分配）→ 用户原文（现状）。
             const task = taskByAgent.get(agentId);
             const basePrompt = task ? task.prompt : userPrompt;
+            // Whole-thread 回放保真（2026-11-07）— 与串行路径同款 buildTurnThread，
+            // 取代 history0.slice(0,-1) 盲删末位（末位非用户消息时会随机丢段）。
+            // prompt 是派生子任务时，被提升用户轮视为被替换（意图拆解语义不变）。
+            const { history: turnHistory, prompt: turnPrompt } = buildTurnThread(history0, basePrompt);
             // worktree 隔离 — 本轮该 agent 的专属工作目录。
             const wt = wtByAgent.get(agentId);
             // plan_card 任务行 → running。
@@ -1187,8 +1192,8 @@ async function runFanout(
               for await (const chunk of callable.turn({
                 // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
                 system: soul + chatLessonsBlock(agentId),
-                prompt: basePrompt + kbText + upstreamText,
-                history: history0.slice(0, -1),
+                prompt: turnPrompt + kbText + upstreamText,
+                history: turnHistory,
                 signal,
                 model,
               })) {
@@ -1373,6 +1378,11 @@ async function runFanout(
           || latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
           || '';
       if (prompt) serialPrompt = prompt;
+      // Whole-thread 回放保真（2026-11-07）— 提升用户轮 + 折叠相邻同角色，
+      // 取代 history.slice(0,-1) 盲删末位：串行 fan-out 第 2+ 轮末位是上一个
+      // agent 的回复，旧删法把它整条删掉（后发言者看不到先发言者），用户消息
+      // 反而与 prompt 重复。契约/测试见 lib/turn-thread.ts。
+      const { history: turnHistory, prompt: turnPrompt } = buildTurnThread(history, prompt);
 
       const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
       if (!agent) {
@@ -1431,8 +1441,8 @@ async function runFanout(
         for await (const chunk of callable.turn({
           // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
           system: soul + chatLessonsBlock(agentId),
-          prompt: prompt + kbText,
-          history: history.slice(0, -1), // exclude the just-read latest user (it's the prompt)
+          prompt: turnPrompt + kbText,
+          history: turnHistory,
           signal: ctrl.signal,
           model,
         })) {
