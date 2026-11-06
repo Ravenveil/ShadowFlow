@@ -6,8 +6,10 @@
  *
  * GET    /api/memory/handoff/stats                  → 概览计数
  * GET    /api/memory/handoff/context?agent=B        → B 当前可读上下文（带来源）
+ * GET    /api/memory/handoff/profiles/conflicts     → 待裁决的画像冲突（人工定夺入口）
+ * POST   /api/memory/handoff/profiles/conflicts/resolve → 裁决冲突（accept 采纳 / dismiss 驳回）
  * GET    /api/memory/handoff/profiles/:subjectId    → 当前画像 + append-only 流水
- * POST   /api/memory/handoff/profiles/writeback     → 长期画像写回（置信度合并）
+ * POST   /api/memory/handoff/profiles/writeback     → 长期画像写回（置信度合并，force 可裁决）
  * POST   /api/memory/handoff/profiles/ingest        → 客户反馈规则式自动提炼
  * GET    /api/memory/handoff                       → 交接包列表
  * POST   /api/memory/handoff                       → A 下班建交接包（自动汇总快照）
@@ -26,8 +28,10 @@ import {
   getHandoff,
   handoffStats,
   ingestFeedback,
+  listConflicts,
   listHandoffs,
   profile,
+  resolveConflict,
   writeback,
 } from '../storage/memory-handoff';
 import { apiGuard } from '../middleware/api-guard';
@@ -77,6 +81,36 @@ router.get('/context', (req: Request, res: Response) => {
 
 // ── 长期画像 ─────────────────────────────────────────────────────────────────
 
+// 必须排在 /profiles/:subjectId 之前，否则 Express 会把 "conflicts" 当成 subjectId。
+router.get('/profiles/conflicts', (req: Request, res: Response) => {
+  const limit = Number(req.query.limit);
+  res.json(
+    listConflicts({
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 50,
+      subject_id: str(req.query.subject_id, 64) || undefined,
+    }),
+  );
+});
+
+// 裁决出口：前端只传「哪条 + 采纳还是驳回」，提议值/置信度/证据由后端从冲突事件里取，
+// 不让调用方自己拼 force 写回（拼错就会把「驳回」写成覆盖）。重复裁决返回 404。
+router.post('/profiles/conflicts/resolve', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    res.json(
+      resolveConflict({
+        subject_type: str(body.subject_type, 32) || 'customer',
+        subject_id: str(body.subject_id, 64),
+        key: str(body.key, 64),
+        decision: str(body.decision, 16),
+        actor: str(body.actor, 64) || 'system',
+      }),
+    );
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
 router.get('/profiles/:subjectId', (req: Request, res: Response) => {
   res.json(profile(req.params.subjectId, str(req.query.subject_type, 32) || 'customer'));
 });
@@ -94,6 +128,7 @@ router.post('/profiles/writeback', (req: Request, res: Response) => {
         source: str(body.source, 64) || 'manual',
         evidence: str(body.evidence, 600),
         actor: str(body.actor, 64) || 'system',
+        force: body.force === true,
       }),
     );
   } catch (err) {

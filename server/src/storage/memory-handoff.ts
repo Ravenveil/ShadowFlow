@@ -353,7 +353,20 @@ export function contextFor(
 
 // ---------------------------------------------------------------- 长期画像写回
 
-export type WritebackAction = 'create' | 'update' | 'conflict' | 'keep';
+export type WritebackAction = 'create' | 'update' | 'conflict' | 'keep' | 'override' | 'dismiss';
+
+/** 写路径共用：每个主体只留最近 PROFILE_EVENT_KEEP 条事件（当前值表不受影响）。 */
+function trimProfileEvents(db: ReturnType<typeof getDb>, subjectType: string, subjectId: string): void {
+  db.prepare(
+    `DELETE FROM memory_profile_events
+      WHERE subject_type = ? AND subject_id = ?
+        AND id NOT IN (
+          SELECT id FROM memory_profile_events
+           WHERE subject_type = ? AND subject_id = ?
+           ORDER BY id DESC LIMIT ?
+        )`,
+  ).run(subjectType, subjectId, subjectType, subjectId, PROFILE_EVENT_KEEP);
+}
 
 export interface WritebackResult {
   subject_type: string;
@@ -374,6 +387,15 @@ export function writeback(input: {
   source?: string;
   evidence?: string;
   actor?: string;
+  /**
+   * 人工裁决：绕过「置信度高者胜」的自动合并，直接覆盖。
+   *
+   * 为什么必须有这个开关：同一置信度、不同说法的两次写回会落成 action='conflict'
+   * 并且**不覆盖**——设计上是对的（不敢替人拍板），但此前没有任何出口能拍板，
+   * 客户画像会永远停在第一次的说法上。现在由人或上游系统显式 force，动作记成
+   * 'override' 并保留 old_value 与新证据，审计链不断。
+   */
+  force?: boolean;
 }): WritebackResult {
   const subject_type = (input.subject_type || 'customer').trim();
   const subject_id = (input.subject_id ?? '').trim();
@@ -389,6 +411,7 @@ export function writeback(input: {
   const source = (input.source || 'manual').slice(0, 64);
   const evidence = (input.evidence ?? '').slice(0, MAX_TEXT);
   const actor = (input.actor || 'system').slice(0, 64);
+  const force = input.force === true;
   const db = getDb();
   const run = db.transaction(() => {
     const cur = db
@@ -408,6 +431,16 @@ export function writeback(input: {
          (subject_type, subject_id, key, value, confidence, source, evidence, updated_at)
          VALUES (?,?,?,?,?,?,?,?)`,
       ).run(subject_type, subject_id, key, value, confidence, source, evidence, now);
+    } else if (force) {
+      // 值没变就没事可做，别把「确认一次」记成一次覆盖
+      action = value === cur.value ? 'keep' : 'override';
+      if (action === 'override') {
+        db.prepare(
+          `UPDATE memory_profile_values
+           SET value = ?, confidence = ?, source = ?, evidence = ?, updated_at = ?
+           WHERE subject_type = ? AND subject_id = ? AND key = ?`,
+        ).run(value, Math.max(confidence, cur.confidence), source, evidence, now, subject_type, subject_id, key);
+      }
     } else if (confidence > cur.confidence) {
       action = 'update';
       db.prepare(
@@ -416,7 +449,7 @@ export function writeback(input: {
          WHERE subject_type = ? AND subject_id = ? AND key = ?`,
       ).run(value, confidence, source, evidence, now, subject_type, subject_id, key);
     } else if (confidence === cur.confidence && value !== cur.value) {
-      action = 'conflict'; // 同置信不同说法：不覆盖，只留痕
+      action = 'conflict'; // 同置信不同说法：不覆盖，只留痕（可用 force 裁决）
     } else {
       action = 'keep';
     }
@@ -434,19 +467,16 @@ export function writeback(input: {
     // 流水只留最近 PROFILE_EVENT_KEEP 条：append-only 不等于无限增长，
     // 长期跑下来（每个客户几百次写回）单表会拖慢 profile() 的历史查询。
     // 当前值在 memory_profile_values 里，裁剪历史不影响画像本身。
-    db.prepare(
-      `DELETE FROM memory_profile_events
-        WHERE subject_type = ? AND subject_id = ?
-          AND id NOT IN (
-            SELECT id FROM memory_profile_events
-             WHERE subject_type = ? AND subject_id = ?
-             ORDER BY id DESC LIMIT ?
-          )`,
-    ).run(subject_type, subject_id, subject_type, subject_id, PROFILE_EVENT_KEEP);
+    trimProfileEvents(db, subject_type, subject_id);
     return {
       action,
-      value: action === 'create' || action === 'update' ? value : cur!.value,
-      confidence: action === 'create' || action === 'update' ? confidence : cur!.confidence,
+      value: action === 'create' || action === 'update' || action === 'override' ? value : cur!.value,
+      confidence:
+        action === 'create' || action === 'update'
+          ? confidence
+          : action === 'override'
+            ? Math.max(confidence, cur!.confidence)
+            : cur!.confidence,
     };
   });
   const r = run();
@@ -455,10 +485,181 @@ export function writeback(input: {
     subject_id,
     key,
     action: r.action,
-    changed: r.action === 'create' || r.action === 'update',
+    changed: r.action === 'create' || r.action === 'update' || r.action === 'override',
     value: r.value,
     confidence: r.confidence,
   };
+}
+
+/**
+ * 待裁决的画像冲突。
+ *
+ * 「同置信、不同说法」的写回不覆盖（不敢替人拍板），但以前只写进 events 表，
+ * 没有任何出口能把它捞出来 —— 冲突等于烂在流水里。
+ *
+ * 判定铁律：该 (主体, key) 的**最近一次写回事件**必须就是这条 conflict。
+ * 以前只在 conflict 事件里取 MAX(id)，于是「冲突之后又被更高置信的写回更新了值」
+ * 或「已经 force 裁决过」的旧冲突还会挂在列表里，人工反复处理同一条。
+ * 改成看全体事件的 MAX(id) 后，任何后续写回（update / override / dismiss / keep）
+ * 都会让旧提议自然失效 —— 裁决动作因此不需要额外的状态列。
+ */
+export interface ProfileConflict {
+  subject_type: string;
+  subject_id: string;
+  key: string;
+  current_value: string;
+  current_confidence: number;
+  proposed_value: string;
+  proposed_confidence: number;
+  source: string;
+  evidence: string;
+  created_at: number;
+}
+
+const CONFLICT_FIELDS = `e.subject_type, e.subject_id, e.key,
+       v.value      AS current_value,
+       v.confidence AS current_confidence,
+       e.new_value  AS proposed_value,
+       e.confidence AS proposed_confidence,
+       e.source, e.evidence, e.created_at`;
+const CONFLICT_BASE = `FROM memory_profile_events e
+      JOIN memory_profile_values v
+        ON v.subject_type = e.subject_type
+       AND v.subject_id   = e.subject_id
+       AND v.key          = e.key
+     WHERE e.action = 'conflict'
+       AND v.value <> e.new_value`;
+const CONFLICT_LATEST = `AND e.id = (
+         SELECT MAX(x.id) FROM memory_profile_events x
+          WHERE x.subject_type = e.subject_type
+            AND x.subject_id   = e.subject_id
+            AND x.key          = e.key
+       )`;
+
+type Conn = ReturnType<typeof getDb>;
+
+/** extra 里的 ? 参数放在 params，cap 永远追加在最后。列表与单条查询同源。 */
+function conflictRows(db: Conn, extra: string, params: unknown[], cap: number): ProfileConflict[] {
+  return db
+    .prepare(
+      `SELECT ${CONFLICT_FIELDS} ${CONFLICT_BASE} ${extra} ${CONFLICT_LATEST}
+        ORDER BY e.created_at DESC LIMIT ?`,
+    )
+    .all(...params, cap) as ProfileConflict[];
+}
+
+/** 待裁决条数（不受列表 500 上限影响，stats / profile 用它）。 */
+function pendingConflictCount(db: Conn, extra = '', params: unknown[] = []): number {
+  return (
+    db.prepare(`SELECT COUNT(*) AS n ${CONFLICT_BASE} ${extra} ${CONFLICT_LATEST}`).get(...params) as {
+      n: number;
+    }
+  ).n;
+}
+
+export function listConflicts(input: { limit?: number; subject_id?: string } = {}): ProfileConflict[] {
+  const raw = Number(input.limit ?? 50);
+  const cap = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 500) : 50;
+  const subject = (input.subject_id ?? '').trim();
+  return subject
+    ? conflictRows(getDb(), 'AND e.subject_id = ?', [subject], cap)
+    : conflictRows(getDb(), '', [], cap);
+}
+
+export type ConflictDecision = 'accept' | 'dismiss';
+
+export interface ConflictResolution {
+  subject_type: string;
+  subject_id: string;
+  key: string;
+  decision: ConflictDecision;
+  action: WritebackAction;
+  /** 裁决后的当前画像值 */
+  value: string;
+  actor: string;
+  resolved_at: number;
+}
+
+/**
+ * 人工裁决一条待裁决冲突：采纳提议 / 驳回提议（保留当前值）。
+ *
+ * 为什么不是直接让前端拼 force 写回：调用方得先自己查出提议值、置信度、证据，
+ * 拼错了就会把「驳回」写成一次覆盖；而且裁决本身需要留痕（谁、什么时候、驳回了什么）。
+ * 这里在一个事务里完成「查待裁决 → 落裁决 → 清列表」，重复点按第二次直接 404。
+ */
+export function resolveConflict(input: {
+  subject_type?: string;
+  subject_id: string;
+  key: string;
+  decision: string;
+  actor?: string;
+}): ConflictResolution {
+  const subject_type = (input.subject_type || 'customer').trim();
+  const subject_id = (input.subject_id ?? '').trim();
+  const key = (input.key ?? '').trim();
+  if (!subject_id || !key) throw new MemoryHandoffError('subject_id / key 不能为空');
+  const rawDecision = input.decision;
+  if (rawDecision !== 'accept' && rawDecision !== 'dismiss') {
+    throw new MemoryHandoffError('decision must be accept|dismiss');
+  }
+  // 显式收窄成字面量联合：下面在事务闭包里返回，TS 不会把 if 的窄化带进闭包。
+  const decision: ConflictDecision = rawDecision;
+  const actor = (input.actor || 'system').slice(0, 64);
+  const db = getDb();
+
+  return db.transaction(() => {
+    const conflict = conflictRows(
+      db,
+      'AND e.subject_type = ? AND e.subject_id = ? AND e.key = ?',
+      [subject_type, subject_id, key],
+      1,
+    )[0];
+    if (!conflict) throw new MemoryHandoffError('该画像没有待裁决的冲突', 404);
+
+    if (decision === 'accept') {
+      const result = writeback({
+        subject_type,
+        subject_id,
+        key,
+        value: conflict.proposed_value,
+        confidence: conflict.proposed_confidence,
+        source: 'conflict_resolution',
+        evidence: `采纳冲突提议：${conflict.evidence}`.slice(0, MAX_TEXT),
+        actor,
+        force: true,
+      });
+      return {
+        subject_type, subject_id, key, decision,
+        action: result.action,
+        value: result.value,
+        actor,
+        resolved_at: Date.now(),
+      };
+    }
+
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO memory_profile_events
+       (subject_type, subject_id, key, old_value, new_value, old_confidence,
+        confidence, action, source, evidence, actor, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      subject_type, subject_id, key,
+      conflict.current_value, conflict.current_value,
+      conflict.current_confidence, conflict.current_confidence,
+      'dismiss', 'conflict_resolution',
+      `驳回提议「${conflict.proposed_value}」`.slice(0, MAX_TEXT),
+      actor, now,
+    );
+    trimProfileEvents(db, subject_type, subject_id);
+    return {
+      subject_type, subject_id, key, decision,
+      action: 'dismiss' as WritebackAction,
+      value: conflict.current_value,
+      actor,
+      resolved_at: now,
+    };
+  })();
 }
 
 export function profile(subjectId: string, subjectType = 'customer'): {
@@ -466,7 +667,10 @@ export function profile(subjectId: string, subjectType = 'customer'): {
   profile: Array<{ key: string; value: string; confidence: number; source: string; evidence: string; updated_at: number }>;
   history: Array<{ key: string; old_value: string | null; new_value: string; action: string; confidence: number; source: string; actor: string; created_at: number }>;
   writes: number;
+  /** 历史累计冲突次数（含已裁决的），用于回溯 */
   conflicts: number;
+  /** 当前还挂在待裁决列表里的条数 —— 与上面的历史累计不是一回事 */
+  pending_conflicts: number;
 } {
   const db = getDb();
   const rows = db
@@ -492,6 +696,11 @@ export function profile(subjectId: string, subjectType = 'customer'): {
     history,
     writes: history.length,
     conflicts: history.filter((h) => h.action === 'conflict').length,
+    pending_conflicts: pendingConflictCount(
+      db,
+      'AND e.subject_type = ? AND e.subject_id = ?',
+      [subjectType, subjectId],
+    ),
   };
 }
 
@@ -538,7 +747,9 @@ export function handoffStats(): {
   handoff_items: number;
   profiles: number;
   profile_events: number;
+  /** 历史累计冲突次数；要看「还有几条要人处理」请用 pending_conflicts。 */
   conflicts: number;
+  pending_conflicts: number;
 } {
   const db = getDb();
   const n = (sql: string): number =>
@@ -551,5 +762,6 @@ export function handoffStats(): {
     profiles: n(`SELECT COUNT(*) AS n FROM memory_profile_values`),
     profile_events: n(`SELECT COUNT(*) AS n FROM memory_profile_events`),
     conflicts: n(`SELECT COUNT(*) AS n FROM memory_profile_events WHERE action = 'conflict'`),
+    pending_conflicts: pendingConflictCount(db),
   };
 }

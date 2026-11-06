@@ -74,6 +74,7 @@ const reconcile: api.ReconcileResult = {
   ledger: { income: 19900, refund: 0, expense: 4300 },
   orders: { amount: 19900, cost: 4300 },
   diffs: { income_cents: 0, expense_cents: 0, refund_cents: 0, refund_rows: 0 },
+  issues: [],
   balanced: true,
 };
 
@@ -129,7 +130,13 @@ beforeEach(() => {
   vi.mocked(api.fetchTrafficCurve).mockResolvedValue(traffic);
   vi.mocked(api.fetchReconcile).mockResolvedValue(reconcile);
   vi.mocked(api.fetchFirstOrderChain).mockResolvedValue(chain);
-  vi.mocked(api.fetchMerchantOrders).mockResolvedValue(orders);
+  vi.mocked(api.fetchMerchantOrders).mockResolvedValue({
+    items: orders,
+    total: orders.length,
+    limit: 50,
+    offset: 0,
+    has_more: false,
+  });
 });
 
 function renderPanel() {
@@ -216,5 +223,111 @@ describe('订单明细（业务要能直接看状态，不用翻流水反推）'
     await waitFor(() =>
       expect(api.fetchMerchantOrders).toHaveBeenCalledWith(expect.objectContaining({ status: 'refunded' })),
     );
+  });
+
+  it('切到「近 7 天」会用 start 重新取概览（默认全量不带参）', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-kpi')).toBeInTheDocument());
+    // 首屏是全量：不传 start，口径与老版本一致
+    expect(api.fetchMerchantOverview).toHaveBeenCalledWith({});
+
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchMerchantOverview).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
+  it('还有下一页时显示「加载更多」，点完把新一页追加在后面', async () => {
+    vi.mocked(api.fetchMerchantOrders).mockResolvedValueOnce({
+      items: orders.slice(0, 2),
+      total: 3,
+      limit: 2,
+      offset: 0,
+      has_more: true,
+    });
+    renderPanel();
+
+    const more = await screen.findByTestId('merchant-orders-more');
+    expect(screen.getByTestId('merchant-orders-sum')).toHaveTextContent('共 3 单');
+    expect(screen.getByTestId('merchant-orders-sum')).toHaveTextContent('已显示 2');
+
+    vi.mocked(api.fetchMerchantOrders).mockResolvedValueOnce({
+      items: [orders[2]],
+      total: 3,
+      limit: 2,
+      offset: 2,
+      has_more: false,
+    });
+    fireEvent.click(more);
+
+    await waitFor(() => expect(screen.getAllByTestId(/merchant-order-row-/)).toHaveLength(3));
+    // 第二页从「已经拿到的条数」开始，不是页号，避免中间插单时漏行
+    expect(api.fetchMerchantOrders).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2 }),
+    );
+    expect(screen.queryByTestId('merchant-orders-more')).not.toBeInTheDocument();
+  });
+});
+
+describe('区间联动 / 环比 / 对账差额 / 单笔毛利口径', () => {
+  it('切到「近 7 天」：订单明细也带 start 重新取数，并请求上一周期环比', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-order-table')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchMerchantOrders).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+    expect(api.fetchMerchantOverview).toHaveBeenCalledWith(
+      expect.objectContaining({ compare: true }),
+    );
+  });
+
+  it('只有「已支付」的行显示毛利，待支付与已退款显示 —', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-order-table')).toBeInTheDocument());
+    expect(within(screen.getByTestId('merchant-order-row-paid')).getByText(/¥156/)).toBeInTheDocument();
+    expect(within(screen.getByTestId('merchant-order-row-refunded')).getAllByText('—')).toHaveLength(1);
+    expect(within(screen.getByTestId('merchant-order-row-created')).getAllByText('—')).toHaveLength(1);
+  });
+
+  it('展示后端算好的环比：涨/跌/上期为零分别有说法', async () => {
+    vi.mocked(api.fetchMerchantOverview).mockResolvedValue({
+      ...overview,
+      comparison: {
+        range: { from: 1, to: 2 },
+        revenue_cents: 10000,
+        cost_cents: 2000,
+        gross_profit_cents: 8000,
+        gross_margin_pct: 80,
+        orders_total: 1,
+        paid_orders: 1,
+        refunded_orders: 0,
+        transacted_orders: 1,
+        avg_order_cents: 10000,
+        delta_pct: { revenue: 25, gross_profit: -10, orders: null },
+      },
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-compare')).toBeInTheDocument());
+    const line = screen.getByTestId('merchant-compare');
+    expect(line).toHaveTextContent('↑25%');
+    expect(line).toHaveTextContent('↓10%');
+    expect(line).toHaveTextContent('新增');
+  });
+
+  it('账实不一致时列出后端给出的逐项差额', async () => {
+    vi.mocked(api.fetchReconcile).mockResolvedValue({
+      ...reconcile,
+      balanced: false,
+      issues: ['成本流水比订单成本多 +777 分'],
+    });
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-reconcile-issues')).toBeInTheDocument());
+    expect(screen.getByTestId('merchant-reconcile-issues')).toHaveTextContent('+777 分');
   });
 });

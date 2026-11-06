@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS mb_orders (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mb_orders_pay_txn
   ON mb_orders(pay_txn_id) WHERE pay_txn_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_mb_orders_created ON mb_orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_mb_orders_status_created ON mb_orders(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_mb_orders_trace ON mb_orders(trace_id);
 CREATE TABLE IF NOT EXISTS mb_ledger (
   id TEXT PRIMARY KEY,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS mb_ledger (
   trace_id TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_mb_ledger_created ON mb_ledger(created_at);
 CREATE INDEX IF NOT EXISTS idx_mb_ledger_order ON mb_ledger(order_id);
 CREATE INDEX IF NOT EXISTS idx_mb_ledger_trace ON mb_ledger(trace_id);
 `;
@@ -190,6 +192,40 @@ function timeWindow(startRaw: unknown, endRaw: unknown, granularity: string) {
   return { from: start, to: end, size, granularity: granularity === '15m' || granularity === 'hour' ? granularity : 'day' };
 }
 
+/**
+ * 可选时间区间（用于「本月赚多少」这类问法）。
+ *
+ * 与 timeWindow 的区别：那个是画曲线用的，必须给区间并补零值桶；
+ * 这个是给聚合/列表用的，**不给就是全量**（保持老行为零变化），
+ * 且只做边界校验，不生成桶。
+ *
+ * 返回 null 表示该侧不设限。
+ */
+function rangeWindow(startRaw: unknown, endRaw: unknown): { from: number | null; to: number | null } {
+  const parse = (v: unknown, field: string): number | null => {
+    if (v === undefined || v === null || v === '') return null;
+    const s = typeof v === 'string' ? v : String(v);
+    // 纯数字字符串当毫秒时间戳，其余按 ISO8601
+    const n = /^\d+$/.test(s) ? Number(s) : Date.parse(s);
+    if (!Number.isFinite(n)) throw new MerchantError(`${field} must be ISO8601 or epoch millis`);
+    return n;
+  };
+  const from = parse(startRaw, 'start');
+  const to = parse(endRaw, 'end');
+  if (from !== null && to !== null && from >= to) {
+    throw new MerchantError('start must be earlier than end');
+  }
+  return { from, to };
+}
+
+/** 把 rangeWindow 的结果拼成 WHERE 片段（含前导 AND），参数按顺序塞进 params。 */
+function rangeClause(column: string, from: number | null, to: number | null, params: unknown[]): string {
+  let sql = '';
+  if (from !== null) { sql += ` AND ${column} >= ?`; params.push(from); }
+  if (to !== null) { sql += ` AND ${column} < ?`; params.push(to); }
+  return sql;
+}
+
 // ── 商品 / 访客 / 订单 ────────────────────────────────────────────────────────
 
 export interface Product {
@@ -235,22 +271,53 @@ export interface OrderRow extends Order {
  * 人反推。按创建时间倒序，支持按状态筛。
  * 商品名 LEFT JOIN 出来，商品被删了也不丢这一单（显示占位而不是整行消失）。
  */
-export function listOrders(input: { limit?: unknown; status?: unknown } = {}): OrderRow[] {
+/** 订单列表分页。以前只能取最近 N 条 —— 单量一多，三个月前的单再也翻不到。 */
+export interface OrderPage {
+  items: OrderRow[];
+  /** 满足筛选条件的总单数（不是本页条数），前端据此决定还有没有下一页 */
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export function listOrders(
+  input: { limit?: unknown; offset?: unknown; status?: unknown; start?: unknown; end?: unknown } = {},
+): OrderPage {
   const rawLimit = Number(input.limit ?? 100);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 500) : 100;
+  const rawOffset = Number(input.offset ?? 0);
+  const offset = Number.isFinite(rawOffset) ? Math.max(Math.trunc(rawOffset), 0) : 0;
   const status = text(input.status, 16, 'status');
   if (status && !ORDER_STATUSES.includes(status as OrderStatus)) {
     throw new MerchantError(`status must be one of ${ORDER_STATUSES.join('|')}`);
   }
+  const { from, to } = rangeWindow(input.start, input.end);
+
+  const params: unknown[] = [];
+  let where = status ? 'WHERE o.status = ?' : 'WHERE 1 = 1';
+  if (status) params.push(status);
+  where += rangeClause('o.created_at', from, to, params);
+
+  const total = (
+    db().prepare(`SELECT COUNT(*) AS n FROM mb_orders o ${where}`).get(...params) as { n: number }
+  ).n;
+
+  // ORDER BY 加 id 兜底：created_at 毫秒相同的两单在翻页时不能因为排序不稳定而重复/漏掉
+  // 单笔毛利只对「已支付且未退款」的单成立：待支付的钱还没进来，已退款的收入和
+  // 成本都已红字冲回。以前对所有状态一律 amount − cost，结果一单没成交也显示
+  // 「毛利 +12 元」、全额退款的单还挂着正毛利 —— 与上方 KPI 的净口径直接打架。
   const sql = `
     SELECT o.*, COALESCE(p.name, '(商品已删除)') AS product_name,
-           o.amount_cents - o.cost_cents AS gross_profit_cents
+           CASE WHEN o.status = 'paid' THEN o.amount_cents - o.cost_cents ELSE 0 END
+             AS gross_profit_cents
       FROM mb_orders o
       LEFT JOIN mb_products p ON p.id = o.product_id
-     ${status ? 'WHERE o.status = ?' : ''}
-     ORDER BY o.created_at DESC
-     LIMIT ?`;
-  return (status ? db().prepare(sql).all(status, limit) : db().prepare(sql).all(limit)) as OrderRow[];
+     ${where}
+     ORDER BY o.created_at DESC, o.id DESC
+     LIMIT ? OFFSET ?`;
+  const items = db().prepare(sql).all(...params, limit, offset) as OrderRow[];
+  return { items, total, limit, offset, has_more: offset + items.length < total };
 }
 
 export interface Visit {
@@ -393,25 +460,50 @@ export function refundOrder(orderId: string): { order: Order; idempotent: boolea
 
 // ── 看板口径 ──────────────────────────────────────────────────────────────────
 
-export function overview() {
-  const conn = db();
+/** 单段区间的核心口径（本期与环比上期共用同一份形状）。 */
+interface OverviewCore {
+  range: { from: number | null; to: number | null };
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  transacted_orders: number;
+  avg_order_cents: number;
+}
+
+/** 上期分母为 0 时不编造增长率：两边都 0 记 0，从 0 涨起来记 null（前端显示「新增」）。 */
+function pctDelta(cur: number, prev: number): number | null {
+  if (prev === 0) return cur === 0 ? 0 : null;
+  return Math.round(((cur - prev) / Math.abs(prev)) * 1000) / 10;
+}
+
+/** 单段区间的核心口径，抽出来给「本期 / 上期」复用，保证环比两边算法同源。 */
+function computeOverview(conn: Database.Database, from: number | null, to: number | null): OverviewCore {
+  const ledgerParams: unknown[] = [];
+  const ledgerWhere = `WHERE 1 = 1${rangeClause('created_at', from, to, ledgerParams)}`;
   const sums = conn
     .prepare(
       `SELECT
          COALESCE(SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END), 0) AS income,
          COALESCE(SUM(CASE WHEN kind = 'refund' THEN amount_cents ELSE 0 END), 0) AS refund,
          COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount_cents ELSE 0 END), 0) AS expense
-       FROM mb_ledger`,
+       FROM mb_ledger ${ledgerWhere}`,
     )
-    .get() as { income: number; refund: number; expense: number };
+    .get(...ledgerParams) as { income: number; refund: number; expense: number };
+
+  const orderParams: unknown[] = [];
+  const orderWhere = `WHERE 1 = 1${rangeClause('created_at', from, to, orderParams)}`;
   const orderStats = conn
     .prepare(
       `SELECT COUNT(*) AS total,
               COALESCE(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END), 0) AS paid,
               COALESCE(SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END), 0) AS refunded
-       FROM mb_orders`,
+       FROM mb_orders ${orderWhere}`,
     )
-    .get() as { total: number; paid: number; refunded: number };
+    .get(...orderParams) as { total: number; paid: number; refunded: number };
 
   const revenue = sums.income - sums.refund;
   const gross = revenue - sums.expense;
@@ -419,6 +511,7 @@ export function overview() {
   // 退了款那单不算还留着钱，商家看到的「一单挣多少」就不是真的。
   const paidOnly = orderStats.paid;
   return {
+    range: { from, to },
     revenue_cents: revenue,
     cost_cents: sums.expense,
     gross_profit_cents: gross,
@@ -428,8 +521,56 @@ export function overview() {
     refunded_orders: orderStats.refunded,
     transacted_orders: paidOnly + orderStats.refunded,
     avg_order_cents: paidOnly ? Math.round(revenue / paidOnly) : 0,
-    first_order: conn.prepare(`SELECT id, trace_id, paid_at FROM mb_orders WHERE paid_at IS NOT NULL ORDER BY paid_at ASC LIMIT 1`).get() ?? null,
   };
+}
+
+export interface OverviewComparison extends OverviewCore {
+  /** 相对上一等长区间的变化百分比；上期为 0 且本期 >0 时为 null。 */
+  delta_pct: {
+    revenue: number | null;
+    gross_profit: number | null;
+    orders: number | null;
+  };
+}
+
+/**
+ * 看板概览。默认全量（老行为不变）；传 start/end 就只看这段区间 ——
+ * 业务最常问的是「这个月赚多少」，而不是「开张到现在赚多少」。
+ *
+ * 口径说明：区间按**记账时间**（流水 created_at / 订单 created_at）切，不是按订单支付时间。
+ * 所以一笔上月成交、本月退款的单，会把退款算进本月 —— 这才是「本月净收入」的真实含义。
+ *
+ * compare=1 时额外算一份「上一等长区间」：[from−span, from)，span = (to ?? now) − from。
+ * 只给 end 不给 start、或压根没给区间（全量）时无法定义等长窗口，返回 null 而不是硬编。
+ * 百分比由后端算，前端不自己除，避免两边口径漂移。
+ */
+export function overview(input: { start?: unknown; end?: unknown; compare?: unknown } = {}) {
+  const conn = db();
+  const { from, to } = rangeWindow(input.start, input.end);
+  const core = computeOverview(conn, from, to);
+
+  const firstOrderParams: unknown[] = [];
+  const firstOrderWhere = `WHERE paid_at IS NOT NULL${rangeClause('created_at', from, to, firstOrderParams)}`;
+  const first_order = conn
+    .prepare(`SELECT id, trace_id, paid_at FROM mb_orders ${firstOrderWhere} ORDER BY paid_at ASC LIMIT 1`)
+    .get(...firstOrderParams) ?? null;
+
+  let comparison: OverviewComparison | null = null;
+  const wantCompare =
+    input.compare === true || input.compare === 1 || input.compare === '1' || input.compare === 'true';
+  if (wantCompare && from !== null) {
+    const span = Math.max((to ?? Date.now()) - from, 1);
+    const previous = computeOverview(conn, from - span, from);
+    comparison = {
+      ...previous,
+      delta_pct: {
+        revenue: pctDelta(core.revenue_cents, previous.revenue_cents),
+        gross_profit: pctDelta(core.gross_profit_cents, previous.gross_profit_cents),
+        orders: pctDelta(core.orders_total, previous.orders_total),
+      },
+    };
+  }
+  return { ...core, first_order, comparison };
 }
 
 export interface Bucket {
@@ -570,7 +711,7 @@ export function listLedger(limit = 100, kind = '') {
   return rows;
 }
 
-/** 账实对账：流水与订单事实双向核对，数字对不上 balanced=false。 */
+/** 账实对账：流水与订单事实双向核对，数字对不上 balanced=false 并逐项给出 issues。 */
 export function reconcile() {
   const conn = db();
   const ledger = conn
@@ -600,7 +741,15 @@ export function reconcile() {
     refund_cents: ledger.refund - refundAmount.n,
     refund_rows: refundCount.n - (conn.prepare(`SELECT COUNT(*) AS n FROM mb_orders WHERE status = 'refunded'`).get() as { n: number }).n,
   };
-  return { ledger, orders, diffs, balanced: Object.values(diffs).every((d) => d === 0) };
+  // 只给 balanced=false 不给原因，业务在页面上只能看到「账实有差额」却不知道差在哪、
+  // 该找谁修。这里把每一项非零差额翻成人话，前端直接列出来即可。
+  const signed = (n: number) => `${n > 0 ? '+' : ''}${n}`;
+  const issues: string[] = [];
+  if (diffs.income_cents !== 0) issues.push(`收入流水比订单实收多 ${signed(diffs.income_cents)} 分`);
+  if (diffs.expense_cents !== 0) issues.push(`成本流水比订单成本多 ${signed(diffs.expense_cents)} 分`);
+  if (diffs.refund_cents !== 0) issues.push(`退款流水金额比退款订单金额多 ${signed(diffs.refund_cents)} 分`);
+  if (diffs.refund_rows !== 0) issues.push(`退款流水比退款订单多 ${signed(diffs.refund_rows)} 行`);
+  return { ledger, orders, diffs, issues, balanced: issues.length === 0 };
 }
 
 /** 第一单五步链路：一个 trace_id 从落地到看板是否全通（事实表判定，不靠事件总线）。 */

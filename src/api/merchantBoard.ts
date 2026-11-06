@@ -33,7 +33,26 @@ export interface MerchantOrder {
   paid_at: number | null;
 }
 
+/** 上一等长区间的口径 + 变化率；compare=1 且给了 start 时才有值。 */
+export interface MerchantOverviewComparison {
+  range: { from: number | null; to: number | null };
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  transacted_orders: number;
+  avg_order_cents: number;
+  /** 上期为 0 且本期 >0 时是 null（显示「新增」，不编造百分比） */
+  delta_pct: { revenue: number | null; gross_profit: number | null; orders: number | null };
+}
+
 export interface MerchantOverview {
+  /** 统计区间；from/to 为 null 表示「全量」 */
+  range?: { from: number | null; to: number | null };
+  comparison?: MerchantOverviewComparison | null;
   revenue_cents: number;
   cost_cents: number;
   gross_profit_cents: number;
@@ -86,6 +105,8 @@ export interface ReconcileResult {
   ledger: { income: number; refund: number; expense: number };
   orders: { amount: number; cost: number };
   diffs: { income_cents: number; expense_cents: number; refund_cents: number; refund_rows: number };
+  /** 账实不一致时逐项说清差在哪；balanced=true 时为空数组 */
+  issues: string[];
   balanced: boolean;
 }
 
@@ -126,11 +147,14 @@ function post<T>(url: string, payload: Record<string, unknown>): Promise<T> {
   }).then((r) => handle<T>(r));
 }
 
-function windowQuery(opts: { granularity?: Granularity; start?: string; end?: string }): string {
+function windowQuery(opts: {
+  granularity?: Granularity; start?: string; end?: string; compare?: boolean;
+}): string {
   const qs = new URLSearchParams();
   if (opts.granularity) qs.set('granularity', opts.granularity);
   if (opts.start) qs.set('start', opts.start);
   if (opts.end) qs.set('end', opts.end);
+  if (opts.compare) qs.set('compare', '1');
   return qs.toString();
 }
 
@@ -138,8 +162,15 @@ export function fetchMerchantStats(): Promise<{ products: number; visits: number
   return fetch(`${BASE}/stats`).then((r) => handle(r));
 }
 
-export function fetchMerchantOverview(): Promise<MerchantOverview> {
-  return fetch(`${BASE}/overview`).then((r) => handle(r));
+/**
+ * 概览。不传 start/end = 全量（老行为）；传了就按记账时间只看这段区间，
+ * 用来回答「这个月赚多少」。
+ */
+export function fetchMerchantOverview(
+  opts: { start?: string; end?: string; compare?: boolean } = {},
+): Promise<MerchantOverview> {
+  const qs = windowQuery(opts);
+  return fetch(`${BASE}/overview${qs ? `?${qs}` : ''}`).then((r) => handle(r));
 }
 
 export function fetchOrderTimeseries(opts: { granularity?: Granularity; start?: string; end?: string } = {}): Promise<OrderTimeseries> {
@@ -164,16 +195,31 @@ export function fetchReconcile(): Promise<ReconcileResult> {
   return fetch(`${BASE}/reconcile`).then((r) => handle(r));
 }
 
-/** 订单列表行：比下单返回多商品名和单笔毛利，省得前端再拿 product_id 去对。 */
+/** 订单列表行：比下单返回多商品名和单笔毛利，省得前端再拿 product_id 去对。
+ *  gross_profit_cents 只有 status='paid' 才有意义，其余状态后端返回 0（钱没进来/已冲回）。 */
 export interface MerchantOrderRow extends MerchantOrder {
   product_name: string;
   gross_profit_cents: number;
 }
 
-export function fetchMerchantOrders(opts: { limit?: number; status?: string } = {}): Promise<MerchantOrderRow[]> {
+/** 订单分页：total 是满足筛选条件的总单数，前端据此决定还有没有下一页。 */
+export interface MerchantOrderPage {
+  items: MerchantOrderRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export function fetchMerchantOrders(
+  opts: { limit?: number; offset?: number; status?: string; start?: string; end?: string } = {},
+): Promise<MerchantOrderPage> {
   const qs = new URLSearchParams();
   if (opts.limit) qs.set('limit', String(opts.limit));
+  if (opts.offset) qs.set('offset', String(opts.offset));
   if (opts.status) qs.set('status', opts.status);
+  if (opts.start) qs.set('start', opts.start);
+  if (opts.end) qs.set('end', opts.end);
   const q = qs.toString();
   return fetch(`${BASE}/orders${q ? `?${q}` : ''}`).then((r) => handle(r));
 }

@@ -20,6 +20,8 @@ vi.mock('../../api/memoryHandoff', () => ({
   getProfile: vi.fn(),
   ingestFeedback: vi.fn(),
   writebackProfile: vi.fn(),
+  listProfileConflicts: vi.fn(),
+  resolveProfileConflict: vi.fn(),
 }));
 
 const handoff: api.Handoff = {
@@ -38,7 +40,20 @@ const handoff: api.Handoff = {
 
 const stats: api.HandoffStats = {
   handoffs: 1, pending: 1, accepted: 0, handoff_items: 0,
-  profiles: 0, profile_events: 0, conflicts: 0,
+  profiles: 0, profile_events: 0, conflicts: 0, pending_conflicts: 0,
+};
+
+const conflict: api.ProfileConflict = {
+  subject_type: 'customer',
+  subject_id: 'cust-1',
+  key: 'budget',
+  current_value: '预算 800',
+  current_confidence: 0.7,
+  proposed_value: '预算 3000',
+  proposed_confidence: 0.7,
+  source: 'feedback',
+  evidence: '客户后来改口',
+  created_at: 1700000000000,
 };
 
 beforeEach(() => {
@@ -75,9 +90,16 @@ beforeEach(() => {
     }],
     writes: 1,
     conflicts: 0,
+    pending_conflicts: 0,
   });
   vi.mocked(api.ingestFeedback).mockResolvedValue({
     subject_id: 'cust-1', profile_keys: ['preference', 'budget'], extracted: 2, rules: 5,
+  });
+  vi.mocked(api.listProfileConflicts).mockResolvedValue([]);
+  vi.mocked(api.resolveProfileConflict).mockResolvedValue({
+    subject_type: 'customer', subject_id: 'cust-1', key: 'budget',
+    decision: 'accept', action: 'override', value: '预算 3000',
+    actor: 'ops', resolved_at: 1,
   });
 });
 
@@ -144,5 +166,48 @@ describe('MemoryHandoffPanel', () => {
     renderPanel();
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('加载失败'));
     expect(screen.getByTestId('memory-handoff-panel')).toBeInTheDocument();
+  });
+});
+
+describe('待裁决画像冲突（发现 → 人工定夺）', () => {
+  beforeEach(() => {
+    vi.mocked(api.listProfileConflicts).mockResolvedValue([conflict]);
+  });
+
+  it('渲染当前值 → 提议值与证据，并标出待处理条数', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('handoff-conflict')).toBeInTheDocument());
+    expect(screen.getByTestId('handoff-conflict-values')).toHaveTextContent('预算 800 → 预算 3000');
+    expect(screen.getByTestId('handoff-conflicts-count')).toHaveTextContent('1 条待处理');
+    expect(screen.getByTestId('handoff-conflict')).toHaveTextContent('客户后来改口');
+  });
+
+  it('点「采纳提议」走 accept 裁决，并刷新待裁决列表', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('handoff-conflict-accept-cust-1-budget'));
+    await waitFor(() =>
+      expect(api.resolveProfileConflict).toHaveBeenCalledWith(
+        expect.objectContaining({ subject_id: 'cust-1', key: 'budget', decision: 'accept', actor: 'ops' }),
+      ),
+    );
+    await waitFor(() => expect(api.listProfileConflicts).toHaveBeenCalledTimes(2));
+  });
+
+  it('点「保留当前」走 dismiss 裁决，不把驳回写成覆盖', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('handoff-conflict-dismiss-cust-1-budget'));
+    await waitFor(() =>
+      expect(api.resolveProfileConflict).toHaveBeenCalledWith(
+        expect.objectContaining({ decision: 'dismiss' }),
+      ),
+    );
+  });
+
+  it('没有冲突时显示空态，不渲染裁决按钮', async () => {
+    vi.mocked(api.listProfileConflicts).mockResolvedValue([]);
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('handoff-conflicts')).toBeInTheDocument());
+    expect(screen.queryByTestId('handoff-conflict')).not.toBeInTheDocument();
+    expect(screen.getByTestId('handoff-conflicts')).toHaveTextContent('暂无冲突');
   });
 });

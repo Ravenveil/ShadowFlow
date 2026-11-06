@@ -24,6 +24,7 @@ import {
   fetchTrafficCurve,
   type FirstOrderChain,
   type Granularity,
+  type MerchantOrderPage,
   type MerchantOrderRow,
   type MerchantOverview,
   type OrderTimeseries,
@@ -77,6 +78,23 @@ function windowStart(g: Granularity): string {
   d.setHours(0, 0, 0, 0);
   if (g === 'day') d.setDate(d.getDate() - 6);
   return d.toISOString();
+}
+
+/** 订单列表一页多少条。50 条在 1280 宽下不滚太久，翻页按钮也不会太快点到底。 */
+const ORDER_PAGE_SIZE = 50;
+
+/**
+ * 概览区间 → 查询参数。全量不传参（保持老口径），其余从本地零点算起。
+ * 非全量才要环比：全量没有「上一等长区间」可言，传了后端也只回 null。
+ * 同一份参数同时喂给概览和订单列表 —— 切到「今天」时，KPI 是今天的、
+ * 下面的订单明细却还列着三个月前的单，业务一眼就会看出不对。
+ */
+function kpiWindow(range: 'all' | '7d' | 'today'): { start?: string; compare?: boolean } {
+  if (range === 'all') return {};
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (range === '7d') d.setDate(d.getDate() - 6);
+  return { start: d.toISOString(), compare: true };
 }
 
 const STEP_LABEL: Record<string, string> = {
@@ -139,6 +157,19 @@ function FlowChart({ data, granularity }: { data: OrderTimeseries; granularity: 
   );
 }
 
+/** 环比变化：涨红跌绿（国内习惯）。上期为 0 时显示「新增」，不编造 ∞% 增长率。 */
+function Delta({ label, value }: { label: string; value: number | null }) {
+  const tone = value === null || value > 0 ? 'up' : value < 0 ? 'down' : 'flat';
+  const text = value === null
+    ? '新增'
+    : `${value > 0 ? '↑' : value < 0 ? '↓' : '→'}${Math.abs(value)}%`;
+  return (
+    <span className="neo-mb-compare-item">
+      {label} <span className={`neo-mb-delta neo-mb-delta--${tone}`}>{text}</span>
+    </span>
+  );
+}
+
 export default function MerchantBoardPanel() {
   const { t } = useI18n();
   const [granularity, setGranularity] = useState<Granularity>('day');
@@ -147,32 +178,37 @@ export default function MerchantBoardPanel() {
   const [traffic, setTraffic] = useState<TrafficCurve | null>(null);
   const [chain, setChain] = useState<FirstOrderChain | null>(null);
   const [reconcile, setReconcile] = useState<ReconcileResult | null>(null);
-  const [orders, setOrders] = useState<MerchantOrderRow[]>([]);
+  const [orderPage, setOrderPage] = useState<MerchantOrderPage | null>(null);
+  /** 概览区间：默认全量（和以前一致），切到「近 7 天 / 今天」就只看这段 */
+  const [kpiRange, setKpiRange] = useState<'all' | '7d' | 'today'>('all');
+  const [loadingMore, setLoadingMore] = useState(false);
   const [orderFilter, setOrderFilter] = useState<'' | 'created' | 'paid' | 'refunded'>('');
   const [traceId, setTraceId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
   const msg = (err: unknown) => (err instanceof Error ? err.message : String(err));
+  const orders = orderPage?.items ?? [];
 
   const refresh = useCallback(async () => {
     setBusy(true);
     setErrorMsg('');
     try {
+      const win = kpiWindow(kpiRange);
       const [ov, ts, tc, rec, ch, od] = await Promise.all([
-        fetchMerchantOverview(),
+        fetchMerchantOverview(win),
         fetchOrderTimeseries({ granularity, start: windowStart(granularity) }),
         fetchTrafficCurve({ granularity, start: windowStart(granularity) }),
         fetchReconcile(),
         fetchFirstOrderChain(''),
-        fetchMerchantOrders({ limit: 50, status: orderFilter }),
+        fetchMerchantOrders({ limit: ORDER_PAGE_SIZE, status: orderFilter, start: win.start }),
       ]);
       setOverview(ov);
       setFlow(ts);
       setTraffic(tc);
       setReconcile(rec);
       setChain(ch);
-      setOrders(od);
+      setOrderPage(od);
     } catch (err) {
       // 后端未起 / 网关未挂时只降级成一条错误提示，不拖垮整页数据看板。
       setErrorMsg(
@@ -183,7 +219,30 @@ export default function MerchantBoardPanel() {
     } finally {
       setBusy(false);
     }
-  }, [granularity, orderFilter, t]);
+  }, [granularity, kpiRange, orderFilter, t]);
+
+  /** 翻页：把新一页追加在后面，total 不变，has_more 由后端给。 */
+  const loadMore = useCallback(async () => {
+    if (!orderPage?.has_more || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await fetchMerchantOrders({
+        limit: ORDER_PAGE_SIZE,
+        offset: orderPage.items.length,
+        status: orderFilter,
+        start: kpiWindow(kpiRange).start,
+      });
+      setOrderPage({
+        ...next,
+        items: [...orderPage.items, ...next.items],
+        offset: 0,
+      });
+    } catch (err) {
+      setErrorMsg(`加载更多订单失败：${msg(err)}`);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [orderPage, loadingMore, orderFilter, kpiRange]);
 
   const loadChain = useCallback(async () => {
     try {
@@ -215,15 +274,41 @@ export default function MerchantBoardPanel() {
       </h2>
       <p className="neo-db-sub" style={{ marginTop: -6, marginBottom: 12 }}>
         {t('neo.merchant.sub', {
-          defaultValue: '订单流水 · 客流转化 · 第一单链路。KPI 是累计值，流水与客流按所选窗口；口径由后端算好，营收已扣退款。',
+          defaultValue:
+            '订单流水 · 客流转化 · 第一单链路。KPI 与订单明细按所选区间（默认全部），流水与客流按所选粒度；口径由后端算好，营收已扣退款。',
         })}
       </p>
+
+      {reconcile && !reconcile.balanced && reconcile.issues.length > 0 && (
+        <ul className="neo-mb-issues" role="alert" data-testid="merchant-reconcile-issues">
+          {reconcile.issues.map((issue) => <li key={issue}>{issue}</li>)}
+        </ul>
+      )}
 
       {errorMsg && (
         <p className="neo-db-status neo-db-status--error" role="alert" data-testid="merchant-error">
           {errorMsg}
         </p>
       )}
+
+      {/* ── KPI 区间 ── */}
+      <div className="neo-db-tabs" style={{ marginBottom: 10 }} role="tablist">
+        {([
+          ['all', t('neo.merchant.rangeAll', { defaultValue: '全部' })],
+          ['7d', t('neo.merchant.range7d', { defaultValue: '近 7 天' })],
+          ['today', t('neo.merchant.rangeToday', { defaultValue: '今天' })],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`neo-db-tab${kpiRange === value ? ' on' : ''}`}
+            onClick={() => setKpiRange(value)}
+            data-testid={`merchant-kpi-range-${value}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* ── KPI ── */}
       <div className="neo-db-cards" data-testid="merchant-kpi">
@@ -268,6 +353,17 @@ export default function MerchantBoardPanel() {
           </p>
         </div>
       </div>
+
+      {overview?.comparison && (
+        <p className="neo-mb-compare" data-testid="merchant-compare">
+          <span className="neo-mb-compare-label">
+            {t('neo.merchant.compareLabel', { defaultValue: '较上一周期' })}
+          </span>
+          <Delta label={t('neo.merchant.revenue', { defaultValue: '营收' })} value={overview.comparison.delta_pct.revenue} />
+          <Delta label={t('neo.merchant.grossShort', { defaultValue: '毛利' })} value={overview.comparison.delta_pct.gross_profit} />
+          <Delta label={t('neo.merchant.ordersShort', { defaultValue: '订单' })} value={overview.comparison.delta_pct.orders} />
+        </p>
+      )}
 
       {/* ── 分时流水 ── */}
       <div className="neo-db-tabs" style={{ marginBottom: 10 }} role="tablist">
@@ -372,7 +468,11 @@ export default function MerchantBoardPanel() {
         <p className="neo-db-card-label">
           {t('neo.merchant.orders', { defaultValue: '订单明细' })}
           <span style={{ marginLeft: 8 }} data-testid="merchant-orders-sum">
-            {t('neo.merchant.ordersSum', { defaultValue: `共 ${orders.length} 单` })}
+            {orderPage
+              ? t('neo.merchant.ordersSum', {
+                  defaultValue: `共 ${orderPage.total} 单${orderPage.total > orders.length ? `，已显示 ${orders.length}` : ''}`,
+                })
+              : ''}
           </span>
         </p>
         <div className="neo-db-tabs" style={{ marginBottom: 10 }} role="tablist">
@@ -417,7 +517,9 @@ export default function MerchantBoardPanel() {
                   </td>
                   <td className="neo-mb-num">{fmtYuan(o.amount_cents)}</td>
                   <td className="neo-mb-num">{fmtYuan(o.cost_cents)}</td>
-                  <td className="neo-mb-num">{fmtYuan(o.gross_profit_cents)}</td>
+                  <td className="neo-mb-num">
+                    {o.status === 'paid' ? fmtYuan(o.gross_profit_cents) : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -429,10 +531,27 @@ export default function MerchantBoardPanel() {
               : t('neo.merchant.ordersEmpty', { defaultValue: '还没有订单，先跑一单试试' })}
           </p>
         )}
+        {orderPage?.has_more && (
+          <div style={{ marginTop: 10, textAlign: 'center' }}>
+            <button
+              type="button"
+              className="neo-db-tab"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              data-testid="merchant-orders-more"
+            >
+              {loadingMore
+                ? t('neo.merchant.ordersLoading', { defaultValue: '加载中…' })
+                : t('neo.merchant.ordersMore', {
+                    defaultValue: `加载更多（还有 ${orderPage.total - orders.length} 单）`,
+                  })}
+            </button>
+          </div>
+        )}
         <p className="neo-mb-hint">
           {t('neo.merchant.ordersNote', {
             defaultValue:
-              '状态由订单本身决定：待支付=已下单未付款，已支付=钱已入账，已退款=已冲回收入与成本。',
+              '状态由订单本身决定：待支付=已下单未付款，已支付=钱已入账，已退款=已冲回收入与成本。只有「已支付」的单计毛利，其余显示 —。',
           })}
         </p>
       </div>
