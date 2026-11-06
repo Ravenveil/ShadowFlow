@@ -57,6 +57,10 @@ import { GenerationSettings } from '../../components/GenerationSettings';
 import { AcpAgentsPanel } from '../../components/AcpAgentsPanel';
 import { MemorySection } from '../../core/components/settings/MemorySection';
 import { SchedulesSection } from './SchedulesSection';
+// 记忆折叠批（2026-11-06）：原左栏一级「记忆」页整体并入设置。
+import MemoryPage from '../MemoryPage';
+import MemoryProfilePanel from '../MemoryProfilePanel';
+import MemoryHandoffPanel from '../MemoryHandoffPanel';
 
 // ---------------------------------------------------------------------------
 // Section ids �?12 existing + 4 placeholders + 1 wallet (= 17)
@@ -84,6 +88,9 @@ type SectionId =
   | 'wallet'       // backed by /api/wallet/*
   | 'onchain'      // placeholder
   // 记忆
+  | 'memory-entries'   // 记忆条目（手动条目 + 经验沉淀，原 /memory 主列表）
+  | 'memory-profile'   // 记忆画像（Agent 运行时画像）
+  | 'memory-handoff'   // 交接与写回（A→B 交接、长期画像写回、冲突裁决）
   | 'memory-river'
   // 数据
   | 'schedules'
@@ -140,6 +147,9 @@ const STATIC_NAV_GROUPS: NavGroup[] = [
   {
     group: 'Memory',
     items: [
+      { id: 'memory-entries', label: 'Memory Entries' },
+      { id: 'memory-profile', label: 'Memory Profile' },
+      { id: 'memory-handoff', label: 'Handoff & Writeback' },
       { id: 'memory-river', label: 'River Memory' },
     ],
   },
@@ -194,7 +204,10 @@ function buildNavGroups(t: (key: string, options?: Record<string, unknown>) => s
     {
       group: t('settings.groupMemory'),
       items: [
-        { id: 'memory-river', label: t('settings.navRiverMemory') },
+        { id: 'memory-entries', label: t('settings.navMemoryEntries', { defaultValue: 'Memory Entries' }) },
+        { id: 'memory-profile', label: t('settings.navMemoryProfile', { defaultValue: 'Memory Profile' }) },
+        { id: 'memory-handoff', label: t('settings.navMemoryHandoff', { defaultValue: 'Handoff & Writeback' }) },
+        { id: 'memory-river',   label: t('settings.navRiverMemory') },
       ],
     },
     {
@@ -542,8 +555,14 @@ export default function SettingsPage() {
           {activeSection === 'wallet'  && <WalletSection />}
           {activeSection === 'onchain' && <ComingSoonSection label={SECTION_LABEL.onchain} />}
 
-          {/* 记忆 */}
-          {activeSection === 'memory-river' && <LegacySectionWrap><MemorySection /></LegacySectionWrap>}
+          {/* 记忆（2026-11-06 折叠批）：左栏一级「记忆」入口下线，整体并入设置。
+              memory-entries 自带 0 padding，右栏留白直接复用。 */}
+          {activeSection === 'memory-entries' && <MemoryPage settings />}
+          {/* 画像区块自带 860 上限；交接卡片按设置右栏整宽（原记忆页也是整宽），
+              套 760 会把一行四输入 + 按钮挤到换行。 */}
+          {activeSection === 'memory-profile' && <MemoryProfilePanel />}
+          {activeSection === 'memory-handoff' && <MemoryHandoffPanel />}
+          {activeSection === 'memory-river'   && <LegacySectionWrap><MemorySection /></LegacySectionWrap>}
 
           {/* 数据 */}
           {activeSection === 'schedules'        && <LegacySectionWrap><SchedulesSection /></LegacySectionWrap>}

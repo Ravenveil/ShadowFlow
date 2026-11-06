@@ -33,9 +33,6 @@ vi.mock('../../api/knowledge', () => ({
 vi.mock('../../api/knowledgeVaults', () => ({
   listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
-vi.mock('../../api/memoryEntries', () => ({
-  listMemoryEntries: vi.fn().mockResolvedValue([]),
-}));
 vi.mock('../../core/auth/AuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
@@ -78,10 +75,10 @@ import type { NeoNav, RailSection } from '../types';
 
 function Harness({ initialNav }: { initialNav?: NeoNav } = {}) {
   const [nav, setNav] = useState<NeoNav>(initialNav ?? { view: 'home' });
-  // os-unified：RailSection 只剩 home/knowledge/memory，home 是唯一会话区
+  // os-unified 后 RailSection 只剩 home/knowledge（memory 已折叠进设置）
   const [section, setSection] = useState<RailSection>('home');
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
-    home: 'home', knowledge: 'knowledge', memory: 'memory',
+    home: 'home', knowledge: 'knowledge',
   };
   return (
     <NeoRail

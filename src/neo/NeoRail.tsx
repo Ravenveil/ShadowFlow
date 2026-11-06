@@ -43,7 +43,6 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  Brain,
   ChevronDown,
   Folder,
   FolderOpen,
@@ -82,7 +81,6 @@ import { listPacks } from '../api/knowledge';
 import type { KnowledgePack } from '../common/types/knowledge';
 import { listVaults } from '../api/knowledgeVaults';
 import type { KnowledgeVault } from '../common/types/knowledgeVault';
-import { listMemoryEntries, type MemoryEntry } from '../api/memoryEntries';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
 // ClawHub（2026-06，T08）：AgentAvatar 样式（增量引入）
@@ -247,12 +245,10 @@ export function NeoRail({
 
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [teams, setTeams] = useState<TeamRecord[]>([]);
-  // 知识源（统一:本地仓库 + 知识分包）/ 记忆条目（左栏分区列表;进入对应分区才拉取）
+  // 知识源（统一:本地仓库 + 知识分包；进入对应分区才拉取）
   const [packs, setPacks] = useState<KnowledgePack[] | null>(null);
   const [vaults, setVaults] = useState<KnowledgeVault[] | null>(null);
   const [packsState, setPacksState] = useState<LoadState>('loading');
-  const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[] | null>(null);
-  const [memoryState, setMemoryState] = useState<LoadState>('loading');
 
   // 会话条目（最近单聊，数据源同 PersonalChatView）；Python 宕机时 store 降级
   // 为空数组，渲染干净空态即可。
@@ -335,27 +331,6 @@ export function NeoRail({
         setPacks([]);
         setVaults([]);
         setPacksState('error');
-      });
-    return () => {
-      alive = false;
-    };
-  }, [section, reloadTick]);
-
-  // 记忆条目（进入 memory 分区拉取；Node 侧 /api/memory-entries）
-  useEffect(() => {
-    if (section !== 'memory') return;
-    let alive = true;
-    setMemoryState('loading');
-    listMemoryEntries()
-      .then((rows) => {
-        if (!alive) return;
-        setMemoryEntries(rows);
-        setMemoryState('ready');
-      })
-      .catch(() => {
-        if (!alive) return;
-        setMemoryEntries([]);
-        setMemoryState('error');
       });
     return () => {
       alive = false;
@@ -1483,18 +1458,8 @@ export function NeoRail({
             {t('neo.knowledgeBase', { defaultValue: language === 'zh' ? '知识库' : 'Knowledge' })}
           </span>
         </button>
-        <button
-          type="button"
-          className={`neo-nav-row${section === 'memory' ? ' on' : ''}`}
-          onClick={() => onNavigate({ view: 'memory' })}
-          aria-pressed={section === 'memory'}
-          data-testid="neo-nav-memory"
-        >
-          <Brain size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">
-            {t('neo.memoryBase', { defaultValue: language === 'zh' ? '记忆' : 'Memory' })}
-          </span>
-        </button>
+        {/* 记忆入口已折叠进设置（2026-11-06 折叠批）：记忆条目 / 画像 / 交接
+            统一在「设置 → 记忆」下管理，左栏不再占一级导航行。 */}
         {/* 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）：nav 常驻行。
             列表区保持当前内容（dashboard 是内容阅读态，不占列表区）。 */}
         <button
@@ -1752,58 +1717,6 @@ export function NeoRail({
                   <span className="neo-row-meta">{p.status}</span>
                 </button>
               ))}
-          </>
-        )}
-
-        {/* 记忆条目列表：点条目 → 中栏记忆页（embedded，rail 常驻） */}
-        {section === 'memory' && (
-          <>
-            <div className="neo-section-label">
-              {t('neo.memoryBase', { defaultValue: language === 'zh' ? '记忆' : 'Memory' })}
-              <ChevronDown size={12} strokeWidth={1.75} aria-hidden />
-            </div>
-            {memoryState === 'loading' && (
-              <div className="neo-rail-skeletons" aria-busy="true" aria-label={t('common.loading')}>
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="sf-skeleton neo-rail-skeleton" />
-                ))}
-              </div>
-            )}
-            {memoryState === 'error' && (
-              <div className="neo-list-note neo-list-error">
-                <span className="neo-list-error-text">{t('team.loadError')}</span>
-                <button
-                  type="button"
-                  className="neo-list-retry"
-                  onClick={() => setReloadTick((n) => n + 1)}
-                >
-                  <RotateCcw size={11} strokeWidth={2} aria-hidden />
-                  {t('common.retry')}
-                </button>
-              </div>
-            )}
-            {memoryState === 'ready' && (memoryEntries?.length ?? 0) === 0 && (
-              <div className="neo-list-note">
-                {t('neo.memory.empty', { defaultValue: '还没有记忆条目' })}
-              </div>
-            )}
-            {(memoryEntries ?? []).map((entry) => {
-              const rel = relativeTime(entry.updated_at, nowTick, t);
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className="neo-row"
-                  onClick={() => onNavigate({ view: 'memory' })}
-                  data-testid="neo-memory-row"
-                  title={entry.content}
-                >
-                  <Brain size={15} strokeWidth={1.75} aria-hidden />
-                  <span className="neo-row-name">{entry.title}</span>
-                  {rel && <span className="neo-row-time">{rel}</span>}
-                </button>
-              );
-            })}
           </>
         )}
       </div>

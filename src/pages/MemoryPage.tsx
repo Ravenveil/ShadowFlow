@@ -11,7 +11,9 @@
  * 与知识库（/knowledge）的分工不变：本页是记忆（条目+经验），知识库是 RAG。
  * 记忆画像（MemoryProfilePanel）是 Agent 运行时配置，保持独立区块。
  *
- * 双形态：路由页 /memory 全页模式；NeoApp 中栏 `<MemoryPage embedded />`。
+ * 三形态（2026-11-06 折叠批）：设置页 `<MemoryPage settings />` 是唯一入口
+ * （左栏「记忆」一级导航下线，/memory 重定向到 /settings#memory-entries）；
+ * `<MemoryPage embedded />` 保留给未来中栏内嵌；无 props 为独立全页兜底。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -70,7 +72,10 @@ function fmtTs(isoOrNum: string | number): string {
   }
 }
 
-export default function MemoryPage({ embedded = false }: { embedded?: boolean } = {}) {
+export default function MemoryPage({
+  embedded = false,
+  settings = false,
+}: { embedded?: boolean; settings?: boolean } = {}) {
   const { t } = useI18n();
   const [items, setItems] = useState<UnifiedItem[]>([]);
   const [stats, setStats] = useState<MemoryLessonStats | null>(null);
@@ -220,13 +225,18 @@ export default function MemoryPage({ embedded = false }: { embedded?: boolean } 
   );
 
   return (
-    <div data-testid="memory-page" className={`neo-mm${embedded ? ' neo-mm--inline' : ''}`}>
+    <div
+      data-testid="memory-page"
+      className={`neo-mm${embedded ? ' neo-mm--inline' : ''}${settings ? ' neo-mm--settings' : ''}`}
+    >
       <header className="neo-mm-header">
         <div>
-          <p className="neo-mm-eyebrow">Memory</p>
-          <h1 className="neo-mm-title">
-            {t('neo.memory.title', { defaultValue: '记忆' })}
-          </h1>
+          {!settings && <p className="neo-mm-eyebrow">Memory</p>}
+          {!settings && (
+            <h1 className="neo-mm-title">
+              {t('neo.memory.title', { defaultValue: '记忆' })}
+            </h1>
+          )}
           <p className="neo-mm-sub">
             {t('neo.memory.subtitle', {
               defaultValue:
@@ -284,8 +294,13 @@ export default function MemoryPage({ embedded = false }: { embedded?: boolean } 
         </div>
       </div>
 
-      <MemoryProfilePanel />
-      <MemoryHandoffPanel />
+      {/* 设置内已把画像 / 交接拆成独立分区，条目页里不再重复挂载 */}
+      {!settings && (
+        <>
+          <MemoryProfilePanel />
+          <MemoryHandoffPanel />
+        </>
+      )}
 
       {status === 'loading' && (
         <div className="neo-mm-loading">
