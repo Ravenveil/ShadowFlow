@@ -56,6 +56,18 @@ export interface TimelineRunRef {
   status: string;
 }
 
+/**
+ * 2026-11-05 OpenBot ProgressRow 对齐 — 用户刚发消息、gateway run 还没被
+ * /timeline 刷新发现（2-6s 窗口）时的「正在处理」占位数据。run 出现 / 停止 /
+ * 30s 超时（后端没起等）即清空。
+ */
+export interface PendingTurn {
+  /** appendLocalUser 生成的本地 turn id（对应乐观用户气泡）。 */
+  turnId: string;
+  /** 发送时刻 epoch ms（前端算 elapsed 展示）。 */
+  since: number;
+}
+
 export interface UseGroupTimelineResult {
   /** 统一 Timeline 流（聊天消息 + run 过程卡，ts 升序 + SSE 增量追加）。 */
   messages: TimelineMessage[];
@@ -70,6 +82,8 @@ export interface UseGroupTimelineResult {
   /** 2026-11-04「停止生成」— 所有 running runs 立即本地翻终态 'canceled'
    *  （解订阅 + 终态簿记）。配合服务端 POST /:id/stop 实现「点停止真停」。 */
   markAllRunsStopped: () => void;
+  /** 2026-11-05 OpenBot 进度行 — 非 null 时 UI 应在流尾渲染「正在处理…」。 */
+  pendingTurn: PendingTurn | null;
 }
 
 interface TimelineResponse {
@@ -154,6 +168,8 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
+  // 2026-11-05 OpenBot ProgressRow — 发消息即置位，run 被发现/停止/超时即清。
+  const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
 
   // 防串台：异步 fetch 落地时校验目标群没被切走（同 useChatStream activeTargetRef）。
   const activeGroupRef = useRef<string | null>(groupId);
@@ -177,6 +193,7 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
       setRuns([]);
       setTruncated(false);
       setError(null);
+      setPendingTurn(null); // 切群/关闭时占位一并清
       return;
     }
     let cancelled = false;
@@ -309,6 +326,9 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
       if (terminalRunsRef.current.has(sid)) continue;
       if (runSubsRef.current.has(sid)) continue;
 
+      // 2026-11-05 ProgressRow — run 被发现并接管订阅，占位行收工。
+      setPendingTurn(null);
+
       // maxRetries 设小：run 终态后服务端关流会触发 onerror，避免对已结束的
       // run 做长时间指数退避（subscribeRunSession 自带 cursor 续传/重连语义）。
       const unsubscribe = subscribeRunSession(
@@ -381,6 +401,15 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
     };
     setMessages((prev) => [...prev, msg]);
 
+    // 2026-11-05 OpenBot ProgressRow — 发消息即出「正在处理」占位；发现新
+    // running run（订阅 effect）或 markAllRunsStopped 或 30s 超时即收。
+    // 30s 兜底：后端没起 / 网关没建 run 时占位不会永远挂着。
+    setPendingTurn({ turnId: id, since: Date.now() });
+    const pendingTimer = setTimeout(() => {
+      setPendingTurn((cur) => (cur && cur.turnId === id ? null : cur));
+    }, 30_000);
+    refreshTimersRef.current.push(pendingTimer);
+
     // F5 时序：发消息 → 网关 startGatewayRun 创建新 run（不在当前 runs 里）。
     // 2s/6s 各刷一次 runs，发现新 running run 由订阅 effect 接管。
     const gid = activeGroupRef.current;
@@ -411,10 +440,21 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
     setRuns((prev) =>
       prev.map((r) => (r.status === 'running' ? { ...r, status: 'canceled' } : r)),
     );
+    // ProgressRow 占位一并收掉（Stop 后不该再有「正在处理」）。
+    setPendingTurn(null);
   }, [runs]);
 
   return useMemo(
-    () => ({ messages, runs, loading, error, truncated, appendLocalUser, markAllRunsStopped }),
-    [messages, runs, loading, error, truncated, appendLocalUser, markAllRunsStopped],
+    () => ({
+      messages,
+      runs,
+      loading,
+      error,
+      truncated,
+      appendLocalUser,
+      markAllRunsStopped,
+      pendingTurn,
+    }),
+    [messages, runs, loading, error, truncated, appendLocalUser, markAllRunsStopped, pendingTurn],
   );
 }

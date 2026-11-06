@@ -55,6 +55,8 @@ import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { AgentAvatarSwitcher } from '../components/agent/AgentAvatarSwitcher';
 import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
+import { NeoQuickSchedule } from './NeoQuickSchedule';
+import type { ScheduleRecord } from '../api/schedules';
 import type { NeoNav } from './types';
 import './neo-chat.css'; // composer 容器/发送钮基样式（.neo-chat-composer / .neo-composer）
 import './neo-group.css';
@@ -233,6 +235,22 @@ function hopStatusLabel(s: GroupHop['status']): string {
 /** 头像条最多叠 5 个，其余收进 +N。 */
 const MEMBER_STACK_MAX = 5;
 
+/* ── 2026-11-05 OpenBot 对齐批：ProgressRow + busy roster ──────────────────── */
+
+/** mm:ss 秒表（ProgressRow / roster tooltip 共用）。 */
+export function fmtElapsed(since: number, now: number): string {
+  const s = Math.max(0, Math.floor((now - since) / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** 该 agent 本回合有过程卡流出（thinking 卡存在即算干过活）。 */
+function agentHasActivity(messages: readonly TimelineMessage[], agentId: string): boolean {
+  return messages.some(
+    (m) =>
+      (m.kind === 'assistant_text' || m.kind === 'raw') && m.agent_id === agentId,
+  );
+}
+
 /* ── 组件 ─────────────────────────────────────────────────────────────────── */
 
 /**
@@ -331,6 +349,46 @@ export function NeoGroupChat({
 
   // 活跃 run → composer 显示 Stop 视觉 + 顶栏 live 徽章
   const busy = timeline.runs.some((r) => r.status === 'running');
+
+  // ── 2026-11-05 OpenBot 对齐：ProgressRow + busy roster ──────────────────────
+  // ProgressRow：pendingTurn 非 null（run 尚未被 /timeline 刷新发现）→ 流尾
+  // 「正在处理… mm:ss」占位行；run 接管订阅/Stop/30s 超时后由 hook 清空。
+  // 1s tick 只在占位存在时开（静止时零重渲染）。
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!timeline.pendingTurn && !busy) return;
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [timeline.pendingTurn?.turnId, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // busy roster：多成员会话在执行中时，顶栏显示每个成员的干活状态点。
+  // 依据（零新端点，全部从已有 timeline 数据推导）：
+  //   - done  = 已有该 agent 的回复（assistant_text/raw 带 agent_id）
+  //   - 转圈  = busy 且还没有回复（正在被派活）
+  //   - 待命  = busy 但既无回复也无 plan_card 任务行（未被点名，串行等待）
+  const busyRoster = useMemo(() => {
+    if (!busy || isDm || groupAgentIds.length <= 1) return [];
+    return groupAgentIds.map((id) => {
+      const rec = agentById.get(id);
+      const replied = agentHasActivity(timeline.messages, id);
+      return { agentId: id, name: rec?.name ?? id, rec, replied };
+    });
+  }, [busy, isDm, groupAgentIds, agentById, timeline.messages]);
+
+  // ── /schedule 快捷定时任务（2026-11-05 GrokBot 对齐）─────────────────────
+  // composer 敲 /schedule → 轻量表单；DM 挂对面 agent，群聊挂会话本身。
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleToast, setScheduleToast] = useState<string | null>(null);
+  const handleScheduleCreated = useCallback((s: ScheduleRecord) => {
+    setScheduleToast(
+      t('neo.qs.created', {
+        defaultValue: '✓ 定时任务已创建：{{desc}}',
+        desc: (s.task_description ?? '').slice(0, 60),
+      }),
+    );
+    // 8s 后自动消失（不进消息流 — 定时任务是侧挂资产，非聊天消息）。
+    setTimeout(() => setScheduleToast(null), 8000);
+  }, [t]);
 
   // 2026-11-04「停止生成」（用户反馈：点暂停对话停不下来）— 服务端取消当前
   // fan-out 轮（POST /:id/stop：abort AbortController + 终结 gateway run），
@@ -803,8 +861,46 @@ export function NeoGroupChat({
         )}
         {busy && (
           <span className="neo-gc-live" data-testid="neo-group-live">
+            {/* OpenBot busy roster（2026-11-05）— 多成员执行中时逐人状态点：
+                done 绿勾 / 干活中转圈 / 待命灰点；单人/单聊不展开（顶栏太挤）。 */}
+            {busyRoster.length > 0 && (
+              <span className="neo-gc-roster" data-testid="neo-gc-roster">
+                {busyRoster.map((m) => (
+                  <span
+                    key={m.agentId}
+                    className="neo-gc-roster-item"
+                    data-state={m.replied ? 'done' : 'working'}
+                    title={`${m.name} · ${m.replied ? '已完成' : '处理中'}`}
+                  >
+                    {m.rec ? (
+                      <AgentAvatar
+                        name={m.name}
+                        style={m.rec.avatar_style}
+                        seed={m.rec.avatar_seed ?? m.name}
+                        image={m.rec.avatar_image ?? null}
+                        size={16}
+                      />
+                    ) : (
+                      <span
+                        className="neo-gc-roster-fallback"
+                        style={{ background: gcAvatarColor(m.agentId) }}
+                        aria-hidden
+                      >
+                        {gcAvatarInitial(m.name)}
+                      </span>
+                    )}
+                    <span className="neo-gc-roster-dot" aria-hidden />
+                  </span>
+                ))}
+              </span>
+            )}
             <span className="neo-gc-live-dot" aria-hidden />
             {t('neo.group.live', { defaultValue: '执行中' })}
+            {timeline.pendingTurn && (
+              <span className="neo-gc-live-elapsed" aria-hidden>
+                {fmtElapsed(timeline.pendingTurn.since, nowTick)}
+              </span>
+            )}
           </span>
         )}
       </header>
@@ -873,6 +969,10 @@ export function NeoGroupChat({
                           }
                           if (s.type === 'user') {
                             // 用户消息：右对齐气泡（neo-tl-user 自带右浮，这里补时间行）
+                            // OpenBot ProgressRow（2026-11-05）— 该 turn 是占位目标且
+                            // run 尚未接管时，气泡下方直接出「正在处理… mm:ss」进度行。
+                            const pendingOnThis =
+                              timeline.pendingTurn?.turnId === s.msg.turn_id;
                             return (
                               <div className="neo-gc-user-row" key={s.key}>
                                 <NeoTimeline messages={[s.msg]} renderMsgActions={renderMsgActions} />
@@ -880,6 +980,29 @@ export function NeoGroupChat({
                                   <span className="neo-gc-user-time" aria-hidden>
                                     {relTime(s.msg.ts)}
                                   </span>
+                                )}
+                                {pendingOnThis && (
+                                  <div
+                                    className="neo-gc-progress-row"
+                                    data-testid="neo-gc-progress-row"
+                                  >
+                                    <span className="neo-gc-progress-dots" aria-hidden>
+                                      <i /><i /><i />
+                                    </span>
+                                    <span className="neo-gc-progress-label">
+                                      {isDm && dmAgent
+                                        ? t('neo.group.progressDm', {
+                                            defaultValue: '{{name}} 正在处理…',
+                                            name: dmAgent.name,
+                                          })
+                                        : t('neo.group.progress', {
+                                            defaultValue: 'Agents 正在处理…',
+                                          })}
+                                    </span>
+                                    <span className="neo-gc-progress-elapsed" aria-hidden>
+                                      {fmtElapsed(timeline.pendingTurn!.since, nowTick)}
+                                    </span>
+                                  </div>
                                 )}
                               </div>
                             );
@@ -972,6 +1095,11 @@ export function NeoGroupChat({
           </div>
 
       <div className="neo-chat-composer neo-gc-composer">
+        {scheduleToast && (
+          <div className="neo-gc-schedule-toast" data-testid="neo-gc-schedule-toast" role="status">
+            {scheduleToast}
+          </div>
+        )}
         <NeoComposer
           variant="chat"
           onSubmit={handleSubmit}
@@ -979,15 +1107,25 @@ export function NeoGroupChat({
           onStop={handleStop}
           onNavigate={onNavigate}
           mentionItems={mentionItems}
+          onScheduleCommand={() => setScheduleOpen(true)}
           placeholder={
             isDm
-              ? t('neo.dm.placeholder', { defaultValue: '发消息，TA 就开始干活' })
+              ? t('neo.dm.placeholder', { defaultValue: '发消息，TA 就开始干活 · /schedule 定时任务' })
               : t('neo.group.placeholder', {
-                  defaultValue: '在群里说话，Agents 开始干活 · @成员 定向派活 · 拆解/派发/合并全程可见',
+                  defaultValue: '在群里说话，Agents 开始干活 · @成员 定向派活 · /schedule 定时任务',
                 })
           }
         />
       </div>
+
+      {scheduleOpen && groupId && (
+        <NeoQuickSchedule
+          groupId={groupId}
+          agentId={isDm ? dmAgentId : null}
+          onClose={() => setScheduleOpen(false)}
+          onCreated={handleScheduleCreated}
+        />
+      )}
     </div>
   );
 }

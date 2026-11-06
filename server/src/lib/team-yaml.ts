@@ -36,7 +36,15 @@ export const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 // richer fields (description, policy as object, edge.kind, dag_layout). We
 // keep TeamDef back-compat and put new fields on a wider interface.
 
-export type EdgeKind = 'sequential' | 'parallel' | 'conditional';
+/**
+ * EdgeKind — 团队 DAG 边类型。
+ * 2026-11-05 新增 'approve'（OpenBot 审批纪律对齐）：流转前人工审批的顺序边。
+ * 参与分层与执行顺序约束（同 sequential），但 chat 执行器在该节点跑之前挂起等
+ * 用户批准（POST /api/groups/:id/approvals/:nodeId decide）；拒绝 → 下游标
+ * blocked，其出边下游按失败传播知情。Python 侧 mode:'approve' 此前被 mapMode
+ * 折叠成 sequential（审批语义在读路径丢失），本类型扩展后打通。
+ */
+export type EdgeKind = 'sequential' | 'parallel' | 'conditional' | 'approve';
 
 export interface TeamEdgeV1 {
   from: string;
@@ -307,7 +315,8 @@ export function validateDag(team: TeamDefV1, agents: SkillAgentDef[]): string[] 
   }
 
   // 4. cycle detection (sequential edges only — conditional retry-back is allowed)
-  const seqEdges = team.edges_v1.filter(e => e.kind === 'sequential' || e.kind === undefined);
+  // 2026-11-05 — approve 边同为顺序边（流转前人工审批），同样参与环检测。
+  const seqEdges = team.edges_v1.filter(e => e.kind === 'sequential' || e.kind === 'approve' || e.kind === undefined);
   const cycle = findCycle(team.members_ids, seqEdges);
   if (cycle) {
     errs.push(`cycle detected via sequential edges: ${cycle.join(' → ')}`);
