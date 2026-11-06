@@ -15,6 +15,7 @@ vi.mock('../../api/merchantBoard', () => ({
   fetchMerchantOverview: vi.fn(),
   fetchOrderTimeseries: vi.fn(),
   fetchTrafficCurve: vi.fn(),
+  fetchChannelEconomics: vi.fn(),
   fetchReconcile: vi.fn(),
   fetchFirstOrderChain: vi.fn(),
   fetchMerchantOrders: vi.fn(),
@@ -70,6 +71,45 @@ const chain: api.FirstOrderChain = {
     { step: 'ledger_income', ok: true },
     { step: 'dashboard_visible', ok: true },
   ],
+};
+
+/** 渠道获客经济性 mock：xhs 挣钱、kuaishou 全退归零，合计与 overview（¥199）一致。
+ *  渠道名避开 traffic mock 的 wechat/douyin，否则 getByText 会命中多元素。 */
+const channelEcon: api.ChannelEconomics = {
+  range: { from: null, to: null },
+  channels: [
+    {
+      channel: 'xhs',
+      orders_total: 2,
+      paid_orders: 2,
+      refunded_orders: 0,
+      revenue_cents: 12800,
+      cost_cents: 3200,
+      gross_profit_cents: 9600,
+      gross_margin_pct: 75,
+      revenue_share_pct: 100,
+    },
+    {
+      channel: 'kuaishou',
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 1,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+      gross_margin_pct: null,
+      revenue_share_pct: 0,
+    },
+  ],
+  total: {
+    orders_total: 3,
+    paid_orders: 2,
+    refunded_orders: 1,
+    revenue_cents: 12800,
+    cost_cents: 3200,
+    gross_profit_cents: 9600,
+    gross_margin_pct: 75,
+  },
 };
 
 const reconcile: api.ReconcileResult = {
@@ -173,6 +213,7 @@ beforeEach(() => {
   vi.mocked(api.fetchMerchantOverview).mockResolvedValue(overview);
   vi.mocked(api.fetchOrderTimeseries).mockResolvedValue(flow);
   vi.mocked(api.fetchTrafficCurve).mockResolvedValue(traffic);
+  vi.mocked(api.fetchChannelEconomics).mockResolvedValue(channelEcon);
   vi.mocked(api.fetchReconcile).mockResolvedValue(reconcile);
   vi.mocked(api.fetchFirstOrderChain).mockResolvedValue(chain);
   vi.mocked(api.fetchMerchantOrders).mockResolvedValue({
@@ -463,6 +504,56 @@ describe('演示证据包（①③ 留痕可核实、可下载）', () => {
     await waitFor(() =>
       expect(screen.getByTestId('merchant-evidence-msg')).toHaveTextContent('401 token 不匹配'),
     );
+    expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
+  });
+});
+
+describe('渠道获客经济性（哪个渠道挣钱，合计=KPI）', () => {
+  it('表格列出渠道营收/成本/毛利/毛利率/占比，合计行可与 KPI 对账', async () => {
+    renderPanel();
+    const table = await screen.findByTestId('merchant-channel-econ-table');
+    // 按行断言：合计行也含 ¥128/75%，整表 getByText 会命中多元素
+    const rows = within(table).getAllByTestId('merchant-channel-econ-row');
+    expect(rows).toHaveLength(2);
+    const [xhs, dy] = rows;
+    expect(within(xhs).getByText('xhs')).toBeInTheDocument();
+    expect(within(xhs).getByText(/¥128/)).toBeInTheDocument();
+    expect(within(xhs).getByText(/¥96/)).toBeInTheDocument();
+    expect(within(xhs).getByText('75%')).toBeInTheDocument();
+    expect(within(xhs).getByText('100%')).toBeInTheDocument();
+    expect(within(dy).getByText('kuaishou')).toBeInTheDocument();
+    // 全退归零：毛利率无从算起显示 —，占比 0%，不编假数
+    expect(within(dy).getByText('—')).toBeInTheDocument();
+    expect(within(dy).getByText('0%')).toBeInTheDocument();
+
+    const total = screen.getByTestId('merchant-channel-econ-total');
+    expect(total).toHaveTextContent('合计');
+    expect(within(total).getByText('3')).toBeInTheDocument();
+    expect(within(total).getByText(/¥128/)).toBeInTheDocument();
+    expect(within(total).getByText('75%')).toBeInTheDocument();
+
+    // 首屏是全量：与 KPI 同一组参数（不限区间），合计才能对上
+    expect(api.fetchChannelEconomics).toHaveBeenCalledTimes(1);
+    expect(api.fetchChannelEconomics).toHaveBeenCalledWith({});
+  });
+
+  it('切 KPI 区间时用同一窗口重新取数', async () => {
+    renderPanel();
+    await screen.findByTestId('merchant-channel-econ-table');
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchChannelEconomics).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
+  it('渠道经济性取数失败只降级成空卡，不拖垮整页看板', async () => {
+    vi.mocked(api.fetchChannelEconomics).mockRejectedValue(new Error('channels boom'));
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199'));
+    expect(screen.getByTestId('merchant-channel-econ')).toBeInTheDocument();
+    expect(screen.queryByTestId('merchant-channel-econ-table')).not.toBeInTheDocument();
     expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
   });
 });

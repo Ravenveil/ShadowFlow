@@ -701,6 +701,147 @@ export function trafficCurve(input: { granularity?: unknown; start?: unknown; en
   };
 }
 
+// ── 渠道获客经济性 ────────────────────────────────────────────────────────────
+
+export interface ChannelEconomicRow {
+  channel: string;
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+  /** 该渠道营收占全部营收的百分比（0.1% 精度）；全量营收为 0 时为 null，不编占比 */
+  revenue_share_pct: number | null;
+}
+
+export interface ChannelEconomics {
+  range: { from: number | null; to: number | null };
+  channels: ChannelEconomicRow[];
+  /** 各渠道合计，与 overview 同窗口逐字段一致（评委可当场对账） */
+  total: Omit<ChannelEconomicRow, 'channel' | 'revenue_share_pct'>;
+}
+
+/**
+ * 渠道获客经济性：渠道维度的营收/成本/毛利/占比 —— 补上「获客方式」的钱口径。
+ *
+ * 客流曲线（trafficCurve）只有 PV/UV/转化，答不了「这个渠道挣不挣钱」；
+ * 本函数把钱按订单来源访客的渠道归因，口径与 computeOverview **完全同源**：
+ *   营收 = income − refund；成本 = expense（含退款的负数冲回）；毛利 = 营收 − 成本。
+ * 各渠道合计必然等于 overview 的数字 —— 不是另算一套，是同一本账换个维度看。
+ *
+ * 时间切窗与 overview 一致：钱按记账时间（l.created_at），单按下单时间
+ * （o.created_at）—— 上月成交、本月退款的单，退款算本月的钱、单数算上月。
+ * 没有来源访客（或访客没记渠道）的单归 '(unknown)'，钱和单都不丢。
+ */
+export function channelEconomics(input: { start?: unknown; end?: unknown } = {}): ChannelEconomics {
+  const conn = db();
+  const { from, to } = rangeWindow(input.start, input.end);
+
+  // 钱：流水按记账时间切窗，顺着 order_id → visit_id 找渠道。
+  // LEFT JOIN：流水没有对应订单（手工记账/历史脏数据）时照样入账，归 '(unknown)'。
+  const moneyParams: unknown[] = [];
+  const moneyWhere = `WHERE 1 = 1${rangeClause('l.created_at', from, to, moneyParams)}`;
+  const moneyRows = conn
+    .prepare(
+      `SELECT COALESCE(NULLIF(v.channel, ''), '(unknown)') AS channel,
+              COALESCE(SUM(CASE WHEN l.kind = 'income' THEN l.amount_cents ELSE 0 END), 0) AS income,
+              COALESCE(SUM(CASE WHEN l.kind = 'refund' THEN l.amount_cents ELSE 0 END), 0) AS refund,
+              COALESCE(SUM(CASE WHEN l.kind = 'expense' THEN l.amount_cents ELSE 0 END), 0) AS expense
+         FROM mb_ledger l
+         LEFT JOIN mb_orders o ON o.id = l.order_id
+         LEFT JOIN mb_visits v ON v.id = o.visit_id
+        ${moneyWhere}
+        GROUP BY channel`,
+    )
+    .all(...moneyParams) as Array<{ channel: string; income: number; refund: number; expense: number }>;
+
+  // 单：订单按下单时间切窗（与钱是两个时间轴，同 overview 的处理）。
+  const orderParams: unknown[] = [];
+  const orderWhere = `WHERE 1 = 1${rangeClause('o.created_at', from, to, orderParams)}`;
+  const orderRows = conn
+    .prepare(
+      `SELECT COALESCE(NULLIF(v.channel, ''), '(unknown)') AS channel,
+              COUNT(*) AS total,
+              COALESCE(SUM(CASE WHEN o.status = 'paid' THEN 1 ELSE 0 END), 0) AS paid,
+              COALESCE(SUM(CASE WHEN o.status = 'refunded' THEN 1 ELSE 0 END), 0) AS refunded
+         FROM mb_orders o
+         LEFT JOIN mb_visits v ON v.id = o.visit_id
+        ${orderWhere}
+        GROUP BY channel`,
+    )
+    .all(...orderParams) as Array<{ channel: string; total: number; paid: number; refunded: number }>;
+
+  // 两侧合并：渠道可能只有一侧有数（只点了广告没成交、或老单没埋点），谁有数谁建行。
+  const map = new Map<string, ChannelEconomicRow>();
+  const row = (channel: string): ChannelEconomicRow => {
+    const r = map.get(channel) ?? {
+      channel,
+      orders_total: 0,
+      paid_orders: 0,
+      refunded_orders: 0,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+      gross_margin_pct: null,
+      revenue_share_pct: null,
+    };
+    map.set(channel, r);
+    return r;
+  };
+  for (const m of moneyRows) {
+    const r = row(m.channel);
+    r.revenue_cents = m.income - m.refund;
+    r.cost_cents = m.expense;
+    r.gross_profit_cents = r.revenue_cents - r.cost_cents;
+    r.gross_margin_pct = r.revenue_cents
+      ? Math.round((r.gross_profit_cents / r.revenue_cents) * 1000) / 10
+      : null;
+  }
+  for (const o of orderRows) {
+    const r = row(o.channel);
+    r.orders_total = o.total;
+    r.paid_orders = o.paid;
+    r.refunded_orders = o.refunded;
+  }
+
+  const totalRevenue = Array.from(map.values()).reduce((a, r) => a + r.revenue_cents, 0);
+  for (const r of map.values()) {
+    r.revenue_share_pct = totalRevenue
+      ? Math.round((r.revenue_cents / totalRevenue) * 1000) / 10
+      : null;
+  }
+
+  // 营收降序（同营收按渠道名，排序稳定）；占比高的渠道一眼在最上面。
+  const channels = Array.from(map.values()).sort(
+    (a, b) => b.revenue_cents - a.revenue_cents || a.channel.localeCompare(b.channel),
+  );
+
+  const total: ChannelEconomics['total'] = {
+    orders_total: 0,
+    paid_orders: 0,
+    refunded_orders: 0,
+    revenue_cents: 0,
+    cost_cents: 0,
+    gross_profit_cents: 0,
+    gross_margin_pct: null,
+  };
+  for (const r of channels) {
+    total.orders_total += r.orders_total;
+    total.paid_orders += r.paid_orders;
+    total.refunded_orders += r.refunded_orders;
+    total.revenue_cents += r.revenue_cents;
+    total.cost_cents += r.cost_cents;
+    total.gross_profit_cents += r.gross_profit_cents;
+  }
+  total.gross_margin_pct = total.revenue_cents
+    ? Math.round((total.gross_profit_cents / total.revenue_cents) * 1000) / 10
+    : null;
+
+  return { range: { from, to }, channels, total };
+}
+
 export function listLedger(limit = 100, kind = '') {
   const cap = Number.isFinite(limit) && limit > 0 ? Math.min(Math.round(limit), 500) : 100;
   const k = ['income', 'expense', 'refund'].includes(kind) ? kind : '';
