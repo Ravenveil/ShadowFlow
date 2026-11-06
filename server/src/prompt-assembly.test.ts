@@ -10,7 +10,8 @@
  * Coverage:
  *   - 7-layer composition with all data present
  *   - Layer order is canonical (DISCOVERY → Identity → DS → Skill →
- *     ProjectMeta → Sides → Framework)
+ *     Framework → ProjectMeta → Sides; conversation_history slots in before
+ *     Side files when supplied — framework is STATIC, not last)
  *   - layer_toggles disables individual layers without affecting siblings
  *   - Empty inputs (no DS, no project_meta, no sides) drop layers cleanly
  *     (no leftover separators, no blank lines)
@@ -18,7 +19,7 @@
  *     values via JSON.stringify; key insertion order preserved
  *   - Framework directive triggers ONLY when skill.mode === 'deck'
  *   - total_chars matches prompt.length
- *   - layers_included + layers_skipped together account for all 7 keys
+ *   - layers_included + layers_skipped together account for all 8 keys
  */
 
 import {
@@ -94,34 +95,41 @@ function main(): void {
     'prompt contains Framework directive (PPTX)',
     full.prompt.includes('PPTX-COMPATIBLE DECK'),
   );
-  // Story 15.29: 7 included layers (no history input) → 6 separators
+  // Layers are joined by LAYER_SEPARATOR and the S8 dynamic-boundary marker
+  // (`__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`) occupies a segment of its own, so a
+  // prompt with N rendered layers always carries exactly N separators
+  // (N-1 between layers + 1 straddling the boundary marker) — not N-1.
   const sepCount = full.prompt.split(LAYER_SEPARATOR).length - 1;
-  check('exactly 6 separators between 7 included layers', sepCount === 6, `got ${sepCount}`);
+  check(
+    'separator count = rendered layer count (boundary marker is its own segment)',
+    sepCount === full.layers_included.length,
+    { sepCount, layers: full.layers_included.length },
+  );
 
   // Layer ORDER verification: walk indexOf for each layer marker
   const idxDiscovery = full.prompt.indexOf('## DISCOVERY MODE');
   const idxIdentity = full.prompt.indexOf('## IDENTITY');
   const idxDS = full.prompt.indexOf('## Design System: Tailwind');
   const idxSkill = full.prompt.indexOf('## Skill: Web Prototype');
+  const idxFramework = full.prompt.indexOf('## FRAMEWORK: PPTX-COMPATIBLE DECK');
   const idxProject = full.prompt.indexOf('## PROJECT META');
   const idxSides = full.prompt.indexOf('## SIDE FILES');
-  const idxFramework = full.prompt.indexOf('## FRAMEWORK: PPTX-COMPATIBLE DECK');
   check(
     'physical order matches canonical layer order',
     idxDiscovery < idxIdentity &&
       idxIdentity < idxDS &&
       idxDS < idxSkill &&
-      idxSkill < idxProject &&
-      idxProject < idxSides &&
-      idxSides < idxFramework,
+      idxSkill < idxFramework &&
+      idxFramework < idxProject &&
+      idxProject < idxSides,
     {
       idxDiscovery,
       idxIdentity,
       idxDS,
       idxSkill,
+      idxFramework,
       idxProject,
       idxSides,
-      idxFramework,
     },
   );
 
@@ -181,9 +189,14 @@ function main(): void {
     !sparse.prompt.startsWith(LAYER_SEPARATOR) &&
       !sparse.prompt.endsWith(LAYER_SEPARATOR),
   );
-  // 3 layers (discovery, identity, skill) → 2 separators
+  // 3 layers (discovery, identity, skill) → 3 separators: 2 between layers +
+  // 1 straddling the always-emitted S8 boundary marker.
   const sparseSeps = sparse.prompt.split(LAYER_SEPARATOR).length - 1;
-  check('exactly 2 separators for 3 included layers', sparseSeps === 2, `got ${sparseSeps}`);
+  check(
+    'separator count = 3 rendered layers (no orphan separators)',
+    sparseSeps === sparse.layers_included.length && sparse.layers_included.length === 3,
+    { sparseSeps, layers: sparse.layers_included.length },
+  );
 
   console.log('\n[5] empty project_meta {} drops the layer');
   const emptyMeta = composeSystemPrompt({
@@ -304,16 +317,18 @@ function main(): void {
   // ── Story 15.29 — conversation_history layer ─────────────────────────────
   console.log('\n[11] Story 15.29 — conversation_history layer');
 
-  // 11a — LAYER_ORDER constant has 8 keys in canonical order
+  // 11a — LAYER_ORDER constant has 8 keys in canonical order. The first five
+  // (discovery / identity / ds / skill / framework) form the cacheable STATIC
+  // segment, so framework sits at slot 4 — not last, as it did before S8.
   const expectedOrder = [
     'discovery',
     'identity',
     'ds',
     'skill',
+    'framework',
     'project',
     'conversation_history',
     'sides',
-    'framework',
   ];
   check(
     'LAYER_ORDER has 8 keys with conversation_history at slot 6',
@@ -407,7 +422,13 @@ function main(): void {
   console.log(`  ${passCount} passed,  ${failCount} failed`);
   console.log('────────────────────────────────────────\n');
 
-  if (failCount > 0) process.exit(1);
+  // vitest 把直接调用 process.exit() 判为「unexpected exit」，整个文件会红成
+  // file-level error（看不出是哪条 check 挂了）。所以在 vitest 里改成抛错，
+  // 让 runner 正常报出失败；`npx tsx` 单独跑时保留退出码语义。
+  if (failCount > 0) {
+    if (process.env.VITEST) throw new Error(`${failCount} checks failed`);
+    process.exit(1);
+  }
 }
 
 main();

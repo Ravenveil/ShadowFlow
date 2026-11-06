@@ -61,6 +61,7 @@ Node 差异（如实记录，不改代码）：runBus **没有 durable 子集概
 | `policy` | run-sessions.ts:2888 | 策略提示 | 观察 | `policy.violation`/`policy.updated`（live） |
 | `question-form` | assembler.ts:1151 / parser.ts:398 | AskUserQuestion 交互表单 | **事实**（等待用户输入） | 无对应（Python 审批走 REST+SSE，见 `permission_check`） |
 | `permission_check` | tool-approval.ts / tool-runner.ts（经 bus） | 工具审批请求与决策（decision: pending/approve/deny；decided_by: user/timeout/abort） | **事实**（决策现场） | `permission.checked`/`permission.blocked`（durable）。语义映射：decision=approve → `permission.checked`；deny/timeout/abort → `permission.blocked` |
+| `team-saved` | team-persistence.ts / assembler.ts | 团队蓝本落库回执（带 PersistedTeam：team + agents 已写库，前端据此换成本地 id） | **事实**（落库回执） | 无对应（Python 团队落库走 REST 返回值，不发事件） |
 
 ## 2. 反向表 — Python durable 14 类 → Node 对应
 
