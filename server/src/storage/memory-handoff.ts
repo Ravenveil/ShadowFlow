@@ -17,7 +17,7 @@
  * （不猜谁对，留痕等人工裁决）；低置信记 keep。每次写都追加一条事件，可回溯。
  */
 
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { getDb } from './sqlite';
 import { recallLessons } from './memory-lessons';
 
@@ -713,31 +713,331 @@ export const FEEDBACK_RULES: ReadonlyArray<readonly [string, readonly string[]]>
   ['weakness', ['返工', '投诉', '不满意', '反复', '太慢']],
 ];
 
+/**
+ * 反馈自动写回队列（2026-11-06，功能线③「自动化」补齐）。
+ *
+ * 以前 ingestFeedback 是「人贴一段文本 → 立刻写回」：业务系统不点按钮就不会动，
+ * 同一条反馈重投几次就写几次，写回结果（create/conflict/keep）没有任何留存，
+ * 失败了也没法重跑。这里把反馈改成一条 append-only 的队列记录：
+ *   投递 → 内容哈希去重 → 自动提炼写回 → 记录每个 key 的动作 → 冲突自动进裁决台。
+ *
+ * 三条规定：
+ *   1. 幂等：UNIQUE(主体, text_hash)，同一条反馈无论重投多少次都只写回一次；
+ *   2. 零模型：仍走 FEEDBACK_RULES 确定性规则，不调 LLM、不花额度；
+ *   3. 可审计：队列留原文、来源、source_ref、命中 key、每个写回动作、失败原因。
+ *
+ * 表在模块内自建（幂等 DDL），不修改 sqlite.ts、不碰别人的表。
+ */
+const FEEDBACK_DDL = `
+CREATE TABLE IF NOT EXISTS memory_feedback_queue (
+  id TEXT PRIMARY KEY,
+  subject_type TEXT NOT NULL DEFAULT 'customer',
+  subject_id TEXT NOT NULL,
+  text_hash TEXT NOT NULL,
+  text TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'api',
+  source_ref TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  keys_json TEXT NOT NULL DEFAULT '[]',
+  actions_json TEXT NOT NULL DEFAULT '[]',
+  conflicts INTEGER NOT NULL DEFAULT 0,
+  error TEXT NOT NULL DEFAULT '',
+  actor TEXT NOT NULL DEFAULT 'system',
+  created_at INTEGER NOT NULL,
+  processed_at INTEGER,
+  UNIQUE(subject_type, subject_id, text_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_feedback_status
+  ON memory_feedback_queue(status, created_at);`;
+
+/** _resetForTests() 会换 db 实例，所以认实例而不是认模块级布尔。 */
+let feedbackDdOwner: unknown = null;
+function feedbackDb(): Conn {
+  const db = getDb();
+  if (feedbackDdOwner !== db) {
+    db.exec(FEEDBACK_DDL);
+    feedbackDdOwner = db;
+  }
+  return db;
+}
+
+export type FeedbackStatus = 'pending' | 'processed' | 'skipped' | 'failed';
+
+export interface FeedbackQueueItem {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  text: string;
+  source: string;
+  source_ref: string;
+  status: FeedbackStatus;
+  profile_keys: string[];
+  actions: string[];
+  conflicts: number;
+  error: string;
+  actor: string;
+  created_at: number;
+  processed_at: number | null;
+}
+
+export interface FeedbackReceipt {
+  id: string;
+  /** true = 这条反馈已经投过（重投或补跑），本次没有重复写回。 */
+  dedup: boolean;
+  status: FeedbackStatus;
+  profile_keys: string[];
+  actions: string[];
+  conflicts: number;
+}
+
+interface FeedbackRow {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  text: string;
+  source: string;
+  source_ref: string;
+  status: FeedbackStatus;
+  keys_json: string;
+  actions_json: string;
+  conflicts: number;
+  error: string;
+  actor: string;
+  created_at: number;
+  processed_at: number | null;
+}
+
+function jsonArray(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function hydrateFeedback(row: FeedbackRow): FeedbackQueueItem {
+  return {
+    id: row.id,
+    subject_type: row.subject_type,
+    subject_id: row.subject_id,
+    text: row.text,
+    source: row.source,
+    source_ref: row.source_ref,
+    status: row.status,
+    profile_keys: jsonArray(row.keys_json),
+    actions: jsonArray(row.actions_json),
+    conflicts: row.conflicts,
+    error: row.error,
+    actor: row.actor,
+    created_at: row.created_at,
+    processed_at: row.processed_at,
+  };
+}
+
+function feedbackReceipt(row: FeedbackRow, dedup: boolean): FeedbackReceipt {
+  return {
+    id: row.id,
+    dedup,
+    status: row.status,
+    profile_keys: jsonArray(row.keys_json),
+    actions: jsonArray(row.actions_json),
+    conflicts: row.conflicts,
+  };
+}
+
+/**
+ * 画像里存「命中关键词的那一小句」，而不是整段反馈原文。
+ * 以前整段塞进去，同一客户说两句不同话就必然同置信冲突，且画像读起来是一大段流水账；
+ * 现在按标点切句取命中片段，零模型、结果确定，同一说法重复投递也能落成 keep。
+ */
+function feedbackSnippet(text: string, words: readonly string[]): string {
+  const parts = text.split(/[，,。；;！!？?\n]+/).map((s) => s.trim()).filter(Boolean);
+  const hit = parts.find((p) => words.some((w) => p.includes(w)));
+  return (hit ?? text).trim().slice(0, 120);
+}
+
+function capNum(v: unknown, fallback: number, max: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.trunc(n), max) : fallback;
+}
+
+/**
+ * 处理一条队列记录：已 processed/skipped 的直接返回（幂等，不再触发写回）。
+ * 命中不了任何规则记 skipped（不是失败，只是这条反馈没有可提炼的画像信息）；
+ * 写回抛错记 failed，留 error 等补跑。conflict 是**正常结果**，不算失败 ——
+ * 它由既有的「待裁决冲突」出口接住，等人定夺。
+ */
+function processFeedbackRow(row: FeedbackRow): FeedbackRow {
+  if (row.status === 'processed' || row.status === 'skipped') return row;
+  const matches = FEEDBACK_RULES.filter(([, words]) => words.some((w) => row.text.includes(w)));
+  const keys: string[] = [];
+  const actions: string[] = [];
+  let conflicts = 0;
+  let status: FeedbackStatus = matches.length ? 'processed' : 'skipped';
+  let error = '';
+  try {
+    for (const [key, words] of matches) {
+      const out = writeback({
+        subject_type: row.subject_type,
+        subject_id: row.subject_id,
+        key,
+        value: feedbackSnippet(row.text, words),
+        confidence: 0.7,
+        source: 'feedback',
+        evidence: `[feedback:${row.id}] ${row.text}`.slice(0, MAX_TEXT),
+        actor: row.actor || 'system',
+      });
+      keys.push(key);
+      actions.push(out.action);
+      if (out.action === 'conflict') conflicts++;
+    }
+  } catch (err) {
+    status = 'failed';
+    error = (err as Error).message.slice(0, 300);
+  }
+  const now = Date.now();
+  const keysJson = JSON.stringify(keys);
+  const actionsJson = JSON.stringify(actions);
+  feedbackDb()
+    .prepare(
+      `UPDATE memory_feedback_queue
+          SET status = ?, keys_json = ?, actions_json = ?, conflicts = ?, error = ?, processed_at = ?
+        WHERE id = ?`,
+    )
+    .run(status, keysJson, actionsJson, conflicts, error, now, row.id);
+  return { ...row, status, keys_json: keysJson, actions_json: actionsJson, conflicts, error, processed_at: now };
+}
+
+/** 业务系统的接入点：投一条反馈，立刻自动提炼写回；重复投递不重复写。 */
+export function submitFeedback(input: {
+  subject_id: string;
+  text: string;
+  subject_type?: string;
+  source?: string;
+  source_ref?: string;
+  actor?: string;
+}): FeedbackReceipt {
+  const text = (input.text ?? '').trim().slice(0, 1000);
+  const subject_id = (input.subject_id ?? '').trim();
+  if (!text || !subject_id) throw new MemoryHandoffError('subject_id / text 不能为空');
+  const subject_type = (input.subject_type || 'customer').trim().slice(0, 32) || 'customer';
+  const source = (input.source || 'api').trim().slice(0, 64) || 'api';
+  const sourceRef = (input.source_ref ?? '').trim().slice(0, 120);
+  const actor = (input.actor || 'system').trim().slice(0, 64) || 'system';
+  const db = feedbackDb();
+  const textHash = createHash('sha256')
+    .update(`${subject_type}\u0000${subject_id}\u0000${text}`)
+    .digest('hex')
+    .slice(0, 32);
+  const inserted = db
+    .prepare(
+      `INSERT OR IGNORE INTO memory_feedback_queue
+        (id, subject_type, subject_id, text_hash, text, source, source_ref, status, actor, created_at)
+       VALUES (?,?,?,?,?,?,?,'pending',?,?)`,
+    )
+    .run(randomUUID(), subject_type, subject_id, textHash, text, source, sourceRef, actor, Date.now());
+  const row = db
+    .prepare(
+      `SELECT * FROM memory_feedback_queue
+        WHERE subject_type = ? AND subject_id = ? AND text_hash = ?`,
+    )
+    .get(subject_type, subject_id, textHash) as FeedbackRow;
+  return feedbackReceipt(processFeedbackRow(row), inserted.changes === 0);
+}
+
+/** 补跑：进程重启后残留的 pending，或之前写回失败的 failed。 */
+export function runFeedbackQueue(input: { limit?: number; include_failed?: boolean } = {}): {
+  scanned: number;
+  processed: number;
+  skipped: number;
+  failed: number;
+  conflicts: number;
+} {
+  const db = feedbackDb();
+  const cap = capNum(input.limit, 100, 500);
+  const clause = input.include_failed === false ? "status = 'pending'" : "status IN ('pending','failed')";
+  const rows = db
+    .prepare(`SELECT * FROM memory_feedback_queue WHERE ${clause} ORDER BY created_at ASC LIMIT ?`)
+    .all(cap) as FeedbackRow[];
+  const out = { scanned: rows.length, processed: 0, skipped: 0, failed: 0, conflicts: 0 };
+  for (const row of rows) {
+    const done = processFeedbackRow(row);
+    out[done.status === 'processed' ? 'processed' : done.status === 'skipped' ? 'skipped' : 'failed']++;
+    out.conflicts += done.conflicts;
+  }
+  return out;
+}
+
+/** 队列审计：统计 + 最近记录（可按状态筛）。前端据此显示自动写回的运行状态。 */
+export function feedbackQueue(input: { status?: string; limit?: number } = {}): {
+  stats: {
+    total: number; pending: number; processed: number; skipped: number;
+    failed: number; conflicts: number;
+  };
+  items: FeedbackQueueItem[];
+} {
+  const db = feedbackDb();
+  const groups = db
+    .prepare(`SELECT status, COUNT(*) AS n, COALESCE(SUM(conflicts), 0) AS c
+                FROM memory_feedback_queue GROUP BY status`)
+    .all() as Array<{ status: FeedbackStatus; n: number; c: number }>;
+  const stats = {
+    total: 0, pending: 0, processed: 0, skipped: 0, failed: 0, conflicts: 0,
+  };
+  for (const g of groups) {
+    stats.total += g.n;
+    stats.conflicts += g.c;
+    if (g.status === 'pending' || g.status === 'processed' || g.status === 'skipped' || g.status === 'failed') {
+      stats[g.status] += g.n;
+    }
+  }
+  const allowed: FeedbackStatus[] = ['pending', 'processed', 'skipped', 'failed'];
+  const status = allowed.includes(input.status as FeedbackStatus) ? (input.status as FeedbackStatus) : null;
+  const rows = db
+    .prepare(
+      `SELECT * FROM memory_feedback_queue ${status ? 'WHERE status = ?' : ''}
+        ORDER BY created_at DESC LIMIT ?`,
+    )
+    .all(...(status ? [status, capNum(input.limit, 20, 200)] : [capNum(input.limit, 20, 200)])) as FeedbackRow[];
+  return { stats, items: rows.map(hydrateFeedback) };
+}
+
+/**
+ * 兼容老入口：面板上的「反馈自动提炼」和任何旧调用都走同一条队列，
+ * 因此手动贴文本与业务系统投递的画像口径、去重规则完全一致。
+ */
 export function ingestFeedback(input: {
   subject_id: string;
   text: string;
   subject_type?: string;
   actor?: string;
-}): { subject_id: string; profile_keys: string[]; extracted: number; rules: number } {
-  const text = (input.text ?? '').trim();
-  const subject_id = (input.subject_id ?? '').trim();
-  if (!text || !subject_id) throw new MemoryHandoffError('subject_id / text 不能为空');
-  const keys = FEEDBACK_RULES.filter(([, words]) => words.some((w) => text.includes(w))).map(
-    ([key]) => key,
-  );
-  for (const key of keys) {
-    writeback({
-      subject_type: input.subject_type || 'customer',
-      subject_id,
-      key,
-      value: text.slice(0, 120),
-      confidence: 0.7,
-      source: 'feedback',
-      evidence: text.slice(0, 200),
-      actor: input.actor || 'system',
-    });
-  }
-  return { subject_id, profile_keys: keys, extracted: keys.length, rules: FEEDBACK_RULES.length };
+}): {
+  subject_id: string;
+  profile_keys: string[];
+  extracted: number;
+  rules: number;
+  feedback_id: string;
+  dedup: boolean;
+  status: FeedbackStatus;
+} {
+  const out = submitFeedback({
+    subject_id: input.subject_id,
+    text: input.text,
+    subject_type: input.subject_type,
+    source: 'feedback',
+    source_ref: 'manual-ingest',
+    actor: input.actor,
+  });
+  return {
+    subject_id: (input.subject_id ?? '').trim(),
+    profile_keys: out.profile_keys,
+    extracted: out.profile_keys.length,
+    rules: FEEDBACK_RULES.length,
+    feedback_id: out.id,
+    dedup: out.dedup,
+    status: out.status,
+  };
 }
 
 export function handoffStats(): {
@@ -750,11 +1050,19 @@ export function handoffStats(): {
   /** 历史累计冲突次数；要看「还有几条要人处理」请用 pending_conflicts。 */
   conflicts: number;
   pending_conflicts: number;
+  /** 反馈自动写回队列（2026-11-06）：总量 / 待处理 / 失败可补跑。 */
+  feedback_total: number;
+  feedback_pending: number;
+  feedback_failed: number;
 } {
   const db = getDb();
+  const feedback = feedbackQueue({ limit: 1 }).stats;
   const n = (sql: string): number =>
     (db.prepare(sql).get() as { n: number }).n;
   return {
+    feedback_total: feedback.total,
+    feedback_pending: feedback.pending,
+    feedback_failed: feedback.failed,
     handoffs: n(`SELECT COUNT(*) AS n FROM memory_handoffs`),
     pending: n(`SELECT COUNT(*) AS n FROM memory_handoffs WHERE status = 'pending'`),
     accepted: n(`SELECT COUNT(*) AS n FROM memory_handoffs WHERE status = 'accepted'`),

@@ -15,7 +15,10 @@
  *   POST   /api/memory/handoff/profiles/conflicts/resolve → 裁决（采纳 / 驳回）
  *   GET    /api/memory/handoff/profiles/:subjectId  → 当前画像 + 变更流水
  *   POST   /api/memory/handoff/profiles/writeback   → 长期画像写回（force 可裁决）
- *   POST   /api/memory/handoff/profiles/ingest      → 反馈规则式自动提炼
+ *   POST   /api/memory/handoff/profiles/ingest      → 反馈规则式自动提炼（兼容老入口，走同一队列）
+ *   GET    /api/memory/handoff/feedback             → 反馈自动写回队列（统计 + 审计）
+ *   POST   /api/memory/handoff/feedback            → 投递反馈，自动提炼写回（单条 / 批量）
+ *   POST   /api/memory/handoff/feedback/run        → 补跑 pending / failed
  */
 
 import { getApiBase } from './_base';
@@ -68,6 +71,10 @@ export interface HandoffStats {
   conflicts: number;
   /** 当前还等人处理的条数 */
   pending_conflicts: number;
+  /** 反馈自动写回队列（旧后端可能没有，故可选） */
+  feedback_total?: number;
+  feedback_pending?: number;
+  feedback_failed?: number;
 }
 
 export interface ContextItem {
@@ -120,6 +127,56 @@ export interface IngestResult {
   profile_keys: string[];
   extracted: number;
   rules: number;
+  feedback_id?: string;
+  dedup?: boolean;
+  status?: FeedbackStatus;
+}
+
+/** 反馈自动写回队列（2026-11-06）：队列状态与投递回执共用。 */
+export type FeedbackStatus = 'pending' | 'processed' | 'skipped' | 'failed';
+
+export interface FeedbackQueueItem {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  text: string;
+  source: string;
+  source_ref: string;
+  status: FeedbackStatus;
+  profile_keys: string[];
+  actions: string[];
+  conflicts: number;
+  error: string;
+  actor: string;
+  created_at: number;
+  processed_at: number | null;
+}
+
+export interface FeedbackQueueResult {
+  stats: {
+    total: number; pending: number; processed: number;
+    skipped: number; failed: number; conflicts: number;
+  };
+  items: FeedbackQueueItem[];
+}
+
+export interface FeedbackSubmitResult {
+  received: number;
+  deduped: number;
+  processed: number;
+  skipped: number;
+  failed: number;
+  conflicts: number;
+  items: Array<{
+    subject_id: string;
+    id?: string;
+    dedup?: boolean;
+    status?: FeedbackStatus;
+    profile_keys?: string[];
+    actions?: string[];
+    conflicts?: number;
+    error?: string;
+  }>;
 }
 
 export class MemoryHandoffError extends Error {
@@ -257,4 +314,31 @@ export function resolveProfileConflict(payload: {
   actor?: string;
 }): Promise<ConflictResolution> {
   return post(`${BASE}/profiles/conflicts/resolve`, payload as unknown as Record<string, unknown>);
+}
+
+/** 业务系统/面板投递反馈：后端即自动提炼写回，重复内容不会重复写。 */
+export function submitFeedback(payload: {
+  subject_id: string; text: string;
+  subject_type?: string; source?: string; source_ref?: string; actor?: string;
+}): Promise<FeedbackSubmitResult> {
+  return post(`${BASE}/feedback`, payload as unknown as Record<string, unknown>);
+}
+
+export function getFeedbackQueue(
+  opts: { status?: FeedbackStatus; limit?: number } = {},
+): Promise<FeedbackQueueResult> {
+  const qs = new URLSearchParams();
+  if (opts.status) qs.set('status', opts.status);
+  if (opts.limit) qs.set('limit', String(opts.limit));
+  const q = qs.toString();
+  return fetch(`${BASE}/feedback${q ? `?${q}` : ''}`).then((r) => handle<FeedbackQueueResult>(r));
+}
+
+/** 补跑队列里残留的 pending / 写回失败的 failed。 */
+export function runFeedbackQueue(payload: {
+  limit?: number; include_failed?: boolean;
+} = {}): Promise<{
+  scanned: number; processed: number; skipped: number; failed: number; conflicts: number;
+}> {
+  return post(`${BASE}/feedback/run`, payload as unknown as Record<string, unknown>);
 }

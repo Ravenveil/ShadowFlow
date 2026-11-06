@@ -16,14 +16,17 @@ import { useI18n } from '../common/i18n';
 import {
   acceptHandoff,
   createHandoff,
+  getFeedbackQueue,
   getHandoffContext,
   getHandoffStats,
   getProfile,
-  ingestFeedback,
   listHandoffs,
   listProfileConflicts,
   resolveProfileConflict,
+  runFeedbackQueue,
+  submitFeedback,
   writebackProfile,
+  type FeedbackQueueResult,
   type Handoff,
   type HandoffContextResult,
   type HandoffStats,
@@ -37,6 +40,8 @@ export default function MemoryHandoffPanel() {
   const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   const [conflicts, setConflicts] = useState<ProfileConflict[]>([]);
   const [stats, setStats] = useState<HandoffStats | null>(null);
+  const [feedbackQueue, setFeedbackQueue] = useState<FeedbackQueueResult | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -62,14 +67,17 @@ export default function MemoryHandoffPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      const [list, s, pending] = await Promise.all([
+      const [list, s, pending, queue] = await Promise.all([
         listHandoffs(),
         getHandoffStats(),
         listProfileConflicts(),
+        // 旧版后端没有队列端点：单独吞掉，不能让整张卡都加载失败。
+        getFeedbackQueue({ limit: 5 }).catch(() => null),
       ]);
       setHandoffs(list);
       setStats(s);
       setConflicts(pending);
+      setFeedbackQueue(queue);
     } catch (err) {
       // 后端未启动 / 网关未挂时静默降级，不阻塞记忆主列表。
       setErrorMsg(`交接数据加载失败：${msg(err)}`);
@@ -148,14 +156,41 @@ export default function MemoryHandoffPanel() {
     await loadProfile(subjectId.trim());
   }, [run, subjectId, profileKey, profileValue, confidence, loadProfile]);
 
+  /** 面板投递走新队列端点：与业务系统自动投递共用同一套去重与写回口径。 */
   const handleIngest = useCallback(async () => {
     const out = await run(() =>
-      ingestFeedback({ subject_id: subjectId.trim(), text: feedbackText.trim() }),
+      submitFeedback({
+        subject_id: subjectId.trim(),
+        text: feedbackText.trim(),
+        source: 'feedback',
+        source_ref: 'panel',
+      }),
     );
     if (!out) return;
+    const first = out.items[0];
+    if (first?.error) {
+      setFeedbackNote(`投递失败：${first.error}`);
+      return;
+    }
+    const keys = first?.profile_keys ?? [];
+    setFeedbackNote(
+      first?.dedup
+        ? `这条反馈已经投过，未重复写回（命中 ${keys.length} 项）`
+        : `已自动写回 ${keys.length} 项：${keys.join('、') || '无可提炼项'}` +
+          (first?.conflicts ? ` · ${first.conflicts} 项进入待裁决` : ''),
+    );
     setFeedbackText('');
-    await loadProfile(subjectId.trim());
-  }, [run, subjectId, feedbackText, loadProfile]);
+    await Promise.all([refresh(), loadProfile(subjectId.trim())]);
+  }, [run, subjectId, feedbackText, loadProfile, refresh]);
+
+  const handleRunQueue = useCallback(async () => {
+    const out = await run(() => runFeedbackQueue({ limit: 100 }));
+    if (!out) return;
+    setFeedbackNote(
+      `补跑 ${out.scanned} 条：已处理 ${out.processed} · 跳过 ${out.skipped} · 失败 ${out.failed}`,
+    );
+    await refresh();
+  }, [run, refresh]);
 
   /** 裁决后刷新待裁决列表 + 当前主体的画像；重复点按由后端 404 兜住。 */
   const handleResolve = useCallback(
@@ -364,8 +399,56 @@ export default function MemoryHandoffPanel() {
           onClick={handleIngest}
           className="neo-mm-btn neo-mm-btn-sm"
         >
-          {t('neo.memory.handoff.ingest', { defaultValue: '反馈自动提炼' })}
+          {t('neo.memory.handoff.ingest', { defaultValue: '投递并自动写回' })}
         </button>
+      </div>
+
+      {/* ── 反馈自动写回队列：投递即写回，去重可查、失败可补跑 ── */}
+      <div data-testid="handoff-feedback-queue" className="neo-mm-card">
+        <div className="neo-mm-card-head">
+          <h3 className="neo-mm-card-title">
+            {t('neo.memory.handoff.queueTitle', { defaultValue: '反馈自动写回队列' })}
+          </h3>
+          <span data-testid="handoff-feedback-stats" className="neo-mm-scope-pill">
+            {feedbackQueue
+              ? `共 ${feedbackQueue.stats.total} · 已处理 ${feedbackQueue.stats.processed} · 待处理 ${feedbackQueue.stats.pending} · 失败 ${feedbackQueue.stats.failed} · 冲突 ${feedbackQueue.stats.conflicts}`
+              : t('neo.memory.handoff.queueUnavailable', { defaultValue: '队列不可用（旧后端）' })}
+          </span>
+        </div>
+        <p className="neo-mm-card-meta">
+          {t('neo.memory.handoff.queueHint', {
+            defaultValue: '业务系统投递反馈即自动提炼写回；同内容只写一次，同置信冲突自动进下面的裁决台。',
+          })}
+        </p>
+        {feedbackNote && (
+          <p data-testid="handoff-feedback-note" className="neo-mm-card-content">{feedbackNote}</p>
+        )}
+        <div className="neo-mm-card-actions">
+          <button
+            data-testid="handoff-feedback-run"
+            disabled={busy || !feedbackQueue}
+            onClick={handleRunQueue}
+            className="neo-mm-btn neo-mm-btn-ghost neo-mm-btn-sm"
+          >
+            {t('neo.memory.handoff.queueRun', { defaultValue: '补跑待处理 / 失败' })}
+          </button>
+        </div>
+        {feedbackQueue && feedbackQueue.items.length === 0 && (
+          <p className="neo-mm-card-meta">
+            {t('neo.memory.handoff.queueEmpty', { defaultValue: '还没有反馈记录。' })}
+          </p>
+        )}
+        {feedbackQueue?.items.slice(0, 5).map((item) => (
+          <div key={item.id} data-testid="handoff-feedback-item" className="neo-mm-card">
+            <p className="neo-mm-card-content">{item.text}</p>
+            <p className="neo-mm-card-meta">
+              {item.subject_id} · {item.status} · 来源 {item.source}
+              {item.profile_keys.length ? ` · 命中 ${item.profile_keys.join('/')}` : ''}
+              {item.conflicts ? ` · 冲突 ${item.conflicts}` : ''}
+              {item.error ? ` · ${item.error}` : ''}
+            </p>
+          </div>
+        ))}
       </div>
 
       {/* ── 待裁决画像冲突：后端不替人拍板，这里给「采纳 / 保留」两个出口 ── */}
