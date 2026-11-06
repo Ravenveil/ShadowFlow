@@ -313,6 +313,44 @@ export function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: stri
   );
 }
 
+/**
+ * roster 孤点投影（2026-11-07「成员增加后 DAG 里没有新成员」修复）：把当前
+ * 画布上还没有节点的 roster 成员补成孤点节点（id 规则 n-<agentId>，与
+ * seedNodes/addAgentNode 同构），网格排在既有节点下方（4 列，130×110，
+ * baseY = 最低节点 y + 120）。
+ *
+ * 背景：useNodesState 只吃初始值 —— 编辑器常驻（TeamPanel 只在保存/取消时
+ * 重挂）后 roster 增员的 agents 变更到不了画布。seed 与增员同步共用本函数，
+ * 铺出来的孤点两处同构。纯函数（policyColorOf 只影响描边），vitest 可直测。
+ */
+export function makeRosterOrphanNodes(
+  agents: AgentRecord[],
+  existing: Array<{ position: { x: number; y: number }; data: { agentId: string } }>,
+  policyColorOf?: Map<string, PolicyCellState> | null,
+): Node<TeamAgentNodeData>[] {
+  const placed = new Set(existing.map((n) => n.data.agentId).filter(Boolean));
+  const missing = agents.filter((a) => !placed.has(a.agent_id));
+  const baseY = existing.reduce((m, n) => Math.max(m, n.position.y + 120), 0);
+  const GRID_COL = 4;
+  const CELL_W = 130;
+  const CELL_H = 110;
+  return missing.map((a, i) => ({
+    id: `n-${a.agent_id}`,
+    type: 'teamAgent',
+    position: { x: (i % GRID_COL) * CELL_W, y: baseY + Math.floor(i / GRID_COL) * CELL_H },
+    data: {
+      agentId: a.agent_id,
+      name: a.name,
+      soul: a.soul ?? '',
+      nodeType: 'agentTask',
+      policyState: policyColorOf?.get(a.agent_id) ?? null,
+      avatarStyle: a.avatar_style,
+      avatarSeed: a.avatar_seed ?? a.name,
+      avatarImage: a.avatar_image ?? null,
+    },
+  }));
+}
+
 /** 把后端 422 detail 拆成逐条错误文案。 */
 function extractSaveErrors(err: unknown): string[] {
   if (err instanceof TeamApiError) {
@@ -506,6 +544,27 @@ export function TeamWorkflowVersionsPanel({ teamId, refreshToken, onRestored }: 
   );
 }
 
+/** rfNode → workflow 节点（serialize 与脏检查基线共用，防两处口径漂移）。 */
+function serializeNode(n: Node<TeamAgentNodeData>): TeamWorkflow['nodes'][number] {
+  return {
+    id: n.id,
+    type: n.data.nodeType,
+    position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+    data: { agentId: n.data.agentId, name: n.data.name, soul: n.data.soul },
+  };
+}
+
+/** rfEdge → workflow 边（同上共用）。 */
+function serializeEdge(e: Edge): TeamWorkflow['edges'][number] {
+  return {
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    data: { mode: normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode) },
+    ...(e.label ? { label: String(e.label) } : {}),
+  };
+}
+
 export function TeamDagEditor(props: TeamDagEditorProps) {
   /**
    * Provider 包装（2026-11-05 三轮 hotfix，reactflow error #001）：
@@ -528,6 +587,14 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   // 放弃未保存修改的二次确认（2026-11-04 用户反馈批）：window.confirm 原生框
   // 替换为 NeoConfirmModal（dirty 时点「取消」先弹此窗）。
   const [discardAsk, setDiscardAsk] = useState(false);
+
+  /**
+   * roster 同步的两个防误伤 ref（2026-11-07，非渲染态）：
+   *   - removedAgentsRef：用户主动 ×/Delete 删掉的成员，本会话不再自动铺回
+   *   - rosterOrphansRef：roster 同步补出的孤点 id，只有这些在成员离队时才回收
+   */
+  const removedAgentsRef = useRef<Set<string>>(new Set());
+  const rosterOrphansRef = useRef<Set<string>>(new Set());
 
   /** 节点展示名：优先 workflow 存量 name，缺失时回退 roster 里的 agent 名。 */
   const resolveNodeName = useCallback(
@@ -602,26 +669,8 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
         },
       };
     });
-    const placedIds = new Set(placed.map((n) => n.data.agentId).filter(Boolean));
-    const missing = agents.filter((a) => !placedIds.has(a.agent_id));
-    const GRID_COL = 4;
-    const CELL_W = 130;
-    const CELL_H = 110;
-    const baseY =
-      placed.reduce((m, n) => Math.max(m, n.position.y + 120), 0);
-    const orphans: Node<TeamAgentNodeData>[] = missing.map((a, i) => ({
-      id: `n-${a.agent_id}`,
-      type: 'teamAgent',
-      position: { x: (i % GRID_COL) * CELL_W, y: baseY + Math.floor(i / GRID_COL) * CELL_H },
-      data: {
-        agentId: a.agent_id,
-        name: a.name,
-        soul: a.soul ?? '',
-        nodeType: 'agentTask',
-        policyState: policyColorOf?.get(a.agent_id) ?? null,
-        ...resolveAvatar(a.agent_id),
-      },
-    }));
+    // roster 里没上画布的成员补成孤立点（与增员同步共用 makeRosterOrphanNodes）
+    const orphans = makeRosterOrphanNodes(agents, placed, policyColorOf);
     return [...placed, ...orphans];
   }, [workflow, agents, resolveNodeName, resolveAvatar, policyColorOf]);
   const seedEdges = useMemo<Edge[]>(
@@ -643,19 +692,8 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   /** 序列化画布 → TeamWorkflow（保存 payload 与撤销快照同构）。 */
   const serialize = useCallback((): TeamWorkflow => {
     return {
-      nodes: rfNodes.map((n) => ({
-        id: n.id,
-        type: n.data.nodeType,
-        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
-        data: { agentId: n.data.agentId, name: n.data.name, soul: n.data.soul },
-      })),
-      edges: rfEdges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        data: { mode: normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode) },
-        ...(e.label ? { label: String(e.label) } : {}),
-      })),
+      nodes: rfNodes.map(serializeNode),
+      edges: rfEdges.map(serializeEdge),
     };
   }, [rfNodes, rfEdges]);
 
@@ -740,6 +778,10 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     const edgeIds = new Set(rfEdges.filter((e) => e.selected).map((e) => e.id));
     if (nodeIds.size === 0 && edgeIds.size === 0) return;
     pushHistory();
+    // 记入 removedAgentsRef：roster 同步不得把用户刚删掉的成员再铺回画布
+    for (const n of rfNodes) {
+      if (nodeIds.has(n.id) && n.data.agentId) removedAgentsRef.current.add(n.data.agentId);
+    }
     setRfNodes((ns) => ns.filter((n) => !nodeIds.has(n.id)));
     // 节点删除连带清掉相连的边
     setRfEdges((es) =>
@@ -765,8 +807,10 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   /** 单节点删除：节点角「×」用，连带清掉相连的边，入撤销栈。 */
   const deleteNodeById = useCallback(
     (nodeId: string) => {
-      if (!rfNodes.some((n) => n.id === nodeId)) return;
+      const target = rfNodes.find((n) => n.id === nodeId);
+      if (!target) return;
       pushHistory();
+      if (target.data.agentId) removedAgentsRef.current.add(target.data.agentId);
       setRfNodes((ns) => ns.filter((n) => n.id !== nodeId));
       setRfEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId));
       setErrors([]);
@@ -1033,37 +1077,22 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   }, [serialize, setRfNodes, fitView, pushHistory]);
 
   /**
-   * 初始图的序列化快照（与 serialize 同构：坐标取整、name 走 roster 回退、
-   * mode 归一化），作为脏检查基线 —— 未做任何编辑时 dirty 必须为 false。
-   * 2026-11-07：从 seedNodes/seedEdges 派生而非 workflow 原文 —— 退化竖列的
-   * 分层展开、孤点直铺都发生在 seed 阶段，这些「铺画布」动作不算用户修改，
-   * 打开编辑器不应亮「● 未保存」。
+   * 脏检查基线（2026-11-07 两改）：与 serialize 同构的 TeamWorkflow 快照，
+   * 未做任何编辑时 dirty 必须为 false。
+   *   ① 从 seedNodes/seedEdges 派生而非 workflow 原文 —— 退化竖列分层展开、
+   *      孤点直铺都发生在 seed 阶段，「铺画布」不算用户修改；
+   *   ② 改为 state 而非 useMemo —— roster 增员同步（下方 effect）与画布
+   *      **同批**增删基线，同步不误报「● 未保存」；workflow prop 中途变化
+   *      也不会再让基线与画布失配（useMemo 版会假性报脏）。
    */
-  const initialSerialized = useMemo<TeamWorkflow>(() => {
-    return {
-      nodes: seedNodes.map((n) => ({
-        id: n.id,
-        type: n.data.nodeType,
-        position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
-        data: {
-          agentId: n.data.agentId,
-          name: n.data.name,
-          soul: n.data.soul,
-        },
-      })),
-      edges: seedEdges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        data: { mode: normalizeEdgeMode((e.data as { mode?: unknown } | undefined)?.mode) },
-        ...(e.label ? { label: String(e.label) } : {}),
-      })),
-    };
-  }, [seedNodes, seedEdges]);
+  const [baseline, setBaseline] = useState<TeamWorkflow>(() => ({
+    nodes: seedNodes.map(serializeNode),
+    edges: seedEdges.map(serializeEdge),
+  }));
 
   const dirty = useMemo(
-    () => JSON.stringify(serialize()) !== JSON.stringify(initialSerialized),
-    [serialize, initialSerialized],
+    () => JSON.stringify(serialize()) !== JSON.stringify(baseline),
+    [serialize, baseline],
   );
 
   // dirty 翻转上报（编辑器常驻后父组件据此显示「● 未保存」徽标）。
@@ -1102,6 +1131,43 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       }),
     );
   }, [policyColorOf, pairPolicy, edgePolicy, setRfNodes, setRfEdges]);
+
+  /**
+   * roster 增员同步（2026-11-07「成员增加后 DAG 里没有新成员」修复）。
+   *
+   * 背景：useNodesState 只吃初始值，而编辑器常驻（TeamPanel 仅在保存/取消
+   * 时重挂）——成员管理里加人后 agents prop 更新了，画布却永远见不到新成员。
+   * 此 effect 把「画布上还没有节点的 roster 成员」补成孤点（与 seed 同构的
+   * makeRosterOrphanNodes），并把基线同批更新（铺画布不算脏）；补人后
+   * fitView 收拢视口，让新成员直接可见。防误伤守卫见组件顶部两个 ref。
+   */
+  useEffect(() => {
+    const additions = makeRosterOrphanNodes(
+      agents.filter((a) => !removedAgentsRef.current.has(a.agent_id)),
+      rfNodes.map((n) => ({ position: n.position, data: { agentId: n.data.agentId } })),
+      policyColorOf,
+    );
+    const rosterIds = new Set(agents.map((a) => a.agent_id));
+    const connected = new Set(rfEdges.flatMap((e) => [e.source, e.target]));
+    const removals = [...rosterOrphansRef.current].filter((id) => {
+      const n = rfNodes.find((r) => r.id === id);
+      return !!n && !rosterIds.has(n.data.agentId) && !connected.has(id);
+    });
+    if (additions.length === 0 && removals.length === 0) return;
+
+    for (const n of additions) rosterOrphansRef.current.add(n.id);
+    for (const id of removals) rosterOrphansRef.current.delete(id);
+    const removeSet = new Set(removals);
+    setRfNodes((ns) => [...ns.filter((n) => !removeSet.has(n.id)), ...additions]);
+    // 基线同批增删：roster 同步是外部数据对齐，不是用户修改，不误报未保存
+    setBaseline((b) => ({
+      nodes: [...b.nodes.filter((n) => !removeSet.has(n.id)), ...additions.map(serializeNode)],
+      edges: b.edges,
+    }));
+    if (additions.length > 0) {
+      window.setTimeout(() => fitView({ padding: 0.18, duration: 320 }), 50);
+    }
+  }, [agents, rfNodes, rfEdges, policyColorOf, setRfNodes, fitView]);
 
   /** 有未保存改动时取消需二次确认，避免误丢拓扑（NeoConfirmModal 弹窗化）。 */
   const handleCancel = useCallback(() => {
