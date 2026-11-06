@@ -130,3 +130,39 @@ _sess*.txt
 _exp*.pid
 Pasted image *.png
 DTempreadme_b64.txt
+*Tempreadme_b64.txt
+*AppDataLocalTemp*.log
+vitest.config.ts.timestamp-*.mjs
+dev.log
+
+# ── Repo slim-down (2026-11-06): untracked bloat, keep local-only ──
+# Design reference screenshots (~6.5MB, referenced once in a CSS comment)
+/design-refs/
+# Legacy PM/audit docs — already covered by "docs/" rule above; old tracked strays removed
+# Third-party BMAD-METHOD vendored repo (~4MB, ingest populates .shadowflow cache instead)
+/server/skills/BMAD-METHOD/
+# 0G era leftovers (AGENTS.md: 0G direction cancelled 2026-08)
+/contracts/
+/acp_adapter.py
+/aci_algorithm_pseudocode.md
+# Internal sprint/competitor notes (moved to local docs/pm/)
+/GAP.md
+/TODOS.md
+# Tool-created empty marker files in repo root (misfire artifacts)
+/context_cohort_reasoner
+/decide_chart
+/event_detection
+/extract_entities
+/generate_chart
+/generate_sql
+/generate_sql_desc
+/industry_data
+/postprocess
+/refine_bind
+/sql_list
+/sql_result
+/sql_valid
+/task_decomposition
+/validate_execute
+# Personal competition material (local only)
+/JUNCTION CHINA*.pdf

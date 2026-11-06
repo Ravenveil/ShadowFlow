@@ -204,7 +204,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.api
+          file: ./docker/Dockerfile.api
           push: false
           load: false
           tags: shadowflow-api:ci
@@ -215,7 +215,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.web
+          file: ./docker/Dockerfile.web
           push: false
           load: false
           tags: shadowflow-web:ci

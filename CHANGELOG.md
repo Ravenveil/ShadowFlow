@@ -3,6 +3,21 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-11-06（仓库瘦身：解除 283 个冗余文件的跟踪）
+
+### Removed — Repo slim-down（协作者视角的仓库减负）
+- **design-refs/**（22 张界面截图 ~6.5MB）解除跟踪，保留本地；代码仅 CSS 注释引用过一次。
+- **docs/ 旧文档**（29 个 2026 年 5-8 月 PM/评审/交接文档）解除跟踪——`docs/` 早已在
+  .gitignore 声明不入库，本次补上了遗漏的 `git rm --cached`。
+- **server/skills/BMAD-METHOD/**（222 个 vendored 第三方文件 ~4MB，含一个 544KB 的
+  package-lock.json）解除跟踪；skill ingest 仍可从上游重新拉取填充 .shadowflow 缓存。
+- **0G 时代残留**（AGENTS.md 已声明 0G 方向取消）：`contracts/*.sol`、
+  `acp_adapter.py`、`aci_algorithm_pseudocode.md` 解除跟踪（本地移入 docs/archive/）；
+  `templates/agent-packs/0g-compute-analyst/` 彻底删除并从 registry-index.yaml 移除条目。
+- **GAP.md / TODOS.md** 移出仓库根目录（内部 sprint/竞品笔记，不入开源库）。
+- .gitignore 补充对应规则与根目录杂项（工具误产空文件、vitest 时间戳临时文件、
+  个人材料等），防止再次误提交。
+
 ## [Unreleased] — 2026-11-03（编队主机：DAG 就地编辑 + 协作策略矩阵联动）
 
 ### Changed — TeamPanel（编队 tab）交互重构
