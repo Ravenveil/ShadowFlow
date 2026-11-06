@@ -1808,14 +1808,17 @@ export function NeoRail({
               </div>
             )}
 
+            {/* 秘书「影」常驻行（2026-11-06 位置调整）：「+ 新建」之下、
+                项目分组之上——老板进门先看到秘书，再往下翻项目与会话。
+                只渲染这一次（默认组 renderProjectBody 内不再重复）。 */}
+            {renderSecretaryRow()}
+
             {projectSections.map(renderProjectSection)}
 
             {/* 默认区：未归项目的团队分组 / 散群 / 成员 DM / 孤儿成员
                 (os-unified 2026-11-04：也是拖拽归组的投放目标——拖到这里 = 移回默认项目）
                 侧栏一次成型批（2026-11-06）：四路数据 settle 前渲染骨架行占位，
-                数据到齐后一次性原位替换——加载过程不再「空白→全量爆发」。
-                秘书「影」常驻行在任何状态下都第一位渲染（含骨架期/空态）。 */}
-            {renderSecretaryRow()}
+                数据到齐后一次性原位替换——加载过程不再「空白→全量爆发」。 */}
             {railEmpty ? (
               <div className="neo-list-note">
                 {t('neo.sessionsEmpty', {
