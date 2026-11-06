@@ -102,6 +102,27 @@ export interface TrafficCurve {
   total: Omit<TrafficBucket, 'ts'>;
 }
 
+/** 渠道获客经济性一行：渠道维度的钱口径（营收/成本/毛利/占比）+ 单量拆分。 */
+export interface ChannelEconomicRow {
+  channel: string;
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+  /** 该渠道营收占比（%）；全量营收为 0 时为 null */
+  revenue_share_pct: number | null;
+}
+
+export interface ChannelEconomics {
+  range: { from: number | null; to: number | null };
+  channels: ChannelEconomicRow[];
+  /** 各渠道合计，与 overview 同窗口逐字段一致 */
+  total: Omit<ChannelEconomicRow, 'channel' | 'revenue_share_pct'>;
+}
+
 export interface ReconcileResult {
   ledger: { income: number; refund: number; expense: number };
   orders: { amount: number; cost: number };
@@ -182,6 +203,12 @@ export function fetchOrderTimeseries(opts: { granularity?: Granularity; start?: 
 export function fetchTrafficCurve(opts: { granularity?: Granularity; start?: string; end?: string } = {}): Promise<TrafficCurve> {
   const qs = windowQuery(opts);
   return fetch(`${BASE}/traffic/curve${qs ? `?${qs}` : ''}`).then((r) => handle(r));
+}
+
+/** 渠道获客经济性。start/end 与概览共用同一组（kpiWindow），合计才能和 KPI 对上。 */
+export function fetchChannelEconomics(opts: { start?: string; end?: string } = {}): Promise<ChannelEconomics> {
+  const qs = windowQuery(opts);
+  return fetch(`${BASE}/channels${qs ? `?${qs}` : ''}`).then((r) => handle(r));
 }
 
 export function fetchMerchantLedger(limit = 100, kind = ''): Promise<Array<{

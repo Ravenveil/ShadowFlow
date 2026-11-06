@@ -11,6 +11,8 @@
  *                                               &compare=1 额外返回上一等长区间的环比）
  * GET  /api/merchant/orders/timeseries      → 订单流水分时（零值补齐 + 峰值）
  * GET  /api/merchant/traffic/curve          → 客流曲线（PV/UV/转化/分渠道）
+ * GET  /api/merchant/channels               → 渠道获客经济性（渠道 × 营收/成本/毛利/占比，
+ *                                             合计与 overview 同窗口同口径）
  * GET  /api/merchant/ledger                 → 收支流水
  * GET  /api/merchant/orders                 → 订单列表（status 筛 + offset 分页
  *                                             + start/end 区间，返回 total/has_more）
@@ -33,6 +35,7 @@
 import { Router, Request, Response } from 'express';
 import {
   MerchantError,
+  channelEconomics,
   createOrder,
   createProduct,
   firstOrderChain,
@@ -107,6 +110,16 @@ router.get('/orders/timeseries', (req: Request, res: Response) => {
 router.get('/traffic/curve', (req: Request, res: Response) => {
   try {
     res.json(trafficCurve({ granularity: req.query.granularity, start: req.query.start, end: req.query.end }));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 渠道获客经济性：客流曲线只有 PV/UV/转化，答不了「哪个渠道挣钱」。
+// 口径与 overview 同源，前端用同一组 start/end 拉两边即可当场对账。
+router.get('/channels', (req: Request, res: Response) => {
+  try {
+    res.json(channelEconomics({ start: req.query.start, end: req.query.end }));
   } catch (err) {
     fail(res, err);
   }

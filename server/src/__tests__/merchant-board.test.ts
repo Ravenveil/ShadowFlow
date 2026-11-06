@@ -695,3 +695,150 @@ describe('单笔毛利 / 环比 / 对账可解释（口径要能自证）', () =
     expect(after.body.issues).toEqual([]);
   });
 });
+
+describe('渠道获客经济性（渠道的钱口径，合计=概览）', () => {
+  it('按来源渠道归集营收/成本/毛利，合计与 overview 同窗口逐字段一致', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '渠道测试品', price_cents: 10000, cost_cents: 3000 });
+
+    // 渠道 xhs：卖一单不退，营收 10000、成本 3000、毛利 7000
+    const v1 = await request(app()).post('/api/merchant/visits').send({ visitor_id: 'ch-v1', channel: 'xhs' });
+    const o1 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: p.body.id, visit_id: v1.body.id, trace_id: 'ch-1' });
+    await request(app()).post(`/api/merchant/orders/${o1.body.id}/pay`).send({ pay_txn_id: 'txn-ch-1' });
+
+    // 渠道 douyin：卖一单后全退，收入退、成本冲，钱和毛利都不能留
+    const v2 = await request(app()).post('/api/merchant/visits').send({ visitor_id: 'ch-v2', channel: 'douyin' });
+    const o2 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: p.body.id, visit_id: v2.body.id, trace_id: 'ch-2' });
+    await request(app()).post(`/api/merchant/orders/${o2.body.id}/pay`).send({ pay_txn_id: 'txn-ch-2' });
+    await request(app()).post(`/api/merchant/orders/${o2.body.id}/refund`);
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    const xhs = res.body.channels.find((c: { channel: string }) => c.channel === 'xhs');
+    expect(xhs).toBeTruthy();
+    expect(xhs).toMatchObject({
+      orders_total: 1,
+      paid_orders: 1,
+      refunded_orders: 0,
+      revenue_cents: 10000,
+      cost_cents: 3000,
+      gross_profit_cents: 7000,
+    });
+    expect(xhs.gross_margin_pct).toBe(70);
+
+    const dy = res.body.channels.find((c: { channel: string }) => c.channel === 'douyin');
+    expect(dy).toBeTruthy();
+    // 全额退款：营收/成本/毛利都归零，不给渠道留假毛利（与 overview 的净口径一致）
+    expect(dy).toMatchObject({
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 1,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(dy.gross_margin_pct).toBeNull();
+
+    // 没有来源访客的单归 '(unknown)'，钱和单都不丢（前面用例造过无 visit 的单）
+    const unk = res.body.channels.find((c: { channel: string }) => c.channel === '(unknown)');
+    expect(unk).toBeTruthy();
+    expect(unk.orders_total).toBeGreaterThanOrEqual(1);
+
+    // 合计与概览同窗口逐字段一致：渠道表不是另算一套，是同一本账换维度看
+    const ov = await request(app()).get(
+      `/api/merchant/overview?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.body.total.revenue_cents).toBe(ov.body.revenue_cents);
+    expect(res.body.total.cost_cents).toBe(ov.body.cost_cents);
+    expect(res.body.total.gross_profit_cents).toBe(ov.body.gross_profit_cents);
+    expect(res.body.total.orders_total).toBe(ov.body.orders_total);
+    expect(res.body.total.paid_orders).toBe(ov.body.paid_orders);
+    expect(res.body.total.refunded_orders).toBe(ov.body.refunded_orders);
+    expect(res.body.total.gross_margin_pct).toBe(ov.body.gross_margin_pct);
+  });
+
+  it('营收占比按渠道营收算：有营收的合计约 100%，零营收渠道是 0 不是编的数', async () => {
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+    // 每行四舍五入到 0.1%，合计允许 1 个百分点内的舍入误差
+    const shareSum = res.body.channels.reduce(
+      (a: number, c: { revenue_share_pct: number | null }) => a + (c.revenue_share_pct ?? 0),
+      0,
+    );
+    expect(Math.abs(shareSum - 100)).toBeLessThanOrEqual(1);
+    // 营收为 0 的渠道（douyin 全退）占比是 0；但整段区间净营收为 0 时后端回 null 不硬编
+    const dy = res.body.channels.find((c: { channel: string }) => c.channel === 'douyin');
+    expect(dy.revenue_share_pct).toBe(0);
+
+    // 隔离窗口（30 天前，其它用例的数据都在近几天）：只有一笔全退的单，
+    // 净营收为 0 → 占比/毛利率都是 null，不能编出 0% 或 100%。
+    const db = sqlite.getDb();
+    const T = Date.now() - 30 * 86400_000;
+    db.prepare(
+      `INSERT INTO mb_visits (id, visitor_id, channel, trace_id, converted, order_id, created_at)
+       VALUES ('only-refund-visit', 'only-refund-v', 'only-refund', 'only-refund', 1, 'only-refund-order', ?)`,
+    ).run(T);
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('only-refund-order', 'only-refund-p', 'only-refund-visit', 500, 100, 'refunded', 'txn-only-refund', 'only-refund', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    for (const [id, kind, amt] of [
+      ['or-1', 'income', 500],
+      ['or-2', 'expense', 100],
+      ['or-3', 'refund', 500],
+      ['or-4', 'expense', -100],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES (?, ?, ?, 'only-refund-order', 'only-refund', ?)`,
+      ).run(id, kind, amt, T + 60000);
+    }
+    const isolated = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(new Date(T).toISOString())}&end=${encodeURIComponent(new Date(T + 3600_000).toISOString())}`,
+    );
+    expect(isolated.status).toBe(200);
+    expect(isolated.body.channels).toHaveLength(1);
+    expect(isolated.body.channels[0]).toMatchObject({
+      channel: 'only-refund',
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(isolated.body.channels[0].gross_margin_pct).toBeNull();
+    expect(isolated.body.channels[0].revenue_share_pct).toBeNull();
+  });
+
+  it('区间隔离与脏参数：未来窗口全零，非法时间 400 不 5xx', async () => {
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const empty = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}`,
+    );
+    expect(empty.status).toBe(200);
+    expect(empty.body.channels).toEqual([]);
+    expect(empty.body.total).toMatchObject({
+      orders_total: 0,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(empty.body.total.gross_margin_pct).toBeNull();
+
+    expect((await request(app()).get('/api/merchant/channels?start=not-a-date')).status).toBe(400);
+    const inverted = await request(app()).get('/api/merchant/channels?start=2026-01-02&end=2026-01-01');
+    expect(inverted.status).toBe(400);
+  });
+});
