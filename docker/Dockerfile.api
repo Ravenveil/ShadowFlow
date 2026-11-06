@@ -15,8 +15,8 @@ COPY pyproject.toml README.md LICENSE ./
 COPY shadowflow/__init__.py ./shadowflow/__init__.py
 
 # Install the package plus [server] extras (FastAPI + uvicorn).
-# We also include [zerog] so /bridge endpoints work out-of-the-box.
-RUN pip install --prefix=/install ".[server,zerog]"
+# 2026-08 0G 拆除后 zerog extra 已不存在，.[server,zerog] 会埋下安装隐患；只装 [server]。
+RUN pip install --prefix=/install ".[server]"
 
 # Pull in the rest of the source after deps are resolved.
 COPY shadowflow/ ./shadowflow/

@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY tsconfig*.json vite.config.ts tailwind.config.ts postcss.config.js index.html ./
+COPY public ./public
 COPY src ./src
 
 # Production bundle: call Vite directly so the container build does not block
@@ -22,10 +23,39 @@ FROM nginx:1.27.4-alpine AS runtime
 # Non-root user for security (H4 fix)
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Minimal nginx config that listens on 3000 and SPA-rewrites to index.html.
-RUN printf 'server {\n  listen 3000;\n  server_name _;\n  root /usr/share/nginx/html;\n  index index.html;\n  location / {\n    try_files $uri $uri/ /index.html;\n  }\n}\n' \
-    > /etc/nginx/conf.d/default.conf \
-    && rm -f /etc/nginx/conf.d/default.conf.default
+# nginx config: listen on 3000, SPA-rewrite to index.html, and reverse-proxy
+# /api to shadowflow-node:8002 (Node Skill Studio, which forwards unmatched
+# /api routes to shadowflow-api:8000). Without this proxy every /api call hit
+# the SPA fallback and returned index.html — the app "started" but nothing
+# worked. SSE/streaming needs buffering off + long read timeout.
+RUN cat > /etc/nginx/conf.d/default.conf <<'NGINXCONF'
+server {
+  listen 3000;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  client_max_body_size 100m;
+
+  location /api/ {
+    proxy_pass http://shadowflow-node:8002;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+NGINXCONF
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 # chown nginx runtime dirs so the non-root process can write pid/cache/log
