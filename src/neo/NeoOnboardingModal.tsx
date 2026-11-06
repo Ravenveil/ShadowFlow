@@ -1,7 +1,7 @@
 /**
  * NeoOnboardingModal — 首访入职问卷（2026-11-06，模仿 ZCode/Codex 对话框弹出形式）。
  *
- * 触发：进入影的会话（Hello World 欢迎语上屏）后延迟弹出，居中模态 + 遮罩。
+ * 触发：进入秘书的会话（欢迎语上屏）后延迟弹出，居中模态 + 遮罩。
  *
  * 内容：模仿竞品「开场提示词」问卷——用轻量问题认识用户（称呼、职业、日常
  * 事务、想甩掉的重活、常用工具、沟通偏好、红线、今天想先做成的一件事）。
@@ -10,7 +10,7 @@
  * 提交三连（2026-11-06 用户需求：问完直接做一个 Agent 给用户，对标 GrokBot
  * 「主Bot派活」+ OpenBot 员工即用）：
  *  1. 画像持久化 localStorage（'sf.user-profile'）；
- *  2. 自我介绍作为第一条用户消息发进与影的会话（NeoApp onFinished 承接）；
+ *  2. 自我介绍作为第一条用户消息发进与秘书的会话（NeoApp onFinished 承接）；
  *  3. 按「最想甩掉的重活」generateAgentPersona 生成专属助理 Agent 人设，
  *     quickCreateAgent 落库（复用 NeoCreateAgentModal 同款创建链路）；
  *     LLM 失败降级为问卷答案直拼的模板 persona——创建永不因 LLM 挂掉。
@@ -71,20 +71,20 @@ const QUIZ_FIELDS: QuizField[] = [
   },
   {
     key: 'style',
-    label: '希望影怎么跟你说话',
+    label: '希望总经理怎么跟你说话',
     placeholder: '例如：简短中文、先给结论',
     options: ['简短中文', '先给结论', '详细解释', '列清单'],
   },
   {
     key: 'redline',
-    label: '有哪些红线（影必须遵守）',
+    label: '有哪些红线（总经理必须遵守）',
     placeholder: '例如：发消息前先给我看、不碰支付',
     options: ['发消息前先给我看', '不碰支付', '不主动加人', '重要决定先问我'],
     multi: true,
   },
   {
     key: 'firstTask',
-    label: '今天就想让影先帮你做成的一件事',
+    label: '今天就想让总经理先帮你做成的一件事',
     placeholder: '例如：帮我整理一份行业日报模板',
     options: [],
   },
@@ -95,7 +95,7 @@ export function NeoOnboardingModal({
   onSkipped,
   onAgentCreated,
 }: {
-  /** 提交：带用户答案摘要（已拼好发影的第一条消息文本）。 */
+  /** 提交：带用户答案摘要（已拼好发秘书的第一条消息文本）。 */
   onFinished: (introMessage: string) => void;
   /** 跳过（右上 × 或 ESC）。 */
   onSkipped: () => void;
@@ -152,7 +152,7 @@ export function NeoOnboardingModal({
       const combined = [...cs, v].filter(Boolean).join('、');
       if (combined) answerLines.push(`${f.label}：${combined}`);
     }
-    // 持久化画像（影后续对话可引用；设置页后续可展示/编辑）
+    // 持久化画像（秘书后续对话可引用；设置页后续可展示/编辑）
     try {
       localStorage.setItem(
         USER_PROFILE_KEY,
@@ -192,7 +192,7 @@ export function NeoOnboardingModal({
     }
     setPhase('idle');
     const intro = answerLines.length
-      ? `（认识一下）你好影，先自我介绍：\n${answerLines.join('\n')}\n请记住这些，之后按我习惯的方式跟我协作。`
+      ? `（认识一下）你好，总经理，先自我介绍：\n${answerLines.join('\n')}\n请记住这些，之后按我习惯的方式跟我协作。`
       : '';
     onFinished(intro);
   };
@@ -215,11 +215,11 @@ export function NeoOnboardingModal({
           </span>
           <div className="neo-onb-title-wrap">
             <h2 className="neo-onb-title">
-              {t('neo.onboarding.title', { defaultValue: '让影更快帮上你' })}
+              {t('neo.onboarding.title', { defaultValue: '让总经理更快帮上你' })}
             </h2>
             <p className="neo-onb-sub">
               {t('neo.onboarding.sub', {
-                defaultValue: '几个小问题，选一选或填一填，影据此安排怎么协助你。都可以跳过。',
+                defaultValue: '几个小问题，选一选或填一填，总经理据此安排怎么协助你。都可以跳过。',
               })}
             </p>
           </div>

@@ -78,7 +78,7 @@ import {
   type TeamWorkflow,
 } from "../../api/teams";
 import { listAgents, type AgentRecord } from "../../api/agents";
-import { resolveDmConversation } from "../../api/groupApi";
+import { patchGroup, resolveDmConversation } from "../../api/groupApi";
 import { useI18n } from "../../common/i18n";
 import { AgentAvatar } from "../../components/agent/AgentAvatar";
 import {
@@ -104,6 +104,13 @@ export interface TeamPanelProps {
    * （NeoApp.navigate 动词，与 NeoAgentInspector「发起私聊」同一通路）。
    */
   onNavigate?: (nav: { view: "conversation"; groupId: string }) => void;
+  /**
+   * 2026-11-06 群↔编队双向同步（编队侧半边）：从群会话挂载时带上群 id，
+   * roster 增删成功后全量回写 group.agent_ids（与 GroupMembersPanel/
+   * 群聊成员栈保持一致，避免「编队加了人、群里不出现」）。团队 target
+   * 直挂（无群）时缺省不传，只改团队。
+   */
+  groupId?: string;
 }
 
 /** 策略格循环次序：未配置 → permit → warn → deny → 清除（回默认允许）。 */
@@ -150,6 +157,7 @@ function PolicyAgentHead({ agent }: { agent: AgentRecord }) {
 // 消费 —— 解构时下划线前缀显式弃用，避免 TS6133。
 export function TeamPanel({
   teamId,
+  groupId,
   teamName: _teamName,
   perNodeChunks: _perNodeChunks,
   streaming: _streaming,
@@ -390,6 +398,12 @@ export function TeamPanel({
         ...(inTeam ? { remove_agent_ids: [agentId] } : { add_agent_ids: [agentId] }),
       });
       setTeam(updated);
+      // 2026-11-06 群↔编队双向同步（编队侧半边）：roster 变更全量回写
+      // group.agent_ids，群成员栈/派发名单随之更新（best-effort，失败不
+      // 影响编队编辑本体）。
+      if (groupId) {
+        void patchGroup(groupId, { agent_ids: updated.agent_ids }).catch(() => {});
+      }
     } catch {
       setRosterErr(t("neo.host.teamRosterEditFailed", { defaultValue: "成员更新失败，请重试" }));
     } finally {

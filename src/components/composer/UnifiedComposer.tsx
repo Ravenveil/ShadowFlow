@@ -39,8 +39,8 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { getApiBase } from '../../api/_base';
-import { listPacks } from '../../api/knowledge';
-import type { KnowledgePack } from '../../common/types/knowledge';
+// 2026-11-06 对话框知识库重做 — 数据源换多模态记忆库（旧知识包 KnowledgePack 下线中）。
+import { listPacks as listMemoryPacks, type MemoryBankPack } from '../../api/memoryBank';
 import { useI18n } from '../../common/i18n';
 import { SkillUrlChip } from '../SkillUrlChip';
 import ModelPicker from '../ModelPicker';
@@ -78,7 +78,8 @@ export interface UnifiedComposerSubmitPayload {
   /** Resolved skill id — explicit CommandMenu pick (pendingSkill) wins, else
    *  auto-resolved from a `@<skill-id>` token in the text (S11 / PR-E parser). */
   skillName?: string;
-  knowledge: string[]; // selected knowledge pack ids
+  /** 多模态记忆库 pack id 列表（KNOWLEDGE chip 勾选；2026-11-06 换源）。 */
+  knowledgePackIds: string[];
   attachments: AttachedFile[];
   // executor/model/cwd are written to localStorage by the internal pickers
   // (sf.defaultExecutor / sf.model / sf.cwd) — read them there, as before.
@@ -347,8 +348,8 @@ export function UnifiedComposer({
     }
   }, [commandMenu, installedSkills, catalogSkills]);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
-  const [knowledge, setKnowledge] = useState<string[]>([]); // selected pack IDs
-  const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
+  const [knowledge, setKnowledge] = useState<string[]>([]); // selected memory-bank pack IDs
+  const [knowledgePacks, setKnowledgePacks] = useState<MemoryBankPack[] | null>(null);
   const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -418,7 +419,7 @@ export function UnifiedComposer({
       await onSubmit({
         text,
         skillName: resolvedSkillName,
-        knowledge,
+        knowledgePackIds: knowledge,
         attachments,
       });
       // 提交成功后清空输入框 + 附件（对齐 ChatGPT/Claude/ClawsGO：发出即清，不残留）。
@@ -704,7 +705,7 @@ export function UnifiedComposer({
     setKnowledgeOpen((v) => !v);
     if (knowledgePacks === null && !knowledgePacksLoading) {
       setKnowledgePacksLoading(true);
-      listPacks({ limit: 20 })
+      listMemoryPacks()
         .then((res) => setKnowledgePacks(res.data.packs))
         .catch(() => setKnowledgePacks([]))
         .finally(() => setKnowledgePacksLoading(false));

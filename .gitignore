@@ -166,3 +166,8 @@ dev.log
 /validate_execute
 # Personal competition material (local only)
 /JUNCTION CHINA*.pdf
+
+# ── Local scratch hub (2026-11-06) ──
+# 本地工作材料统一收纳处：研究资料、BMAD 产物、设计证据、交接草稿、日志、
+# 已废弃构建产物、个人竞赛材料等。全部本地私有，永不入库；根目录保持干净。
+/_local/

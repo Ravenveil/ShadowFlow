@@ -1,9 +1,10 @@
 /**
  * memory-handoff.ts — 功能线③「记忆与交接」的存储层（2026-11-05）。
  *
- * 定位：这是挂在现有 Node 后端上的一个外接模块，不是新服务。它只做两件事：
+ * 定位：这是挂在现有 Node 后端上的一个外接模块，不是新服务。它只做三件事：
  *   1. agent 间记忆交接（A 下班 → B 接班能读上下文）；
- *   2. 长期画像写回（当前值 + append-only 变更流水，零 LLM）。
+ *   2. 长期画像写回（当前值 + append-only 变更流水，零 LLM）；
+ *   3. 记忆消费留痕（contextFor 每次被调用落一条访问记录，证明记忆被用上了）。
  *
  * 与既有存储层的边界（有意为之，避免动主链路）：
  *   - 快照从已有事实里挖：recallLessons() 的分域经验 + run_index 近 7 天失败目标
@@ -25,6 +26,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_TEXT = 600;
 /** 每个画像主体保留的流水条数上限；超出滚动删除最老的（当前值表不受影响）。 */
 const PROFILE_EVENT_KEEP = 200;
+/** 记忆消费留痕保留的最近条数上限；是访问日志性质，超出滚动删除最老的。 */
+const CONTEXT_READ_KEEP = 200;
 
 export class MemoryHandoffError extends Error {
   status: number;
@@ -273,6 +276,38 @@ function itemInScope(
   return true;
 }
 
+// ---------------------------------------------------------------- 记忆消费留痕
+//
+// ③ 的闭环不只有「写回 / 交接」供给侧，还得证明「交接出来的记忆被用上了」：
+// contextFor() 是记忆的消费入口，每次调用落一条轻量访问留痕（谁 / 什么作用域 /
+// 带出几条 / 来源集合），证据材料据此展示「记忆不是摆设」。
+// 消费留痕是访问日志性质的写入：写不进去绝不影响读取本身（contextFor 里 try/catch）。
+// 只有落痕这一条写路径会建表（幂等 DDL），contextReads() 等查询纯只读、不建表。
+
+const CONTEXT_READS_DDL = `
+CREATE TABLE IF NOT EXISTS memory_context_reads (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent TEXT NOT NULL,
+  scope_key TEXT NOT NULL DEFAULT '',
+  task_type TEXT NOT NULL DEFAULT '',
+  item_count INTEGER NOT NULL DEFAULT 0,
+  sources_json TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_context_reads_at
+  ON memory_context_reads(created_at);`;
+
+/** _resetForTests() 会换 db 实例，所以认实例而不是认模块级布尔（与 feedbackDb 同法）。 */
+let contextReadsDdOwner: unknown = null;
+function contextReadsDb(): Conn {
+  const db = getDb();
+  if (contextReadsDdOwner !== db) {
+    db.exec(CONTEXT_READS_DDL);
+    contextReadsDdOwner = db;
+  }
+  return db;
+}
+
 export interface ContextItem {
   type: 'memory' | 'handoff' | 'lesson';
   source: string;
@@ -342,13 +377,89 @@ export function contextFor(
     items.push({ type: 'lesson', source: 'lesson:common', content: r.content, kind: r.kind, score: r.score });
   }
   const sliced = items.slice(0, capped);
+  const sources = Array.from(new Set(sliced.map((i) => i.source))).sort();
+  // 消费留痕：访问日志性质，失败绝不影响「读上下文」本身。
+  try {
+    const db = contextReadsDb();
+    db.prepare(
+      `INSERT INTO memory_context_reads (agent, scope_key, task_type, item_count, sources_json, created_at)
+       VALUES (?,?,?,?,?,?)`,
+    ).run(agent, scope_key, task_type, sliced.length, JSON.stringify(sources), Date.now());
+    db.prepare(
+      `DELETE FROM memory_context_reads WHERE id NOT IN
+         (SELECT id FROM memory_context_reads ORDER BY id DESC LIMIT ?)`,
+    ).run(CONTEXT_READ_KEEP);
+  } catch {
+    // 留痕失败静默跳过：读取不能因为访问日志写不进去而失败。
+  }
   return {
     agent,
     scope: { scope_key, task_type },
     items: sliced,
     count: sliced.length,
-    sources: Array.from(new Set(sliced.map((i) => i.source))).sort(),
+    sources,
   };
+}
+
+export interface ContextReadItem {
+  id: number;
+  agent: string;
+  scope_key: string;
+  task_type: string;
+  /** 这次读取带出的上下文条数（0 = 该作用域没有可用记忆，也如实记 0） */
+  item_count: number;
+  sources: string[];
+  created_at: number;
+}
+
+/**
+ * 消费留痕审计（纯只读，不建表）：谁在什么时候读走了哪些来源的记忆。
+ * 表不存在（还没人读过记忆）时返回全 0 空列表，与「计数为 0 明写待补」口径一致。
+ */
+export function contextReads(opts: { limit?: number; from?: number | null; to?: number | null } = {}): {
+  total: number;
+  by_agent: Record<string, number>;
+  items: ContextReadItem[];
+} {
+  const empty = { total: 0, by_agent: {} as Record<string, number>, items: [] as ContextReadItem[] };
+  const db = getDb();
+  const exists = !!db
+    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_context_reads'`)
+    .get();
+  if (!exists) return empty;
+  const params: unknown[] = [];
+  let where = 'WHERE 1 = 1';
+  if (Number.isFinite(opts.from)) {
+    where += ' AND created_at >= ?';
+    params.push(opts.from);
+  }
+  if (Number.isFinite(opts.to)) {
+    where += ' AND created_at < ?';
+    params.push(opts.to);
+  }
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM memory_context_reads ${where}`).get(...params) as { n: number }).n;
+  const by_agent: Record<string, number> = {};
+  const groups = db
+    .prepare(`SELECT agent, COUNT(*) AS n FROM memory_context_reads ${where} GROUP BY agent`)
+    .all(...params) as Array<{ agent: string; n: number }>;
+  for (const g of groups) by_agent[g.agent] = g.n;
+  const rows = db
+    .prepare(
+      `SELECT id, agent, scope_key, task_type, item_count, sources_json, created_at
+         FROM memory_context_reads ${where} ORDER BY id DESC LIMIT ?`,
+    )
+    .all(...params, capNum(opts.limit, 20, 200)) as Array<{
+    id: number;
+    agent: string;
+    scope_key: string;
+    task_type: string;
+    item_count: number;
+    sources_json: string;
+    created_at: number;
+  }>;
+  // 明细按时间正序展示（与画像流水同口径），窗口总数不受 limit 影响。
+  const items = rows.reverse().map(({ sources_json, ...rest }) => ({ ...rest, sources: jsonArray(sources_json) }));
+  return { total, by_agent, items };
 }
 
 // ---------------------------------------------------------------- 长期画像写回
@@ -1054,6 +1165,8 @@ export function handoffStats(): {
   feedback_total: number;
   feedback_pending: number;
   feedback_failed: number;
+  /** 记忆消费留痕（2026-11-06）：contextFor 被调用的累计次数，证明记忆被用上。 */
+  context_reads: number;
 } {
   const db = getDb();
   const feedback = feedbackQueue({ limit: 1 }).stats;
@@ -1063,6 +1176,7 @@ export function handoffStats(): {
     feedback_total: feedback.total,
     feedback_pending: feedback.pending,
     feedback_failed: feedback.failed,
+    context_reads: contextReads({ limit: 1 }).total,
     handoffs: n(`SELECT COUNT(*) AS n FROM memory_handoffs`),
     pending: n(`SELECT COUNT(*) AS n FROM memory_handoffs WHERE status = 'pending'`),
     accepted: n(`SELECT COUNT(*) AS n FROM memory_handoffs WHERE status = 'accepted'`),

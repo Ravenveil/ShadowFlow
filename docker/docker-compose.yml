@@ -19,7 +19,10 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ../.env
+      # long-form + required:false（Compose ≥ 2.24）：没有 .env 也能起，
+      # 只是缺省空 key（走前端 BYOK）。避免 "env file ../.env not found" 直接起不来。
+      - path: ../.env
+        required: false
     environment:
       PYTHONUNBUFFERED: "1"
     networks:

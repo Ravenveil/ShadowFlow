@@ -26,10 +26,34 @@
  *     git-introspect.ts so callers can treat "no worktree" as "plain mode").
  */
 import { spawn } from 'child_process';
+import { realpathSync } from 'fs';
 import path from 'path';
 import type { CommitFileEntry } from './contracts';
 
 const GIT_TIMEOUT_MS = 15000;
+
+/**
+ * Canonical comparison key for a filesystem path.
+ *
+ * `git worktree list --porcelain` always reports the long/canonical form, while
+ * a path we build ourselves can still carry a Windows 8.3 short component
+ * (e.g. `C:\Users\TERRYS~1\AppData\...` when TEMP is short-named). `path.resolve`
+ * does NOT expand short names, so the two forms never compare equal and an
+ * existing worktree is treated as missing — the follow-up `worktree add` then
+ * fails ("already exists" / "already checked out") and the caller silently
+ * degrades to plain mode. `realpathSync.native` asks the OS for the canonical
+ * path, which expands 8.3 names and resolves symlinks; paths that do not exist
+ * (yet) fall back to a plain resolve.
+ */
+function canonicalPathKey(p: string): string {
+  let resolved: string;
+  try {
+    resolved = realpathSync.native(p);
+  } catch {
+    resolved = path.resolve(p);
+  }
+  return resolved.toLowerCase();
+}
 
 function git(cwd: string, args: string[]): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
@@ -153,11 +177,11 @@ export async function prepareWorktree(
   const baseSha = base.out.trim();
 
   const existing = await git(repoRoot, ['worktree', 'list', '--porcelain']);
-  const dirNormalized = path.resolve(dir).toLowerCase();
+  const dirNormalized = canonicalPathKey(dir);
   const alreadyThere = existing.ok
     && existing.out
       .split('\n')
-      .some((l) => l.startsWith('worktree ') && path.resolve(l.slice(9).trim()).toLowerCase() === dirNormalized);
+      .some((l) => l.startsWith('worktree ') && canonicalPathKey(l.slice(9).trim()) === dirNormalized);
 
   if (alreadyThere) {
     // Turn-reset: hard reset to base + remove untracked files.
@@ -294,11 +318,11 @@ export async function integrateAll(
 
   // Integration worktree: reuse + hard-reset when a stale one exists.
   const existing = await git(repoRoot, ['worktree', 'list', '--porcelain']);
-  const integNormalized = path.resolve(integDir).toLowerCase();
+  const integNormalized = canonicalPathKey(integDir);
   const alreadyThere = existing.ok
     && existing.out
       .split('\n')
-      .some((l) => l.startsWith('worktree ') && path.resolve(l.slice(9).trim()).toLowerCase() === integNormalized);
+      .some((l) => l.startsWith('worktree ') && canonicalPathKey(l.slice(9).trim()) === integNormalized);
 
   if (alreadyThere) {
     const co = await git(integDir, ['checkout', '-q', '-B', integBranch, baseSha]);

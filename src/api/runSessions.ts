@@ -77,6 +77,11 @@ export interface RunSessionCreateRequest {
    * 该群的所有 run 归属同一条会话（群 timeline 经 B2 端点可见）。
    */
   group_id?: string;
+  /**
+   * 2026-11-06 — 对话框知识库接线：多模态记忆库 pack id 列表（composer
+   * KNOWLEDGE chip 勾选）。服务端按 goal 检索命中注入「知识库参考」块。
+   */
+  knowledge_pack_ids?: string[];
 }
 
 export interface RunSessionCreateResponse {

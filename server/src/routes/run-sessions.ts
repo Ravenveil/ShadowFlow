@@ -33,11 +33,12 @@ import { toolApprovals, type PermissionDecision } from '../lib/tool-approval';
 // in shape from the SkillDropdown UI; both call sites now agree on which
 // goal text patterns are recognised as inline-skill tokens.
 import { parseSkillToken } from '../lib/skill-token';
-import { saveRun, type ArtifactType } from '../storage/runs';
+import { saveRun, saveRunArtifacts, type ArtifactType } from '../storage/runs';
 import { getSetting } from '../storage/settings';
 // 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
 import { remember, contextBlock } from '../storage/memory-lessons';
+import { coercePackIds, knowledgeBlock } from '../lib/memory-bank';
 import { SKILLS } from '../skills';
 import { DESIGN_SYSTEMS } from '../design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../prompt-assembly';
@@ -335,6 +336,12 @@ interface SessionRecord {
   /** Story 15.12 interface — pre-rendered side-files block; loader to be wired by 15.12. */
   side_files?: string;
   layer_toggles?: LayerToggles;
+  /**
+   * 2026-11-06 — 对话框知识库接线：多模态记忆库 pack id 列表（用户在 composer
+   * KNOWLEDGE chip 勾选）。stream 组装提示词时按 goal 检索命中注入「知识库参考」
+   * 块（fail-soft）；多轮接力每轮以当轮 goal 重新检索。
+   */
+  knowledge_pack_ids?: string[];
   /**
    * Story 15.29 — conversation this run belongs to. Always set: when the
    * client omits `conversation_id` we auto-create an anonymous one under
@@ -874,6 +881,44 @@ function coerceArtifactType(raw: unknown): ArtifactType | null {
     : null;
 }
 
+// ── 多产物登记（2026-11-07）— blueprint 事件捕获器 ──────────────────────────
+// 此前「last blueprint wins」：一个 run 只留最后一件产物（runs 表三字段），
+// 其余产物在产物面板/项目产物里全部不可见。现在每件 blueprint 产物都进
+// captured 列表（storage/runs.ts run_artifacts 表持久化）。
+// 导出为纯函数供 __tests__/run-artifacts.test.ts 直测。
+
+/** 一件捕获到的产物（= storage/runs.ts RunArtifact 的运行时形状）。 */
+export interface CapturedArtifact {
+  type: ArtifactType | null;
+  filename: string | null;
+  url: string | null;
+}
+
+/**
+ * captureBlueprintArtifact — 把一条 blueprint 事件的载荷登记进 captured。
+ *
+ * - 载荷全空（type/filename/url 均无）→ 不登记，返回 null。
+ * - 身份 = filename ?? url：同名产物的重复事件**覆盖**既有行（后值补齐
+ *   缺字段，如先 filename 后带 url 的补发），不产生重复行。
+ * - 返回本次的条目（无论新增还是覆盖）——调用方用它维持「最后一件」的
+ *   主产物语义（critique/回执沿用旧行为）。
+ */
+export function captureBlueprintArtifact(
+  captured: CapturedArtifact[],
+  data: { artifact_type?: unknown; filename?: unknown; artifact_url?: unknown },
+): CapturedArtifact | null {
+  const type = coerceArtifactType(data.artifact_type);
+  const filename = typeof data.filename === 'string' && data.filename ? data.filename : null;
+  const url = typeof data.artifact_url === 'string' && data.artifact_url ? data.artifact_url : null;
+  if (!type && !filename && !url) return null;
+  const entry: CapturedArtifact = { type, filename, url };
+  const key = filename ?? url;
+  const idx = key ? captured.findIndex((a) => (a.filename ?? a.url) === key) : -1;
+  if (idx >= 0) captured[idx] = entry;
+  else captured.push(entry);
+  return entry;
+}
+
 // ── GET /api/run-sessions — M3 三栏融合 ──────────────────────────────────────
 // 轻量列表：右栏「工作区」tab 按 conversation_id 或 group_id（B1 互链换算）
 // 查群关联的 run。status 来自 runBus（内存）；重启后无活跃 run 回落 'idle'。
@@ -978,6 +1023,8 @@ router.post('/', (req: Request, res: Response) => {
     project_meta,
     side_files,
     layer_toggles,
+    // 2026-11-06 — 对话框知识库：记忆库 pack id 列表（coercePackIds 清洗）。
+    knowledge_pack_ids,
     // Story 15.19 v2 — optional executor selector.
     executor,
     // Story 15.18 — optional provider selector.
@@ -1006,6 +1053,7 @@ router.post('/', (req: Request, res: Response) => {
     project_meta?: unknown;
     side_files?: unknown;
     layer_toggles?: unknown;
+    knowledge_pack_ids?: unknown;
     executor?: unknown;
     provider?: unknown;
     cwd?: unknown;
@@ -1158,6 +1206,8 @@ router.post('/', (req: Request, res: Response) => {
   const validated_side_files =
     typeof side_files === 'string' && side_files.trim().length > 0 ? side_files : undefined;
   const validated_layer_toggles = coerceLayerToggles(layer_toggles);
+  // 对话框知识库（2026-11-06）— 记忆库 pack id 列表；非法项丢弃，空 = 不挂知识。
+  const validated_knowledge_pack_ids = coercePackIds(knowledge_pack_ids);
 
   // Story 15.19 v2 — coerce executor. We accept any non-empty string and let
   // the dispatcher emit structured errors for unknown values; this keeps the
@@ -1267,6 +1317,8 @@ router.post('/', (req: Request, res: Response) => {
     project_meta: validated_project_meta ?? null,
     side_files: validated_side_files,
     layer_toggles: validated_layer_toggles,
+    knowledge_pack_ids:
+      validated_knowledge_pack_ids.length > 0 ? validated_knowledge_pack_ids : undefined,
     executor: validated_executor,
     cwd: validated_cwd,
     conversation_id: validated_conversation_id,
@@ -1343,6 +1395,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     anthropic_key?: unknown;
     executor?: unknown;
     cwd?: unknown;
+    knowledge_pack_ids?: unknown;
   };
   // Accept either `content` (chat-style payload that the RunSessionPage send box
   // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
@@ -1366,6 +1419,11 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   // CLI 工作目录:follow-up 可改;仅接受绝对路径(否则保留 source 继承值)。
   if (typeof body.cwd === 'string' && /^([a-zA-Z]:[\\/]|[\\/])/.test(body.cwd.trim())) {
     overrides.cwd = body.cwd.trim();
+  }
+  // 对话框知识库（2026-11-06）— 显式给出数组即整体替换（空数组 = 本轮取消挂载）；
+  // 未给继承 source 会话的选择。
+  if (Array.isArray(body.knowledge_pack_ids)) {
+    overrides.knowledge_pack_ids = coercePackIds(body.knowledge_pack_ids);
   }
 
   sessionStore.set(new_session_id, {
@@ -1699,6 +1757,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const toolCallProjector = createToolCallProjector({ idSeed: id });
 
   // Story 15.8 — capture run outcome for persistence after generator drains.
+  // 多产物登记（2026-11-07）：capturedArtifacts 登记本 run 的**每一件** blueprint
+  // 产物（持久化到 run_artifacts 表）；artifactInfo 保留「最后一件 = 主产物」
+  // 语义，critique / saveRun 三字段 / 回执摘要的单件行为不变。
+  const capturedArtifacts: CapturedArtifact[] = [];
   let artifactInfo: {
     type: ArtifactType | null;
     filename: string | null;
@@ -1771,10 +1833,20 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   // 经验记忆（2026-11-05，OPC-OS PR#3 移植）：按 skill_name 分域召回，拼进 skill 层
   // 尾部（静态段内、技能指令之后），空块自动丢弃不打乱段落顺序。失败静默。
   const lessonsBlock = lessonsBlockForSession(session.skill_name);
+  // 知识库参考（2026-11-06 对话框知识库接线）：会话挂了记忆库 pack → 按本轮
+  // goal 检索命中注入「知识库参考」块（fail-soft：Python 未起/超时 → 空块）。
+  // 多轮接力每轮以当轮 goal 重新检索，与经验块并列拼进 skill 层尾部。
+  const knowledgeBlockText = await knowledgeBlock(session.knowledge_pack_ids, session.goal);
+  if (knowledgeBlockText) {
+    console.log(
+      `[run-sessions] injecting knowledge_block (chars=${knowledgeBlockText.length}, packs=${session.knowledge_pack_ids?.length ?? 0})`,
+    );
+  }
+  const dynamicContextBlock = lessonsBlock + (knowledgeBlockText ? `\n\n${knowledgeBlockText}` : '');
   const compose = wantPlainConversation
     ? composeSystemPrompt({
         ds_injection: ds?.injection_prompt,
-        skill_system_prompt: joinLessons(CONVERSATIONAL_AGENT_PROMPT, lessonsBlock),
+        skill_system_prompt: joinLessons(CONVERSATIONAL_AGENT_PROMPT, dynamicContextBlock),
         skill_mode: undefined,
         project_meta: session.project_meta ?? null,
         conversation_history: conversationHistoryBlock,
@@ -1783,7 +1855,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       })
     : composeSystemPrompt({
         ds_injection: ds?.injection_prompt,
-        skill_system_prompt: joinLessons(skillForPrompt?.system_prompt, lessonsBlock),
+        skill_system_prompt: joinLessons(skillForPrompt?.system_prompt, dynamicContextBlock),
         skill_mode: skillForPrompt?.mode,
         project_meta: session.project_meta ?? null,
         conversation_history: conversationHistoryBlock,
@@ -2234,19 +2306,18 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         console.error(`[run-sessions] tool-call projection error on event=${event}:`, toolCallErr);
       }
 
-      // Capture latest artifact info (last blueprint wins — usually only one).
+      // 多产物登记（2026-11-07）— 每件 blueprint 产物都进 capturedArtifacts
+      // （同名覆盖去重）；artifactInfo = 最后一件（主产物，沿用旧语义）。
       if (event === 'blueprint' && data && typeof data === 'object') {
-        const d = data as {
-          artifact_type?: unknown;
-          filename?: unknown;
-          artifact_url?: unknown;
-        };
-        const type = coerceArtifactType(d.artifact_type);
-        const filename = typeof d.filename === 'string' ? d.filename : null;
-        const url = typeof d.artifact_url === 'string' ? d.artifact_url : null;
-        if (type || filename || url) {
-          artifactInfo = { type, filename, url };
-        }
+        const entry = captureBlueprintArtifact(
+          capturedArtifacts,
+          data as {
+            artifact_type?: unknown;
+            filename?: unknown;
+            artifact_url?: unknown;
+          },
+        );
+        if (entry) artifactInfo = entry;
       } else if (event === 'error') {
         sawError = true;
         // Story 15.29 — capture error message for the assistant message.
@@ -2474,6 +2545,17 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
               : null,
           },
         );
+        // 多产物登记（2026-11-07）— 本 run 捕获的每件 blueprint 产物独立
+        // 落 run_artifacts（幂等全量重登记）。runs 三字段仍是主产物（最后
+        // 一件）——上面 saveRun 刚写完，这里补全其余产物/同名去重后的全集。
+        saveRunArtifacts(
+          persistedRunId,
+          capturedArtifacts.map((a) => ({
+            artifact_type: a.type,
+            artifact_filename: a.filename,
+            artifact_url: a.url,
+          })),
+        );
       } catch (persistErr) {
         // Don't fail the response just because we couldn't persist the
         // run record — the SSE stream is already over. Log and move on.
@@ -2492,7 +2574,14 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // Writing failure NEVER reaches the client (try/catch + console.error).
     if (session.conversation_id) {
       let summary: string;
-      if (artifactInfo.filename) {
+      // 多产物登记（2026-11-07）— 多件产物在回执里全部点名（此前只提最后
+      // 一件）。单件/无 filename 保持旧文案，链路优先级不变。
+      const artifactNames = capturedArtifacts
+        .map((a) => a.filename ?? a.url)
+        .filter((n): n is string => typeof n === 'string' && !!n);
+      if (artifactNames.length > 1) {
+        summary = `[Generated artifacts: ${artifactNames.join(', ')}]`;
+      } else if (artifactInfo.filename) {
         summary = `[Generated artifact: ${artifactInfo.filename}]`;
       } else if (stripLeakedSseFrames(collectedStreamText).trim().length > 0) {
         // P2 — control-frame channel isolation (root-cure plan §5). NEVER

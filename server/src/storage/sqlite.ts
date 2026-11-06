@@ -271,6 +271,25 @@ export function getDb(): Database.Database {
   CREATE INDEX IF NOT EXISTS idx_memory_profile_events
     ON memory_profile_events(subject_id, key, id);`);
 
+  // 多产物登记（2026-11-07）— run_artifacts：一 run 多产物的独立登记表。
+  // 动机：run-sessions 此前「last blueprint wins」（runs 表三字段只留最后一件
+  // 产物），多产物 run 的其余产物在产物面板/项目产物里全部不可见。
+  // 约定：runs.artifact_type/filename/url 三字段保留 = 主产物（向后兼容），
+  // 本表按捕获序（seq）登记每一件 blueprint 产物。
+  // 不挂 FOREIGN KEY：saveRun 用 INSERT OR REPLACE（PK 冲突先删后插），
+  // 挂 FK 会级联清掉子行——改为 deleteRun/saveRun 清理时手动删孤儿行。
+  db.exec(`CREATE TABLE IF NOT EXISTS run_artifacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    artifact_type TEXT,
+    artifact_filename TEXT,
+    artifact_url TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(run_id, seq)
+  );
+  CREATE INDEX IF NOT EXISTS idx_run_artifacts_run ON run_artifacts(run_id, seq);`);
+
   _db = db;
   _initialized = true;
   console.log(`[sqlite] db ${dbExisted ? 'loaded' : 'initialized'} at ${file}`);

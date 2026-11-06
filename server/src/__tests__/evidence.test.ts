@@ -70,6 +70,7 @@ describe('空库：演示前刚摆好库时材料也不能报错', () => {
     expect(r.merchant.first_order.complete).toBe(false);
     expect(r.memory.audit.total).toBe(0);
     expect(r.memory.conflicts).toEqual([]);
+    expect(r.memory.context_reads).toMatchObject({ total: 0, items: [] });
     expect(r.collaboration).toMatchObject({
       available: true, total: 0, failures: 0, reworks: 0, approval_rejections: 0, open: 0,
     });
@@ -259,6 +260,35 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     expect(r.memory.audit.events.some((e: { actor: string }) => e.actor === 'boss')).toBe(true);
   });
 
+  it('失败反馈可核实：队列表带失败原因，速览提示人工补跑后重新导出', async () => {
+    // 真实失败由 processFeedbackRow 的 catch 落成 failed + error；公开 API 没法
+    // 确定性逼出写回异常，这里直接种一条失败态（与 demo-exception-replay 同一手法，
+    // 只写队列表、不造假表），验证「失败可补跑」这条闭环在材料里看得见原因。
+    sqlite.getDb()
+      .prepare(
+        `INSERT INTO memory_feedback_queue
+           (id, subject_type, subject_id, text_hash, text, source, source_ref,
+            status, keys_json, actions_json, conflicts, error, actor, created_at)
+         VALUES ('fb-fail-1', 'customer', 'cust-ev', 'hash-fail-1', '行业做的是烘焙',
+                 'test', 'case-failed-feedback', 'failed', '[]', '[]', 0,
+                 '模拟写回失败：库忙超时', 'system', ?)`,
+      )
+      .run(Date.now());
+
+    const r = (await request(app()).get('/api/merchant/evidence')).body;
+    expect(r.human_decisions.failed_feedback).toBeGreaterThanOrEqual(1);
+    const failed = r.memory.feedback.items.find((i: { status: string }) => i.status === 'failed');
+    expect(failed?.error).toContain('模拟写回失败');
+
+    const md = (await request(app()).get('/api/merchant/evidence.md')).text;
+    expect(md).toContain('失败原因');
+    expect(md).toContain('模拟写回失败：库忙超时');
+
+    const card = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+    expect(card).toContain('条写回失败');
+    expect(card).toContain('补跑待处理 / 失败');
+  });
+
   it('Markdown 是能直接当答辩附件的中文材料', async () => {
     const md = (await request(app()).get('/api/merchant/evidence.md')).text;
     expect(md).toContain('## 〇、评委速览（对照赛题评分表）');
@@ -370,5 +400,36 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     }
     const oddLimit = await request(app()).get('/api/merchant/evidence?limit=abc');
     expect(oddLimit.status).toBe(200); // limit 收敛到默认值，不是错误
+  });
+});
+
+describe('记忆消费留痕：「记忆被用上」在材料里可核实', () => {
+  it('没消费记录时速览提示补跑；一次 contextFor 后 JSON / 报告 / 速览三处同步出现', async () => {
+    // 此时已有画像写回 / 交接包（供给侧有数据），但还没人读过记忆（消费侧为 0），
+    // 速览必须自曝这个缺口，不能让评委以为「记忆被用上了」是既成事实。
+    const before = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+    expect(before).toContain('还没有记忆消费记录');
+    expect(before).toContain('GET /api/memory/handoff/context');
+
+    // 接班 agent 真实拉一次上下文（公开路径，消费留痕自动落库）
+    const read = await request(app()).get('/api/memory/handoff/context?agent=交付岗&scope_key=&task_type=');
+    expect(read.status).toBe(200);
+
+    const r = (await request(app()).get('/api/merchant/evidence')).body;
+    expect(r.memory.context_reads.total).toBeGreaterThanOrEqual(1);
+    const mine = r.memory.context_reads.items.filter((i: { agent: string }) => i.agent === '交付岗');
+    expect(mine.length).toBeGreaterThanOrEqual(1);
+    expect(mine[mine.length - 1].item_count).toBe(read.body.count);
+    expect(mine[mine.length - 1].sources).toEqual(read.body.sources);
+
+    const md = (await request(app()).get('/api/merchant/evidence.md')).text;
+    expect(md).toContain('记忆消费留痕');
+    expect(md).toContain('交付岗');
+
+    const card = (await request(app()).get('/api/merchant/evidence/scorecard.md')).text;
+    expect(card).toContain(`记忆消费 ${r.memory.context_reads.total} 次`);
+    expect(card).not.toContain('还没有记忆消费记录');
+    // 评委能照着复现端点核消费留痕
+    expect(r.reproduction.endpoints).toContain('GET /api/memory/handoff/context/reads');
   });
 });

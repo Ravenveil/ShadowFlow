@@ -1765,7 +1765,7 @@ body.neo-rail-resizing .neo-rail {
   color: #fff;
 }
 
-/* ── 内置秘书「影」常驻行（2026-11-06，GrokBot 主Bot范式）──────────────────
+/* ── 内置秘书常驻行（2026-11-06，GrokBot 主Bot范式）──────────────────
    home 列表区第一位：微 accent 底色区分普通会话行，其余复用 neo-sess-row。 */
 .neo-secretary-row {
   background: color-mix(in srgb, var(--t-accent, #4f46e5) 6%, transparent);
