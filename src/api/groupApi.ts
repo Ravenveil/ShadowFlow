@@ -468,6 +468,9 @@ export async function postGroupMessage(
      *  executor（cli:* / byok:*）生成回复。executor 空时网关默认 anthropic-direct。 */
     executor?: string;
     model?: string;
+    /** 2026-11-06 · 对话框知识库 — 多模态记忆库 pack id 列表，网关 fan-out
+     *  按本轮消息检索命中注入 Agent 提示词（fail-soft）。 */
+    knowledgePackIds?: string[];
     /** AbortSignal — allows cancelling an in-flight POST. */
     signal?: AbortSignal;
   },
@@ -484,6 +487,7 @@ export async function postGroupMessage(
       reply_to: options?.replyTo,
       executor: options?.executor,
       model: options?.model,
+      knowledge_pack_ids: options?.knowledgePackIds,
     }),
     signal: options?.signal,
   });

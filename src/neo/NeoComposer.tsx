@@ -64,8 +64,7 @@ import {
 import { getApiBase } from '../api/_base';
 import { listDetectedClis, type DetectedCli } from '../api/cli';
 import { resolveClawMeta } from '../config/clawhub';
-import { listPacks } from '../api/knowledge';
-import type { KnowledgePack } from '../common/types/knowledge';
+import { listPacks as listMemoryPacks, type MemoryBankPack } from '../api/memoryBank';
 import { useI18n } from '../common/i18n';
 import {
   extractSkillUrl,
@@ -1349,9 +1348,10 @@ export function NeoComposer({
   const [skillStatusById, setSkillStatusById] = useState<Record<string, CompileStatus>>({});
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
-  const [knowledge, setKnowledge] = useState<string[]>([]); // selected pack IDs
-  const [knowledgePacks, setKnowledgePacks] = useState<KnowledgePack[] | null>(null);
+  const [knowledge, setKnowledge] = useState<string[]>([]); // selected memory-bank pack IDs
+  const [knowledgePacks, setKnowledgePacks] = useState<MemoryBankPack[] | null>(null);
   const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -1454,7 +1454,7 @@ export function NeoComposer({
       await onSubmit({
         text,
         skillName: resolvedSkillName,
-        knowledge,
+        knowledgePackIds: knowledge,
         attachments,
       });
       // 提交成功清空输入框 + 附件（发出即清，不残留）；失败保留文字方便重发。
@@ -1697,15 +1697,22 @@ export function NeoComposer({
     );
   }
 
+  // 记忆库列表懒拉（chip 弹层打开时）；失败置 error + 清空，重开/点重试即重拉。
+  function loadKnowledgePacks() {
+    setKnowledgePacksLoading(true);
+    setKnowledgeError(false);
+    listMemoryPacks()
+      .then((res) => setKnowledgePacks(res.data.packs))
+      .catch(() => {
+        setKnowledgeError(true);
+        setKnowledgePacks(null);
+      })
+      .finally(() => setKnowledgePacksLoading(false));
+  }
+
   function openKnowledge() {
     setKnowledgeOpen((v) => !v);
-    if (knowledgePacks === null && !knowledgePacksLoading) {
-      setKnowledgePacksLoading(true);
-      listPacks({ limit: 20 })
-        .then((res) => setKnowledgePacks(res.data.packs))
-        .catch(() => setKnowledgePacks([]))
-        .finally(() => setKnowledgePacksLoading(false));
-    }
+    if (knowledgePacks === null && !knowledgePacksLoading) loadKnowledgePacks();
   }
 
   const hasText = composer.trim().length > 0;
@@ -1784,8 +1791,8 @@ export function NeoComposer({
           />
         </div>
 
-        {/* 附件 chips —— 仅在有附件时渲染 */}
-        {attachments.length > 0 && (
+        {/* 附件 chips + 已挂知识库 chips —— 仅在有内容时渲染 */}
+        {(attachments.length > 0 || knowledge.length > 0) && (
           <div className="neo-cp-attachments" data-testid="start-attachments">
             {attachments.map((a) => (
               <span
@@ -1807,6 +1814,29 @@ export function NeoComposer({
                 <button
                   type="button"
                   onClick={() => removeAttachment(a.id)}
+                  aria-label={t('start.attachmentRemove')}
+                  className="neo-cp-attach-x"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {knowledge.map((packId) => (
+              <span
+                key={packId}
+                data-testid="start-knowledge-token"
+                className="neo-cp-attach"
+                title={t('start.knowledgeAttach')}
+              >
+                <span aria-hidden className="neo-cp-attach-icon">
+                  <BookOpen size={12} strokeWidth={2} />
+                </span>
+                <span className="neo-cp-attach-label">
+                  {knowledgePacks?.find((p) => p.pack_id === packId)?.name ?? packId}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleKnowledgePack(packId)}
                   aria-label={t('start.attachmentRemove')}
                   className="neo-cp-attach-x"
                 >
@@ -1916,7 +1946,7 @@ export function NeoComposer({
             )}
           </div>
 
-          {/* KNOWLEDGE chip — 调 /knowledge/packs */}
+          {/* KNOWLEDGE chip — 多模态记忆库（/api/memory-bank），勾选随消息检索注入 */}
           <div ref={knowledgeRef} className="neo-cp-pop-anchor">
             <NeoChipBtn
               glyph={<BookOpen size={14} strokeWidth={2} />}
@@ -1933,25 +1963,55 @@ export function NeoComposer({
                 <div className="neo-cp-pop-head">{t('start.knowledgeLabel')}</div>
                 {knowledgePacksLoading ? (
                   <div className="neo-cp-pop-note">{t('start.knowledgeLoading')}</div>
+                ) : knowledgeError ? (
+                  <div className="neo-cp-pop-empty">
+                    <p className="neo-cp-pop-empty-text">{t('start.knowledgeLoadError')}</p>
+                    <button
+                      type="button"
+                      onClick={loadKnowledgePacks}
+                      className="neo-cp-pop-empty-link"
+                      data-testid="start-knowledge-retry"
+                    >
+                      {t('start.knowledgeRetry')}
+                    </button>
+                  </div>
                 ) : knowledgePacks && knowledgePacks.length > 0 ? (
-                  knowledgePacks.map((pack) => {
-                    const on = knowledge.includes(pack.pack_id);
-                    return (
-                      <button
-                        key={pack.pack_id}
-                        type="button"
-                        onClick={() => toggleKnowledgePack(pack.pack_id)}
-                        data-testid={`start-knowledge-pack-${pack.pack_id}`}
-                        className={`neo-cp-pop-row neo-cp-pop-row--pack${on ? ' on' : ''}`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`neo-cp-checkbox${on ? ' on' : ''}`}
-                        />
-                        <span className="neo-cp-pop-row-label">{pack.name}</span>
-                      </button>
-                    );
-                  })
+                  <>
+                    {knowledgePacks.map((pack) => {
+                      const on = knowledge.includes(pack.pack_id);
+                      return (
+                        <button
+                          key={pack.pack_id}
+                          type="button"
+                          onClick={() => toggleKnowledgePack(pack.pack_id)}
+                          data-testid={`start-knowledge-pack-${pack.pack_id}`}
+                          title={pack.description || undefined}
+                          className={`neo-cp-pop-row neo-cp-pop-row--pack${on ? ' on' : ''}`}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={`neo-cp-checkbox${on ? ' on' : ''}`}
+                          />
+                          <span className="neo-cp-pop-row-main">
+                            <span className="neo-cp-pop-row-label">{pack.name}</span>
+                            {pack.description ? (
+                              <span className="neo-cp-pop-row-desc">{pack.description}</span>
+                            ) : null}
+                          </span>
+                          {on && <span aria-hidden>✓</span>}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
+                      className="neo-cp-pop-row neo-cp-pop-row--footer"
+                      data-testid="start-knowledge-manage"
+                    >
+                      <span className="neo-cp-pop-row-label">{t('start.knowledgeManage')}</span>
+                      <ArrowRight size={11} strokeWidth={2} aria-hidden />
+                    </button>
+                  </>
                 ) : (
                   <div className="neo-cp-pop-empty">
                     <p className="neo-cp-pop-empty-text">{t('start.knowledgeEmpty')}</p>
@@ -1959,9 +2019,10 @@ export function NeoComposer({
                       type="button"
                       onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
                       className="neo-cp-pop-empty-link"
+                      data-testid="start-knowledge-create"
                     >
                       <ArrowRight size={11} strokeWidth={2} aria-hidden />
-                      {t('start.knowledgeManage')}
+                      {t('start.knowledgeCreate')}
                     </button>
                   </div>
                 )}

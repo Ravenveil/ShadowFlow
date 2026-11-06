@@ -654,6 +654,9 @@ export function NeoGroupChat({
           senderKind: 'user',
           executor,
           model,
+          // 对话框知识库（2026-11-06）— 记忆库 pack id 随消息下发，fan-out
+          // 按本轮消息检索命中注入 Agent 提示词。
+          knowledgePackIds: p.knowledgePackIds,
         });
       } catch (err) {
         throw new Error(
