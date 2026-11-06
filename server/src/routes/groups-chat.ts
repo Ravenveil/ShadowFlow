@@ -95,9 +95,120 @@ const MAX_FANOUT_AGENTS = 5;
 // abort 上一轮(用户插话即取消上一轮在跑的 DAG),并在结束时清理。
 const activeDagRuns = new Map<string, AbortController>();
 
+// ── 2026-11-05 OpenBot 审批纪律 — chat DAG approve 边的人工审批门 ─────────────
+// pendingApprovals: "${groupId}:${nodeId}" → resolve。执行器 deps.approval.request
+// 挂起等 Promise；用户两条路批/拒：
+//   1) 显式 API：POST /api/groups/:id/approvals/:nodeId { decision: 'approve'|'reject' }
+//   2) 会话内自然语言：该群下一条用户消息若以 批准/同意/approve/go/继续 开头 → 批；
+//      以 拒绝/不同意/reject/否/停 开头 → 拒。（群聊主链路不受影响：消息照常
+//      持久化 + fan-out；只在没有 pending 时才完全旁路。）
+const pendingApprovals = new Map<string, (v: 'approved' | 'rejected') => void>();
+
+/** 测试可见：清空审批注册表（groups-chat 路由单测隔离用）。 */
+export function clearPendingApprovals(): void {
+  pendingApprovals.clear();
+}
+
+/** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
+function tryResolveApprovalFromText(groupId: string, text: string): boolean {
+  const trimmed = text.trim().toLowerCase();
+  const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
+  if (entries.length === 0) return false;
+  // 决定消息必须短——「批准」「拒绝」是决定，「继续写代码」这种长句是新一轮
+  // 派活，不吞（前缀「继续」会误伤，长度闸门兜住）。中文 ≤6 字；拉丁词按
+  // 字符计 ≤10（"approve"/"rejected" 全词各 7-8 字符）。
+  const latinChars = (trimmed.match(/[a-z]/g) ?? []).length;
+  const lenLimit = latinChars > 0 ? 10 : 6;
+  if (trimmed.length > lenLimit) return false;
+  const isApprove = /^(批准|同意|approve|ok|好|通过|allowed|yes)/.test(trimmed);
+  const isReject = /^(拒绝|不同意|reject|否|不行|停|驳回|no|deny)/.test(trimmed);
+  if (!isApprove && !isReject) return false;
+  const verdict: 'approved' | 'rejected' = isApprove ? 'approved' : 'rejected';
+  for (const [key, resolve] of entries) {
+    pendingApprovals.delete(key);
+    try {
+      resolve(verdict);
+    } catch {
+      /* resolver 异常不阻断聊天主链路 */
+    }
+  }
+  return true;
+}
+
+// ── 2026-11-05 GrokBot「记忆交接」— 会话回合跑完自动沉淀交接包 ─────────────────
+// 对齐 GrokBot 的记忆交接体验：多 agent 一轮协作结束后，把本轮结论沉淀为
+// memory_handoffs 交接包（最后发言的 agent → 下一个执行者/群成员首位），下游
+// agent 经 /api/memory/handoff/context 能读到，accept 后注入自己的上下文副本。
+// 零 LLM：summary 规则式拼接（本轮 goal + 各 agent 产出首行）；开关沿用
+// settings.memory.autoLearn（默认开）。任何失败静默 — 沉淀是 additive 增强。
+
+/** 纯函数：组装交接包 payload。不满足沉淀条件（单 agent/空产出/autoLearn 关）返回 null。 */
+export function buildRoundHandoffPayload(
+  input: {
+    groupId: string;
+    turnSeq: number;
+    goal: string;
+    autoLearnOff?: boolean;
+    speakers: Array<{ id: string; name: string; excerpt: string }>;
+  },
+): { shift_id: string; from_agent: string; to_agent: string; scope_key: string; task_type: string; summary: string } | null {
+  if (input.autoLearnOff) return null;
+  const speakers = input.speakers.filter((s) => s.id && s.excerpt);
+  // 双方角色齐备才沉淀（单 agent 无交接语义；createHandoff 禁自环）。
+  if (speakers.length < 2) return null;
+  const from = speakers[speakers.length - 1]!;
+  const to = speakers[0]!;
+  const summary = [
+    input.goal ? `任务：${input.goal.slice(0, 100)}` : '',
+    ...speakers.map((s) => `${s.name}：${s.excerpt.slice(0, 120)}`),
+  ]
+    .filter(Boolean)
+    .join('；')
+    .slice(0, 600);
+  return {
+    // shift_id 幂等锚：同群同回合重复触发不重复建包。
+    shift_id: `chat:${input.groupId}:${input.turnSeq}`,
+    from_agent: from.id,
+    to_agent: to.id,
+    scope_key: input.groupId.slice(0, 120),
+    task_type: 'chat_round',
+    summary,
+  };
+}
+
+/** 薄壳：组 payload → createHandoff 落库。任何失败静默（additive 增强）。 */
+export function sinkRoundHandoff(input: {
+  groupId: string;
+  turnSeq: number;
+  goal: string;
+  speakers: Array<{ id: string; name: string; excerpt: string }>;
+}): void {
+  void (async () => {
+    // 动态 import（防循环依赖；主链路零感知）。
+    const { getSetting } = await import('../storage/settings');
+    const { createHandoff } = await import('../storage/memory-handoff');
+    const payload = buildRoundHandoffPayload({
+      ...input,
+      autoLearnOff: getSetting('memory.autoLearn') === false,
+    });
+    if (!payload) return;
+    createHandoff(payload);
+  })().catch(() => {
+    /* 沉淀失败不影响聊天主链路（SQLite 不可用等） */
+  });
+}
+
 // 测试可见:登记本轮 controller 并取消同 group 上一轮,返回本轮 controller。
 export function swapDagRun(groupId: string, registry: Map<string, AbortController>): AbortController {
   registry.get(groupId)?.abort();
+  // 2026-11-05 审批门 — 换轮即取消上一轮挂起的节点审批（视作拒绝收场）：
+  // 用户插话/重发 = 放弃上一轮，审批 promise 不悬挂（executor 侧 blocked 收口）。
+  for (const key of [...pendingApprovals.keys()]) {
+    if (!key.startsWith(`${groupId}:`)) continue;
+    const resolve = pendingApprovals.get(key);
+    pendingApprovals.delete(key);
+    try { resolve?.('rejected'); } catch { /* settled */ }
+  }
   const ac = new AbortController();
   registry.set(groupId, ac);
   return ac;
@@ -918,6 +1029,10 @@ async function runFanout(
           }
         } catch { hopStore = null; }
 
+        // 记忆交接沉淀（2026-11-05）— 本轮实际发言 agent 收集器（执行序），
+        // 回合结束后 sinkRoundHandoff 落交接包（零 LLM、autoLearn 开关）。
+        const roundSpeakers: Array<{ id: string; name: string; excerpt: string }> = [];
+
         const deps: RunTeamDagDeps = {
           getAgent: async (agentId) => {
             const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
@@ -1027,9 +1142,52 @@ async function runFanout(
               // U0 绑角色 — 透传 agent 回话的发送者 agent_id（system 消息无）。
               ...(m.agent_id ? { agent_id: m.agent_id } : {}),
             }).catch(() => {});
+            // 记忆交接沉淀（2026-11-05）— 收集本轮实际发言的 agent（执行序）。
+            if (m.sender_kind === 'agent' && m.agent_id) {
+              roundSpeakers.push({
+                id: m.agent_id,
+                name: m.sender_name,
+                excerpt: m.content.replace(/\s+/g, ' ').trim().slice(0, 160),
+              });
+            }
           },
           // 交接记录（2026-11-05）— hopStore 为 null（SQLite 异常）时省略，执行器走无记录路径。
           ...(hopStore ? { hops: hopStore } : {}),
+          // ── approve 边人工审批门（2026-11-05，OpenBot 审批纪律）────────────
+          // 执行器遇带 approve 入边的节点 → 挂起 pendingApprovals 等用户决定；
+          // 批准放行 / 拒绝标 blocked。无 approve 边的团队零开销。
+          ...(effTeam.edges.some((e) => e.kind === 'approve')
+            ? {
+                approval: {
+                  request: ({ nodeId, nodeName }: { nodeId: string; nodeName: string; preview: string; signal: AbortSignal }) =>
+                    new Promise<'approved' | 'rejected'>((resolve) => {
+                      const key = `${groupId}:${nodeId}`;
+                      pendingApprovals.set(key, resolve);
+                      // 外部取消（用户插话换轮/停止生成）→ 视作拒绝收场，不悬挂。
+                      // signal 由执行器传入（runTeamDagFanout 的 opts.signal）。
+                      // 这里借 postMessage 之外的通道不好拿 signal —— 挂 30 分钟
+                      // 兜底超时（与 run 超时同量级，避免永久 pending 占内存）。
+                      setTimeout(() => {
+                        if (pendingApprovals.delete(key)) {
+                          try { resolve('rejected'); } catch { /* settled */ }
+                        }
+                      }, 30 * 60_000).unref?.();
+                    }).then((v) => {
+                      // 决定落一条系统消息（审批留痕；postMessage 失败不回传）。
+                      void pyPostMessage(groupId, {
+                        content: `[approval] ${nodeName} 的审批结果：${v === 'approved' ? '已批准 ✅' : '已拒绝 ❌'}`,
+                        sender_name: 'system',
+                        sender_kind: 'system',
+                      }).catch(() => {});
+                      return v;
+                    }),
+                },
+                onNodeBlocked: (blockedId: string) => {
+                  // plan_card 任务行 → blocked（OpenBot work_items 语义：审批拒 = 不再等）。
+                  planTaskUpdate(blockedId, { status: 'blocked' });
+                },
+              }
+            : {}),
         };
         let dagController: AbortController | undefined;
         try {
@@ -1057,6 +1215,9 @@ async function runFanout(
             }
           } catch { /* best-effort */ }
         }
+        // 记忆交接沉淀（2026-11-05 GrokBot 对齐）— 回合结论落 memory_handoffs
+        // 交接包（最后发言 → 首位执行者），下游 agent accept 后能接班。静默。
+        sinkRoundHandoff({ groupId, turnSeq, goal: userPrompt, speakers: roundSpeakers });
         // ── Polynoia AGGREGATE/MERGE 收尾 ─────────────────────────────────
         // 各 agent 分支按 DAG 层序并入集成分支 sf/run/<runKey>（专用 integration
         // worktree，不碰用户检出分支）；合并卡 / 冲突表 + 冲突系统消息。
@@ -1081,6 +1242,10 @@ async function runFanout(
     // 每 agent 一个 worktree（git 仓库 workspace 时）；无 plan_card（单人无拆解）。
     const serialRunKey = `${groupId}-serial-${Date.now()}`;
     const serialWt = new Map<string, PreparedWorktree>();
+    // 记忆交接沉淀收集器（2026-11-05）— 串行路径实际发言 agent（执行序）。
+    const serialSpeakers: Array<{ id: string; name: string; excerpt: string }> = [];
+    // 本轮派发 prompt（@ 清洗文本或用户原文最后一条；沉淀 summary 用）。
+    let serialPrompt = '';
     if (await isGitWorkable(workspace)) {
       for (const id of agentIds) {
         const wt = await prepareWorktree(workspace, serialRunKey, id).catch(() => null);
@@ -1098,6 +1263,7 @@ async function runFanout(
         (mentioned.size > 0 ? cleanText : '')
           || latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
           || '';
+      if (prompt) serialPrompt = prompt;
 
       const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
       if (!agent) {
@@ -1237,6 +1403,12 @@ async function runFanout(
         sender_kind: 'agent',
         agent_id: agentId,
       }).catch(() => {});
+      // 记忆交接沉淀收集器 — 串行路径同款（执行序）。
+      serialSpeakers.push({
+        id: agentId,
+        name: agentName,
+        excerpt: reply.replace(/\s+/g, ' ').trim().slice(0, 160),
+      });
       // 串行路径同样「干完即提交」— worktree 产物 + 证据卡。
       if (wt) {
         await commitAndEvidence(gw, wt, agentName, prompt);
@@ -1247,6 +1419,14 @@ async function runFanout(
     if (serialCtrl && !serialCtrl.signal.aborted) activeDagRuns.delete(groupId);
     // 串行路径收尾：各 agent 分支按执行序并入集成分支。
     await integrateAndReport(gw, groupId, workspace, serialRunKey, agentIds, serialWt);
+    // 记忆交接沉淀（2026-11-05 GrokBot 对齐）— 多 agent 串行回合同样落交接包。
+    // turn_seq 用负数时间戳锚（串行路径无 hop turnSeq；shift_id 幂等锚粒度到轮）。
+    sinkRoundHandoff({
+      groupId,
+      turnSeq: -Date.now(),
+      goal: serialPrompt,
+      speakers: serialSpeakers,
+    });
     gw?.finish('succeeded');
   } catch (e) {
     // 未捕获异常：过程流以 raw 卡可见地收口，run 标 failed；异常继续上抛
@@ -1435,11 +1615,46 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // Fire-and-forget; replies reach the browser via Python SSE.
     // userText 原文透传（@ 提及解析用）——persisted 记录即 content，直接用它
     // 避免 runFanout 二次反查（时序上 group.messages 已含本条）。
+    // 2026-11-05 审批门 — 该群有挂起的节点审批且本条消息是明确批/拒语义 →
+    // 先把决定送达（不改聊天主链路：消息照常持久化； fan-out 照常，若用户
+    // 批/拒后还想派新活，这条消息本身就是新一轮）。
+    tryResolveApprovalFromText(groupId, content);
     void runFanout(groupId, executor, model, req.headers, content).catch((e) => {
       // eslint-disable-next-line no-console
       console.warn('[groups-chat] fanout failed:', e);
     });
   })();
+});
+
+/**
+ * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05）。
+ * body: { decision: 'approve' | 'reject' }。
+ * 命中挂起 → resolve 执行器 promise（执行器会补系统留痕消息 + plan_card blocked）；
+ * 未命中 → 409（已决定/超时/无此挂起）。
+ */
+router.post('/:id/approvals/:nodeId', (req: Request, res: Response) => {
+  const groupId = req.params.id;
+  const nodeId = req.params.nodeId;
+  const decision = (req.body ?? {}).decision;
+  if (decision !== 'approve' && decision !== 'reject') {
+    res.status(400).json({
+      error: { code: 'BAD_DECISION', message: "decision must be 'approve' or 'reject'" },
+    });
+    return;
+  }
+  const key = `${groupId}:${nodeId}`;
+  const resolve = pendingApprovals.get(key);
+  if (!resolve) {
+    res.status(409).json({
+      error: { code: 'NO_PENDING_APPROVAL', message: `no pending approval for node ${nodeId} in group ${groupId}` },
+    });
+    return;
+  }
+  pendingApprovals.delete(key);
+  try {
+    resolve(decision === 'approve' ? 'approved' : 'rejected');
+  } catch { /* resolver 已 settle — 幂等 */ }
+  res.json({ group_id: groupId, node_id: nodeId, decision });
 });
 
 export { router as groupsChatRouter };

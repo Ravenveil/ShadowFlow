@@ -361,6 +361,70 @@ describe('useGroupTimeline (F2 灰度)', () => {
       unmount();
       expect(runSubs[0]!.cancelled).toBe(true);
     });
+
+    // 2026-11-05 OpenBot ProgressRow — 发消息后 run 被发现前的「正在处理」占位。
+    describe('pendingTurn（ProgressRow 占位）', () => {
+      it('appendLocalUser 置位 → 发现新 running run 即清空', async () => {
+        fetchMock.mockResolvedValueOnce(
+          okTimelineResponse({ group_id: 'g1', messages: [], runs: [], truncated: false }),
+        );
+        const { result } = renderHook(() => useGroupTimeline('g1'));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+        expect(result.current.pendingTurn).toBeNull();
+
+        vi.useFakeTimers();
+        try {
+          fetchMock.mockResolvedValue(
+            okTimelineResponse({
+              group_id: 'g1',
+              messages: [],
+              runs: [{ session_id: 's_new', status: 'running' }],
+              truncated: false,
+            }),
+          );
+          act(() => result.current.appendLocalUser('跑个任务'));
+          expect(result.current.pendingTurn).not.toBeNull();
+          expect(result.current.pendingTurn!.turnId).toBe(
+            result.current.messages.at(-1)!.turn_id,
+          );
+
+          await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
+          // run 被发现并订阅 → 占位收工
+          expect(runSubs).toHaveLength(1);
+          expect(result.current.pendingTurn).toBeNull();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('30s 无 run → 超时自动清空（后端挂了占位不悬挂）', async () => {
+        fetchMock.mockResolvedValue(
+          okTimelineResponse({ group_id: 'g1', messages: [], runs: [], truncated: false }),
+        );
+        const { result } = renderHook(() => useGroupTimeline('g1'));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        vi.useFakeTimers();
+        try {
+          act(() => result.current.appendLocalUser('hi'));
+          expect(result.current.pendingTurn).not.toBeNull();
+          await act(async () => { await vi.advanceTimersByTimeAsync(30_100); });
+          expect(result.current.pendingTurn).toBeNull();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('markAllRunsStopped 清空占位', async () => {
+        fetchMock.mockResolvedValueOnce(okTimelineResponse(RUNNING_TIMELINE));
+        const { result } = renderHook(() => useGroupTimeline('g1'));
+        await waitFor(() => expect(runSubs).toHaveLength(1));
+        act(() => result.current.appendLocalUser('再来一轮'));
+        expect(result.current.pendingTurn).not.toBeNull();
+        act(() => result.current.markAllRunsStopped());
+        expect(result.current.pendingTurn).toBeNull();
+      });
+    });
   });
 
   describe('纯函数', () => {

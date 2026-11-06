@@ -53,9 +53,26 @@ export interface RunTeamDagDeps {
   postMessage: (msg: { content: string; sender_name: string; sender_kind: 'agent' | 'system'; agent_id?: string }) => Promise<void>;
   /** 可选：交接记录（2026-11-05）。不注入 = 行为与旧版完全一致。 */
   hops?: HopRecorder;
+  /**
+   * 可选：approve 边人工审批门（2026-11-05，OpenBot 审批纪律对齐）。
+   * 不注入 = approve 边按 direct 处理（旧版行为，零回归）。
+   * request 返回 'rejected'（含超时/外部取消）→ 该节点标 'blocked' 不执行，
+   * 其出边下游按失败传播知情；'approved' → 照常执行。
+   */
+  approval?: {
+    request: (args: {
+      nodeId: string;
+      nodeName: string;
+      /** 待审批内容预览（上游产出首段，供审批卡片/消息展示）。 */
+      preview: string;
+      signal: AbortSignal;
+    }) => Promise<'approved' | 'rejected'>;
+  };
+  /** 可选：节点被审批拒绝后回调（群聊接线用它把 plan_card 任务行标 blocked）。 */
+  onNodeBlocked?: (agentId: string) => void;
 }
 
-export type AgentOutcome = 'ok' | 'error' | 'empty' | 'timeout' | 'aborted';
+export type AgentOutcome = 'ok' | 'error' | 'empty' | 'timeout' | 'aborted' | 'blocked';
 
 export interface RunTeamDagResult {
   ranLayers: number;
@@ -83,7 +100,7 @@ export interface RunTeamDagOpts {
 export async function runTeamDagFanout(
   team: TeamRunShape,
   deps: RunTeamDagDeps,
-  _userPrompt: string,
+  userPrompt: string,
   opts: RunTeamDagOpts = {},
 ): Promise<RunTeamDagResult> {
   const signal = opts.signal ?? new AbortController().signal;
@@ -121,6 +138,15 @@ export async function runTeamDagFanout(
   const nodeOutcome = new Map<string, AgentOutcome>();
   /** 节点 error 时的错误消息（hop detail 用，timeout/empty 有固定文案）。 */
   const errMsgOf = new Map<string, string>();
+
+  // approve 边索引（2026-11-05）— 节点 → 是否带 approve 入边（带则跑前审批）。
+  // 只有下游确有 approve 入边才需要审批；direct 入边不受影响。
+  const needsApproval = new Set<string>();
+  for (const e of team.edges) {
+    if (e.kind === 'approve' && team.members.includes(e.from) && team.members.includes(e.to) && e.from !== e.to) {
+      needsApproval.add(e.to);
+    }
+  }
 
   // hop 生命周期辅助 — hops 未注入时全部空操作，主循环零分支。
   const hops = deps.hops;
@@ -183,15 +209,27 @@ export async function runTeamDagFanout(
           if (hops && hopId) {
             const failDetail = upOutcome === 'error'
               ? (errMsgOf.get(from) ?? 'error')
-              : `上游 ${from} ${upOutcome}`;
-            hops.settle(hopId, upOutcome === 'aborted' ? 'aborted' : upOutcome === 'timeout' ? 'timeout' : upOutcome === 'empty' ? 'empty' : 'failed', {
-              detail: failDetail,
-            });
+              : upOutcome === 'blocked'
+                ? `审批被拒：${from} 未获批准，交接未发生`
+                : `上游 ${from} ${upOutcome}`;
+            hops.settle(
+              hopId,
+              upOutcome === 'blocked'
+                ? 'denied'
+                : upOutcome === 'aborted'
+                  ? 'aborted'
+                  : upOutcome === 'timeout'
+                    ? 'timeout'
+                    : upOutcome === 'empty'
+                      ? 'empty'
+                      : 'failed',
+              { detail: failDetail },
+            );
           }
           const upstreamName = (await deps.getAgent(from))?.name ?? from;
           upstream.push({
             from,
-            text: `[系统通知] 上游 ${upstreamName} 本轮${upOutcome === 'timeout' ? '超时未响应' : upOutcome === 'empty' ? '返回空回复' : upOutcome === 'aborted' ? '被中止' : '执行失败'}，其交接内容缺失。请基于可用信息继续，并在产出中说明哪些部分因上游缺失可能不完整。`,
+            text: `[系统通知] 上游 ${upstreamName} 本轮${upOutcome === 'timeout' ? '超时未响应' : upOutcome === 'empty' ? '返回空回复' : upOutcome === 'aborted' ? '被中止' : upOutcome === 'blocked' ? '未通过人工审批' : '执行失败'}，其交接内容缺失。请基于可用信息继续，并在产出中说明哪些部分因上游缺失可能不完整。`,
           });
         }
       }
@@ -203,6 +241,41 @@ export async function runTeamDagFanout(
       nodeOutcome.set(agentId, 'error');
       await deps.postMessage({ content: `[chat] Agent '${agentId}' not found.`, sender_name: 'system', sender_kind: 'system' });
       return 'error';
+    }
+
+    // ── approve 边人工审批门（2026-11-05，OpenBot「每步发生在审批之后」）────
+    // 带 approve 入边的节点在执行前挂起等用户决定；不注入 approval deps 或
+    // 无 approve 入边 → 直接放行（零回归）。拒绝 → 'blocked'，出边下游走
+    // 既有失败传播（「审批被拒」文案）。
+    if (needsApproval.has(agentId) && deps.approval) {
+      const upstreamPreview = upstream
+        .map((u) => `[${u.from}] ${u.text}`)
+        .join('\n')
+        .slice(0, 200);
+      await deps.postMessage({
+        content: `[approval] ${agent.name} 的执行已挂起，等待人工审批（该节点带审批入边）。`,
+        sender_name: 'system', sender_kind: 'system',
+      });
+      const verdict = await deps.approval.request({
+        nodeId: agentId,
+        nodeName: agent.name,
+        preview: upstreamPreview || userPrompt,
+        signal,
+      });
+      if (verdict !== 'approved') {
+        perAgent[agentId] = 'blocked';
+        nodeOutcome.set(agentId, 'blocked');
+        deps.onNodeBlocked?.(agentId);
+        await deps.postMessage({
+          content: `[approval] ${agent.name} 的执行被拒绝，本轮该节点跳过（产出不落库、下游不再等待它）。`,
+          sender_name: 'system', sender_kind: 'system',
+        });
+        return 'blocked';
+      }
+      await deps.postMessage({
+        content: `[approval] ${agent.name} 已获批准，开始执行。`,
+        sender_name: 'system', sender_kind: 'system',
+      });
     }
 
     const maxRetries = retryBudget.get(agentId) ?? defaultMaxRetries;
@@ -337,6 +410,11 @@ export async function runTeamDagFanout(
       const fromOutcome = nodeOutcome.get(e.from) ?? 'aborted';
       const toOutcome = nodeOutcome.get(e.to);
       if (toOutcome !== 'ok') {
+        // 上游被审批拒绝 → 该交接结算 denied（与 policy deny 同语义，审计可辨）。
+        if (fromOutcome === 'blocked') {
+          hops.settle(hopId!, 'denied', { detail: `审批被拒：${e.from} 未获批准，交接未发生` });
+          continue;
+        }
         const failDetail = fromOutcome === 'error'
           ? (errMsgOf.get(e.from) ?? 'error')
           : `回合结束兜底：${e.from}=${fromOutcome}, ${e.to}=${toOutcome ?? 'not_reached'}`;

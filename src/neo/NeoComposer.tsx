@@ -134,6 +134,9 @@ export interface NeoComposerProps {
    *  Skills 之前列出这些成员（选中插入 @token，后端据此只派活给被点名者）。
    *  id 必须是成员 id（后端 mention 解析的锚点），title 用显示名。 */
   mentionItems?: Array<{ id: string; name: string; role?: string }>;
+  /** 2026-11-05 GrokBot 对齐 — /schedule 斜杠命令回调：弹出轻量定时任务表单。
+   *  缺省（调用方未接）→ /schedule 不出现在命令菜单（单聊页传入）。 */
+  onScheduleCommand?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -1304,6 +1307,7 @@ export function NeoComposer({
   onClearClawTarget,
   onPickClaw,
   mentionItems,
+  onScheduleCommand,
 }: NeoComposerProps) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -1571,6 +1575,11 @@ export function NeoComposer({
         if (onNavigate) onNavigate({ view: 'runs' });
         else navigate('/runs');
         break;
+      case 'schedule':
+        // GrokBot 对齐（2026-11-05）— /schedule 弹轻量定时任务表单（调用方
+        // 持有会话上下文：DM 挂 agent / 群挂 group_id）。
+        onScheduleCommand?.();
+        break;
       case 'reload':
         // POST /api/skills/reload 让服务端重扫 FS。
         fetch(`${getApiBase()}/api/skills/reload`, { method: 'POST' })
@@ -1673,6 +1682,10 @@ export function NeoComposer({
       { id: 'skill', title: '/skill', subtitle: '打开 Skill picker（URL 导入）', hint: 'command' },
       { id: 'reload', title: '/reload', subtitle: '后端重新扫描 .shadowflow/skills/', hint: 'command' },
       { id: 'inspect', title: '/inspect', subtitle: '跳转到 Runs 历史页', hint: 'command' },
+      // GrokBot 对齐（2026-11-05）— 会话内快捷建定时任务（仅调用方接了回调才出）。
+      ...(onScheduleCommand
+        ? [{ id: 'schedule', title: '/schedule', subtitle: '给这个会话加一个定时任务', hint: 'command' }]
+        : []),
       { id: 'help', title: '/help', subtitle: '快捷键提示', hint: 'command' },
     ];
     return [...builtin, ...subCommandItems, ...skillItems];

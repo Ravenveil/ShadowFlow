@@ -32,6 +32,9 @@ interface PyTeamJson {
 function mapMode(mode: string | undefined): EdgeKind {
   if (mode === 'conditional') return 'conditional';
   if (mode === 'parallel') return 'parallel';
+  // 2026-11-05 — approve 不再折叠成 sequential：审批语义此前在读路径丢失
+  // （chat 执行器无从知道该边要人工审批）。透传后由 runTeamDagFanout 消费。
+  if (mode === 'approve') return 'approve';
   return 'sequential'; // 'direct' / 未知 → 串行
 }
 
