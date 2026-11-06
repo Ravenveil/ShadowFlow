@@ -194,6 +194,9 @@ export function NeoRail({
   onNewTask,
   collapsed,
   onToggleCollapsed,
+  width,
+  onResizeStart,
+  style,
 }: NeoRailProps) {
   const { t, language } = useI18n();
   const { user } = useAuth();
@@ -1470,7 +1473,7 @@ export function NeoRail({
   //    底部账户钮）───────────────────────────────────────────────────────────
   if (collapsed) {
     return (
-      <nav className="neo-rail collapsed" aria-label={t('shell.navigation')}>
+      <nav className="neo-rail collapsed" aria-label={t('shell.navigation')} style={style}>
         <div className="neo-rail-nav" role="group" aria-label={t('neo.nav.history', { defaultValue: '历史导航' })}>
           {navHistoryBtns}
           <button
@@ -1534,9 +1537,26 @@ export function NeoRail({
     );
   }
 
-  // ── 展开态：180px 完整导航 ────────────────────────────────────────────────
+  // ── 展开态：默认 180px / 拖宽后 var(--rail-w)（2026-11-06 侧栏可拖宽）────
   return (
-    <nav className="neo-rail" aria-label={t('shell.navigation')}>
+    <nav
+      className="neo-rail"
+      aria-label={t('shell.navigation')}
+      style={style}
+      data-width={width ?? undefined}
+    >
+      {/* 右缘拖宽热区（2026-11-06 用户反馈：侧边栏可左右拉动）：6px 命中条，
+          pointerdown 上报 NeoApp（move/up 由其窗口级监听跟随），折叠态不渲染。 */}
+      {onResizeStart && (
+        <div
+          className="neo-rail-resize-handle"
+          onPointerDown={onResizeStart}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('neo.rail.resize', { defaultValue: language === 'zh' ? '拖动调整侧边栏宽度' : 'Resize sidebar' })}
+          data-testid="neo-rail-resize-handle"
+        />
+      )}
       {/* 栏顶导航簇（ZCode 式 ←/→/折叠；工作区头已按用户要求移除） */}
       <div className="neo-rail-nav" role="group" aria-label={t('neo.nav.history', { defaultValue: '历史导航' })}>
         {navHistoryBtns}

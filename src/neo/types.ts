@@ -2,6 +2,7 @@
  * Neo (clawsgo-style chat-first 重构) 共享类型契约。
  * 所有 src/neo/ 组件跨文件引用此文件，禁止各自重复定义。
  */
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 
 /** 左栏当前选中对象：单个 Agent（个人）或一个 Team（团队）。 */
 export interface NeoTarget {
@@ -24,7 +25,7 @@ export type NeoNav =
   | { view: 'knowledge'; sourceId?: string }
   /** 数据看板内嵌页（2026-11-05，整合 OPC-OS PR#3 看板设计；左栏列表保持不动）。 */
   | { view: 'dashboard' }
-  /** 定时任务管理页（2026-11-06，GrokBot/OpenBot /routines 对齐；左栏列表 = 计划列表）。 */
+  /** 定时任务管理页（2026-11-06，GrokBot/OpenBot /routines 对齐；左栏列表保持不动——阅读态页不抢侧边栏）。 */
   | { view: 'schedules' }
   /** ClawHub 内嵌页（2026-11-06 起入口迁至 /settings#clawhub；本变体保留
    *  兼容旧深链/历史状态，NeoApp 中栏仍按它渲染 Claw 目录/安装/卸载）。 */
@@ -62,6 +63,12 @@ export interface NeoRailProps {
   /** 折叠态由 NeoApp 持有（中栏顶栏的 panel-left 折叠钮也要触发）。 */
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  /** 拖宽（2026-11-06）：NeoApp 持有的像素宽度（null = CSS 默认 180px）。 */
+  width?: number | null;
+  /** 右缘拖拽手柄 pointerdown 上报；移动/抬起由 NeoApp 窗口级监听处理。 */
+  onResizeStart?: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  /** 透传到根 nav 的行内样式（--rail-w 变量驱动宽度）。 */
+  style?: CSSProperties;
 }
 
 /** NeoChat props — 中栏聊天 + inline 任务执行。 */
