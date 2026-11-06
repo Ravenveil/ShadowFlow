@@ -19,6 +19,7 @@ export type ProviderId =
   | 'openai'
   | 'deepseek'
   | 'zhipu'
+  | 'mimo'
   | 'google'
   | 'qwen'
   | 'moonshot'
@@ -109,6 +110,8 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   // 该模型）；glm-4.6 实测 coding 端点可用（思考模型，reasoning_content 走
   // <sf:thinking> 通道）。作为 zhipu 无显式 model 时的兜底。
   zhipu:      'glm-4.6',
+  // 小米 MiMo（JUNCTION 2026 赛道用）。OpenAI 兼容端点 api.xiaomimimo.com/v1。
+  mimo:       'mimo-v2.6-flash',
   google:     'gemini-2.5-flash',
   qwen:       'qwen3-max',
   moonshot:   'kimi-k2-turbo-preview',
@@ -126,6 +129,7 @@ export const PROVIDER_ENV_VAR: Record<ProviderId, string> = {
   openai:     'OPENAI_API_KEY',
   deepseek:   'DEEPSEEK_API_KEY',
   zhipu:      'ZHIPU_API_KEY',
+  mimo:       'MIMO_API_KEY',
   google:     'GOOGLE_API_KEY',
   qwen:       'DASHSCOPE_API_KEY',
   moonshot:   'MOONSHOT_API_KEY',
@@ -143,6 +147,7 @@ export const PROVIDER_LABEL: Record<ProviderId, string> = {
   openai:     'OpenAI',
   deepseek:   'DeepSeek',
   zhipu:      'Zhipu',
+  mimo:       'Xiaomi MiMo',
   google:     'Google Gemini',
   qwen:       'Qwen',
   moonshot:   'Moonshot',
@@ -160,6 +165,7 @@ export const PROVIDER_IDS: ReadonlyArray<ProviderId> = [
   'openai',
   'deepseek',
   'zhipu',
+  'mimo',
   'google',
   'qwen',
   'moonshot',

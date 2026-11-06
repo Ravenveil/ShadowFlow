@@ -45,15 +45,13 @@ ShadowFlow/
 │   ├── memory/           #   经验记忆/交接/画像
 │   ├── contracts/        #   契约定义与校验
 │   └── mcp_server.py     #   MCP 支持
-├── docker/               # Dockerfile.api / Dockerfile.web（compose 与 CI 共用）
+├── docker/               # Dockerfile.api / Dockerfile.web / docker-compose.yml（compose 与 CI 共用）
 ├── templates/            # 工作流模板 + agent-packs（yaml manifest）
-├── examples/             # 高层 API 与运行时契约示例（yaml/ts）
+├── examples/             # 高层 API 与运行时契约示例（yaml/ts）+ backend-poc（OPC OS 原型）+ ui-kits（设计稿 HTML）
 ├── tests/                # Python 测试（pytest）
-├── scripts/              # dev.mjs 统一启动器、i18n 翻译等脚本
+├── scripts/              # dev.mjs 统一启动器、i18n 翻译等脚本（scripts/data/ 训练数据）
 ├── config/               # 示例/默认配置（yaml/json）
-├── ui_kits/              # 设计稿 HTML（settings-redesign 等的规格来源）
 ├── .github/workflows/    # CI（ci.yml）
-├── docker-compose.yml    # 一键起全栈（api + node + web）
 └── pyproject.toml        # Python 包定义（可选依赖组见下）
 ```
 
@@ -66,10 +64,10 @@ ShadowFlow/
 ```bash
 git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
 cp .env.example .env          # 可选：填 API key；留空则用界面内 BYOK 输入
-docker compose up -d          # web :3000 / node :8002 / api :8000
+docker compose -f docker/docker-compose.yml up -d   # web :3000 / node :8002 / api :8000
 ```
 
-镜像构建文件在 `docker/Dockerfile.api` 与 `docker/Dockerfile.web`（网关用自己的 `server/Dockerfile`）。**移动这三个文件时必须同步修改 `docker-compose.yml`（两处）和 `.github/workflows/ci.yml`（两处）**，CI 会实际构建验证。
+镜像构建文件在 `docker/Dockerfile.api` 与 `docker/Dockerfile.web`（网关用自己的 `server/Dockerfile`）。**移动这三个文件时必须同步修改 `docker/docker-compose.yml`（build.dockerfile 两处）和 `.github/workflows/ci.yml`（两处）**，CI 会实际构建验证。
 
 ### 方式二：本地开发（改代码用这个）
 

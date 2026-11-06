@@ -6,7 +6,7 @@
 
 ```bash
 # 终端 1 — 启动 ShadowFlow
-docker compose up
+docker compose -f docker/docker-compose.yml up
 
 # 终端 2 — 启动 Hermes ACP Adapter（mock 模式，无需安装 Hermes CLI）
 python scripts/demo/hermes-adapter.py --mock
@@ -74,7 +74,7 @@ wscat -c ws://localhost:8765/acp
 
 演示前请确认：
 
-- [ ] `docker compose up` 启动后前端可访问 http://localhost:3000
+- [ ] `docker compose -f docker/docker-compose.yml up` 启动后前端可访问 http://localhost:3000
 - [ ] ACP Server 在 ws://localhost:8765/acp 监听
 - [ ] hermes-adapter.py 启动后 Agent 列表出现 `Hermes Agent（代码理解者）` 状态 🟢 online
 - [ ] Team「论文复现团队」已在 Team Builder 中创建，包含 3 个成员

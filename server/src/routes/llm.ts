@@ -60,6 +60,7 @@ export function pickProviderFromModel(
   }
   if (m.startsWith('deepseek-')) return 'deepseek';
   if (m.startsWith('glm-') || m.startsWith('zhipu-')) return 'zhipu';
+  if (m.startsWith('mimo-') || m.startsWith('xiaomi-')) return 'mimo';
   return clientDefault;
 }
 

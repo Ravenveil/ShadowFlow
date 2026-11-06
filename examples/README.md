@@ -9,6 +9,11 @@
 - 其他历史示例
   - 主要保留为 legacy / 研究 / 旧接口参考
   - 当前不视为 Phase 1 canonical workflow schema 的权威来源
+- `backend-poc/`
+  - OPC OS 独立原型后端（Python/FastAPI，可独立 `run.py` 启动）
+  - `shadowflow/services/opc_*.py` 即由此移植而来（移植差异见各文件头注释）
+- `ui-kits/`
+  - 设计稿 HTML（含 `_kit.css`），界面规格的来源参考
 
 ## Phase 1 官方示例
 

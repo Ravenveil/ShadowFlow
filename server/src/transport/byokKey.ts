@@ -29,6 +29,7 @@ export const HEADER_BY_PROVIDER: Record<ProviderId, string> = {
   openai: 'x-openai-key',
   deepseek: 'x-deepseek-key',
   zhipu: 'x-zhipu-key',
+  mimo: 'x-mimo-key',
   google: 'x-google-key',
   qwen: 'x-qwen-key',
   moonshot: 'x-moonshot-key',

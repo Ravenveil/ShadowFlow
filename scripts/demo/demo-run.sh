@@ -40,7 +40,7 @@ echo "[check] Verifying demo environment..."
 ERRORS=0
 
 if ! curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
-    echo "  ❌ ShadowFlow 未启动 — 请先运行 'docker compose up'"
+    echo "  ❌ ShadowFlow 未启动 — 请先运行 'docker compose -f docker/docker-compose.yml up'"
     ERRORS=$((ERRORS + 1))
 fi
 

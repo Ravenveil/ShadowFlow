@@ -3,6 +3,23 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-11-06（根目录结构合并：按功能归箱，tracked 文件夹 15 → 12）
+
+### Changed — 目录合并（`git mv` 保留历史）
+- **backend-poc/ → examples/backend-poc/**：OPC OS 独立原型后端归入示例区
+  （`shadowflow/services/opc_*` 为其移植产物，代码引用仅为注释级出处说明，无运行时依赖）。
+- **ui_kits/ → examples/ui-kits/**：设计稿 HTML 归入示例区（规格引用见 ByokSection 等头注释）。
+- **data/ → scripts/data/**：训练样本与消费它的 `accumulate_training_data.py` /
+  `clean_activation_training_data.py` 同居 scripts/，脚本默认路径改为脚本相对定位
+  （不再依赖从仓库根执行）；`data/do_result_ai_sql_agent.md` 为内部实验记录，移出仓库（本地 docs/research/）。
+- **docker-compose.yml → docker/docker-compose.yml**：Docker 相关文件（Dockerfile.api /
+  Dockerfile.web / compose）全部收进 docker/。compose 内 build context、env_file、volume
+  均已改为相对新位置的 `..` 基准；README / README.zh / CONTRIBUTING / package.json /
+  scripts/demo 中的启动命令统一为 `docker compose -f docker/docker-compose.yml up -d`。
+- 根目录 tracked 文件夹收敛为：`.github .shadowflow config docker examples scripts server
+  shadowflow src src-tauri templates tests`（src/server/shadowflow 三栈与工具配置文件维持原位，
+  避免破坏 vite/tsc/eslint/pytest/CI 的默认发现路径）。
+
 ## [Unreleased] — 2026-11-06（仓库瘦身：解除 283 个冗余文件的跟踪）
 
 ### Removed — Repo slim-down（协作者视角的仓库减负）

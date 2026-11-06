@@ -34,6 +34,7 @@ const PROVIDER_META: Record<string, ProviderMeta> = {
   google:    { name: 'Google Gemini',   monogram: 'G',  tint: '#4285F4', short: 'Gemini family',             defaultUrl: 'https://generativelanguage.googleapis.com/v1beta',     keyPlaceholder: 'AIza…',       noKey: false, docsUrl: 'https://aistudio.google.com/app/apikey' },
   deepseek:  { name: 'DeepSeek',        monogram: 'DS', tint: '#3D8BFD', short: 'V3 / R1',                  defaultUrl: 'https://api.deepseek.com',                             keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.deepseek.com/api_keys' },
   zhipu:     { name: 'Zhipu GLM',       monogram: 'ZP', tint: '#1447E6', short: 'GLM-4 family',             defaultUrl: 'https://open.bigmodel.cn/api/paas/v4',                 keyPlaceholder: 'xxxx.yyyyyy', noKey: false, docsUrl: 'https://open.bigmodel.cn/usercenter/apikeys' },
+  mimo:      { name: 'Xiaomi MiMo',     monogram: 'MI', tint: '#FF6900', short: 'MiMo V2.6 / V2.5',        defaultUrl: 'https://api.xiaomimimo.com/v1',                       keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.xiaomimimo.com/' },
   qwen:      { name: 'Qwen · Alibaba',  monogram: 'Qw', tint: '#1447E6', short: 'Alibaba Cloud Bailian',    defaultUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',    keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://bailian.console.aliyun.com/?apiKey=1' },
   moonshot:  { name: 'Moonshot · Kimi', monogram: 'MK', tint: '#06B6D4', short: 'K2 / K1.5',               defaultUrl: 'https://api.moonshot.cn/v1',                           keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://platform.moonshot.cn/console/api-keys' },
   mistral:   { name: 'Mistral',         monogram: 'Mi', tint: '#FB923C', short: 'Large 2 · Codestral',      defaultUrl: 'https://api.mistral.ai/v1',                            keyPlaceholder: 'sk-…',        noKey: false, docsUrl: 'https://console.mistral.ai/api-keys/' },
@@ -43,7 +44,7 @@ const PROVIDER_META: Record<string, ProviderMeta> = {
   lmstudio:  { name: 'LM Studio',       monogram: 'LM', tint: '#22C55E', short: 'Local',                    defaultUrl: 'http://localhost:1234/v1',                             keyPlaceholder: '',            noKey: true,  docsUrl: 'https://lmstudio.ai' },
 };
 
-const PROVIDER_ORDER = ['anthropic','openai','google','deepseek','zhipu','qwen','moonshot','mistral','groq','azure','ollama','lmstudio'];
+const PROVIDER_ORDER = ['anthropic','openai','google','deepseek','zhipu','mimo','qwen','moonshot','mistral','groq','azure','ollama','lmstudio'];
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -100,6 +101,8 @@ const FALLBACK_MODELS: ModelDef[] = [
   { id: 'deepseek-reasoner',   name: 'DeepSeek Reasoner',  provider: 'deepseek'  },
   { id: 'glm-4-flash',         name: 'GLM-4 Flash',        provider: 'zhipu'     },
   { id: 'glm-4-plus',          name: 'GLM-4 Plus',         provider: 'zhipu'     },
+  { id: 'mimo-v2.6-flash',     name: 'MiMo V2.6 Flash',    provider: 'mimo'      },
+  { id: 'mimo-v2.6-pro',       name: 'MiMo V2.6 Pro',      provider: 'mimo'      },
   { id: 'qwen3-max',           name: 'Qwen3 Max',          provider: 'qwen'      },
   { id: 'qwen-plus-latest',    name: 'Qwen Plus',          provider: 'qwen'      },
   { id: 'moonshot-v1-8k',      name: 'Moonshot v1 8k',     provider: 'moonshot'  },

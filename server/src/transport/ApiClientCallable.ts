@@ -52,6 +52,7 @@ const OPENAI_COMPAT_PROVIDERS = new Set([
   'openai',
   'deepseek',
   'zhipu',
+  'mimo',
   'qwen',
   'moonshot',
   'mistral',

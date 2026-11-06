@@ -142,6 +142,7 @@ export type ProviderId =
   | 'openai'
   | 'deepseek'
   | 'zhipu'
+  | 'mimo'
   | 'google'
   | 'qwen'
   | 'moonshot'
@@ -157,6 +158,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   'openai',
   'deepseek',
   'zhipu',
+  'mimo',
   'google',
   'qwen',
   'moonshot',
@@ -174,6 +176,7 @@ export const KEY_STORAGE: Record<ProviderId, string> = {
   openai:     'sf_openai_key',
   deepseek:   'sf_deepseek_key',
   zhipu:      'sf_zhipu_key',
+  mimo:       'sf_mimo_key',
   google:     'sf_google_key',
   qwen:       'sf_qwen_key',
   moonshot:   'sf_moonshot_key',
@@ -191,6 +194,7 @@ export const HEADER_NAME: Record<ProviderId, string> = {
   openai:     'X-OpenAI-Key',
   deepseek:   'X-DeepSeek-Key',
   zhipu:      'X-Zhipu-Key',
+  mimo:       'X-Mimo-Key',
   google:     'X-Google-Key',
   qwen:       'X-Qwen-Key',
   moonshot:   'X-Moonshot-Key',

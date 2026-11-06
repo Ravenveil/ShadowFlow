@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
+DATA_DIR = ROOT / "scripts" / "data" / "training"
 sys.path.insert(0, str(ROOT))
 
 from shadowflow.runtime.training_cleaning import clean_activation_training_file
@@ -12,9 +13,9 @@ from shadowflow.runtime.training_cleaning import clean_activation_training_file
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Clean accumulated activation training data")
-    parser.add_argument("--input", default="data/training/activation_samples.jsonl")
-    parser.add_argument("--output", default="data/training/activation_samples.cleaned.jsonl")
-    parser.add_argument("--report", default="data/training/activation_samples.cleaned.report.json")
+    parser.add_argument("--input", default=str(DATA_DIR / "activation_samples.jsonl"))
+    parser.add_argument("--output", default=str(DATA_DIR / "activation_samples.cleaned.jsonl"))
+    parser.add_argument("--report", default=str(DATA_DIR / "activation_samples.cleaned.report.json"))
     args = parser.parse_args()
 
     stats = clean_activation_training_file(

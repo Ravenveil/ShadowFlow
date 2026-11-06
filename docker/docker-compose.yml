@@ -1,5 +1,7 @@
 # Story 0.1 — ShadowFlow one-shot orchestration.
-# Run `cp .env.example .env && docker compose up -d` to bring up the full MVP.
+# From the repo root run:
+#   cp .env.example .env && docker compose -f docker/docker-compose.yml up -d
+# to bring up the full MVP.
 #
 # Service map:
 #   shadowflow-api  : Python FastAPI (business logic, agents/teams/wallet)  :8000
@@ -10,14 +12,14 @@
 services:
   shadowflow-api:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.api
     image: shadowflow/api:dev
     container_name: shadowflow-api
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ../.env
     environment:
       PYTHONUNBUFFERED: "1"
     networks:
@@ -32,7 +34,7 @@ services:
 
   shadowflow-node:
     build:
-      context: ./server
+      context: ../server
       dockerfile: Dockerfile
     image: shadowflow/node:dev
     container_name: shadowflow-node
@@ -46,7 +48,7 @@ services:
       shadowflow-api:
         condition: service_healthy
     volumes:
-      - ./server:/app
+      - ../server:/app
       - /app/node_modules            # prevent host node_modules from clobbering image-installed deps
       - shadowflow_node_data:/app/.shadowflow  # persist SQLite + projects/
     networks:
@@ -61,7 +63,7 @@ services:
 
   shadowflow-web:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.web
     image: shadowflow/web:dev
     container_name: shadowflow-web

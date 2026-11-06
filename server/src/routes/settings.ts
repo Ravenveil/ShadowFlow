@@ -156,6 +156,11 @@ const BYOK_MODELS = [
   { id: 'embedding-3',               name: 'Embedding-3',         provider: 'zhipu',     group: 'Embedding' },
   { id: 'cogview-4',                 name: 'CogView-4',           provider: 'zhipu',     group: 'Image' },
 
+  // ── Xiaomi MiMo (JUNCTION 2026 赛道；OpenAI 兼容 api.xiaomimimo.com/v1) ──
+  { id: 'mimo-v2.6-pro',             name: 'MiMo V2.6 Pro',       provider: 'mimo',      group: 'MiMo V2.6' },
+  { id: 'mimo-v2.6-flash',           name: 'MiMo V2.6 Flash',     provider: 'mimo',      group: 'MiMo V2.6' },
+  { id: 'mimo-v2.5-pro',             name: 'MiMo V2.5 Pro',       provider: 'mimo',      group: 'MiMo V2.5' },
+
   // ── Qwen / Alibaba Bailian ──
   { id: 'qwen3-max',                 name: 'Qwen3 Max',           provider: 'qwen',      group: 'Qwen3' },
   { id: 'qwen3-plus',                name: 'Qwen3 Plus',          provider: 'qwen',      group: 'Qwen3' },
@@ -244,6 +249,7 @@ const PROVIDER_DEFAULT_BASE: Record<string, string> = {
   gemini:    'https://generativelanguage.googleapis.com/v1beta',
   deepseek:  'https://api.deepseek.com',
   zhipu:     'https://open.bigmodel.cn/api/paas/v4',
+  mimo:      'https://api.xiaomimimo.com/v1',
   qwen:      'https://dashscope.aliyuncs.com/compatible-mode/v1',
   moonshot:  'https://api.moonshot.cn/v1',
   mistral:   'https://api.mistral.ai/v1',
@@ -266,6 +272,7 @@ const PROVIDER_DEFAULT_TYPE: Record<string, EndpointType> = {
   gemini:     'gemini',
   deepseek:   'openai',
   zhipu:      'openai',
+  mimo:       'openai',
   qwen:       'openai',
   moonshot:   'openai',
   mistral:    'openai',
