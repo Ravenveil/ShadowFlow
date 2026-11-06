@@ -607,30 +607,54 @@ async def post_group_message(
 async def stream_group_events(group_id: str, request: Request) -> StreamingResponse:
     """SSE stream of a group's live events.
 
-    Events emitted (``event:`` line → ``data:`` JSON):
+    Events emitted (``id:`` seq → ``event:`` line → ``data:`` JSON):
       agent.message  — an agent reply was appended to the group
       system.notice  — a bridge/system notice was appended
       agent.typing   — an agent is composing a reply (optional UX hint)
 
     Keepalive comments every 15s keep the connection open through proxies.
+
+    2026-11-07 — Disconnect replay: frames carry a per-group monotonic ``id``.
+    On connect the stream first replays buffered events missing since the
+    client's cursor (``Last-Event-ID`` header — sent automatically by the
+    browser's EventSource auto-reconnect — or ``?last_event_id=`` / ``?after=``),
+    then continues live. Without a cursor the whole buffer is replayed; the
+    client dedupes by message_id so duplicates are harmless.
     """
     if _load_group(group_id) is None:
         raise HTTPException(status_code=404, detail=f"Group not found: {group_id}")
 
-    from shadowflow.api._group_events import subscribe, unsubscribe  # noqa: PLC0415
+    from shadowflow.api._group_events import (  # noqa: PLC0415
+        get_group_events_after,
+        subscribe,
+        unsubscribe,
+    )
+
+    cursor = _parse_replay_cursor(request)
 
     async def _generate():
         q = subscribe(group_id)
         try:
             yield ": connected\n\n"
+            # 补帧：先订阅再补发 —— 订阅与快照之间 publish 的帧两路都会到，
+            # 靠 last_sent 水位去重。水位从「实际发出」起算，不从游标起算
+            # （进程重启后 seq 归零，旧游标可能远大于新 id，以游标为基线会
+            # 把重启后的 live 帧全部误杀）。
+            last_sent = -1
+            for event in get_group_events_after(group_id, cursor):
+                last_sent = max(last_sent, event.get("id", -1))
+                yield _format_group_event(event)
             while True:
                 if await request.is_disconnected():
                     break
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=15.0)
-                    event_type = event.get("type", "message")
-                    data = json.dumps(event.get("data", {}), default=str)
-                    yield f"event: {event_type}\ndata: {data}\n\n"
+                    ev_id = event.get("id")
+                    if ev_id is not None and ev_id <= last_sent:
+                        continue  # already replayed (or older) — dedupe
+                    if ev_id is not None:
+                        last_sent = ev_id
+                    yield _format_group_event(event)
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         finally:
@@ -641,6 +665,34 @@ async def stream_group_events(group_id: str, request: Request) -> StreamingRespo
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _format_group_event(event: Dict[str, Any]) -> str:
+    """One SSE frame: ``id:`` (when present) + ``event:`` + ``data:``."""
+    event_type = event.get("type", "message")
+    data = json.dumps(event.get("data", {}), default=str)
+    ev_id = event.get("id")
+    id_line = f"id: {ev_id}\n" if ev_id is not None else ""
+    return f"{id_line}event: {event_type}\ndata: {data}\n\n"
+
+
+def _parse_replay_cursor(request: Request) -> Optional[int]:
+    """Reconnect cursor: ``Last-Event-ID`` header first, then ?last_event_id= / ?after=.
+
+    Missing/invalid → None (replay the whole buffer; see get_group_events_after).
+    """
+    raw = request.headers.get("last-event-id")
+    if raw is None:
+        raw = request.query_params.get("last_event_id")
+    if raw is None:
+        raw = request.query_params.get("after")
+    if raw is None:
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 0 else None
 
 
 # ---------------------------------------------------------------------------
