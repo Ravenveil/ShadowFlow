@@ -9,10 +9,15 @@
  *   - GET /api/teams/{id}/policy   → TeamPolicyMatrix（permit/warn/deny 矩阵）
  *   - GET /api/agents              → 成员名/状态解析（roster 行 + 矩阵行头）
  *
- * 2026-11-05 用户反馈（添加成员微信化）：
- *   - 添加入口从成员头部右上角小圆钮移入成员网格尾部：最后一位成员右边
- *     追加一个「+」虚线格子（微信/钉钉群成员网格同款），点它开合候选
- *     浮层；头部不再有常驻添加钮。浮层交互（✓ 移出 / + 加入）不变。
+ * 2026-11-06 用户反馈（成员资料卡微信化三期）：
+ *   - 成员网格格子可点（微信/钉钉群成员同款）：点成员弹出资料小卡 ——
+ *     大头像 + 名字 + 角色徽章 + 运行状态 + soul 简介，底部「发消息」
+ *     入口（resolveDmConversation find-or-create DM，成功即切会话，
+ *     与 NeoAgentInspector「发起私聊」同一通路）。遮罩/Esc/× 关闭。
+ *
+ * 2026-11-05 用户反馈（添加成员微信化二期）：
+ *   - 添加入口从成员头部右上角小圆钮移入网格尾部（最后一位成员右边的「+」格子，
+ *     微信/钉钉群同款）；头部只留「成员 + 计数」。
  *
  * 2026-11-04 用户反馈第六批（编队 pane 去重 + 分节点输出移除）：
  *   - 编队 pane 尾部重复的成员面板（GroupMembersPanel：成员/工作流摘要/简报）
@@ -52,10 +57,11 @@
  *     patchTeam/deleteTeam/resolveTeamGroup 依赖一并清理。
  *   - 头部团队名称 meta（team?.name）不再显示 —— 顶部主机标题已跟随群名。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   GitBranch,
+  MessageSquare,
   Plus,
   ShieldCheck,
   UsersRound,
@@ -72,8 +78,14 @@ import {
   type TeamWorkflow,
 } from "../../api/teams";
 import { listAgents, type AgentRecord } from "../../api/agents";
+import { resolveDmConversation } from "../../api/groupApi";
 import { useI18n } from "../../common/i18n";
 import { AgentAvatar } from "../../components/agent/AgentAvatar";
+import {
+  POLICY_COLOR as SHARED_POLICY_COLOR,
+  buildAgentPolicyColor,
+  buildPairPolicyColor,
+} from "./teamPolicyVisual";
 import { TeamDagEditor } from "./TeamDagEditor";
 
 export interface TeamPanelProps {
@@ -87,38 +99,30 @@ export interface TeamPanelProps {
   perNodeChunks?: Record<string, unknown>;
   /** 2026-11-04 第六批弃用：仅保留契约。 */
   streaming?: boolean;
+  /**
+   * 2026-11-06 成员资料卡「发消息」：find-or-create DM 成功后切到该会话
+   * （NeoApp.navigate 动词，与 NeoAgentInspector「发起私聊」同一通路）。
+   */
+  onNavigate?: (nav: { view: "conversation"; groupId: string }) => void;
 }
 
 /** 策略格循环次序：未配置 → permit → warn → deny → 清除（回默认允许）。 */
 const POLICY_CYCLE: PolicyCellState[] = ["permit", "warn", "deny"];
 
-/** 策略态 → 染色（矩阵格 / 节点描边 / chips 共用）。 */
-const POLICY_COLOR: Record<PolicyCellState, string> = {
-  permit: "var(--t-ok, #16A34A)",
-  warn: "var(--t-warn, #D97706)",
-  deny: "var(--t-err, #DC2626)",
-};
-const POLICY_RANK: Record<PolicyCellState, number> = { deny: 3, warn: 2, permit: 1 };
+/** 策略态 → 染色（矩阵格 / 节点描边 / 边线 / chips 共用；真源在 teamPolicyVisual）。 */
+const POLICY_COLOR = SHARED_POLICY_COLOR;
 
-/** agentId → 最严策略态（deny > warn > permit；自环忽略），画布染色源。 */
-export function buildAgentPolicyColor(
-  matrix: TeamPolicyMatrix | null,
-): Map<string, PolicyCellState> {
-  const map = new Map<string, PolicyCellState>();
-  if (!matrix) return map;
-  for (const [from, row] of Object.entries(matrix)) {
-    for (const [to, state] of Object.entries(row ?? {})) {
-      if (from === to) continue;
-      const s = state as PolicyCellState;
-      if (!(s in POLICY_RANK)) continue;
-      const prevFrom = map.get(from);
-      if (!prevFrom || POLICY_RANK[s] > POLICY_RANK[prevFrom]) map.set(from, s);
-      const prevTo = map.get(to);
-      if (!prevTo || POLICY_RANK[s] > POLICY_RANK[prevTo]) map.set(to, s);
-    }
-  }
-  return map;
-}
+// buildAgentPolicyColor / buildPairPolicyColor 2026-11-06 迁入 teamPolicyVisual
+// （节点聚合染色与边成员对染色同源同口径），此处按原名 re-export 保持兼容。
+export { buildAgentPolicyColor } from "./teamPolicyVisual";
+
+/** 状态 → 中文标签（资料卡 meta 行用）。 */
+const STATUS_LABEL: Record<string, string> = {
+  idle: "空闲",
+  running: "运行中",
+  paused: "已暂停",
+  error: "异常",
+};
 
 /**
  * 策略矩阵行/列头（2026-11-04 用户反馈）：真实头像在上、名字在下的竖排
@@ -149,6 +153,7 @@ export function TeamPanel({
   teamName: _teamName,
   perNodeChunks: _perNodeChunks,
   streaming: _streaming,
+  onNavigate,
 }: TeamPanelProps) {
   const { t } = useI18n();
   const [team, setTeam] = useState<TeamRecord | null>(null);
@@ -203,6 +208,82 @@ export function TeamPanel({
   const roster = team?.agent_ids ?? [];
   const wfNodes = workflow?.nodes ?? [];
   const wfEdges = workflow?.edges ?? [];
+
+  // ── 成员资料卡（2026-11-06 微信/钉钉式三期；四期改浮层锚定）──────────────
+  // 点成员格 → 头像旁浮出资料小卡（微信/钉钉范式：无全屏遮罩，点击卡片
+  // 外任意区域或 Esc 关闭）；发消息走 resolveDmConversation find-or-create
+  // DM，成功即 onNavigate 切会话。
+  const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
+  const [dmBusy, setDmBusy] = useState(false);
+  const [dmErr, setDmErr] = useState<string | null>(null);
+  // 锚定定位：卡片绝对定位到被点成员格的下方（右对齐防溢出右栏）。
+  const gridWrapRef = useRef<HTMLDivElement | null>(null);
+  const profileCardRef = useRef<HTMLDivElement | null>(null);
+  const [profileAnchorLeft, setProfileAnchorLeft] = useState(0);
+  const profileAgent = profileAgentId ? (agentById.get(profileAgentId) ?? null) : null;
+
+  const openProfile = (id: string, cellEl: HTMLElement) => {
+    // 微信式锚定：以被点格子为基准水平定位；右溢出时右对齐成员 section。
+    const wrap = gridWrapRef.current;
+    if (wrap) {
+      const wrapRect = wrap.getBoundingClientRect();
+      const cellRect = cellEl.getBoundingClientRect();
+      const cardWidth = 280;
+      const left = cellRect.left - wrapRect.left + cellRect.width / 2 - cardWidth / 2;
+      setProfileAnchorLeft(Math.max(0, Math.min(left, wrapRect.width - cardWidth)));
+    }
+    setProfileAgentId(id);
+    setDmErr(null);
+  };
+  const closeProfile = () => {
+    setProfileAgentId(null);
+    setDmErr(null);
+    setDmBusy(false);
+  };
+
+  // 点击卡片外关闭（微信/钉钉范式：无遮罩，监听 document mousedown）；
+  // 卡片内部点击（含发消息钮）不关。
+  useEffect(() => {
+    if (!profileAgentId) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (profileCardRef.current?.contains(target)) return;
+      // 点在成员格上 = 切换资料对象，交给格子 click 处理，这里不关
+      if (
+        gridWrapRef.current?.contains(target) &&
+        (target as HTMLElement).closest?.(".neo-gm-cell--click")
+      ) {
+        return;
+      }
+      closeProfile();
+    };
+    const onDocKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !dmBusy) closeProfile();
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onDocKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onDocKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileAgentId, dmBusy]);
+
+  const sendDm = async () => {
+    if (!profileAgent) return;
+    setDmBusy(true);
+    setDmErr(null);
+    try {
+      const dmGroupId = await resolveDmConversation(profileAgent.agent_id);
+      if (!dmGroupId) throw new Error("resolve failed");
+      closeProfile();
+      onNavigate?.({ view: "conversation", groupId: dmGroupId });
+    } catch {
+      setDmErr(t("neo.inspect.dmFailed", { defaultValue: "私聊创建失败，请重试" }));
+    } finally {
+      setDmBusy(false);
+    }
+  };
 
   // ── 协作策略矩阵（2026-11-03）──────────────────────────────────────
   // 展示草稿本地即时翻转，点「保存策略」才 PUT（有真实 diff 才出保存钮）；
@@ -263,8 +344,10 @@ export function TeamPanel({
     }
   };
 
-  /** 策略 → 画布联动：agentId → 最严策略态（matrix 草稿即时驱动）。 */
+  /** 策略 → 画布联动：agentId → 最严策略态（节点描边；matrix 草稿即时驱动）。 */
   const agentPolicyColor = useMemo(() => buildAgentPolicyColor(policyDraft), [policyDraft]);
+  /** 策略 → 画布联动：成员对无向键 → 策略态（边线染色；同一份草稿即时驱动）。 */
+  const pairPolicy = useMemo(() => buildPairPolicyColor(policyDraft), [policyDraft]);
 
   // ── 添加/移出成员（2026-11-04 用户反馈第五批）────────────────────────
   // 头部「+」→ 候选浮层（样式复用 NeoGroupChat 的 Grok 式 picker 交互）：
@@ -273,6 +356,29 @@ export function TeamPanel({
   const [rosterPickerOpen, setRosterPickerOpen] = useState(false);
   const [rosterBusy, setRosterBusy] = useState<string | null>(null);
   const [rosterErr, setRosterErr] = useState<string | null>(null);
+
+  // 点浮层外部关闭（微信/钉钉范式：监听 document mousedown，Esc 同关）；
+  // 浮层内部点击不关；点「添加」格交给按钮自己的 onClick 开合（避免
+  // mousedown 先关、click 又切回开）。
+  const rosterPickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!rosterPickerOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (rosterPickerRef.current?.contains(target)) return;
+      if ((target as HTMLElement).closest?.(".neo-gm-add")) return;
+      setRosterPickerOpen(false);
+    };
+    const onDocKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRosterPickerOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onDocKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onDocKeyDown);
+    };
+  }, [rosterPickerOpen]);
 
   const toggleRosterMember = async (agentId: string) => {
     if (rosterBusy) return;
@@ -321,7 +427,7 @@ export function TeamPanel({
       {/* 成员 roster（2026-11-05 用户反馈：成员区微信化二期 —— 头部不再放
           「+」添加钮，添加入口移入网格尾部（最后一位成员右边的「+」格子，
           微信/钉钉群同款）；头部只留「成员 + 计数」。 */}
-      <div className="neo-host-sec">
+      <div className="neo-host-sec" ref={gridWrapRef}>
         <div className="neo-host-sec-head">
           <UsersRound size={12} strokeWidth={1.8} />
           <span className="neo-host-sec-title">
@@ -336,7 +442,11 @@ export function TeamPanel({
         {/* 候选浮层（对齐 NeoGroupChat 的 Grok 式添加成员）：已在编队显示 ✓
             （点即移出），不在编队显示 +（点即加入）；无候选给空态。 */}
         {rosterPickerOpen && (
-          <div className="neo-host-roster-picker" data-testid="team-roster-picker">
+          <div
+            className="neo-host-roster-picker"
+            data-testid="team-roster-picker"
+            ref={rosterPickerRef}
+          >
             <div className="neo-host-roster-picker-head">
               {t("neo.host.teamRosterPickTitle", { defaultValue: "选择要加入的成员" })}
             </div>
@@ -394,7 +504,7 @@ export function TeamPanel({
             GroupMembersPanel 同一套 .neo-gm-* 样式，全产品一个成员观感）：
             头像上、名字下、状态点挂头像右下；内部 agent ID 收进 tooltip，
             不再裸露在行尾。网格尾部常驻「添加」格（微信/钉钉同款入口）。 */}
-        <div className="neo-gm-grid" data-testid="team-roster-grid">
+        <div className="neo-gm-grid" data-testid="team-roster-grid" ref={gridWrapRef}>
             {roster.map((id) => {
               const agent = agentById.get(id);
               const name = agent?.name ?? id;
@@ -403,7 +513,14 @@ export function TeamPanel({
               const cellTitle = role ? `${name} · ${role}` : name;
               const idTitle = agent ? `${id}${agent.status ? ` · ${agent.status}` : ""}` : id;
               return (
-                <div key={id} className="neo-gm-cell" title={cellTitle}>
+                <button
+                  key={id}
+                  type="button"
+                  className="neo-gm-cell neo-gm-cell--click"
+                  title={cellTitle}
+                  onClick={(e) => openProfile(id, e.currentTarget)}
+                  data-testid={`team-roster-cell-${id}`}
+                >
                   {agent ? (
                     <span className="neo-gm-avatar neo-gm-avatar--img">
                       <AgentAvatar
@@ -434,7 +551,7 @@ export function TeamPanel({
                     })()
                   )}
                   <span className="neo-gm-cell-name">{name}</span>
-                </div>
+                </button>
               );
             })}
             {/* 网格尾部的「添加成员」格（2026-11-05 微信/钉钉式）：与成员格
@@ -494,6 +611,7 @@ export function TeamPanel({
             workflow={workflow ?? { nodes: [], edges: [] }}
             agents={rosterAgents}
             policyColorOf={agentPolicyColor}
+            pairPolicy={pairPolicy}
             onDirtyChange={setDagDirty}
             onSaved={(wf) => {
               setWorkflow(wf);
@@ -538,7 +656,18 @@ export function TeamPanel({
             <table className="neo-host-policy-table">
                 <thead>
                   <tr>
-                    <th className="neo-host-policy-corner" />
+                    {/* 2026-11-06 方向语义澄清：行=发起方、列=接收方（与运行时
+                        policy-gate 的 gate(matrix, from, to) 一致）。 */}
+                    <th
+                      className="neo-host-policy-corner"
+                      title={t("neo.host.teamPolicyDirection", {
+                        defaultValue: "行成员 → 列成员：行的发起，列的接收",
+                      })}
+                    >
+                      <span className="neo-host-policy-corner-label">
+                        {t("neo.host.teamPolicyDirectionShort", { defaultValue: "行→列" })}
+                      </span>
+                    </th>
                     {rosterAgents.map((a) => (
                       <th key={a.agent_id} title={a.agent_id}>
                         <PolicyAgentHead agent={a} />
@@ -608,6 +737,10 @@ export function TeamPanel({
               </span>
               <span className="neo-host-policy-hint">
                 {t("neo.host.teamPolicyCycleHint", { defaultValue: "点击格子：允许 → 警告 → 拒绝 → 清除" })}
+                {" · "}
+                {t("neo.host.teamPolicyEdgeLink", {
+                  defaultValue: "限制会同步染到画布连线（两人之间）",
+                })}
               </span>
               <span className="neo-host-policy-spacer" />
               {policyDirty && (
@@ -635,6 +768,67 @@ export function TeamPanel({
             )}
         </div>
       </div>
+
+      {/* ── 成员资料卡（2026-11-06 微信/钉钉式四期：浮层锚定）───────────────
+          点成员格 → 头像下方浮出资料小卡：大头像 + 名字 + 角色徽章 + 状态 +
+          soul 简介 + 「发消息」。无全屏遮罩，点击卡片外 / Esc 关闭（微信
+          PC 群成员资料卡同范式）。 */}
+      {profileAgent && (
+        <div
+          className="neo-gm-profile"
+          role="dialog"
+          aria-label={t("neo.gm.profileTitle", { defaultValue: "成员资料" })}
+          style={{ left: `${profileAnchorLeft}px` }}
+          ref={profileCardRef}
+          data-testid="team-member-profile"
+        >
+          <div className="neo-gm-profile-head">
+            <span className="neo-gm-profile-avatar">
+              <AgentAvatar
+                name={profileAgent.name}
+                style={profileAgent.avatar_style}
+                seed={profileAgent.avatar_seed ?? profileAgent.name}
+                image={profileAgent.avatar_image ?? null}
+                size={52}
+              />
+              <i className={`neo-gm-dot neo-gm-dot--${profileAgent.status}`} aria-hidden />
+            </span>
+            <div className="neo-gm-profile-id">
+              <strong className="neo-gm-profile-name">{profileAgent.name}</strong>
+              <span className="neo-gm-profile-meta">
+                {typeof profileAgent.blueprint?.role === "string" && profileAgent.blueprint.role.trim() && (
+                  <span className="neo-gm-profile-role">{profileAgent.blueprint.role.trim()}</span>
+                )}
+                <span className="neo-gm-profile-status">
+                  {STATUS_LABEL[profileAgent.status] ?? profileAgent.status}
+                </span>
+              </span>
+            </div>
+          </div>
+          {profileAgent.soul?.trim() && (
+            <div className="neo-gm-profile-soul" title={profileAgent.soul}>
+              {profileAgent.soul.trim()}
+            </div>
+          )}
+          <button
+            type="button"
+            className="neo-gm-profile-dm"
+            onClick={() => void sendDm()}
+            disabled={dmBusy}
+            data-testid="team-member-profile-dm"
+          >
+            <MessageSquare size={14} strokeWidth={1.9} aria-hidden />
+            {dmBusy
+              ? t("neo.inspect.dmOpening", { defaultValue: "创建私聊…" })
+              : t("neo.inspect.dm", { defaultValue: "发消息" })}
+          </button>
+          {dmErr && (
+            <div className="neo-gm-profile-err" role="alert" data-testid="team-member-profile-err">
+              {dmErr}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { TeamWorkflow } from '../../api/teams';
+import { buildPairPolicyColor } from '../projections/teamPolicyVisual';
 import {
   computeTeamDagColumns,
   teamWorkflowToFlowEdges,
@@ -98,5 +99,27 @@ describe('teamWorkflowToFlowEdges — 边投影 + mode 视觉', () => {
     // source/target 原样透传
     expect(edges[1].source).toBe('n1');
     expect(edges[1].target).toBe('n3');
+  });
+
+  it('2026-11-06 策略联动：成员对命中时边线随策略染色（nodeId 经节点表解析 agentId）', () => {
+    // n1=a1, n2=a2, n3=a3, n4=a4；e1(n1→n2)=a1→a2 对命中 deny
+    const pairPolicy = buildPairPolicyColor({ a1: { a2: 'deny' }, a3: { a4: 'warn' } });
+    const edges = teamWorkflowToFlowEdges(chain, pairPolicy);
+    // e1：deny → 红色加粗，无虚线 className（direct 边不加 mode 类）
+    expect(edges[0].style?.stroke).toContain('--t-err');
+    expect(edges[0].style?.strokeWidth).toBe(2.4);
+    expect(edges[0].className).toBeUndefined();
+    // e2（n1→n3 = a1→a3）：无配置 → 沿用 approve mode 视觉（警示虚线）
+    expect(edges[1].style?.stroke).toContain('--t-warn');
+    expect(edges[1].className).toBe('neo-gm-dag-edge--approve');
+    // e4（n3→n4 = a3→a4）：warn → 琥珀
+    expect(edges[3].style?.stroke).toContain('--t-warn');
+    expect(edges[3].style?.strokeWidth).toBe(1.8);
+    // 反向矩阵也命中（无向对取严）：a2→a1 配 deny 时 e1 同样染色
+    const reversed = buildPairPolicyColor({ a2: { a1: 'deny' } });
+    expect(teamWorkflowToFlowEdges(chain, reversed)[0].style?.stroke).toContain('--t-err');
+    // pairPolicy 不传 → 行为与旧版一致
+    const plain = teamWorkflowToFlowEdges(chain);
+    expect(plain[0].style).toBeUndefined();
   });
 });

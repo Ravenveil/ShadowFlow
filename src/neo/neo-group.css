@@ -638,6 +638,7 @@
 /* agent 消息：头像 + 名字/角色/时间头 + 气泡体 */
 .neo-gc-msg {
   display: flex;
+  align-items: flex-start;
   gap: 10px;
   margin: 10px 0;
 }
