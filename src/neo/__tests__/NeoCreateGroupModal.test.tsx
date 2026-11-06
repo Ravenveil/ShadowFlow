@@ -1,7 +1,7 @@
 /**
- * NeoCreateGroupModal 测试（2026-08-22 第二轮 GAP D）。
- * 覆盖：团队模式默认选中首团队（空名回退团队名）→ createGroup 带 team_id +
- * roster；Agent 模式勾选 → createGroup 带 agent_ids 无 team_id；无团队无
+ * NeoCreateGroupModal 测试（2026-11-06 选人式重做）。
+ * 覆盖：勾选成员 → chips 出现 + 主钮计数；全选团队 roster → createGroup 带
+ * team_id；自由勾选 → 无 team_id；群名留空回退成员名拼接；搜索过滤；无
  * Agent → 空态 + 提交禁用；createGroup 失败 → 模态内红条。
  */
 import { render, screen, fireEvent, waitFor } from '../../test/utils';
@@ -23,8 +23,8 @@ vi.mock('../../api/teams', () => ({
 }));
 vi.mock('../../api/agents', () => ({
   listAgents: vi.fn().mockResolvedValue([
-    { agent_id: 'a1', name: '甲', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
-    { agent_id: 'a2', name: '乙', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a1', name: '甲', soul: '研究员', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a2', name: '乙', soul: '设计师', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
   ]),
 }));
 
@@ -47,6 +47,11 @@ function renderModal(onCreated = vi.fn(), onClose = vi.fn()) {
   };
 }
 
+/** 勾选一个成员行（按 agent_id）。 */
+function pick(agentId: string) {
+  fireEvent.click(screen.getByTestId('neo-new-group-agent-row').closest('[data-agent-id]') ?? screen.getAllByTestId('neo-new-group-agent-row')[0]);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   createGroupMock.mockResolvedValue({
@@ -60,83 +65,89 @@ beforeEach(() => {
     { team_id: 't1', name: '测试团队', description: '', workspace_id: 'ws1', agent_ids: ['a1', 'a2'], created_at: '', updated_at: '' },
   ]);
   listAgentsMock.mockResolvedValue([
-    { agent_id: 'a1', name: '甲', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
-    { agent_id: 'a2', name: '乙', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a1', name: '甲', soul: '研究员', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a2', name: '乙', soul: '设计师', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
   ]);
 });
 
-describe('NeoCreateGroupModal — 团队模式', () => {
-  it('默认选中首团队，空名称回退团队名，提交带 team_id + roster', async () => {
+describe('NeoCreateGroupModal — 选人式交互', () => {
+  it('勾选成员 → chip 出现 + 主钮带计数；提交不带 team_id（自由群）', async () => {
     const { onCreated } = renderModal();
-    const submit = await screen.findByTestId('neo-create-group-submit');
-    await waitFor(() => expect(submit).toBeEnabled());
-
-    fireEvent.click(submit);
     await waitFor(() => {
-      expect(createGroupMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: '测试团队',
-          agentIds: ['a1', 'a2'],
-          teamId: 't1',
-          workspaceId: 'ws1',
-        }),
-      );
+      expect(screen.getAllByTestId('neo-new-group-agent-row')).toHaveLength(2);
     });
-    expect(onCreated).toHaveBeenCalledWith({ groupId: 'g-new-1', name: '测试团队' });
-  });
-
-  it('自定义名称优先于回退名', async () => {
-    renderModal();
-    const input = await screen.findByLabelText('群名称');
-    fireEvent.change(input, { target: { value: '氢能获客作战室' } });
+    // 勾选「甲」
+    fireEvent.click(screen.getAllByTestId('neo-new-group-agent-row')[0]);
+    expect(screen.getAllByTestId('neo-new-group-chip')).toHaveLength(1);
+    expect(screen.getByTestId('neo-create-group-submit').textContent).toContain('(1)');
     fireEvent.click(screen.getByTestId('neo-create-group-submit'));
     await waitFor(() => {
-      expect(createGroupMock).toHaveBeenCalledWith(
-        expect.objectContaining({ name: '氢能获客作战室' }),
-      );
+      expect(createGroupMock).toHaveBeenCalledTimes(1);
     });
-  });
-});
-
-describe('NeoCreateGroupModal — Agent 模式', () => {
-  it('勾选 Agent → createGroup 带 agent_ids、无 team_id', async () => {
-    const { onCreated } = renderModal();
-    fireEvent.click(await screen.findByTestId('neo-new-group-mode-agents'));
-    // 未勾选时提交禁用 + 提示
-    expect(screen.getByTestId('neo-create-group-submit')).toBeDisabled();
-    expect(screen.getByTestId('neo-new-group-pick-hint')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('甲'));
-    fireEvent.click(screen.getByText('乙'));
-    const submit = screen.getByTestId('neo-create-group-submit');
-    expect(submit).toBeEnabled();
-    fireEvent.click(submit);
+    const arg = createGroupMock.mock.calls[0][0];
+    expect(arg.agentIds).toEqual(['a1']);
+    expect(arg.teamId).toBeUndefined();
     await waitFor(() => {
-      expect(createGroupMock).toHaveBeenCalledWith(
-        expect.objectContaining({ agentIds: ['a1', 'a2'], teamId: undefined }),
-      );
+      expect(onCreated).toHaveBeenCalledWith({ groupId: 'g-new-1', name: expect.any(String) });
     });
-    expect(onCreated).toHaveBeenCalledWith({ groupId: 'g-new-1', name: '测试团队' });
   });
-});
 
-describe('NeoCreateGroupModal — 空态与失败', () => {
-  it('无团队且无 Agent → 明确空态提示，提交禁用', async () => {
-    listTeamsMock.mockResolvedValue([]);
+  it('全选（恰好等于团队 roster）→ createGroup 带 team_id；群名留空回退团队名', async () => {
+    const { onCreated } = renderModal();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('neo-new-group-agent-row')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getByTestId('neo-new-group-select-all'));
+    // 团队匹配标签出现
+    expect(screen.getByTestId('neo-new-group-team-tag')).toBeTruthy();
+    // 群名留空 → placeholder 即回退名（成员名拼接，微信式）
+    expect(
+      (screen.getByTestId('neo-new-group-name') as HTMLInputElement).placeholder,
+    ).toBe('甲、乙');
+    fireEvent.click(screen.getByTestId('neo-create-group-submit'));
+    await waitFor(() => {
+      expect(createGroupMock).toHaveBeenCalledTimes(1);
+    });
+    const arg = createGroupMock.mock.calls[0][0];
+    expect(arg.agentIds).toEqual(['a1', 'a2']);
+    expect(arg.teamId).toBe('t1');
+    expect(arg.name).toBe('甲、乙'); // 群名留空 → 成员名拼接回退
+    await waitFor(() => {
+      expect(onCreated).toHaveBeenCalled();
+    });
+  });
+
+  it('搜索过滤成员列表', async () => {
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getAllByTestId('neo-new-group-agent-row')).toHaveLength(2);
+    });
+    fireEvent.change(screen.getByTestId('neo-new-group-search'), { target: { value: '甲' } });
+    const rows = screen.getAllByTestId('neo-new-group-agent-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('甲');
+  });
+
+  it('无 Agent → 空态提示 + 提交禁用', async () => {
     listAgentsMock.mockResolvedValue([]);
     renderModal();
-    expect(await screen.findByTestId('neo-create-group-empty')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('neo-create-group-empty')).toBeTruthy();
+    });
     expect(screen.getByTestId('neo-create-group-submit')).toBeDisabled();
-    expect(createGroupMock).not.toHaveBeenCalled();
   });
 
   it('createGroup 失败 → 模态内红条展示真实错误，不假成功', async () => {
-    createGroupMock.mockRejectedValue(new Error('后端 503'));
+    createGroupMock.mockRejectedValue(new Error('后端 500'));
     const { onCreated } = renderModal();
-    const submit = await screen.findByTestId('neo-create-group-submit');
-    await waitFor(() => expect(submit).toBeEnabled());
-    fireEvent.click(submit);
-    expect(await screen.findByTestId('neo-create-group-error')).toHaveTextContent('后端 503');
+    await waitFor(() => {
+      expect(screen.getAllByTestId('neo-new-group-agent-row')).toHaveLength(2);
+    });
+    fireEvent.click(screen.getAllByTestId('neo-new-group-agent-row')[0]);
+    fireEvent.click(screen.getByTestId('neo-create-group-submit'));
+    await waitFor(() => {
+      expect(screen.getByTestId('neo-create-group-error').textContent).toContain('后端 500');
+    });
     expect(onCreated).not.toHaveBeenCalled();
   });
 });

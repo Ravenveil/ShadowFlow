@@ -5,7 +5,7 @@
  * 2026-11-04 用户反馈第三批 —— 头部「重命名/删除/发起群聊」三钮与
  * 团队名 meta 全部移除后的负向断言。
  */
-import { render, screen, fireEvent, waitFor } from '../../test/utils';
+import { render, screen, fireEvent, waitFor, within } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../../api/teams', () => ({
@@ -33,34 +33,48 @@ vi.mock('../../api/agents', () => ({
   listAgents: vi.fn().mockResolvedValue([
     { agent_id: 'a1', name: '甲', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
     { agent_id: 'a2', name: '乙', soul: '', workspace_id: 'ws1', blueprint: {}, status: 'idle', source: 'quick_hire', created_at: '' },
-    { agent_id: 'a3', name: '丙', soul: '', workspace_id: 'ws1', blueprint: { role: '测试员' }, status: 'idle', source: 'quick_hire', created_at: '' },
+    { agent_id: 'a3', name: '丙', soul: '负责冒烟测试的员工', workspace_id: 'ws1', blueprint: { role: '测试员' }, status: 'idle', source: 'quick_hire', created_at: '' },
   ]),
 }));
 
-// stub 编辑器：只暴露保存/取消回调，验证 TeamPanel 的常驻编辑器契约
+vi.mock('../../api/groupApi', () => ({
+  resolveDmConversation: vi.fn(),
+}));
+
+// stub 编辑器：只暴露保存/取消回调，验证 TeamPanel 的常驻编辑器契约。
+// 2026-11-06 策略联动：捕获 policyColorOf/pairPolicy 供草稿联动断言。
+const editorPolicyProps: Array<{
+  policyColorOf?: Map<string, string>;
+  pairPolicy?: Map<string, string>;
+}> = [];
 vi.mock('../projections/TeamDagEditor', () => ({
   TeamDagEditor: (props: {
     onSaved: (wf: unknown) => void;
     onCancel: () => void;
     onDirtyChange?: (dirty: boolean) => void;
-  }) => (
-    <div data-testid="team-dag-editor-stub">
-      <button
-        data-testid="stub-save"
-        onClick={() =>
-          props.onSaved({
-            nodes: [
-              { id: 'n1', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 'a1', name: '甲', soul: '' } },
-              { id: 'n2', type: 'agentTask', position: { x: 200, y: 0 }, data: { agentId: 'a2', name: '乙', soul: '' } },
-            ],
-            edges: [{ id: 'n1->n2', source: 'n1', target: 'n2', data: { mode: 'direct' } }],
-          })
-        }
-      />
-      <button data-testid="stub-cancel" onClick={props.onCancel} />
-      <button data-testid="stub-dirty" onClick={() => props.onDirtyChange?.(true)} />
-    </div>
-  ),
+    policyColorOf?: Map<string, string>;
+    pairPolicy?: Map<string, string>;
+  }) => {
+    editorPolicyProps.push({ policyColorOf: props.policyColorOf, pairPolicy: props.pairPolicy });
+    return (
+      <div data-testid="team-dag-editor-stub">
+        <button
+          data-testid="stub-save"
+          onClick={() =>
+            props.onSaved({
+              nodes: [
+                { id: 'n1', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 'a1', name: '甲', soul: '' } },
+                { id: 'n2', type: 'agentTask', position: { x: 200, y: 0 }, data: { agentId: 'a2', name: '乙', soul: '' } },
+              ],
+              edges: [{ id: 'n1->n2', source: 'n1', target: 'n2', data: { mode: 'direct' } }],
+            })
+          }
+        />
+        <button data-testid="stub-cancel" onClick={props.onCancel} />
+        <button data-testid="stub-dirty" onClick={() => props.onDirtyChange?.(true)} />
+      </div>
+    );
+  },
 }));
 
 import { TeamPanel } from '../projections/TeamPanel';
@@ -202,6 +216,101 @@ describe('TeamPanel — 添加成员（2026-11-05 网格尾格微信化）', () 
     fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
     expect(await screen.findByTestId('team-roster-error')).toBeInTheDocument();
   });
+
+  it('点浮层外空白 → 候选浮层关闭（2026-11-06 用户反馈）', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    expect(screen.getByTestId('team-roster-picker')).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByTestId('team-roster-picker')).not.toBeInTheDocument();
+  });
+
+  it('Esc → 候选浮层关闭；浮层内点击不关', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    // 浮层内部 mousedown 不关
+    fireEvent.mouseDown(screen.getByTestId('team-roster-picker'));
+    expect(screen.getByTestId('team-roster-picker')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('team-roster-picker')).not.toBeInTheDocument();
+  });
+});
+
+describe('TeamPanel — 成员资料卡（2026-11-06 微信/钉钉式三期；四期浮层锚定）', () => {
+  it('点成员格 → 资料卡浮出：名字 + 状态 + 「发消息」钮；soul/角色徽章来自记录', async () => {
+    // a3 带 blueprint.role 与 soul，但不在团队 roster —— 先把它加进团队再验证
+    const { patchTeam } = await import('../../api/teams');
+    vi.mocked(patchTeam).mockResolvedValue({
+      team_id: 't1',
+      name: '测试团队',
+      description: '',
+      workspace_id: 'ws1',
+      agent_ids: ['a1', 'a2', 'a3'],
+      created_at: '',
+      updated_at: '',
+    });
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-add'));
+    fireEvent.click(screen.getByTestId('team-roster-picker-row-a3'));
+    expect(await screen.findByText('3 位成员')).toBeInTheDocument();
+    // 点 a3 成员格 → 资料卡浮出，含角色徽章/状态/soul/发消息
+    fireEvent.click(screen.getByTestId('team-roster-cell-a3'));
+    const card = screen.getByTestId('team-member-profile');
+    expect(card).toBeInTheDocument();
+    expect(within(card).getByText('测试员')).toBeInTheDocument();
+    expect(within(card).getByText('空闲')).toBeInTheDocument();
+    expect(within(card).getByText('负责冒烟测试的员工')).toBeInTheDocument();
+    expect(within(card).getByTestId('team-member-profile-dm')).toBeInTheDocument();
+    // 再点同一格 → 换对象重开（不闪关）
+    fireEvent.click(screen.getByTestId('team-roster-cell-a3'));
+    expect(screen.getByTestId('team-member-profile')).toBeInTheDocument();
+  });
+
+  it('资料卡「发消息」→ resolveDmConversation 成功 → onNavigate 切会话且卡片关闭', async () => {
+    const { resolveDmConversation } = await import('../../api/groupApi');
+    vi.mocked(resolveDmConversation).mockResolvedValue('dm-9');
+    const onNavigate = vi.fn();
+    render(
+      <TeamPanel teamId="t1" teamName="测试团队" onNavigate={onNavigate} />,
+    );
+    fireEvent.click(await screen.findByTestId('team-roster-cell-a1'));
+    fireEvent.click(screen.getByTestId('team-member-profile-dm'));
+    await waitFor(() => {
+      expect(resolveDmConversation).toHaveBeenCalledWith('a1');
+    });
+    await waitFor(() => {
+      expect(onNavigate).toHaveBeenCalledWith({ view: 'conversation', groupId: 'dm-9' });
+    });
+    // 跳转后卡片关闭
+    expect(screen.queryByTestId('team-member-profile')).not.toBeInTheDocument();
+  });
+
+  it('resolveDmConversation 失败 → 卡内红条提示，卡片不关', async () => {
+    const { resolveDmConversation } = await import('../../api/groupApi');
+    vi.mocked(resolveDmConversation).mockRejectedValue(new Error('500'));
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-cell-a1'));
+    fireEvent.click(screen.getByTestId('team-member-profile-dm'));
+    expect(await screen.findByTestId('team-member-profile-err')).toBeInTheDocument();
+    expect(screen.getByTestId('team-member-profile')).toBeInTheDocument();
+  });
+
+  it('Esc 关闭资料卡', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-cell-a1'));
+    expect(screen.getByTestId('team-member-profile')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('team-member-profile')).not.toBeInTheDocument();
+  });
+
+  it('点击卡片外（非成员格区域）关闭资料卡', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByTestId('team-roster-cell-a1'));
+    expect(screen.getByTestId('team-member-profile')).toBeInTheDocument();
+    // mousedown 在卡片外（document body）→ 关
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByTestId('team-member-profile')).not.toBeInTheDocument();
+  });
 });
 
 describe('TeamPanel — 协作策略矩阵（2026-11-04 常驻展开）', () => {
@@ -248,5 +357,32 @@ describe('TeamPanel — 协作策略矩阵（2026-11-04 常驻展开）', () => 
       expect(putTeamPolicy).toHaveBeenCalledWith('t1', { a2: { a1: 'permit' } });
     });
     expect(await screen.findByTestId('team-policy-saved')).toBeInTheDocument();
+  });
+
+  it('2026-11-06 联动：矩阵草稿即时驱动编辑器的 policyColorOf/pairPolicy（不需保存）', async () => {
+    renderPanel();
+    await screen.findByTestId('team-policy-cell-a1-a2');
+    const last = () => editorPolicyProps[editorPolicyProps.length - 1];
+    // 初始：空矩阵 → 两张表都空
+    expect(last().policyColorOf?.size ?? 0).toBe(0);
+    expect(last().pairPolicy?.size ?? 0).toBe(0);
+    // 点一格（a1→a2 permit）→ 草稿态立即反映到两张表（不点保存）
+    fireEvent.click(screen.getByTestId('team-policy-cell-a1-a2'));
+    await waitFor(() => {
+      expect(last().pairPolicy?.get('a1|a2')).toBe('permit');
+    });
+    expect(last().policyColorOf?.get('a1')).toBe('permit');
+    expect(last().policyColorOf?.get('a2')).toBe('permit');
+    // 再点两格到 deny → 取更严（节点表 a1/a2 → deny；对表同键覆盖为 deny）
+    fireEvent.click(screen.getByTestId('team-policy-cell-a1-a2'));
+    fireEvent.click(screen.getByTestId('team-policy-cell-a1-a2'));
+    await waitFor(() => {
+      expect(last().pairPolicy?.get('a1|a2')).toBe('deny');
+      expect(last().policyColorOf?.get('a1')).toBe('deny');
+    });
+    // 反向格 a2→a1 同键（无向对）→ 对表不新增条目
+    const sizeBefore = last().pairPolicy!.size;
+    fireEvent.click(screen.getByTestId('team-policy-cell-a2-a1'));
+    expect(last().pairPolicy!.size).toBe(sizeBefore);
   });
 });

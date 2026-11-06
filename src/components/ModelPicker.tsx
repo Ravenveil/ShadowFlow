@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { Cpu, Check, ExternalLink } from 'lucide-react';
 import { useI18n } from '../common/i18n';
 import { getApiBase } from '../api/_base';
+import { BrandGlyph } from '../common/icons/brandIcons';
 import {
   PICKER_CLI_META,
   PICKER_PROVIDER_META,
@@ -143,6 +144,9 @@ export default function ModelPicker({
     const key = it.kind === 'cli' ? `cli:${it.agentId}` : `byok:${it.providerId}:${it.modelId}`;
     const title = it.kind === 'cli' ? it.name : it.modelId;
     const sub = it.kind === 'cli' ? (it.version ? it.version : 'CLI · installed') : it.providerName;
+    // 品牌官方图标优先，未收录回落首字母 monogram（与 NeoComposer 同策略）。
+    const brandId = it.kind === 'cli' ? it.agentId : it.providerId;
+    const glyph = BrandGlyph({ brandId, size: 14 });
     return (
       <button
         key={key}
@@ -166,7 +170,7 @@ export default function ModelPicker({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 8.5,
           letterSpacing: '-0.04em', userSelect: 'none',
-        }}>{it.monogram}</span>
+        }}>{glyph ?? it.monogram}</span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{
             display: 'block', fontFamily: 'var(--font-mono, monospace)', fontSize: 11.5, fontWeight: 500,

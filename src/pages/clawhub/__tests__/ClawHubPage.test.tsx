@@ -134,9 +134,10 @@ describe('ClawHubPage — 目录渲染（FR-01）', () => {
     await waitFor(() => {
       expect(screen.getByTestId('claw-card-autoresearchclaw')).toBeInTheDocument();
     });
-    // openclaw 已安装 → 徽章含版本
+    // openclaw 已安装 → 徽章「已安装」+ 卡内版本串（2026-11-06 版本自徽章
+    // 拆出为独立 .claw-version 串，避免错误串撑爆徽章）
     expect(screen.getByTestId('claw-status-openclaw').textContent).toContain('已安装');
-    expect(screen.getByTestId('claw-status-openclaw').textContent).toContain('1.2.3');
+    expect(screen.getByTestId('claw-card-openclaw').textContent).toContain('1.2.3');
     // autoresearchclaw 未安装
     expect(screen.getByTestId('claw-status-autoresearchclaw').textContent).toContain('未安装');
   });

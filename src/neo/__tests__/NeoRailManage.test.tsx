@@ -183,16 +183,15 @@ beforeEach(() => {
 });
 
 describe('NeoRail 管理面 — 员工行', () => {
-  // os-unified（2026-11-03）：员工行走 Grok 会话项形态（头像可点开主机卡片），
-  // 行内删除钮移入主机卡片——rail 内不再渲染 neo-agent-delete，改断言其缺席。
+  // os-unified（2026-11-03）：员工行走 Grok 会话项形态；2026-11-06 用户反馈
+  // 头像主机入口移除（点头像也进单聊，灵魂编辑走会话右栏「灵魂」tab）——
+  // rail 内不再渲染 neo-agent-delete / neo-agent-host-btn，改断言其缺席。
   // 2026-11-04：分区移除，成员会话行直接渲染在 home 列表区。
-  it('成员行走会话项形态：无行内删除钮（删除入口移入 agent 主机卡片）', async () => {
+  it('成员行走会话项形态：无行内删除钮、无头像主机入口', async () => {
     renderRail('home');
     const rows = await screen.findAllByTestId('neo-agent-session-row');
     expect(rows.length).toBeGreaterThanOrEqual(1);
-    // 头像主机入口（点头像开 agent-soul 主机卡片）
-    const hostBtns = await screen.findAllByTestId('neo-agent-host-btn');
-    expect(hostBtns.length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByTestId('neo-agent-host-btn')).toBeNull();
     expect(screen.queryByTestId('neo-agent-delete')).toBeNull();
     expect(screen.queryByTestId('neo-agent-soul-entry')).toBeNull();
     expect(screen.queryByTestId('neo-agent-pause-toggle')).toBeNull();

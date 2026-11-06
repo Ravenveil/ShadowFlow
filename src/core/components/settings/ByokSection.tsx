@@ -7,6 +7,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../common/i18n';
+// 2026-11-06 美化批：官方品牌 logo（首字母 monogram 太丑，用户反馈）
+import { BrandGlyph } from '../../../common/icons/brandIcons';
 
 const RECOMMENDED_TEMP = 0.2;
 
@@ -197,17 +199,20 @@ async function revealProviderKey(id: string): Promise<string | null> {
 function ProviderLogo({ id, size = 32, active = false }: { id: string; size?: number; active?: boolean }) {
   const m = PROVIDER_META[id] ?? { tint: '#71717A', monogram: '?' };
   const r = Math.round(size * 0.28);
-  const fs = m.monogram.length > 1 ? Math.round(size * 0.32) : Math.round(size * 0.44);
+  const glyph = BrandGlyph({ brandId: id, size: Math.round(size * 0.58) });
+  // 2026-11-06 美化批：官方品牌 SVG 优先（BrandGlyph），未收录回落首字母 monogram。
   return (
     <div style={{
       width: size, height: size, borderRadius: r, flexShrink: 0,
       background: `color-mix(in oklab, ${m.tint} 14%, var(--t-panel, var(--t-bg)))`,
       border: `1px solid color-mix(in oklab, ${m.tint} ${active ? 55 : 30}%, transparent)`,
       color: m.tint, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: fs, letterSpacing: '-0.04em',
+      fontFamily: 'var(--font-mono)', fontWeight: 700,
+      fontSize: Math.round(size * (m.monogram.length > 1 ? 0.32 : 0.44)),
+      letterSpacing: '-0.04em',
       userSelect: 'none',
     }}>
-      {m.monogram}
+      {glyph ?? m.monogram}
     </div>
   );
 }

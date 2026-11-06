@@ -409,6 +409,28 @@ export function NeoGroupChat({
   const [memberBusy, setMemberBusy] = useState<string | null>(null);
   const [memberErr, setMemberErr] = useState<string | null>(null);
 
+  // 点浮层外部关闭（与 TeamPanel roster picker 同款：document mousedown +
+  // Esc）；浮层内部点击不关；点「+」钮交给按钮自身 onClick 开合。
+  const memberPickerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!memberPickerOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (memberPickerRef.current?.contains(target)) return;
+      if ((target as HTMLElement).closest?.('.neo-gc-member-add')) return;
+      setMemberPickerOpen(false);
+    };
+    const onDocKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMemberPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    document.addEventListener('keydown', onDocKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onDocMouseDown);
+      document.removeEventListener('keydown', onDocKeyDown);
+    };
+  }, [memberPickerOpen]);
+
   // ── 交接记录面板（2026-11-05 迭代六，OpenBot hop 模型可视化）──────────────
   // 顶栏「交接」钮 → 下拉面板展示最近 3 回合的 agent 间交接（谁→谁、终态、
   // 产出规模、失败原因）。数据源 GET /hops?all=1；回合结束自动刷新一次
@@ -764,7 +786,11 @@ export function NeoGroupChat({
         </button>
 
         {memberPickerOpen && (
-          <div className="neo-gc-member-picker" data-testid="neo-gc-member-picker">
+          <div
+            className="neo-gc-member-picker"
+            data-testid="neo-gc-member-picker"
+            ref={memberPickerRef}
+          >
             <div className="neo-gc-member-picker-head">
               {t('neo.group.addMemberTitle', { defaultValue: '选择要加入的成员' })}
             </div>

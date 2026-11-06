@@ -321,6 +321,11 @@ export function ClawHubPage({ embedded = false }: { embedded?: boolean } = {}) {
         <span className="clawhub-subtitle" data-testid="clawhub-scan-info">
           {snapshot
             ? t('clawhub.scanInfo', {
+                // 2026-11-06 修复：补传插值变量——此前漏传导致 zh 词条的
+                // {{installed}}/{{total}}/{{time}} 渲染成字面量占位符。
+                installed: installedCount,
+                total: snapshot.items.length,
+                time: new Date(snapshot.scanned_at).toLocaleTimeString(),
                 defaultValue: `已装 ${installedCount}/${snapshot.items.length} · 扫描于 ${new Date(
                   snapshot.scanned_at,
                 ).toLocaleTimeString()}`,

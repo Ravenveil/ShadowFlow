@@ -43,6 +43,85 @@ _SCHEDULE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 MAX_RUNS_STORED = 20
 
+# ── OpenBot /routines 防呆三件套（2026-11-06 对齐批）────────────────────────
+# OpenBot 产品约束范式：例程间隔下限 / 启用数量上限 / 连续失败熔断自动停用，
+# 都是「防止一句话调度出超出人意料的规模」的产品化思考。落点：
+MAX_ENABLED_SCHEDULES = 20      # 启用计划数上限（创建/启用时校验）
+MIN_CRON_INTERVAL_MINUTES = 15  # cron 最小触发间隔（防高频烧模型费用）
+MAX_CONSECUTIVE_FAILURES = 10   # 连续失败达阈值 → 熔断自动停用
+
+
+def _parse_cron_interval_minutes(cron: str) -> Optional[int]:
+    """Estimate the shortest interval (minutes) at which a cron expression can
+    fire consecutively. Conservative parse of the minute/hour fields only:
+      - "*/N" in minute field → N minutes
+      - "A/B" in minute field → interval N within the hour window
+      - plain "*" minute field with "*/*" hour → 60/hours-step minutes
+      - anything more specific (listed minutes, single time) → ≥ 60 minutes
+    Returns None when the expression cannot be parsed conservatively (caller
+    then skips the interval check rather than false-positiving).
+    """
+    try:
+        fields = cron.split()
+    except (ValueError, AttributeError):
+        return None
+    if len(fields) != 5:
+        return None
+    minute, hour = fields[0], fields[1]
+
+    def _step(field: str) -> Optional[int]:
+        """Extract the step of a */N or A/B field; None when not a step form."""
+        if "/" not in field:
+            return None
+        _, _, step_part = field.partition("/")
+        try:
+            step = int(step_part)
+        except ValueError:
+            return None
+        return step if step > 0 else None
+
+    def _is_wildcard(field: str) -> bool:
+        return field == "*" or (field.startswith("*/") and field[2:].isdigit())
+
+    # Minute field */N or A/B → fires every N minutes (N < 60 → sub-hourly).
+    m_step = _step(minute)
+    if m_step is not None:
+        return m_step
+    # Minute wildcard + hour step A/B → fires every B hours = B*60 minutes.
+    if _is_wildcard(minute) and (hour.startswith("*/") or "/" in hour):
+        h_step = _step(hour)
+        if h_step is not None:
+            return h_step * 60
+    # Listed minutes (0,15,30,45 etc.) → shortest gap between consecutive
+    # listed values within the hour; conservative floor at 60 when unclear.
+    if "," in minute:
+        try:
+            mins = sorted({int(x) for x in minute.split(",")})
+            gaps = [b - a for a, b in zip(mins, mins[1:])]
+            gaps.append(60 - mins[-1] + mins[0])  # wrap-around gap
+            return max(min(gaps), 1)
+        except ValueError:
+            return None
+    # Single fixed minute (e.g. "0 9 * * *") → at most once per hour.
+    if minute.isdigit():
+        return 60
+    return None
+
+
+def _enforce_enabled_cap() -> None:
+    """Reject create/enable when the enabled-schedule cap is reached (422)."""
+    enabled_count = sum(1 for r in _list_schedules() if r.get("enabled", True) is not False)
+    if enabled_count >= MAX_ENABLED_SCHEDULES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "enabled_limit_reached",
+                "message": f"最多允许 {MAX_ENABLED_SCHEDULES} 个启用中的计划（当前 {enabled_count} 个）。"
+                "请先停用或删除部分计划再试。",
+                "limit": MAX_ENABLED_SCHEDULES,
+            },
+        )
+
 
 # ---------------------------------------------------------------------------
 # Storage helpers
@@ -119,23 +198,81 @@ def _schedule_job(schedule_id: str) -> None:
     if record.get("enabled", True) is False:
         return
 
+    # Run bookkeeping: runs are appended after execution outcome is known.
+    runs: List[Dict[str, Any]] = record.get("runs", [])
+
+    # The trigger itself only proves the scheduler fired; whether the task
+    # succeeded is decided by the executor bridge below. When no bridge is
+    # registered (pure reminder schedules), firing counts as success.
+    status = "succeeded"
+    error_message: Optional[str] = None
+    bridge = _RUN_EXECUTOR_BRIDGE
+    if bridge is not None:
+        try:
+            bridge(record)
+        except Exception as exc:
+            status = "failed"
+            error_message = str(exc)[:300]
+            logger.warning("schedule_job: executor failed for %s: %s", schedule_id, exc)
+
     run = {
         "run_id": uuid4().hex,
         "triggered_at": _utc_now().isoformat(),
-        "status": "succeeded",
+        "status": status,
     }
-    runs: List[Dict[str, Any]] = record.get("runs", [])
+    if error_message:
+        run["error"] = error_message
     runs.insert(0, run)
     record["runs"] = runs[:MAX_RUNS_STORED]
+
     # One-shot events fire exactly once; mark completed so frontend can render
     # them as historical rather than pending.
     if record.get("start_at") and not record.get("cron_expression"):
         record["completed"] = True
         record["next_run_time"] = None
+
+    # OpenBot 防呆③：连续失败熔断 — cron 计划连续失败达阈值自动停用，
+    # 防止一个坏计划每 15 分钟烧一次模型费用（OpenBot: 连续失败 10 次停用）。
+    if status == "failed" and record.get("cron_expression"):
+        recent = record["runs"][:MAX_CONSECUTIVE_FAILURES]
+        if (
+            len(recent) >= MAX_CONSECUTIVE_FAILURES
+            and all(r.get("status") == "failed" for r in recent)
+        ):
+            record["enabled"] = False
+            record["next_run_time"] = None
+            record["auto_disabled"] = True
+            record["auto_disabled_at"] = _utc_now().isoformat()
+            record["auto_disabled_reason"] = (
+                f"连续失败 {MAX_CONSECUTIVE_FAILURES} 次，已自动停用"
+            )
+            logger.warning(
+                "schedule_job: schedule %s auto-disabled after %d consecutive failures",
+                schedule_id,
+                MAX_CONSECUTIVE_FAILURES,
+            )
+            _save_schedule(record)
+            # Mirror the disable into APScheduler (pause the burning job).
+            from shadowflow.services.scheduler import get_scheduler
+            scheduler = get_scheduler()
+            if scheduler.running:
+                try:
+                    scheduler.pause_job(schedule_id)
+                except Exception:
+                    pass
+            return
+
     try:
         _save_schedule(record)
     except Exception as exc:
         logger.error("schedule_job: failed to save run record for %s: %s", schedule_id, exc)
+
+
+# Executor bridge: the daemon registers a callable that actually runs the
+# task_description (LLM/chat pipeline). None = pure reminder mode where a
+# fired trigger is recorded as succeeded. Kept module-level so tests can
+# monkeypatch it without touching APScheduler internals.
+_RUN_EXECUTOR_BRIDGE: Optional[Any] = None
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +342,10 @@ async def create_schedule(body: CreateScheduleRequest) -> Dict[str, Any]:
             detail={"error": "SCHEDULER_UNAVAILABLE", "message": "APScheduler not installed; add 'APScheduler>=3.10,<4' to your environment"},
         )
 
+    # OpenBot 防呆①：启用计划数上限（创建即启用，创建前校验）。
+    # 注意放在 cron/start_at 二分支之前——两种计划类型都占启用名额。
+    _enforce_enabled_cap()
+
     # Build trigger: cron (recurring) takes precedence if both supplied,
     # otherwise start_at (one-shot).
     if body.cron_expression:
@@ -219,6 +360,18 @@ async def create_schedule(body: CreateScheduleRequest) -> Dict[str, Any]:
                     "example": "0 8 * * 1-5",
                 },
             )
+        # OpenBot 防呆②：最小触发间隔（默认 15 分钟，防高频计划烧模型费用）。
+        interval = _parse_cron_interval_minutes(body.cron_expression)
+        if interval is not None and interval < MIN_CRON_INTERVAL_MINUTES:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "cron_interval_too_short",
+                    "message": f"cron 触发间隔过短（约 {interval} 分钟），最小允许 {MIN_CRON_INTERVAL_MINUTES} 分钟。",
+                    "example": "*/15 * * * *",
+                },
+            )
+
     else:
         # body.start_at guaranteed not None by _xor_trigger validator
         start_at = body.start_at
@@ -290,7 +443,17 @@ async def patch_schedule(schedule_id: str, body: PatchScheduleRequest) -> Dict[s
     if record is None:
         raise HTTPException(status_code=404, detail={"error": {"code": "NOT_FOUND", "message": "Schedule not found"}})
 
+    # OpenBot 防呆①：停用→启用切换时同样受启用数上限约束（创建路径同款 422）。
+    was_enabled = record.get("enabled", True) is not False
+    if body.enabled and not was_enabled:
+        _enforce_enabled_cap()
+
     record["enabled"] = body.enabled
+    # 人工重新启用 = 熔断复位：清掉自动停用标记与失败计数（runs 历史保留）。
+    if body.enabled:
+        record.pop("auto_disabled", None)
+        record.pop("auto_disabled_at", None)
+        record.pop("auto_disabled_reason", None)
 
     # Recompute next_run_time so list views reflect the toggle immediately.
     # A completed one-shot stays completed — re-enabling does not resurrect it.

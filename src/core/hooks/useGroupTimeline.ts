@@ -107,6 +107,41 @@ export function lastTurnId(messages: readonly TimelineMessage[]): string {
 }
 
 /**
+ * 2026-11-06「消息结束了还在转圈」前端兜底 — run 到终态时，本地流里仍可能有
+ * 未收口的过程卡（服务端缺 finalize patch / SSE 断流丢帧 / 老事件日志回放）：
+ *   thinking(streaming) → done（耗时按 ts 到现在估）
+ *   tool_call(running)  → error（run 都终态了，工具不可能再回来结果）
+ *   msg_foot(running)   → done
+ * 纯函数，返回新数组（不变式与 applyPatch 一致）；没有残留时原样返回。
+ */
+export function sweepStaleProcessCards(
+  messages: TimelineMessage[],
+  nowMs: number,
+): TimelineMessage[] {
+  let changed = false;
+  const next = messages.map((m) => {
+    if (m.kind === 'thinking' && m.status === 'streaming') {
+      changed = true;
+      return {
+        ...m,
+        status: 'done' as const,
+        duration_ms: Math.max(0, nowMs - m.ts),
+      };
+    }
+    if (m.kind === 'tool_call' && m.status === 'running') {
+      changed = true;
+      return { ...m, status: 'error' as const };
+    }
+    if (m.kind === 'msg_foot' && m.status === 'running') {
+      changed = true;
+      return { ...m, status: 'done' as const };
+    }
+    return m;
+  });
+  return changed ? next : messages;
+}
+
+/**
  * 群 SSE 帧（MessageItem 风格 payload）→ TimelineMessage。
  * 与 server/src/lib/timeline-replay.ts `chatMessagesToTimeline` 同语义：
  *   agent → assistant_text（保留 sender_name）；system.notice → raw。
@@ -314,6 +349,9 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
         runSubsRef.current.delete(sessionId);
         unsub();
       }
+      // 前端兜底清扫 — run 终态时把本地仍 streaming/running 的过程卡就地
+      // 落终态（服务端缺 finalize patch / SSE 断帧的场景；2026-11-06）。
+      setMessages((prev) => sweepStaleProcessCards(prev, Date.now()));
       // 终态回写 runs（避免下一轮 effect 误判仍 running；UI 徽章同步变灰/变绿）。
       setRuns((prev) =>
         prev.map((r) => (r.session_id === sessionId ? { ...r, status } : r)),
@@ -440,6 +478,9 @@ export function useGroupTimeline(groupId: string | null): UseGroupTimelineResult
     setRuns((prev) =>
       prev.map((r) => (r.status === 'running' ? { ...r, status: 'canceled' } : r)),
     );
+    // 前端兜底清扫 — 停止生成时同样把残留的 streaming 过程卡就地落终态，
+    // 避免「点了停止，thinking 卡还在转圈」。
+    setMessages((prev) => sweepStaleProcessCards(prev, Date.now()));
     // ProgressRow 占位一并收掉（Stop 后不该再有「正在处理」）。
     setPendingTurn(null);
   }, [runs]);

@@ -427,3 +427,139 @@ describe('画像冲突裁决闭环（发现 → 采纳 / 驳回 → 列表清空
     }
   });
 });
+
+describe('反馈自动写回队列（投递即写回 → 幂等 → 冲突 → 补跑）', () => {
+  const send = (body: Record<string, unknown>) =>
+    request(app()).post('/api/memory/handoff/feedback').send(body);
+  const queue = (qs = '') => request(app()).get(`/api/memory/handoff/feedback${qs}`);
+  const profileOf = (id: string) => request(app()).get(`/api/memory/handoff/profiles/${id}`);
+  const valueOf = async (id: string, key: string): Promise<string> => {
+    const p = await profileOf(id);
+    const rows = p.body.profile as Array<{ key: string; value: string }>;
+    return rows.find((x) => x.key === key)?.value ?? '';
+  };
+
+  it('单条投递即自动写回：画像只存命中短句，回执带每个 key 的动作与来源留痕', async () => {
+    const res = await send({
+      subject_id: 'cust-q1',
+      text: '客户偏好简洁一点，预算 800 以内',
+      source: 'crm',
+      source_ref: 'ticket-1',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.processed).toBe(1);
+    expect(res.body.items[0].profile_keys).toEqual(expect.arrayContaining(['preference', 'budget']));
+    expect(res.body.items[0].actions).toEqual(['create', 'create']);
+    expect(await valueOf('cust-q1', 'preference')).toBe('客户偏好简洁一点');
+    expect(await valueOf('cust-q1', 'budget')).toBe('预算 800 以内');
+    const row = (await queue('?status=processed&limit=100')).body.items.find(
+      (x: { subject_id: string }) => x.subject_id === 'cust-q1',
+    );
+    expect(row.source).toBe('crm');
+    expect(row.source_ref).toBe('ticket-1');
+  });
+
+  it('同一内容重投只入队一次，画像事件不新增', async () => {
+    const before = (await profileOf('cust-q1')).body.writes as number;
+    const res = await send({
+      subject_id: 'cust-q1', text: '客户偏好简洁一点，预算 800 以内', source: 'crm',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.deduped).toBe(1);
+    expect(res.body.items[0].dedup).toBe(true);
+    expect((await profileOf('cust-q1')).body.writes).toBe(before);
+  });
+
+  it('没命中规则的反馈记 skipped，不往画像里塞东西', async () => {
+    const res = await send({ subject_id: 'cust-q2', text: '今天天气不错' });
+    expect(res.body.skipped).toBe(1);
+    expect(res.body.items[0].profile_keys).toEqual([]);
+    expect((await profileOf('cust-q2')).body.writes).toBe(0);
+  });
+
+  it('批量投递逐条独立：一条脏数据只让自己 failed，整批仍 2xx', async () => {
+    const res = await send({
+      items: [
+        { subject_id: 'cust-q3', text: '偏好简洁' },
+        { subject_id: 'cust-q4', text: '' },
+        { subject_id: '', text: '预算 900' },
+        { subject_id: 'cust-q5', text: '行业是烘焙' },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.received).toBe(4);
+    expect(res.body.processed).toBe(2);
+    expect(res.body.failed).toBe(2);
+    expect(res.body.items[1].error).toBeTruthy();
+  });
+
+  it('同主体不同说法自动记冲突并进待裁决列表，但不擅自覆盖原值', async () => {
+    await send({ subject_id: 'cust-q6', text: '预算 800 以内' });
+    const second = await send({ subject_id: 'cust-q6', text: '预算 3000 以内' });
+    expect(second.body.items[0].actions).toContain('conflict');
+    expect(second.body.conflicts).toBe(1);
+    expect(await valueOf('cust-q6', 'budget')).toBe('预算 800 以内');
+    const list = await request(app()).get('/api/memory/handoff/profiles/conflicts');
+    expect(
+      list.body.some((x: { subject_id: string; key: string }) => x.subject_id === 'cust-q6' && x.key === 'budget'),
+    ).toBe(true);
+  });
+
+  it('老入口 /profiles/ingest 走同一队列：返回 feedback_id，重投命中去重', async () => {
+    const url = '/api/memory/handoff/profiles/ingest';
+    const first = await request(app()).post(url).send({ subject_id: 'cust-q7', text: '偏好极简' });
+    expect(first.status).toBe(200);
+    expect(first.body.feedback_id).toBeTruthy();
+    const again = await request(app()).post(url).send({ subject_id: 'cust-q7', text: '偏好极简' });
+    expect(again.body.dedup).toBe(true);
+  });
+
+  it('队列审计：状态筛选、统计自洽、非法状态不报错', async () => {
+    const all = await queue('?limit=100');
+    expect(all.status).toBe(200);
+    expect(all.body.stats.total).toBeGreaterThanOrEqual(6);
+    const s = all.body.stats;
+    expect(s.pending + s.processed + s.skipped + s.failed).toBe(s.total);
+    const skipped = await queue('?status=skipped&limit=100');
+    expect(skipped.body.items.every((x: { status: string }) => x.status === 'skipped')).toBe(true);
+    expect((await queue('?status=nope')).status).toBe(200);
+  });
+
+  it('补跑：把一条置回 failed 后 run 能重新结算，画像值不被改写', async () => {
+    const before = await valueOf('cust-q1', 'preference');
+    sqlite.getDb()
+      .prepare(
+        `UPDATE memory_feedback_queue SET status = 'failed'
+          WHERE id = (SELECT id FROM memory_feedback_queue
+                       WHERE subject_id = 'cust-q1' ORDER BY created_at DESC LIMIT 1)`,
+      )
+      .run();
+    const run = await request(app())
+      .post('/api/memory/handoff/feedback/run')
+      .send({ include_failed: true, limit: 100 });
+    expect(run.status).toBe(200);
+    expect(run.body.scanned).toBeGreaterThanOrEqual(1);
+    expect(run.body.processed).toBeGreaterThanOrEqual(1);
+    expect(await valueOf('cust-q1', 'preference')).toBe(before);
+    expect((await queue('?limit=100')).body.stats.failed).toBe(0);
+  });
+
+  it('stats 暴露队列计数；空批量 / 超 50 条 / 奇怪 run body 一律 4xx 不是 5xx', async () => {
+    const s = await request(app()).get('/api/memory/handoff/stats');
+    expect(s.body.feedback_total).toBeGreaterThan(0);
+    expect(s.body.feedback_pending).toBe(0);
+    expect(s.body.feedback_failed).toBe(0);
+
+    const empty = await send({ items: [] });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error.code).toBe('INVALID_BODY');
+    const tooMany = await send({
+      items: Array.from({ length: 51 }, () => ({ subject_id: 'x', text: '偏好简洁' })),
+    });
+    expect(tooMany.status).toBe(400);
+    const weirdRun = await request(app())
+      .post('/api/memory/handoff/feedback/run')
+      .send({ limit: 'oops', include_failed: 'yes' });
+    expect(weirdRun.status).toBeLessThan(500);
+  });
+});

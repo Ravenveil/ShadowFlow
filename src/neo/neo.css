@@ -436,6 +436,31 @@
   color: var(--t-accent-ink, var(--t-panel));
 }
 
+/* ── 「+ 新建」聚合菜单（2026-11-06 用户反馈）：三个创建入口收进一个加号行，
+   点加号弹无遮罩下拉浮层（微信/钉钉范式）。浮层 = 白卡 r12 + 边框 + 投影，
+   菜单项复用 .neo-row 行形态，hover 浅灰底。── */
+.neo-plus-wrap {
+  position: relative;
+}
+.neo-plus-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--t-panel);
+  border: 1px solid var(--t-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+.neo-plus-menu-item {
+  border-radius: 8px;
+}
+
 /* 折叠态图标列表 */
 .neo-rail-icons {
   flex: 1;
@@ -1369,4 +1394,513 @@
 .neo-sess-row.neo-row {
   padding-top: 5px;
   padding-bottom: 5px;
+}
+
+/* ═══ 定时任务管理面（2026-11-06，GrokBot/OpenBot /routines 对齐批）═══
+   SchedulesPage：中栏列表 = 头像 + 任务摘要 + 元信息 + 启停 toggle + 删除。
+   视觉沿用 rail 会话行语言（32px 头像 / 两行文本 / 细线图标），密度放宽。 */
+
+.neo-sched-head {
+  margin-bottom: 16px;
+}
+.neo-sched-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-sched-title svg {
+  color: var(--t-fg-3);
+}
+.neo-sched-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--t-fg-3);
+  line-height: 1.5;
+}
+
+.neo-sched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-sched-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.neo-sched-row:hover {
+  background: color-mix(in srgb, var(--t-fg) 3%, var(--t-panel));
+}
+.neo-sched-row[data-enabled='false'] {
+  opacity: 0.62;
+}
+.neo-sched-avatar {
+  flex-shrink: 0;
+  display: flex;
+}
+.neo-sched-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.neo-sched-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-sched-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--t-fg-3);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.neo-sched-cron {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--t-fg) 6%, transparent);
+}
+.neo-sched-dot {
+  color: var(--t-fg-5);
+}
+/* 归属 agent 名字徽标（被动展示：计划属于哪个 Bot） */
+.neo-sched-agent {
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--t-fg-3);
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--t-border);
+  background: color-mix(in srgb, var(--t-fg) 3%, transparent);
+}
+.neo-sched-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--t-ok, #15803d);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-sched-toggle:hover {
+  background: color-mix(in srgb, var(--t-fg) 5%, transparent);
+}
+.neo-sched-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.neo-sched-row[data-enabled='false'] .neo-sched-toggle {
+  color: var(--t-fg-5);
+}
+.neo-sched-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 24px;
+  border: 1.5px dashed var(--t-border);
+  border-radius: 14px;
+  color: var(--t-fg-3);
+  text-align: center;
+}
+.neo-sched-empty p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-width: 420px;
+}
+.neo-sched-footnote {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 14px 2px 0;
+  font-size: 11.5px;
+  color: var(--t-fg-5);
+}
+
+/* ═══ 侧栏一次成型批（2026-11-06）：home 加载骨架 ═══
+   agents/teams/inbox/projects 四路 settle 前渲染会话行形状的骨架（圆头像 +
+   两行文本），数据到齐原位替换——「空白→全量爆发」改为「骨架→内容」。 */
+.neo-rail-sess-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.neo-rail-skel-avatar {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.neo-rail-skel-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.neo-rail-skel-line {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  width: 78%;
+}
+.neo-rail-skel-line--short {
+  width: 52%;
+}
+
+/* ═══ 发起群聊选人式模态（2026-11-06 重做）═══
+   顶部已选 chips + 搜索行 + 成员列表（头像/名称/勾选），微信建群心智。 */
+.neo-ng-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--t-fg) 2%, transparent);
+}
+.neo-ng-chips-hint {
+  font-size: 12px;
+  color: var(--t-fg-5);
+}
+.neo-ng-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  font-size: 12px;
+  color: var(--t-fg-2);
+}
+.neo-ng-chip-name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-ng-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--t-fg-4);
+  cursor: pointer;
+}
+.neo-ng-chip-x:hover {
+  background: color-mix(in srgb, var(--t-fg) 8%, transparent);
+  color: var(--t-fg-2);
+}
+.neo-ng-team-tag {
+  font-size: 11px;
+  color: var(--t-accent, #4f46e5);
+  border: 1px solid color-mix(in srgb, var(--t-accent, #4f46e5) 35%, transparent);
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 8%, transparent);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.neo-ng-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 6px;
+}
+.neo-ng-search {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.neo-ng-search-icon {
+  position: absolute;
+  left: 9px;
+  color: var(--t-fg-5);
+  pointer-events: none;
+}
+.neo-ng-search input {
+  width: 100%;
+  padding: 6px 10px 6px 28px;
+  font-size: 12.5px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-bg);
+  color: var(--t-fg);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.neo-ng-list {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  padding: 4px;
+}
+.neo-ng-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+.neo-ng-row:hover {
+  background: color-mix(in srgb, var(--t-fg) 4%, transparent);
+}
+.neo-ng-row.on {
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 8%, transparent);
+}
+.neo-ng-row-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.neo-ng-row-soul {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--t-fg-5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-ng-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--t-border);
+  color: transparent;
+}
+.neo-ng-check.on {
+  border-color: var(--t-accent, #4f46e5);
+  background: var(--t-accent, #4f46e5);
+  color: #fff;
+}
+
+/* ── 内置秘书「影」常驻行（2026-11-06，GrokBot 主Bot范式）──────────────────
+   home 列表区第一位：微 accent 底色区分普通会话行，其余复用 neo-sess-row。 */
+.neo-secretary-row {
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--t-accent, #4f46e5) 14%, transparent);
+}
+.neo-secretary-row:hover {
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 10%, transparent);
+}
+.neo-secretary-row.on {
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 12%, transparent);
+  border-color: color-mix(in srgb, var(--t-accent, #4f46e5) 30%, transparent);
+}
+
+/* ── 首访入职问卷模态（2026-11-06，ZCode/Codex 弹窗式）─────────────────────
+   复用 neo-modal-mask 遮罩；卡片窄一点，问题一屏一问 + 进度条。 */
+.neo-onb-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.32);
+  animation: neo-fade var(--dur-2) var(--ease-out);
+}
+.neo-onb-card {
+  position: relative;
+  width: min(420px, calc(100vw - 48px));
+  padding: 22px 20px 16px;
+  border: 1px solid var(--t-border);
+  border-radius: 16px;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+  animation: neo-pop var(--dur-2) var(--ease-out);
+}
+.neo-onb-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-3);
+  cursor: pointer;
+}
+.neo-onb-close:hover { background: var(--t-hover, rgba(0,0,0,0.06)); color: var(--t-fg); }
+.neo-onb-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.neo-onb-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 12%, transparent);
+  color: var(--t-accent, #4f46e5);
+}
+.neo-onb-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.neo-onb-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--t-fg-3);
+}
+.neo-onb-progress {
+  height: 3px;
+  margin-bottom: 14px;
+  border-radius: 2px;
+  background: var(--t-border);
+  overflow: hidden;
+}
+.neo-onb-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--t-accent, #4f46e5);
+  transition: width 200ms var(--ease-out);
+}
+.neo-onb-body { min-height: 108px; }
+.neo-onb-q {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.neo-onb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.neo-onb-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  background: var(--t-panel);
+  color: var(--t-fg-2, var(--t-fg));
+  font-size: 12px;
+  cursor: pointer;
+}
+.neo-onb-chip:hover { border-color: var(--t-accent, #4f46e5); }
+.neo-onb-chip.on {
+  border-color: var(--t-accent, #4f46e5);
+  background: color-mix(in srgb, var(--t-accent, #4f46e5) 12%, transparent);
+  color: var(--t-accent, #4f46e5);
+}
+.neo-onb-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-size: 13px;
+}
+.neo-onb-input:focus {
+  outline: none;
+  border-color: var(--t-accent, #4f46e5);
+}
+.neo-onb-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+.neo-onb-step { font-size: 11px; color: var(--t-fg-3); }
+.neo-onb-foot-actions { display: flex; gap: 8px; }
+.neo-onb-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--t-border);
+  border-radius: 9px;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+.neo-onb-btn:hover { border-color: var(--t-accent, #4f46e5); }
+.neo-onb-btn.primary {
+  border-color: var(--t-accent, #4f46e5);
+  background: var(--t-accent, #4f46e5);
+  color: #fff;
+}
+.neo-onb-btn.primary:hover { filter: brightness(1.08); }
+
+/* 问卷卡片入场（neo-pop 此前未定义，本批补上；同款缩放淡入） */
+@keyframes neo-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
