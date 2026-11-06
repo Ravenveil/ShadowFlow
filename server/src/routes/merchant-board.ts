@@ -15,6 +15,9 @@
  * GET  /api/merchant/orders                 → 订单列表（status 筛 + offset 分页
  *                                             + start/end 区间，返回 total/has_more）
  * GET  /api/merchant/reconcile              → 账实对账（差额逐项给出 issues）
+ * GET  /api/merchant/evidence               → 演示证据包（①③ 留痕汇总，JSON）
+ * GET  /api/merchant/evidence.md            → 同上，可下载的 Markdown 答辩材料
+ * GET  /api/merchant/evidence/orders.csv   → 区间内订单明细 CSV（UTF-8 BOM）
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
  * POST /api/merchant/products               → 建商品（管理）
@@ -44,6 +47,12 @@ import {
   stats,
   trafficCurve,
 } from '../storage/merchant-board';
+import {
+  buildEvidence,
+  evidenceFilename,
+  evidenceMarkdown,
+  evidenceOrdersCsv,
+} from '../storage/evidence';
 import { apiGuard } from '../middleware/api-guard';
 
 const router = Router();
@@ -132,6 +141,43 @@ router.get('/orders', (req: Request, res: Response) => {
 router.get('/reconcile', (_req: Request, res: Response) => {
   try {
     res.json(reconcile());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// ── 演示证据包：把 ①③ 的留痕合成一份可核实、可下载的答辩材料 ──────────────────
+// 纯只读；非法 start/end 由 overview()/listOrders() 抛 MerchantError(400)，
+// 这里不重复解析时间，页面与附件就不会出现两套口径。
+function evidenceQuery(req: Request) {
+  return { start: req.query.start, end: req.query.end, limit: req.query.limit };
+}
+
+router.get('/evidence/orders.csv', (req: Request, res: Response) => {
+  try {
+    const csv = evidenceOrdersCsv(evidenceQuery(req));
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="${evidenceFilename('csv')}"`);
+    res.send(csv);
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+router.get('/evidence.md', (req: Request, res: Response) => {
+  try {
+    const report = buildEvidence(evidenceQuery(req));
+    res.set('Content-Type', 'text/markdown; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="${evidenceFilename('md', report.generated_at)}"`);
+    res.send(evidenceMarkdown(report));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+router.get('/evidence', (req: Request, res: Response) => {
+  try {
+    res.json(buildEvidence(evidenceQuery(req)));
   } catch (err) {
     fail(res, err);
   }

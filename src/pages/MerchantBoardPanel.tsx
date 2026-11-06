@@ -10,18 +10,22 @@
  *   1. 订单流水分时（15m / 小时 / 日，零值补齐）+ 营收/成本/毛利/客单价 KPI；
  *   2. 客流曲线（PV / UV / 转化率 / 分渠道）；
  *   3. 第一单五步链路（访客 → 下单 → 支付 → 入账 → 看板）+ 账实对账。
+ *   4. 演示证据包：把 ①③ 的已落库留痕导成可下载的答辩材料（只读）。
  *
  * 口径全部由后端算好，这里只做展示与单位换算，不在前端重复计算。
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../common/i18n';
 import {
+  downloadEvidence,
+  fetchEvidence,
   fetchFirstOrderChain,
   fetchMerchantOrders,
   fetchMerchantOverview,
   fetchOrderTimeseries,
   fetchReconcile,
   fetchTrafficCurve,
+  type EvidenceSummary,
   type FirstOrderChain,
   type Granularity,
   type MerchantOrderPage,
@@ -186,6 +190,10 @@ export default function MerchantBoardPanel() {
   const [traceId, setTraceId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  /** 演示证据包：摘要单独拉，失败只降级成卡片里一行提示，不拖垮整页看板。 */
+  const [evidence, setEvidence] = useState<EvidenceSummary | null>(null);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const [exportMsg, setExportMsg] = useState('');
 
   const msg = (err: unknown) => (err instanceof Error ? err.message : String(err));
   const orders = orderPage?.items ?? [];
@@ -195,13 +203,16 @@ export default function MerchantBoardPanel() {
     setErrorMsg('');
     try {
       const win = kpiWindow(kpiRange);
-      const [ov, ts, tc, rec, ch, od] = await Promise.all([
+      const [ov, ts, tc, rec, ch, od, ev] = await Promise.all([
         fetchMerchantOverview(win),
         fetchOrderTimeseries({ granularity, start: windowStart(granularity) }),
         fetchTrafficCurve({ granularity, start: windowStart(granularity) }),
         fetchReconcile(),
         fetchFirstOrderChain(''),
         fetchMerchantOrders({ limit: ORDER_PAGE_SIZE, status: orderFilter, start: win.start }),
+        // 证据摘要单独降级：它只是附加材料，挂了不能让整页看板变空白。
+        // 失败时置 null，用户可点「重新扫描留痕」单独重试并看到错误原因。
+        fetchEvidence(win).catch(() => null),
       ]);
       setOverview(ov);
       setFlow(ts);
@@ -209,6 +220,7 @@ export default function MerchantBoardPanel() {
       setReconcile(rec);
       setChain(ch);
       setOrderPage(od);
+      setEvidence(ev);
     } catch (err) {
       // 后端未起 / 网关未挂时只降级成一条错误提示，不拖垮整页数据看板。
       setErrorMsg(
@@ -251,6 +263,32 @@ export default function MerchantBoardPanel() {
       setErrorMsg(`链路查询失败：${msg(err)}`);
     }
   }, [traceId]);
+
+  /**
+   * 证据摘要与导出都用 kpiWindow(kpiRange)：切到「今天」，附件里也只能是今天的单。
+   * 页面一个数字、附件另一个数字，是演示现场最容易露馅的地方。
+   */
+  const loadEvidence = useCallback(async () => {
+    setEvidenceBusy(true);
+    setExportMsg('');
+    try {
+      setEvidence(await fetchEvidence(kpiWindow(kpiRange)));
+    } catch (err) {
+      setExportMsg(`证据摘要加载失败：${msg(err)}`);
+    } finally {
+      setEvidenceBusy(false);
+    }
+  }, [kpiRange]);
+
+  const exportFile = useCallback(async (kind: 'md' | 'csv') => {
+    setExportMsg('');
+    try {
+      await downloadEvidence(kind, kpiWindow(kpiRange));
+      setExportMsg(kind === 'md' ? 'Markdown 报告已导出' : '订单 CSV 已导出');
+    } catch (err) {
+      setExportMsg(`导出失败：${msg(err)}`);
+    }
+  }, [kpiRange]);
 
   useEffect(() => {
     void refresh();
@@ -597,6 +635,73 @@ export default function MerchantBoardPanel() {
         ) : (
           <p className="neo-db-chart-empty">
             {t('neo.merchant.chainEmpty', { defaultValue: '还没有成交，链路无从判定' })}
+          </p>
+        )}
+      </div>
+
+      {/* ── 演示证据包：①③ 的留痕合成一份可下载的答辩材料 ── */}
+      <div className="neo-db-panel neo-mb-evidence" style={{ marginTop: 12 }} data-testid="merchant-evidence">
+        <p className="neo-db-card-label">
+          {t('neo.merchant.evidence', { defaultValue: '演示证据包（运行记录）' })}
+        </p>
+        <p className="neo-mb-hint">
+          {t('neo.merchant.evidenceHint', {
+            defaultValue:
+              '把经营口径、账实核对、记忆交接与人工裁决留痕合成一份材料，供评委核实业务闭环与人机分工；导出只读，不改数据，区间与上方 KPI 一致。',
+          })}
+        </p>
+        {evidence && (
+          <div className="neo-db-lesson-kinds" data-testid="merchant-evidence-summary">
+            <span className="neo-db-lesson-chip" data-testid="merchant-evidence-reconcile">
+              {evidence.merchant.reconcile.balanced ? '账实一致' : '账实有差额'}
+            </span>
+            <span className="neo-db-lesson-chip">
+              {evidence.merchant.first_order.complete ? '第一单五步全通' : '第一单链路未通'}
+            </span>
+            <span className="neo-db-lesson-chip">写回事件 {evidence.memory.audit.total}</span>
+            <span className="neo-db-lesson-chip" data-testid="merchant-evidence-conflicts">
+              待裁决 {evidence.human_decisions.pending_conflicts}
+            </span>
+            <span className="neo-db-lesson-chip" data-testid="merchant-evidence-resolutions">
+              人工裁决 {evidence.human_decisions.resolutions}
+            </span>
+            <span className="neo-db-lesson-chip">
+              反馈待补跑 {evidence.human_decisions.pending_feedback + evidence.human_decisions.failed_feedback}
+            </span>
+          </div>
+        )}
+        <div className="neo-db-tabs" role="group" aria-label="evidence export">
+          <button
+            type="button"
+            className="neo-db-tab"
+            onClick={() => void loadEvidence()}
+            disabled={evidenceBusy}
+            data-testid="merchant-evidence-refresh"
+          >
+            {evidenceBusy
+              ? t('neo.merchant.evidenceLoading', { defaultValue: '扫描中…' })
+              : t('neo.merchant.evidenceScan', { defaultValue: '重新扫描留痕' })}
+          </button>
+          <button
+            type="button"
+            className="neo-db-tab"
+            onClick={() => void exportFile('md')}
+            data-testid="merchant-evidence-md"
+          >
+            {t('neo.merchant.evidenceMd', { defaultValue: '导出 Markdown 报告' })}
+          </button>
+          <button
+            type="button"
+            className="neo-db-tab"
+            onClick={() => void exportFile('csv')}
+            data-testid="merchant-evidence-csv"
+          >
+            {t('neo.merchant.evidenceCsv', { defaultValue: '导出订单 CSV' })}
+          </button>
+        </div>
+        {exportMsg && (
+          <p className="neo-db-status" role="status" data-testid="merchant-evidence-msg">
+            {exportMsg}
           </p>
         )}
       </div>

@@ -18,6 +18,8 @@ vi.mock('../../api/merchantBoard', () => ({
   fetchReconcile: vi.fn(),
   fetchFirstOrderChain: vi.fn(),
   fetchMerchantOrders: vi.fn(),
+  fetchEvidence: vi.fn(),
+  downloadEvidence: vi.fn(),
 }));
 
 const overview: api.MerchantOverview = {
@@ -76,6 +78,39 @@ const reconcile: api.ReconcileResult = {
   diffs: { income_cents: 0, expense_cents: 0, refund_cents: 0, refund_rows: 0 },
   issues: [],
   balanced: true,
+};
+
+const evidence: api.EvidenceSummary = {
+  schema_version: 'evidence-1',
+  generated_at: 1700000000000,
+  window: { from: null, to: null, label: '全部（开张至今）' },
+  merchant: {
+    overview,
+    reconcile,
+    first_order: chain,
+    orders: { total: 3, shown: 3 },
+  },
+  memory: {
+    stats: {
+      handoffs: 2,
+      accepted: 1,
+      profile_events: 7,
+      pending_conflicts: 2,
+      feedback_total: 4,
+      feedback_pending: 0,
+      feedback_failed: 1,
+    },
+    audit: { total: 7, resolutions: 1, by_action: { create: 3, conflict: 2 } },
+    feedback: { available: true },
+  },
+  human_decisions: {
+    pending_conflicts: 2,
+    resolutions: 1,
+    failed_feedback: 1,
+    pending_feedback: 0,
+    note: '系统自动完成下单与写回，冲突由人裁决。',
+  },
+  notes: ['营收 = 收入 − 退款'],
 };
 
 const orders: api.MerchantOrderRow[] = [
@@ -137,6 +172,8 @@ beforeEach(() => {
     offset: 0,
     has_more: false,
   });
+  vi.mocked(api.fetchEvidence).mockResolvedValue(evidence);
+  vi.mocked(api.downloadEvidence).mockResolvedValue(undefined);
 });
 
 function renderPanel() {
@@ -329,5 +366,65 @@ describe('区间联动 / 环比 / 对账差额 / 单笔毛利口径', () => {
     renderPanel();
     await waitFor(() => expect(screen.getByTestId('merchant-reconcile-issues')).toBeInTheDocument());
     expect(screen.getByTestId('merchant-reconcile-issues')).toHaveTextContent('+777 分');
+  });
+});
+
+describe('演示证据包（①③ 留痕可核实、可下载）', () => {
+  it('摘要显示账实、第一单、写回事件、待裁决与人工裁决次数', async () => {
+    renderPanel();
+    const summary = await screen.findByTestId('merchant-evidence-summary');
+    expect(summary).toHaveTextContent('账实一致');
+    expect(summary).toHaveTextContent('第一单五步全通');
+    expect(summary).toHaveTextContent('写回事件 7');
+    expect(screen.getByTestId('merchant-evidence-conflicts')).toHaveTextContent('待裁决 2');
+    expect(screen.getByTestId('merchant-evidence-resolutions')).toHaveTextContent('人工裁决 1');
+    expect(summary).toHaveTextContent('反馈待补跑 1');
+  });
+
+  it('导出 Markdown / CSV，且换 KPI 区间后附件用同一区间', async () => {
+    renderPanel();
+    await screen.findByTestId('merchant-evidence-summary');
+
+    fireEvent.click(screen.getByTestId('merchant-evidence-md'));
+    await waitFor(() => expect(api.downloadEvidence).toHaveBeenCalledWith('md', {}));
+    fireEvent.click(screen.getByTestId('merchant-evidence-csv'));
+    await waitFor(() => expect(api.downloadEvidence).toHaveBeenCalledWith('csv', {}));
+
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchEvidence).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+    fireEvent.click(screen.getByTestId('merchant-evidence-md'));
+    await waitFor(() =>
+      expect(api.downloadEvidence).toHaveBeenLastCalledWith(
+        'md',
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
+  it('证据摘要失败静默降级不拖垮看板，手动重新扫描才给出原因', async () => {
+    vi.mocked(api.fetchEvidence).mockRejectedValue(new Error('evidence boom'));
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-revenue')).toHaveTextContent('¥199'));
+    expect(screen.queryByTestId('merchant-evidence-summary')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('merchant-evidence-refresh'));
+    await waitFor(() =>
+      expect(screen.getByTestId('merchant-evidence-msg')).toHaveTextContent('evidence boom'),
+    );
+    expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
+  });
+
+  it('下载失败显示后端错误，不把错误体当附件吞掉', async () => {
+    vi.mocked(api.downloadEvidence).mockRejectedValue(new Error('401 token 不匹配'));
+    renderPanel();
+    await screen.findByTestId('merchant-evidence-summary');
+    fireEvent.click(screen.getByTestId('merchant-evidence-md'));
+    await waitFor(() =>
+      expect(screen.getByTestId('merchant-evidence-msg')).toHaveTextContent('401 token 不匹配'),
+    );
+    expect(screen.getByTestId('merchant-board-panel')).toBeInTheDocument();
   });
 });
