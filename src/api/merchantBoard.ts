@@ -4,6 +4,7 @@
  * 后端：server/src/routes/merchant-board.ts（挂载在 /api/merchant）。
  * 与 dashboard.ts（AI 用量看板）并存互不覆盖：那边是 tokens/calls/cost，
  * 这边是订单流水/客流/营收，口径由后端算好，前端不自己算。
+ * /evidence* 是演示证据包（①③ 留痕汇总 + Markdown / CSV 下载），同样只读。
  */
 
 import { getApiBase } from './_base';
@@ -257,4 +258,122 @@ export function payMerchantOrder(orderId: string, payTxnId: string): Promise<{ o
 
 export function refundMerchantOrder(orderId: string): Promise<{ order: MerchantOrder; idempotent: boolean }> {
   return post(`${BASE}/orders/${encodeURIComponent(orderId)}/refund`, {});
+}
+
+// ── 演示证据包（①③ 运行记录导出） ─────────────────────────────────────────────
+
+/**
+ * 前端只消费摘要投影；完整结构见 server/src/storage/evidence.ts 的 EvidenceReport。
+ * 这里不重新定义所有明细数组，避免后端加字段时两边类型反复漂移。
+ */
+export interface EvidenceSummary {
+  schema_version: string;
+  generated_at: number;
+  window: { from: number | null; to: number | null; label: string };
+  merchant: {
+    overview: MerchantOverview;
+    reconcile: ReconcileResult;
+    first_order: FirstOrderChain;
+    orders: { total: number; shown: number };
+  };
+  memory: {
+    stats: {
+      handoffs: number;
+      accepted: number;
+      profile_events: number;
+      pending_conflicts: number;
+      /** 反馈队列模块上线后才有这三个字段（老库/未启用时不返回） */
+      feedback_total?: number;
+      feedback_pending?: number;
+      feedback_failed?: number;
+    };
+    audit: { total: number; resolutions: number; by_action: Record<string, number> };
+    feedback: { available: boolean };
+  };
+  /** 协作 DAG 执行留痕（只读 agent_hops）：异常处理与人工审批的计数 */
+  collaboration: {
+    available: boolean;
+    total: number;
+    failures: number;
+    reworks: number;
+    approval_rejections: number;
+    open: number;
+  };
+  human_decisions: {
+    pending_conflicts: number;
+    resolutions: number;
+    failed_feedback: number;
+    pending_feedback: number;
+    hop_failures: number;
+    hop_approval_rejections: number;
+    note: string;
+  };
+  notes: string[];
+}
+
+/** 导出区间与 KPI 区间共用，保证「页面上看到的」与「附件里的」是同一段。 */
+export interface EvidenceWindow {
+  start?: string;
+  end?: string;
+}
+
+function evidenceQuery(opts: EvidenceWindow): string {
+  const qs = new URLSearchParams();
+  if (opts.start) qs.set('start', opts.start);
+  if (opts.end) qs.set('end', opts.end);
+  return qs.toString();
+}
+
+export function fetchEvidence(opts: EvidenceWindow = {}): Promise<EvidenceSummary> {
+  const qs = evidenceQuery(opts);
+  return fetch(`${BASE}/evidence${qs ? `?${qs}` : ''}`).then((r) => handle(r));
+}
+
+/**
+ * 下载走 fetch + Blob，不用 <a href>：
+ *   1. 服务端开了 SF_API_TOKEN 时能在同一处统一带鉴权头；
+ *   2. 401/400 时返回的是 JSON 错误，直接跳转会把错误体当成附件下载下来，
+ *      演示现场看起来像「下载成功但打不开」。这里会把错误 visibly 显示在面板上。
+ */
+async function download(path: string, qs: string, fallbackName: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}${qs ? `?${qs}` : ''}`);
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      if (body?.error?.message) msg = body.error.message;
+    } catch {
+      // 非 JSON 错误体用 statusText
+    }
+    throw new MerchantBoardError(res.status, msg);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const name = /filename="([^"]+)"/i.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    // 立刻 revoke 在部分浏览器会取消下载，延后释放。
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+export type EvidenceExportKind = 'md' | 'csv' | 'scorecard';
+
+const EVIDENCE_EXPORT: Record<EvidenceExportKind, { path: string; fallback: string }> = {
+  md: { path: '/evidence.md', fallback: 'shadowflow-evidence.md' },
+  scorecard: { path: '/evidence/scorecard.md', fallback: 'shadowflow-scorecard.md' },
+  csv: { path: '/evidence/orders.csv', fallback: 'shadowflow-orders.csv' },
+};
+
+export function downloadEvidence(kind: EvidenceExportKind, opts: EvidenceWindow = {}): Promise<void> {
+  const qs = evidenceQuery(opts);
+  const { path, fallback } = EVIDENCE_EXPORT[kind];
+  return download(path, qs, fallback);
 }

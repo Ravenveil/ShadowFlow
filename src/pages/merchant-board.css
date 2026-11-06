@@ -80,3 +80,11 @@
   color: var(--t-danger, #d94b3f);
 }
 .neo-mb-issues li { margin: 2px 0; }
+
+/* 演示证据包（2026-11-06）：摘要徽章 + 三个动作按钮共用一行，
+   窄屏下按钮不能被压到换行或挤成两截（记忆面板折叠时踩过同样的问题）。
+   只作用于本模块根节点，不碰别人页面的 .neo-db-tabs。 */
+.neo-mb-evidence .neo-db-lesson-kinds { margin: 8px 0 10px; }
+.neo-mb-evidence .neo-db-tabs { flex-wrap: wrap; }
+.neo-mb-evidence .neo-db-tab { flex-shrink: 0; white-space: nowrap; }
+.neo-mb-evidence .neo-db-status { margin: 8px 0 0; font-size: 11px; color: var(--t-fg-4); }
