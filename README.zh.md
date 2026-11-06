@@ -36,7 +36,7 @@
 ```bash
 git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
 cp .env.example .env          # 可选：填入 API Key；不填走 BYOK（Windows: copy .env.example .env）
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
 打开 **http://localhost:3000**，看到 ShadowFlow 工作流编辑器即成功。
@@ -137,13 +137,13 @@ lsof -i :3000
 netstat -an | findstr "8000 3000"
 ```
 
-停用占用进程后重新 `docker compose up -d`。
+停用占用进程后重新 `docker compose -f docker/docker-compose.yml up -d`。
 
 ### 容器无日志 / 白屏
 
 ```bash
-docker compose logs shadowflow-api   # 查 API 错误
-docker compose logs shadowflow-web   # 查前端构建错误
+docker compose -f docker/docker-compose.yml logs shadowflow-api   # 查 API 错误
+docker compose -f docker/docker-compose.yml logs shadowflow-web   # 查前端构建错误
 ```
 
 常见原因：前端构建失败或端口被占用。

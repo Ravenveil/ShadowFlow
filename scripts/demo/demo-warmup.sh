@@ -70,7 +70,7 @@ echo "[check] Checking ShadowFlow ACP Server..."
 if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
     echo "[ok] ShadowFlow is running"
 else
-    echo "[warn] ShadowFlow not detected at localhost:8000 — run 'docker compose up' first"
+    echo "[warn] ShadowFlow not detected at localhost:8000 — run 'docker compose -f docker/docker-compose.yml up' first"
 fi
 
 # ── Step 5: Start Hermes Adapter in background ───────────────────────────────

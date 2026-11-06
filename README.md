@@ -35,7 +35,7 @@ Building with AI agents today means writing brittle orchestration code from scra
 ```bash
 git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
 cp .env.example .env          # optional: add API key; leave blank for BYOK
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
 Open **http://localhost:3000** — you should see the ShadowFlow workflow editor.
@@ -137,13 +137,13 @@ lsof -i :8000 && lsof -i :3000
 netstat -an | findstr "8000 3000"
 ```
 
-Kill the conflicting process then re-run `docker compose up -d`.
+Kill the conflicting process then re-run `docker compose -f docker/docker-compose.yml up -d`.
 
 ### No logs / blank screen
 
 ```bash
-docker compose logs shadowflow-api
-docker compose logs shadowflow-web
+docker compose -f docker/docker-compose.yml logs shadowflow-api
+docker compose -f docker/docker-compose.yml logs shadowflow-web
 ```
 
 Common causes: frontend build failure or port already in use.

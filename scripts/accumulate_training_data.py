@@ -12,7 +12,7 @@ Usage:
     python scripts/accumulate_training_data.py --provider claude --goals-file goals.txt
     python scripts/accumulate_training_data.py --dry-run  # just assemble, don't execute
 
-The script writes accumulated samples to data/training/activation_samples.jsonl,
+The script writes accumulated samples to scripts/data/training/activation_samples.jsonl,
 one ActivationTrainingSample per line.
 """
 from __future__ import annotations
@@ -27,6 +27,7 @@ from typing import List
 
 # Add project root to path
 ROOT = Path(__file__).parent.parent
+DATA_DIR = ROOT / "scripts" / "data" / "training"
 sys.path.insert(0, str(ROOT))
 
 from shadowflow.assembly.activation import ActivationSelector, ConnectionResolver
@@ -167,7 +168,7 @@ def main():
     parser.add_argument("--executor-kind", default="cli", choices=["cli", "api"])
     parser.add_argument("--goals-file", help="File with one goal per line (overrides defaults)")
     parser.add_argument("--count", type=int, help="Limit number of goals to run")
-    parser.add_argument("--output", default="data/training/activation_samples.jsonl")
+    parser.add_argument("--output", default=str(DATA_DIR / "activation_samples.jsonl"))
     parser.add_argument("--dry-run", action="store_true", help="Assemble only, don't execute")
     args = parser.parse_args()
 
