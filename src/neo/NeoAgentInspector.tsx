@@ -31,6 +31,7 @@ import { useI18n } from '../common/i18n';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
 import { resolveDmConversation } from '../api/groupApi';
 import { NeoTimeline } from './NeoTimeline';
+import { isAgentActivity, thinkingLabelPrefix } from './agent-activity';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { getAgent, type AgentRecord } from '../api/agents';
 import type { TimelineMessage } from '../components/run-session/timeline/types';
@@ -50,40 +51,15 @@ export interface NeoAgentInspectorProps {
 
 /**
  * 后台活动过滤（导出供单测）— 该 agent 的发言 / 过程卡 / 工具卡 / 交接边。
- * 归属优先级：显式 agent_id > thinking 的 label 前缀（老数据兜底）> 不进流。
+ * 归属判定委托 agent-activity.isAgentActivity（与群聊 busy roster 共用单真源）。
  */
 export function filterAgentActivity(
   messages: readonly TimelineMessage[],
   agentId: string,
   displayName: string,
 ): TimelineMessage[] {
-  const labelPrefix = `${displayName} `; // 老数据过程卡 label 形如 `${name} 正在思考`
-  return messages.filter((m) => isActivity(m, agentId, labelPrefix));
-}
-
-function isActivity(m: TimelineMessage, agentId: string, labelPrefix: string): boolean {
-  switch (m.kind) {
-    case 'assistant_text':
-    case 'raw':
-      return m.agent_id === agentId;
-    case 'thinking':
-      return m.agent_id != null ? m.agent_id === agentId : m.label.startsWith(labelPrefix);
-    case 'tool_call':
-    case 'tool_echo':
-      return m.agent_id === agentId;
-    case 'hop_card':
-      return m.from_agent === agentId || m.to_agent === agentId;
-    case 'plan_card':
-      // 「含它的任务行」才进流：行归属 显式 agent_id > 行 id `node:<agentId>`
-      // （2026-11-07 前的行只有 id/assignee，id 即确定性归属锚点，不猜名字）。
-      return m.tasks.some((t) => t.agent_id === agentId || t.id === `node:${agentId}`);
-    default: {
-      // 其余 run 产物卡（commit_record/file_diff/table/verdict…）：有 agent_id
-      // 的按 id 筛；无归属的（老数据/编排者合并提交）不进流（宁可少不串台）。
-      const aid = (m as { agent_id?: string }).agent_id;
-      return aid != null && aid === agentId;
-    }
-  }
+  const labelPrefix = thinkingLabelPrefix(displayName); // 老数据过程卡 label 形如 `${name} 正在思考`
+  return messages.filter((m) => isAgentActivity(m, agentId, labelPrefix));
 }
 
 export function NeoAgentInspector({ agentId, name, groupId, onOpenDm, onClose }: NeoAgentInspectorProps) {

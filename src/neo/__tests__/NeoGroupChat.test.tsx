@@ -84,7 +84,13 @@ vi.mock('../NeoComposer', () => ({
   ),
 }));
 
-import { NeoGroupChat, segmentTurn, dropSettledThinking } from '../NeoGroupChat';
+import {
+  NeoGroupChat,
+  segmentTurn,
+  dropSettledThinking,
+  agentHasReply,
+  agentHasActivity,
+} from '../NeoGroupChat';
 
 function renderChat() {
   return render(
@@ -312,5 +318,117 @@ describe('NeoGroupChat — 交接记录面板（2026-11-05 迭代六，OpenBot h
     renderChat();
     await screen.findByTestId('composer-stub');
     expect(screen.queryByTestId('neo-gc-hops-btn')).not.toBeInTheDocument();
+  });
+});
+
+describe('agentHasReply / agentHasActivity — roster 归属判定（2026-11-07 三态批）', () => {
+  it('agentHasReply 只认带 agent_id 的 assistant_text/raw；thinking 不算回复', () => {
+    const msgs = [
+      { id: 't1', kind: 'thinking', label: '想', status: 'done', agent_id: 'a1', turn_id: 't', ts: 1 },
+      { id: 'r1', kind: 'raw', body: '回', sender_name: '读读', agent_id: 'a1', turn_id: 't', ts: 2 },
+    ] as TimelineMessage[];
+    expect(agentHasReply(msgs, 'a1')).toBe(true);
+    expect(agentHasReply(msgs.slice(0, 1), 'a1')).toBe(false);
+    // 无归属的 run 产出不算回复
+    expect(
+      agentHasReply(
+        [{ id: 'x', kind: 'assistant_text', body: 'run 输出', turn_id: 't', ts: 1 }] as TimelineMessage[],
+        'a1',
+      ),
+    ).toBe(false);
+  });
+
+  it('agentHasActivity 认 thinking/工具卡/任务行/交接边；他人的活动不串台', () => {
+    const msgs = [
+      { id: 't1', kind: 'thinking', label: '想', status: 'streaming', agent_id: 'a1', turn_id: 't', ts: 1 },
+      { id: 'c1', kind: 'tool_call', name: 'fs.read', args_summary: '', agent_id: 'a1', turn_id: 't', ts: 2 },
+    ] as TimelineMessage[];
+    expect(agentHasActivity(msgs, 'a1', '读读')).toBe(true);
+    expect(agentHasActivity(msgs, 'a2', '甲')).toBe(false);
+    // plan_card 任务行：行 id `node:<agentId>` 确定性锚点（老行无 agent_id）
+    const plan = [
+      {
+        id: 'p1',
+        kind: 'plan_card',
+        title: '计划',
+        tasks: [{ id: 'node:a2', title: '行', status: 'pending' }],
+        turn_id: 't',
+        ts: 1,
+      },
+    ] as TimelineMessage[];
+    expect(agentHasActivity(plan, 'a2', '甲')).toBe(true);
+    expect(agentHasActivity(plan, 'a1', '读读')).toBe(false);
+    // hop 交接边 from/to 命中
+    const hop = [
+      {
+        id: 'h1',
+        kind: 'hop_card',
+        hop_id: 'hop1',
+        from_agent: 'a1',
+        to_agent: 'a2',
+        status: 'pending',
+        turn_id: 't',
+        ts: 1,
+      },
+    ] as TimelineMessage[];
+    expect(agentHasActivity(hop, 'a2', '甲')).toBe(true);
+  });
+
+  it('老数据 thinking 无 agent_id → label 前缀兜底；无归属产物卡不算活动', () => {
+    const msgs = [
+      { id: 't1', kind: 'thinking', label: '甲 正在思考', status: 'done', turn_id: 't', ts: 1 },
+      { id: 'k1', kind: 'commit_record', repo: 'r', sha: 's', short_sha: 's', message: 'm', author: 'a', files_changed: 1, insertions: 0, deletions: 0, turn_id: 't', ts: 2 },
+    ] as TimelineMessage[];
+    expect(agentHasActivity(msgs, 'a2', '甲')).toBe(true);
+    // 名字对不上不算；无归属 commit_record 不算
+    expect(agentHasActivity(msgs, 'a3', '乙')).toBe(false);
+  });
+});
+
+describe('NeoGroupChat — busy roster 三态（2026-11-07）', () => {
+  it('done=已回复 / working=有过程卡流出 / idle=待命（没动静），tooltip 三态文案', async () => {
+    timelineState.runs = [{ session_id: 's1', status: 'running' }];
+    groupRecord.agent_ids = ['a1', 'a2', 'a3'];
+    timelineState.messages = [
+      { id: 'm1', kind: 'assistant_text', body: '搞定', sender_name: '读读', agent_id: 'a1', turn_id: 't1', ts: now },
+      { id: 'm2', kind: 'thinking', label: '想', status: 'streaming', agent_id: 'a2', turn_id: 't1', ts: now },
+    ] as TimelineMessage[];
+    renderChat();
+    const roster = await screen.findByTestId('neo-gc-roster');
+    await waitFor(() => {
+      expect(roster.querySelectorAll('.neo-gc-roster-item')).toHaveLength(3);
+    });
+    const items = roster.querySelectorAll('.neo-gc-roster-item');
+    expect(items[0]).toHaveAttribute('data-state', 'done');
+    expect(items[0]).toHaveAttribute('title', '读读 · 已完成');
+    // thinking 卡也算干过活 → working（此前 agentHasActivity 不认，误显示转圈/待命）
+    expect(items[1]).toHaveAttribute('data-state', 'working');
+    expect(items[1]).toHaveAttribute('title', 'a2 · 处理中');
+    // 一点动静都没有 → 待命（第三态，此前缺失）
+    expect(items[2]).toHaveAttribute('data-state', 'idle');
+    expect(items[2]).toHaveAttribute('title', 'a3 · 待命');
+  });
+
+  it('plan_card 任务行认作 working（干活中，不误显示待命）', async () => {
+    timelineState.runs = [{ session_id: 's1', status: 'running' }];
+    groupRecord.agent_ids = ['a1', 'a2'];
+    timelineState.messages = [
+      {
+        id: 'p1',
+        kind: 'plan_card',
+        title: '计划',
+        tasks: [{ id: 'node:a2', title: '行', status: 'running' }],
+        turn_id: 't1',
+        ts: now,
+      },
+    ] as TimelineMessage[];
+    renderChat();
+    const roster = await screen.findByTestId('neo-gc-roster');
+    await waitFor(() => {
+      expect(roster.querySelectorAll('.neo-gc-roster-item')).toHaveLength(2);
+    });
+    const items = roster.querySelectorAll('.neo-gc-roster-item');
+    expect(items[0]).toHaveAttribute('data-state', 'idle');
+    expect(items[1]).toHaveAttribute('data-state', 'working');
   });
 });
