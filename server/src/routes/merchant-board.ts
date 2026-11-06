@@ -7,10 +7,12 @@
  *
  * GET  /api/merchant/stats                  → 各表计数
  * GET  /api/merchant/overview               → 营收/成本/毛利/毛利率/客单价/首单
+ *                                             （?start&end 可选，缺省为全量）
  * GET  /api/merchant/orders/timeseries      → 订单流水分时（零值补齐 + 峰值）
  * GET  /api/merchant/traffic/curve          → 客流曲线（PV/UV/转化/分渠道）
  * GET  /api/merchant/ledger                 → 收支流水
- * GET  /api/merchant/orders                 → 订单列表（含状态，可按 status 筛）
+ * GET  /api/merchant/orders                 → 订单列表（status 筛 + offset 分页
+ *                                             + start/end 区间，返回 total/has_more）
  * GET  /api/merchant/reconcile              → 账实对账
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
@@ -74,9 +76,9 @@ router.get('/stats', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/overview', (_req: Request, res: Response) => {
+router.get('/overview', (req: Request, res: Response) => {
   try {
-    res.json(overview());
+    res.json(overview({ start: req.query.start, end: req.query.end }));
   } catch (err) {
     fail(res, err);
   }
@@ -106,12 +108,21 @@ router.get('/ledger', (req: Request, res: Response) => {
   }
 });
 
-// 订单列表（含状态）。以前只有聚合，业务想知道「第 3 单是待付还是已退」只能翻流水反推。
+// 订单列表（含状态 + 分页 + 时间区间）。以前只有聚合，业务想知道「第 3 单是待付还是已退」
+// 只能翻流水反推；而 limit 又封顶 500，单量一大就再也翻不到老单。
 // 注意：这个路径以前没有注册，GET /api/merchant/orders 会落到 proxyFallback 被转给
 // 旧 Python 后端，返回 503 PYTHON_BACKEND_UNAVAILABLE —— 看起来像服务挂了。
 router.get('/orders', (req: Request, res: Response) => {
   try {
-    res.json(listOrders({ limit: req.query.limit, status: str(req.query.status, 16) }));
+    res.json(
+      listOrders({
+        limit: req.query.limit,
+        offset: req.query.offset,
+        status: str(req.query.status, 16),
+        start: req.query.start,
+        end: req.query.end,
+      }),
+    );
   } catch (err) {
     fail(res, err);
   }

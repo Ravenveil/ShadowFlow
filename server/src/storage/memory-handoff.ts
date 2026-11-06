@@ -353,7 +353,7 @@ export function contextFor(
 
 // ---------------------------------------------------------------- 长期画像写回
 
-export type WritebackAction = 'create' | 'update' | 'conflict' | 'keep';
+export type WritebackAction = 'create' | 'update' | 'conflict' | 'keep' | 'override';
 
 export interface WritebackResult {
   subject_type: string;
@@ -374,6 +374,15 @@ export function writeback(input: {
   source?: string;
   evidence?: string;
   actor?: string;
+  /**
+   * 人工裁决：绕过「置信度高者胜」的自动合并，直接覆盖。
+   *
+   * 为什么必须有这个开关：同一置信度、不同说法的两次写回会落成 action='conflict'
+   * 并且**不覆盖**——设计上是对的（不敢替人拍板），但此前没有任何出口能拍板，
+   * 客户画像会永远停在第一次的说法上。现在由人或上游系统显式 force，动作记成
+   * 'override' 并保留 old_value 与新证据，审计链不断。
+   */
+  force?: boolean;
 }): WritebackResult {
   const subject_type = (input.subject_type || 'customer').trim();
   const subject_id = (input.subject_id ?? '').trim();
@@ -389,6 +398,7 @@ export function writeback(input: {
   const source = (input.source || 'manual').slice(0, 64);
   const evidence = (input.evidence ?? '').slice(0, MAX_TEXT);
   const actor = (input.actor || 'system').slice(0, 64);
+  const force = input.force === true;
   const db = getDb();
   const run = db.transaction(() => {
     const cur = db
@@ -408,6 +418,16 @@ export function writeback(input: {
          (subject_type, subject_id, key, value, confidence, source, evidence, updated_at)
          VALUES (?,?,?,?,?,?,?,?)`,
       ).run(subject_type, subject_id, key, value, confidence, source, evidence, now);
+    } else if (force) {
+      // 值没变就没事可做，别把「确认一次」记成一次覆盖
+      action = value === cur.value ? 'keep' : 'override';
+      if (action === 'override') {
+        db.prepare(
+          `UPDATE memory_profile_values
+           SET value = ?, confidence = ?, source = ?, evidence = ?, updated_at = ?
+           WHERE subject_type = ? AND subject_id = ? AND key = ?`,
+        ).run(value, Math.max(confidence, cur.confidence), source, evidence, now, subject_type, subject_id, key);
+      }
     } else if (confidence > cur.confidence) {
       action = 'update';
       db.prepare(
@@ -416,7 +436,7 @@ export function writeback(input: {
          WHERE subject_type = ? AND subject_id = ? AND key = ?`,
       ).run(value, confidence, source, evidence, now, subject_type, subject_id, key);
     } else if (confidence === cur.confidence && value !== cur.value) {
-      action = 'conflict'; // 同置信不同说法：不覆盖，只留痕
+      action = 'conflict'; // 同置信不同说法：不覆盖，只留痕（可用 force 裁决）
     } else {
       action = 'keep';
     }
@@ -445,8 +465,13 @@ export function writeback(input: {
     ).run(subject_type, subject_id, subject_type, subject_id, PROFILE_EVENT_KEEP);
     return {
       action,
-      value: action === 'create' || action === 'update' ? value : cur!.value,
-      confidence: action === 'create' || action === 'update' ? confidence : cur!.confidence,
+      value: action === 'create' || action === 'update' || action === 'override' ? value : cur!.value,
+      confidence:
+        action === 'create' || action === 'update'
+          ? confidence
+          : action === 'override'
+            ? Math.max(confidence, cur!.confidence)
+            : cur!.confidence,
     };
   });
   const r = run();
@@ -455,10 +480,63 @@ export function writeback(input: {
     subject_id,
     key,
     action: r.action,
-    changed: r.action === 'create' || r.action === 'update',
+    changed: r.action === 'create' || r.action === 'update' || r.action === 'override',
     value: r.value,
     confidence: r.confidence,
   };
+}
+
+/**
+ * 待裁决的画像冲突。
+ *
+ * 「同置信、不同说法」的写回不覆盖（不敢替人拍板），但以前只写进 events 表，
+ * 没有任何出口能把它捞出来 —— 冲突等于烂在流水里。这里按 (主体, key) 取**最新一次**
+ * 冲突事件，且要求当前值仍与它不同（已经被 force 裁决过的不再出现）。
+ */
+export interface ProfileConflict {
+  subject_type: string;
+  subject_id: string;
+  key: string;
+  current_value: string;
+  current_confidence: number;
+  proposed_value: string;
+  proposed_confidence: number;
+  source: string;
+  evidence: string;
+  created_at: number;
+}
+
+export function listConflicts(input: { limit?: number; subject_id?: string } = {}): ProfileConflict[] {
+  const raw = Number(input.limit ?? 50);
+  const cap = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 500) : 50;
+  const subject = (input.subject_id ?? '').trim();
+  const db = getDb();
+  const sql = `
+    SELECT e.subject_type, e.subject_id, e.key,
+           v.value      AS current_value,
+           v.confidence AS current_confidence,
+           e.new_value  AS proposed_value,
+           e.confidence AS proposed_confidence,
+           e.source, e.evidence, e.created_at
+      FROM memory_profile_events e
+      JOIN memory_profile_values v
+        ON v.subject_type = e.subject_type
+       AND v.subject_id   = e.subject_id
+       AND v.key          = e.key
+     WHERE e.action = 'conflict'
+       AND v.value <> e.new_value
+       ${subject ? 'AND e.subject_id = ?' : ''}
+       AND e.id = (
+         SELECT MAX(x.id) FROM memory_profile_events x
+          WHERE x.subject_type = e.subject_type
+            AND x.subject_id   = e.subject_id
+            AND x.key          = e.key
+            AND x.action       = 'conflict'
+       )
+     ORDER BY e.created_at DESC
+     LIMIT ?`;
+  const params = subject ? [subject, cap] : [cap];
+  return db.prepare(sql).all(...params) as ProfileConflict[];
 }
 
 export function profile(subjectId: string, subjectType = 'customer'): {

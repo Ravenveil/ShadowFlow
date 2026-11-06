@@ -129,7 +129,13 @@ beforeEach(() => {
   vi.mocked(api.fetchTrafficCurve).mockResolvedValue(traffic);
   vi.mocked(api.fetchReconcile).mockResolvedValue(reconcile);
   vi.mocked(api.fetchFirstOrderChain).mockResolvedValue(chain);
-  vi.mocked(api.fetchMerchantOrders).mockResolvedValue(orders);
+  vi.mocked(api.fetchMerchantOrders).mockResolvedValue({
+    items: orders,
+    total: orders.length,
+    limit: 50,
+    offset: 0,
+    has_more: false,
+  });
 });
 
 function renderPanel() {
@@ -216,5 +222,50 @@ describe('订单明细（业务要能直接看状态，不用翻流水反推）'
     await waitFor(() =>
       expect(api.fetchMerchantOrders).toHaveBeenCalledWith(expect.objectContaining({ status: 'refunded' })),
     );
+  });
+
+  it('切到「近 7 天」会用 start 重新取概览（默认全量不带参）', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByTestId('merchant-kpi')).toBeInTheDocument());
+    // 首屏是全量：不传 start，口径与老版本一致
+    expect(api.fetchMerchantOverview).toHaveBeenCalledWith({});
+
+    fireEvent.click(screen.getByTestId('merchant-kpi-range-7d'));
+    await waitFor(() =>
+      expect(api.fetchMerchantOverview).toHaveBeenCalledWith(
+        expect.objectContaining({ start: expect.any(String) }),
+      ),
+    );
+  });
+
+  it('还有下一页时显示「加载更多」，点完把新一页追加在后面', async () => {
+    vi.mocked(api.fetchMerchantOrders).mockResolvedValueOnce({
+      items: orders.slice(0, 2),
+      total: 3,
+      limit: 2,
+      offset: 0,
+      has_more: true,
+    });
+    renderPanel();
+
+    const more = await screen.findByTestId('merchant-orders-more');
+    expect(screen.getByTestId('merchant-orders-sum')).toHaveTextContent('共 3 单');
+    expect(screen.getByTestId('merchant-orders-sum')).toHaveTextContent('已显示 2');
+
+    vi.mocked(api.fetchMerchantOrders).mockResolvedValueOnce({
+      items: [orders[2]],
+      total: 3,
+      limit: 2,
+      offset: 2,
+      has_more: false,
+    });
+    fireEvent.click(more);
+
+    await waitFor(() => expect(screen.getAllByTestId(/merchant-order-row-/)).toHaveLength(3));
+    // 第二页从「已经拿到的条数」开始，不是页号，避免中间插单时漏行
+    expect(api.fetchMerchantOrders).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2 }),
+    );
+    expect(screen.queryByTestId('merchant-orders-more')).not.toBeInTheDocument();
   });
 });

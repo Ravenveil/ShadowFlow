@@ -6,8 +6,9 @@
  *
  * GET    /api/memory/handoff/stats                  → 概览计数
  * GET    /api/memory/handoff/context?agent=B        → B 当前可读上下文（带来源）
+ * GET    /api/memory/handoff/profiles/conflicts     → 待裁决的画像冲突（人工定夺入口）
  * GET    /api/memory/handoff/profiles/:subjectId    → 当前画像 + append-only 流水
- * POST   /api/memory/handoff/profiles/writeback     → 长期画像写回（置信度合并）
+ * POST   /api/memory/handoff/profiles/writeback     → 长期画像写回（置信度合并，force 可裁决）
  * POST   /api/memory/handoff/profiles/ingest        → 客户反馈规则式自动提炼
  * GET    /api/memory/handoff                       → 交接包列表
  * POST   /api/memory/handoff                       → A 下班建交接包（自动汇总快照）
@@ -26,6 +27,7 @@ import {
   getHandoff,
   handoffStats,
   ingestFeedback,
+  listConflicts,
   listHandoffs,
   profile,
   writeback,
@@ -77,6 +79,17 @@ router.get('/context', (req: Request, res: Response) => {
 
 // ── 长期画像 ─────────────────────────────────────────────────────────────────
 
+// 必须排在 /profiles/:subjectId 之前，否则 Express 会把 "conflicts" 当成 subjectId。
+router.get('/profiles/conflicts', (req: Request, res: Response) => {
+  const limit = Number(req.query.limit);
+  res.json(
+    listConflicts({
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 50,
+      subject_id: str(req.query.subject_id, 64) || undefined,
+    }),
+  );
+});
+
 router.get('/profiles/:subjectId', (req: Request, res: Response) => {
   res.json(profile(req.params.subjectId, str(req.query.subject_type, 32) || 'customer'));
 });
@@ -94,6 +107,7 @@ router.post('/profiles/writeback', (req: Request, res: Response) => {
         source: str(body.source, 64) || 'manual',
         evidence: str(body.evidence, 600),
         actor: str(body.actor, 64) || 'system',
+        force: body.force === true,
       }),
     );
   } catch (err) {

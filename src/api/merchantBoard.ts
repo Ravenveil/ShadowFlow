@@ -34,6 +34,8 @@ export interface MerchantOrder {
 }
 
 export interface MerchantOverview {
+  /** 统计区间；from/to 为 null 表示「全量」 */
+  range?: { from: number | null; to: number | null };
   revenue_cents: number;
   cost_cents: number;
   gross_profit_cents: number;
@@ -138,8 +140,13 @@ export function fetchMerchantStats(): Promise<{ products: number; visits: number
   return fetch(`${BASE}/stats`).then((r) => handle(r));
 }
 
-export function fetchMerchantOverview(): Promise<MerchantOverview> {
-  return fetch(`${BASE}/overview`).then((r) => handle(r));
+/**
+ * 概览。不传 start/end = 全量（老行为）；传了就按记账时间只看这段区间，
+ * 用来回答「这个月赚多少」。
+ */
+export function fetchMerchantOverview(opts: { start?: string; end?: string } = {}): Promise<MerchantOverview> {
+  const qs = windowQuery(opts);
+  return fetch(`${BASE}/overview${qs ? `?${qs}` : ''}`).then((r) => handle(r));
 }
 
 export function fetchOrderTimeseries(opts: { granularity?: Granularity; start?: string; end?: string } = {}): Promise<OrderTimeseries> {
@@ -170,10 +177,24 @@ export interface MerchantOrderRow extends MerchantOrder {
   gross_profit_cents: number;
 }
 
-export function fetchMerchantOrders(opts: { limit?: number; status?: string } = {}): Promise<MerchantOrderRow[]> {
+/** 订单分页：total 是满足筛选条件的总单数，前端据此决定还有没有下一页。 */
+export interface MerchantOrderPage {
+  items: MerchantOrderRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export function fetchMerchantOrders(
+  opts: { limit?: number; offset?: number; status?: string; start?: string; end?: string } = {},
+): Promise<MerchantOrderPage> {
   const qs = new URLSearchParams();
   if (opts.limit) qs.set('limit', String(opts.limit));
+  if (opts.offset) qs.set('offset', String(opts.offset));
   if (opts.status) qs.set('status', opts.status);
+  if (opts.start) qs.set('start', opts.start);
+  if (opts.end) qs.set('end', opts.end);
   const q = qs.toString();
   return fetch(`${BASE}/orders${q ? `?${q}` : ''}`).then((r) => handle(r));
 }

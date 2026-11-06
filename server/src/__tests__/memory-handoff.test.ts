@@ -204,6 +204,49 @@ describe('长期画像写回', () => {
   });
 });
 
+describe('画像冲突的裁决出口（force + 待裁决列表）', () => {
+  const wb = (body: Record<string, unknown>) =>
+    request(app()).post('/api/memory/handoff/profiles/writeback').send(body);
+
+  it('同置信不同说法先记冲突，force 覆盖后从待裁决列表消失', async () => {
+    await wb({ subject_id: 'cust-c1', key: 'budget', value: '预算 800', confidence: 0.7, source: 'manual' });
+    const conflict = await wb({
+      subject_id: 'cust-c1', key: 'budget', value: '预算 3000', confidence: 0.7, source: 'manual',
+    });
+    expect(conflict.body.action).toBe('conflict');
+    expect(conflict.body.value).toBe('预算 800'); // 不覆盖
+
+    const list = await request(app()).get('/api/memory/handoff/profiles/conflicts');
+    expect(list.status).toBe(200);
+    const row = list.body.find((x: { subject_id: string }) => x.subject_id === 'cust-c1');
+    expect(row).toBeTruthy();
+    expect(row.current_value).toBe('预算 800');
+    expect(row.proposed_value).toBe('预算 3000');
+
+    const forced = await wb({
+      subject_id: 'cust-c1', key: 'budget', value: '预算 3000', confidence: 0.7, force: true, actor: 'ops',
+    });
+    expect(forced.body.action).toBe('override');
+    expect(forced.body.changed).toBe(true);
+    expect(forced.body.value).toBe('预算 3000');
+
+    // 裁决完就不该再挂在待裁决列表里，否则人工会反复处理同一条
+    const after = await request(app()).get('/api/memory/handoff/profiles/conflicts');
+    expect(after.body.find((x: { subject_id: string }) => x.subject_id === 'cust-c1')).toBeFalsy();
+
+    const p = await request(app()).get('/api/memory/handoff/profiles/cust-c1');
+    expect(p.body.profile[0].value).toBe('预算 3000');
+    expect(p.body.history.some((h: { action: string; actor: string }) => h.action === 'override' && h.actor === 'ops')).toBe(true);
+  });
+
+  it('force 但值没变时记 keep，不伪造一次覆盖', async () => {
+    await wb({ subject_id: 'cust-c2', key: 'industry', value: '烘焙', confidence: 0.8 });
+    const same = await wb({ subject_id: 'cust-c2', key: 'industry', value: '烘焙', confidence: 0.8, force: true });
+    expect(same.body.action).toBe('keep');
+    expect(same.body.changed).toBe(false);
+  });
+});
+
 describe('脏输入不 5xx', () => {
   it('空 body / 同人交接 / 缺 to_agent / 缺 agent / 越界置信度 / 空反馈 / 不存在的 id', async () => {
     const cases: Array<[string, string, Record<string, unknown> | null]> = [

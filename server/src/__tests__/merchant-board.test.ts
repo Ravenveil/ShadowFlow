@@ -442,8 +442,9 @@ describe('订单列表 GET /orders（看状态不该靠流水反推）', () => {
 
     const res = await request(app()).get('/api/merchant/orders?limit=5');
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    const row = res.body.find((x: { id: string }) => x.id === o.body.id);
+    expect(Array.isArray(res.body.items)).toBe(true);
+    expect(typeof res.body.total).toBe('number');
+    const row = res.body.items.find((x: { id: string }) => x.id === o.body.id);
     expect(row).toBeTruthy();
     expect(row.product_name).toBe('列表商品');
     expect(row.status).toBe('paid');
@@ -470,13 +471,13 @@ describe('订单列表 GET /orders（看状态不该靠流水反推）', () => {
 
     const onlyCreated = await request(app()).get('/api/merchant/orders?status=created&limit=500');
     expect(onlyCreated.status).toBe(200);
-    expect(onlyCreated.body.every((x: { status: string }) => x.status === 'created')).toBe(true);
-    expect(onlyCreated.body.some((x: { id: string }) => x.id === unpaid.body.id)).toBe(true);
+    expect(onlyCreated.body.items.every((x: { status: string }) => x.status === 'created')).toBe(true);
+    expect(onlyCreated.body.items.some((x: { id: string }) => x.id === unpaid.body.id)).toBe(true);
 
     const onlyRefunded = await request(app()).get('/api/merchant/orders?status=refunded&limit=500');
-    expect(onlyRefunded.body.every((x: { status: string }) => x.status === 'refunded')).toBe(true);
-    expect(onlyRefunded.body.some((x: { id: string }) => x.id === refunded.body.id)).toBe(true);
-    expect(onlyRefunded.body.some((x: { id: string }) => x.id === paid.body.id)).toBe(false);
+    expect(onlyRefunded.body.items.every((x: { status: string }) => x.status === 'refunded')).toBe(true);
+    expect(onlyRefunded.body.items.some((x: { id: string }) => x.id === refunded.body.id)).toBe(true);
+    expect(onlyRefunded.body.items.some((x: { id: string }) => x.id === paid.body.id)).toBe(false);
   });
 
   it('非法 status 返回 400（不静默返回空列表）', async () => {
@@ -489,6 +490,88 @@ describe('订单列表 GET /orders（看状态不该靠流水反推）', () => {
     expect((await request(app()).get('/api/merchant/orders?limit=0')).status).toBe(200);
     expect((await request(app()).get('/api/merchant/orders?limit=-5')).status).toBe(200);
     expect((await request(app()).get('/api/merchant/orders?limit=99999')).status).toBe(200);
+  });
+
+  it('分页：offset 翻页不重复不遗漏，total 是筛选后的总数', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '分页品', price_cents: 100, cost_cents: 10 });
+    const before = (await request(app()).get('/api/merchant/orders?limit=1')).body.total;
+    for (let i = 0; i < 5; i += 1) {
+      await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id, trace_id: `page-${i}` });
+    }
+
+    // 整个库里的单（本文件其它用例也会造单，所以按"全量"当基准，不假设从 0 开始）
+    const all = await request(app()).get('/api/merchant/orders?limit=500');
+    const allIds = all.body.items.map((x: { id: string }) => x.id);
+    expect(all.body.total).toBe(before + 5);
+
+    // 每页 2 条翻到底，拼起来必须与全量一一对应
+    const collected: string[] = [];
+    let offset = 0;
+    let guard = 0;
+    for (;;) {
+      const page = await request(app()).get(`/api/merchant/orders?limit=2&offset=${offset}`);
+      expect(page.status).toBe(200);
+      collected.push(...page.body.items.map((x: { id: string }) => x.id));
+      offset += page.body.items.length;
+      if (!page.body.has_more || page.body.items.length === 0) break;
+      guard += 1;
+      if (guard > 100) throw new Error('分页没有收敛');
+    }
+    expect(collected).toEqual(allIds);
+    expect(new Set(collected).size).toBe(collected.length); // 同一单不会出现在两页
+  });
+
+  it('时间区间：只统计区间内的单，越界过滤生效', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '区间品', price_cents: 300, cost_cents: 100 });
+    await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const inFuture = await request(app()).get(
+      `/api/merchant/orders?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}&limit=500`,
+    );
+    expect(inFuture.status).toBe(200);
+    expect(inFuture.body.total).toBe(0);
+
+    const now = await request(app()).get('/api/merchant/orders?limit=500');
+    expect(now.body.total).toBeGreaterThan(0);
+  });
+
+  it('区间参数非法时 400，而不是静默返回全量', async () => {
+    expect((await request(app()).get('/api/merchant/orders?start=not-a-date')).status).toBe(400);
+    const inverted = await request(app()).get('/api/merchant/orders?start=2026-01-02&end=2026-01-01');
+    expect(inverted.status).toBe(400);
+  });
+});
+
+describe('概览按时间区间（「这个月赚多少」）', () => {
+  it('不传区间=全量；传区间只算区间内，且区间内无单时营收为 0', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '区间概览品', price_cents: 5000, cost_cents: 2000 });
+    const o = await request(app()).post('/api/merchant/orders').send({ product_id: p.body.id });
+    await request(app())
+      .post(`/api/merchant/orders/${o.body.id}/pay`)
+      .send({ pay_txn_id: 'txn-range-ov' });
+
+    const all = await request(app()).get('/api/merchant/overview');
+    expect(all.body.revenue_cents).toBeGreaterThanOrEqual(5000);
+    expect(all.body.range).toEqual({ from: null, to: null });
+
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const empty = await request(app()).get(
+      `/api/merchant/overview?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}`,
+    );
+    expect(empty.status).toBe(200);
+    expect(empty.body.revenue_cents).toBe(0);
+    expect(empty.body.gross_profit_cents).toBe(0);
+    expect(empty.body.gross_margin_pct).toBeNull();
+    expect(empty.body.paid_orders).toBe(0);
   });
 });
 
