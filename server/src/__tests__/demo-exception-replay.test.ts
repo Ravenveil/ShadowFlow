@@ -145,8 +145,10 @@ describe('demo-exception-replay 演示证据包', () => {
       // 画像写回 / 交接包已有事实，空库提示应当消失。
       expect(card).not.toContain('本区间没有画像写回');
       expect(card).not.toContain('本区间没有协作交接');
-      // 仍然如实列出未启用模块与模拟支付，不粉饰。
-      expect(card).toContain('反馈自动写回队列模块尚未启用');
+      // 模拟支付如实标注，不粉饰。反馈队列：PR #19 已合并（ingestFeedback
+      // 幂等建表），demo 造数后 feedback.available=true → 速览不再输出
+      // 「尚未启用」提示；断言跟进（2026-11-06 CI 修复）。
+      expect(card).not.toContain('反馈自动写回队列模块尚未启用');
       expect(card).toContain('支付为演示用模拟回调');
     } finally {
       try { rmSync(outDir, { recursive: true, force: true }); } catch { /* best-effort */ }
