@@ -77,8 +77,9 @@ function Harness({ initialNav }: { initialNav?: NeoNav } = {}) {
   const [nav, setNav] = useState<NeoNav>(initialNav ?? { view: 'home' });
   // os-unified 后 RailSection 只剩 home/knowledge（memory 已折叠进设置）
   const [section, setSection] = useState<RailSection>('home');
+  // 2026-11-07 知识库出映射表（列表保持成员显示）——与 NeoApp.SECTION_BY_NAV 同构
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
-    home: 'home', knowledge: 'knowledge',
+    home: 'home',
   };
   return (
     <NeoRail
