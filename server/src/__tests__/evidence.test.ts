@@ -6,6 +6,8 @@
  *   - 空库也能导出，不 500；
  *   - 报告里的营收/毛利/对账/第一单与看板接口逐项一致，不另算一套；
  *   - 人机分工（冲突留痕、人工裁决、失败补跑）在材料里可核实；
+ *   - 协作 DAG 留痕（异常终态 / 返工 / 人工审批拒绝）可逐条核实，
+ *     且系统的 policy deny 不会被包装成「老板拍板」；
  *   - CSV 中文不乱码、公式注入被挡、区间与页面一致；
  *   - 导出是**只读**的：导出前后库里的计数一模一样。
  */
@@ -25,6 +27,8 @@ let merchantRouter: typeof import('../routes/merchant-board').default;
 let handoffRouter: typeof import('../routes/memory-handoff').default;
 let sqlite: typeof import('../storage/sqlite');
 let evidence: typeof import('../storage/evidence');
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+let hopsStore: typeof import('../storage/agent-hops');
 
 function app() {
   const a = express();
@@ -43,6 +47,7 @@ beforeAll(async () => {
   merchantRouter = (await import('../routes/merchant-board')).default;
   handoffRouter = (await import('../routes/memory-handoff')).default;
   evidence = await import('../storage/evidence');
+  hopsStore = await import('../storage/agent-hops');
   sqlite.getDb();
 });
 
@@ -65,8 +70,12 @@ describe('空库：演示前刚摆好库时材料也不能报错', () => {
     expect(r.merchant.first_order.complete).toBe(false);
     expect(r.memory.audit.total).toBe(0);
     expect(r.memory.conflicts).toEqual([]);
+    expect(r.collaboration).toMatchObject({
+      available: true, total: 0, failures: 0, reworks: 0, approval_rejections: 0, open: 0,
+    });
     expect(r.human_decisions).toMatchObject({
       pending_conflicts: 0, resolutions: 0, failed_feedback: 0, pending_feedback: 0,
+      hop_failures: 0, hop_approval_rejections: 0,
     });
     expect(r.notes.length).toBeGreaterThan(3);
     expect(r.reproduction.endpoints).toContain('GET /api/merchant/evidence.md');
@@ -79,6 +88,9 @@ describe('空库：演示前刚摆好库时材料也不能报错', () => {
     expect(md.headers['content-disposition']).toMatch(/attachment; filename="shadowflow-evidence-.*\.md"/);
     expect(md.text).toContain('# ShadowFlow · 一人公司演示证据包');
     expect(md.text).toContain('区间内还没有订单');
+    expect(md.text).toContain('## 四、协作执行留痕');
+    expect(md.text).toContain('本区间未发生 DAG 交接');
+    expect(md.text).toContain('本区间没有协作交接记录');
 
     const csv = await request(app()).get('/api/merchant/evidence/orders.csv');
     expect(csv.status).toBe(200);
@@ -141,6 +153,45 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
       .send({ to_agent: 'B' })).status).toBe(200);
   });
 
+  it('协作 DAG 也留下真实 hop：正常交接 / 失败 / 返工 / 人工审批拒绝 / 系统策略拦截 / 悬挂', async () => {
+    // 用编排层自己的 openHop / settleHop 造数据，detail 与线上真实写入一致；
+    // evidence 只负责读，不碰这些写入函数以外的编排层代码。
+    const turn = hopsStore.nextTurnSeq('grp-ev');
+    const open = (from: string, to: string) =>
+      hopsStore.openHop({ group_id: 'grp-ev', turn_seq: turn, from_agent: from, to_agent: to });
+
+    const ok = open('pm', 'arch');
+    hopsStore.settleHop(ok, 'done', { outputChars: 120 });
+
+    const failed = open('arch', 'dev');
+    hopsStore.settleHop(failed, 'failed', { detail: 'agent 超时无响应' });
+
+    const rework = open('qa', 'dev');
+    hopsStore.settleHop(rework, 'done', { detail: 'rework round 1', outputChars: 80 });
+
+    // 同样记 denied，但只有「审批被拒」这一条是老板拍板，policy deny 是系统策略。
+    const approval = open('dev', 'qa');
+    hopsStore.settleHop(approval, 'denied', { detail: '审批被拒：dev 未获批准，交接未发生' });
+    const policy = open('arch', 'qa');
+    hopsStore.settleHop(policy, 'denied', { detail: 'policy deny' });
+
+    open('pm', 'qa'); // 未结算：验证 open 计数，不改状态
+
+    const r = (await request(app()).get('/api/merchant/evidence')).body;
+    expect(r.collaboration.available).toBe(true);
+    expect(r.collaboration.total).toBe(6);
+    expect(r.collaboration.by_status).toMatchObject({ done: 2, failed: 1, denied: 2, pending: 1 });
+    expect(r.collaboration.settled).toBe(5);
+    expect(r.collaboration.open).toBe(1);
+    expect(r.collaboration.failures).toBe(3); // failed 1 + denied 2
+    expect(r.collaboration.reworks).toBe(1);
+    expect(r.collaboration.approval_rejections).toBe(1);
+    expect(r.collaboration.events).toHaveLength(6);
+    expect(r.collaboration.events[0].created_at).toBeLessThanOrEqual(r.collaboration.events[5].created_at);
+    expect(r.human_decisions.hop_failures).toBe(3);
+    expect(r.human_decisions.hop_approval_rejections).toBe(1);
+  });
+
   it('报告里的经营数字与看板接口逐项一致（不另算一套口径）', async () => {
     const r = (await request(app()).get('/api/merchant/evidence')).body;
     const ov = (await request(app()).get('/api/merchant/overview')).body;
@@ -187,8 +238,20 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     expect(md).toContain('## 一、业务闭环：第一单与经营口径');
     expect(md).toContain('## 二、账实核对');
     expect(md).toContain('## 三、人机分工与异常处理');
-    expect(md).toContain('## 五、口径与边界');
-    expect(md).toContain('## 六、复现与复用');
+    expect(md).toContain('## 四、协作执行留痕');
+    expect(md).toContain('## 六、口径与边界');
+    expect(md).toContain('## 七、复现与复用');
+    // 协作章：异常、返工、审批拒绝、明细交接方向都能逐条核实
+    expect(md).toContain('异常终态');
+    expect(md).toContain('人工审批拒绝');
+    expect(md).toContain('rework round 1');
+    expect(md).toContain('审批被拒：dev 未获批准');
+    expect(md).toContain('policy deny');
+    expect(md).toContain('pm → arch');
+    expect(md).toContain('状态分布：');
+    expect(md).toContain('失败 1');
+    // 口径边界里必须说清「系统策略拦截不算老板决策」，防止评审被误导
+    expect(md).toContain('系统策略 deny 与人工审批拒绝都记为 denied，只有后者算人的决策');
     expect(md).toContain('¥199.00');
     expect(md).toContain('账实一致');
     expect(md).toContain('人工裁决');
@@ -216,24 +279,30 @@ describe('真实闭环 + 人机分工：材料必须能逐项核实', () => {
     const empty = await request(app()).get(`/api/merchant/evidence?start=${encodeURIComponent(future)}`);
     expect(empty.status).toBe(200);
     expect(empty.body.merchant.orders.total).toBe(0);
+    // 协作 hop 与经营数字共用同一个窗口，不能把区间外的交接混进附件
+    expect(empty.body.collaboration.total).toBe(0);
     expect(evidence.evidenceOrdersCsv({ start: future }).trim().split('\r\n')).toHaveLength(1);
 
     const past = new Date(Date.now() - 86400000).toISOString();
     const full = await request(app()).get(`/api/merchant/evidence?start=${encodeURIComponent(past)}`);
     expect(full.body.merchant.orders.total).toBe(2);
     expect(full.body.window.from).toBe(Date.parse(past));
-    // 记忆流水复用同一个窗口，不另造时间定义
+    // 记忆流水与协作 hop 复用同一个窗口，不另造时间定义
     expect(full.body.memory.audit.total).toBeGreaterThan(0);
+    expect(full.body.collaboration.total).toBe(6);
   });
 
-  it('导出只读：导出前后两张线的计数完全一致', async () => {
+  it('导出只读：导出前后两条线 + 协作 hop 的数据完全一致', async () => {
     const beforeMerchant = (await request(app()).get('/api/merchant/stats')).body;
     const beforeMemory = (await request(app()).get('/api/memory/handoff/stats')).body;
+    const hopRows = () => sqlite.getDb().prepare('SELECT * FROM agent_hops ORDER BY id').all();
+    const beforeHops = hopRows();
     await request(app()).get('/api/merchant/evidence');
     await request(app()).get('/api/merchant/evidence.md');
     await request(app()).get('/api/merchant/evidence/orders.csv');
     expect((await request(app()).get('/api/merchant/stats')).body).toEqual(beforeMerchant);
     expect((await request(app()).get('/api/memory/handoff/stats')).body).toEqual(beforeMemory);
+    expect(hopRows()).toEqual(beforeHops); // 只读汇总，绝不改写编排层留下的状态
   });
 
   it('脏参数一律 4xx，不出现 5xx，也不静默忽略错误区间', async () => {

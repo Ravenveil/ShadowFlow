@@ -290,11 +290,22 @@ export interface EvidenceSummary {
     audit: { total: number; resolutions: number; by_action: Record<string, number> };
     feedback: { available: boolean };
   };
+  /** 协作 DAG 执行留痕（只读 agent_hops）：异常处理与人工审批的计数 */
+  collaboration: {
+    available: boolean;
+    total: number;
+    failures: number;
+    reworks: number;
+    approval_rejections: number;
+    open: number;
+  };
   human_decisions: {
     pending_conflicts: number;
     resolutions: number;
     failed_feedback: number;
     pending_feedback: number;
+    hop_failures: number;
+    hop_approval_rejections: number;
     note: string;
   };
   notes: string[];

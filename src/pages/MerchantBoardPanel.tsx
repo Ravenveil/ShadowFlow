@@ -647,7 +647,7 @@ export default function MerchantBoardPanel() {
         <p className="neo-mb-hint">
           {t('neo.merchant.evidenceHint', {
             defaultValue:
-              '把经营口径、账实核对、记忆交接与人工裁决留痕合成一份材料，供评委核实业务闭环与人机分工；导出只读，不改数据，区间与上方 KPI 一致。',
+              '把经营口径、账实核对、记忆交接、人工裁决与协作 DAG 的失败/返工/审批留痕合成一份材料，供评委核实业务闭环、人机分工与异常处理；导出只读，不改数据，区间与上方 KPI 一致。',
           })}
         </p>
         {evidence && (
@@ -667,6 +667,10 @@ export default function MerchantBoardPanel() {
             </span>
             <span className="neo-db-lesson-chip">
               反馈待补跑 {evidence.human_decisions.pending_feedback + evidence.human_decisions.failed_feedback}
+            </span>
+            <span className="neo-db-lesson-chip" data-testid="merchant-evidence-hops">
+              协作交接 {evidence.collaboration.total} · 异常 {evidence.human_decisions.hop_failures} · 返工{' '}
+              {evidence.collaboration.reworks}
             </span>
           </div>
         )}

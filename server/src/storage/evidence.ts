@@ -5,7 +5,10 @@
  * 光有页面截图不够 —— 数字算错、账实不符、冲突被系统擅自覆盖，截图都看不出来。
  * 这里把两条功能线**已落库的事实**汇总成一份可下载材料：
  *   ① 经营口径 / 账实核对 / 第一单五步链路 / 订单明细；
- *   ③ 交接包 / 画像写回流水 / 待裁决冲突 / 反馈队列，以及「哪几步是人拍板」。
+ *   ③ 交接包 / 画像写回流水 / 待裁决冲突 / 反馈队列，以及「哪几步是人拍板」；
+ *   另附一章协作 DAG 执行留痕（只读 agent_hops），把节点失败 / 返工 / 审批拒绝
+ *   变成「异常处理」的可核实证据 —— 这一章读的是编排层已落库的表，
+ *   **不改编排层任何代码**。
  *
  * 设计约束：
  *   - **纯只读**：只调两条线已有的查询函数，不写表、不触发模型、不改业务状态。
@@ -182,6 +185,113 @@ function readFeedback(db: Db, cap: number): FeedbackSnapshot {
   };
 }
 
+/**
+ * 协作 DAG 交接留痕（hop）—— 编排层每条前向边 A→B 落一行，全生命周期可审计。
+ * 这里只做只读投影，不 import 编排层、不调用它的写入函数：
+ * 证据包是「已经发生的事」的记录者，不是执行者，改编排层的口子一律不开。
+ */
+export interface HopEvent {
+  id: string;
+  group_id: string;
+  turn_seq: number;
+  from_agent: string;
+  to_agent: string;
+  status: string;
+  output_chars: number;
+  detail: string;
+  created_at: number;
+  settled_at: number | null;
+}
+
+export interface CollaborationTrail {
+  /** false = 老库里没有 agent_hops 表；计数记 0，报告其余章节照常可用 */
+  available: boolean;
+  /** 窗口内 hop 总数（与经营数字同一 [from, to)） */
+  total: number;
+  by_status: Record<string, number>;
+  /** 已结算（settled_at 非空）/ 尚未结算（悬挂中的交接） */
+  settled: number;
+  open: number;
+  /** 异常终态：failed / timeout / denied / aborted / empty —— 需要人介入或重试 */
+  failures: number;
+  /** 返工 hop：detail 以 'rework round ' 开头（conditional 驳回触发的真实标记） */
+  reworks: number;
+  /**
+   * 人工审批门拒绝：detail 以「审批被拒」开头。
+   * 注意 status='denied' 还可能是系统的 'policy deny'，那种不算老板拍板，
+   * 所以这里按 detail 精确识别，绝不把系统策略拦截包装成「人的决策」。
+   */
+  approval_rejections: number;
+  /** 最近 N 条明细，按时间正序 */
+  events: HopEvent[];
+}
+
+const HOP_ABNORMAL = ['failed', 'timeout', 'denied', 'aborted', 'empty'];
+
+/** 协作 DAG 留痕只读汇总；表不存在时返回空快照，不让导出 500。 */
+function readCollaboration(
+  db: Db,
+  opts: { limit: number; from: number | null; to: number | null },
+): CollaborationTrail {
+  const empty: CollaborationTrail = {
+    available: false, total: 0, by_status: {}, settled: 0, open: 0,
+    failures: 0, reworks: 0, approval_rejections: 0, events: [],
+  };
+  if (!tableExists(db, 'agent_hops')) return empty;
+
+  const params: unknown[] = [];
+  let where = 'WHERE 1 = 1';
+  if (opts.from !== null) {
+    where += ' AND created_at >= ?';
+    params.push(opts.from);
+  }
+  if (opts.to !== null) {
+    where += ' AND created_at < ?';
+    params.push(opts.to);
+  }
+  const rows = db
+    .prepare(
+      `SELECT status,
+              COUNT(*) AS n,
+              COALESCE(SUM(CASE WHEN settled_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS settled,
+              COALESCE(SUM(CASE WHEN settled_at IS NULL THEN 1 ELSE 0 END), 0) AS open,
+              COALESCE(SUM(CASE WHEN detail LIKE 'rework round %' THEN 1 ELSE 0 END), 0) AS reworks,
+              COALESCE(SUM(CASE WHEN detail LIKE '审批被拒%' THEN 1 ELSE 0 END), 0) AS approval_rejections
+         FROM agent_hops ${where} GROUP BY status`,
+    )
+    .all(...params) as Array<{
+    status: string; n: number; settled: number; open: number;
+    reworks: number; approval_rejections: number;
+  }>;
+  const by_status: Record<string, number> = {};
+  let total = 0;
+  let settled = 0;
+  let open = 0;
+  let failures = 0;
+  let reworks = 0;
+  let approval_rejections = 0;
+  for (const r of rows) {
+    by_status[r.status] = r.n;
+    total += r.n;
+    settled += r.settled;
+    open += r.open;
+    if (HOP_ABNORMAL.includes(r.status)) failures += r.n;
+    reworks += r.reworks;
+    approval_rejections += r.approval_rejections;
+  }
+  const events = db
+    .prepare(
+      `SELECT id, group_id, turn_seq, from_agent, to_agent, status, output_chars,
+              detail, created_at, settled_at
+         FROM agent_hops ${where} ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+    )
+    .all(...params, opts.limit) as HopEvent[];
+  return {
+    available: true, total, by_status, settled, open,
+    failures, reworks, approval_rejections, events: events.reverse(),
+  };
+}
+
 export interface EvidenceReport {
   schema_version: 'evidence-1';
   generated_at: number;
@@ -200,12 +310,18 @@ export interface EvidenceReport {
     feedback: FeedbackSnapshot;
     handoffs: Handoff[];
   };
+  /** 协作 DAG 执行留痕（只读 agent_hops），把「异常处理」变成可核实的运行记录。 */
+  collaboration: CollaborationTrail;
   /** 「老板不可替代决策」的可核实计数，单独成节给评委看。 */
   human_decisions: {
     pending_conflicts: number;
     resolutions: number;
     failed_feedback: number;
     pending_feedback: number;
+    /** 异常终态的交接节点：需要人重试 / 介入 */
+    hop_failures: number;
+    /** 人工审批门拒绝执行：老板否决了某个节点 */
+    hop_approval_rejections: number;
     note: string;
   };
   notes: string[];
@@ -270,6 +386,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
   const conflicts = listConflicts({ limit: cap });
   const audit = readAuditTrail(db, { limit: cap, from, to });
   const handoffs = listHandoffs({ limit: cap });
+  const collaboration = readCollaboration(db, { limit: cap, from, to });
 
   return {
     schema_version: 'evidence-1',
@@ -293,12 +410,15 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
       feedback,
       handoffs,
     },
+    collaboration,
     human_decisions: {
       pending_conflicts: ms.pending_conflicts,
       resolutions: audit.resolutions,
       failed_feedback: feedback.stats.failed,
       pending_feedback: feedback.stats.pending,
-      note: '系统自动完成下单、记账、反馈提炼与低置信写回；遇到同置信冲突只留痕不覆盖，由人在裁决台决定采纳或驳回；处理失败的反馈由人点补跑。',
+      hop_failures: collaboration.failures,
+      hop_approval_rejections: collaboration.approval_rejections,
+      note: '系统自动完成下单、记账、反馈提炼、低置信写回与 DAG 分层调度；遇到同置信冲突只留痕不覆盖，由人在裁决台决定采纳或驳回；处理失败的反馈由人点补跑；被审批门驳回或异常终态的协作节点由人决定是否重试。',
     },
     notes: [
       '营收 = 收入流水 − 退款流水；成本 = 费用流水（退款会补一条负数 expense 冲回成本）；毛利 = 营收 − 成本。',
@@ -307,7 +427,10 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
       '支付为演示用模拟回调，未接真实支付渠道；金额为整数分，展示时换算成元。',
       '画像写回是规则式提炼（零模型消耗）；同置信不同说法记 conflict 并保留原值，不擅自覆盖。',
       '本材料由已落库事实汇总生成，导出过程只读，不改写任何业务数据。',
-      '经营数字与画像写回流水按所选统计区间；交接包与反馈队列的计数是累计全量、明细只取最近 N 条，两类口径在报告中分开标注。',
+      '经营数字、画像写回流水与协作 hop 留痕按所选统计区间；交接包与反馈队列的计数是累计全量、明细只取最近 N 条，两类口径在报告中分开标注。',
+      '协作 hop 取自编排层已落库的 agent_hops（每条 DAG 边一行）；只记状态、产出字符数与终态原因，产出全文不落库。本材料只读汇总，不改编排层。',
+      '异常终态 = failed / timeout / denied / aborted / empty；返工按 detail「rework round」识别，人工审批拒绝按「审批被拒」识别；系统策略 deny 与人工审批拒绝都记为 denied，只有后者算人的决策。',
+      ...(collaboration.available ? [] : ['协作留痕表 agent_hops 不存在（老库），本章计数为 0；其余章节不受影响。']),
       ...(feedback.available ? [] : ['反馈自动写回队列模块尚未启用（数据表不存在），本节计数为 0；启用后导出会自动包含真实数据，无需改代码。']),
       ...(orders.truncated ? [`订单明细超过 ${CSV_ROW_CAP} 行，CSV 只导出前 ${CSV_ROW_CAP} 行；完整数据请翻页查询 /api/merchant/orders。`] : []),
     ],
@@ -329,6 +452,7 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
         '打开商家数据看板核对营收/毛利，再看 /reconcile 是否账实一致',
         'POST /api/memory/handoff/feedback 投递客户反馈，系统自动提炼写回画像',
         '出现同置信冲突时到「设置 — 记忆」的裁决台人工采纳或驳回',
+        '（可选）在已绑团队的群发消息触发 DAG：节点失败、返工与人工审批拒绝会落 agent_hops，导出时自动进入「协作执行留痕」一章',
         '在商家数据看板点「导出演示证据」，得到本 Markdown 与订单 CSV',
       ],
     },
@@ -365,9 +489,21 @@ const STEP_LABEL: Record<string, string> = {
   dashboard_visible: '看板可见',
 };
 
+/** agent_hops 状态的中文化，报告里不直接甩英文枚举给评委。 */
+const HOP_STATUS_LABEL: Record<string, string> = {
+  pending: '待开始',
+  running: '执行中',
+  done: '完成',
+  failed: '失败',
+  timeout: '超时',
+  empty: '空产出',
+  denied: '拒绝 / 策略拦截',
+  aborted: '已中止',
+};
+
 /** Markdown 报告：评委不用打开系统也能核实数字与分工，且能当答辩附件。 */
 export function evidenceMarkdown(report: EvidenceReport): string {
-  const { merchant: m, memory: mm, human_decisions: hd } = report;
+  const { merchant: m, memory: mm, collaboration: dag, human_decisions: hd } = report;
   const lines: string[] = [];
   const push = (s = '') => lines.push(s);
   const table = (head: string[], rows: string[][]) => {
@@ -431,6 +567,9 @@ export function evidenceMarkdown(report: EvidenceReport): string {
     ['人工裁决已发生', String(hd.resolutions), '**人**拍板，事件带 actor 与证据'],
     ['反馈自动写回·累计（总 / 已处理 / 跳过 / 失败）', `${mm.feedback.stats.total} / ${mm.feedback.stats.processed} / ${mm.feedback.stats.skipped} / ${mm.feedback.stats.failed}`, '系统自动；失败由**人**补跑'],
     ['待补跑反馈（pending / failed）', `${hd.pending_feedback} / ${hd.failed_feedback}`, '**人**点补跑后重放，幂等不重复写回'],
+    ['协作 DAG 交接 hop（本区间）', String(dag.total), '系统按拓扑调度，每条边逐行落库'],
+    ['异常终态节点（失败 / 超时 / 拒绝 / 空产出 / 中止）', String(dag.failures), '**人**决定是否重试，不静默吞掉'],
+    ['人工审批门拒绝执行', String(dag.approval_rejections), '**人**否决节点，系统不擅自放行'],
   ]);
   push();
   push('写回动作分布（窗口内）：');
@@ -448,7 +587,41 @@ export function evidenceMarkdown(report: EvidenceReport): string {
     push();
   }
 
-  push('## 四、运行记录明细');
+  push('## 四、协作执行留痕（DAG 异常处理可核实）');
+  push();
+  push('数据来源：编排层每次 DAG 边遍历（A→B 交接）落一行 `agent_hops`，全生命周期状态可审计。本材料**只读汇总，不改编排层任何代码**；产出全文不落库，只保留状态、产出字符数与终态原因。');
+  push();
+  if (!dag.available) {
+    push('> 老库中不存在 `agent_hops` 表，本章计数为 0；其余章节不受影响。');
+    push();
+  }
+  table(['指标', '数值', '含义'], [
+    ['交接 hop 总数（本区间）', String(dag.total), '与上方经营数字同一统计区间'],
+    ['已结算 / 未结算', `${dag.settled} / ${dag.open}`, '未结算 = 悬挂中的交接，巡检可发现'],
+    ['异常终态', String(dag.failures), 'failed / timeout / denied / aborted / empty'],
+    ['其中返工（conditional 驳回）', String(dag.reworks), '评审节点驳回 → 被评审方带意见重跑'],
+    ['其中人工审批拒绝', String(dag.approval_rejections), '老板否决带审批入边的节点'],
+  ]);
+  push();
+  const hopStatuses = Object.entries(dag.by_status);
+  push(`状态分布：${hopStatuses.length === 0
+    ? '本区间未发生 DAG 交接'
+    : hopStatuses.map(([s, n]) => `${HOP_STATUS_LABEL[s] ?? s} ${n}`).join(' · ')}`);
+  push();
+  push(`### 交接明细（最近 ${dag.events.length} 条，按时间正序）`);
+  push();
+  if (dag.events.length === 0) {
+    push('_本区间没有协作交接记录；如需核实异常处理，可在已绑团队的群触发一次 DAG（含节点失败 / 返工 / 审批拒绝）后重新导出。_');
+  } else {
+    table(['时间', '群 / 回合', '交出 → 接手', '状态', '产出字符', '终态原因'], dag.events.map((h) => [
+      stamp(h.created_at), `${h.group_id} / #${h.turn_seq}`,
+      `${h.from_agent} → ${h.to_agent}`, HOP_STATUS_LABEL[h.status] ?? h.status,
+      String(h.output_chars), h.detail || '—',
+    ]));
+  }
+  push();
+
+  push('## 五、运行记录明细');
   push();
   push(`### 订单明细（区间内共 ${m.orders.total} 单，下列 ${m.orders.shown} 单）`);
   push();
@@ -494,12 +667,12 @@ export function evidenceMarkdown(report: EvidenceReport): string {
     push();
   }
 
-  push('## 五、口径与边界');
+  push('## 六、口径与边界');
   push();
   for (const n of report.notes) push(`- ${n}`);
   push();
 
-  push('## 六、复现与复用');
+  push('## 七、复现与复用');
   push();
   push('复现步骤：');
   push();

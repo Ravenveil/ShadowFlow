@@ -103,11 +103,21 @@ const evidence: api.EvidenceSummary = {
     audit: { total: 7, resolutions: 1, by_action: { create: 3, conflict: 2 } },
     feedback: { available: true },
   },
+  collaboration: {
+    available: true,
+    total: 6,
+    failures: 3,
+    reworks: 1,
+    approval_rejections: 1,
+    open: 1,
+  },
   human_decisions: {
     pending_conflicts: 2,
     resolutions: 1,
     failed_feedback: 1,
     pending_feedback: 0,
+    hop_failures: 3,
+    hop_approval_rejections: 1,
     note: '系统自动完成下单与写回，冲突由人裁决。',
   },
   notes: ['营收 = 收入 − 退款'],
@@ -379,6 +389,9 @@ describe('演示证据包（①③ 留痕可核实、可下载）', () => {
     expect(screen.getByTestId('merchant-evidence-conflicts')).toHaveTextContent('待裁决 2');
     expect(screen.getByTestId('merchant-evidence-resolutions')).toHaveTextContent('人工裁决 1');
     expect(summary).toHaveTextContent('反馈待补跑 1');
+    expect(screen.getByTestId('merchant-evidence-hops')).toHaveTextContent('协作交接 6');
+    expect(screen.getByTestId('merchant-evidence-hops')).toHaveTextContent('异常 3');
+    expect(screen.getByTestId('merchant-evidence-hops')).toHaveTextContent('返工 1');
   });
 
   it('导出 Markdown / CSV，且换 KPI 区间后附件用同一区间', async () => {
