@@ -243,6 +243,20 @@
   flex-wrap: wrap;
   font-size: 11px;
   color: var(--t-fg-3);
+  /* 2026-11-06: 状态徽章移入 meta 行后，行尾留呼吸空间 */
+  min-height: 22px;
+}
+
+/* 版本串（2026-11-06 自状态徽章拆出）：单行省略，悬浮 title 看全貌 */
+.claw-version {
+  font-family: var(--font-mono, 'SF Mono', Consolas, monospace);
+  font-size: 10.5px;
+  color: var(--t-fg-4);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
 }
 
 .claw-chip {
