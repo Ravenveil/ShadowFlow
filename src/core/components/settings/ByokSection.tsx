@@ -731,6 +731,9 @@ export function ByokSection() {
       next.forEach(i => { map[i] = PROVIDER_META[i]; });
       localStorage.setItem('sf.byok.custom-meta', JSON.stringify(map));
     } catch {}
+    // 立即在服务端建占位配置：否则「校验 / 拉取模型列表」接口都查不到该
+    // provider，自定义 API 设置形同失败（2026-11-06 修复）。
+    void saveProvider(id, { baseUrl, enabled: false, models: [], manualModels: [] });
     setSelectedId(id);
     setCustomOpen(false);
   }
@@ -755,6 +758,7 @@ export function ByokSection() {
   const [testState,    setTestState]    = useState<TestState>('idle');
   const [, setIsDirty] = useState(false);  // retained as no-op setter for legacy markDirty callers
   const [refreshingModels, setRefreshingModels] = useState(false);
+  const [newModelId, setNewModelId] = useState('');
   const [defaultModelId, setDefaultModelId] = useState<string>('');
   const [temperature,    setTemperature]    = useState<number>(0.2);
   const [routingPriority, setRoutingPriority] = useState<string>('fallback');
@@ -768,6 +772,31 @@ export function ByokSection() {
       if (typeof s.defaultModel === 'string' && s.defaultModel) setDefaultModelId(s.defaultModel);
     });
   }, []);
+
+  // 把已保存的模型 id（启用 / 远端同步 / 手动补录）合并进模型目录：否则刷新后
+  // 自定义模型与远端同步来的模型全部消失，列表里只剩内置目录（2026-11-06 修复
+  // 「自定义的模型不在列表显示」）。合并 key 用 provider+id，避免跨厂商撞名去重。
+  useEffect(() => {
+    setAllModels(prev => {
+      const seen = new Set(prev.map(m => String(m.provider) + ' ' + String(m.id)));
+      const additions: ModelDef[] = [];
+      for (const [pid, p] of Object.entries(store.providers)) {
+        const ids = new Set([
+          ...(p.models ?? []),
+          ...(p.syncedModels ?? []),
+          ...(p.manualModels ?? []),
+        ]);
+        for (const id of ids) {
+          if (!id) continue;
+          const k = String(pid) + ' ' + String(id);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          additions.push({ id, name: id, provider: pid });
+        }
+      }
+      return additions.length ? [...prev, ...additions] : prev;
+    });
+  }, [store]);
 
   const [refreshNote, setRefreshNote] = useState<{ tone: 'ok' | 'warn' | 'err'; text: string } | null>(null);
 
@@ -938,6 +967,21 @@ export function ByokSection() {
     await autoSave({ models: next });
   }
 
+  /** 手动补录模型 id（远端目录没有的自定义/私有模型）。记入 manualModels 并默认启用。 */
+  async function addManualModel() {
+    const id = newModelId.trim();
+    if (!id) return;
+    setNewModelId('');
+    setAllModels(prev => prev.some(m => m.provider === selectedId && m.id === id)
+      ? prev
+      : [...prev, { id, name: id, provider: selectedId }]);
+    const nextEnabled = enabledModels.includes(id) ? enabledModels : [...enabledModels, id];
+    setEnabledModels(nextEnabled);
+    const prevManual = savedState?.manualModels ?? [];
+    const nextManual = prevManual.includes(id) ? prevManual : [...prevManual, id];
+    await autoSave({ models: nextEnabled, manualModels: nextManual });
+  }
+
 
   async function handleRemove() {
     const ok = await deleteProvider(selectedId);
@@ -995,6 +1039,29 @@ export function ByokSection() {
   const LOCAL_IDS = new Set(['ollama', 'lmstudio']);
   const OAI_COMPAT_IDS = new Set(['openai','deepseek','zhipu','qwen','moonshot','mistral','groq','azure','ollama','lmstudio']);
 
+  // 侧栏可见 provider = 内置顺序 + 用户自定义。此前只遍历 PROVIDER_ORDER，
+  // 自定义 provider 创建后在侧栏根本不可见，切走即「消失」（2026-11-06 修复）。
+  const ALL_PROVIDER_IDS = [
+    ...PROVIDER_ORDER,
+    ...customIds.filter(id => !PROVIDER_ORDER.includes(id)),
+  ];
+  const CUSTOM_ID_SET = new Set(customIds);
+
+  /** 落单 meta 兜底：localStorage 的 custom-meta 丢失时不能让整页崩掉。 */
+  const metaOf = (id: string): ProviderMeta =>
+    PROVIDER_META[id] ?? {
+      name: id, monogram: id.slice(0, 2).toUpperCase(), tint: '#71717A',
+      short: '', defaultUrl: '', keyPlaceholder: '', noKey: false,
+    };
+
+  const matchFilter = (id: string, key: FilterKey): boolean => {
+    if (key === 'configured') return Boolean(store.providers[id]?.apiKey || metaOf(id).noKey);
+    // 自定义 provider 均为 OpenAI 兼容端点
+    if (key === 'openai-compat') return OAI_COMPAT_IDS.has(id) || CUSTOM_ID_SET.has(id);
+    if (key === 'local') return LOCAL_IDS.has(id);
+    return true;
+  };
+
   const RAIL_FILTERS: { key: FilterKey; label: string }[] = [
     { key: 'all',          label: T('全部', 'All') },
     { key: 'configured',   label: T('已配置', 'Configured') },
@@ -1002,19 +1069,16 @@ export function ByokSection() {
     { key: 'local',        label: T('本地', 'Local') },
   ];
 
-  const filteredProviders = PROVIDER_ORDER.filter(id => {
-    const meta = PROVIDER_META[id];
+  const filteredProviders = ALL_PROVIDER_IDS.filter(id => {
     if (railSearch) {
+      const meta = metaOf(id);
       const q = railSearch.toLowerCase();
       if (!meta.name.toLowerCase().includes(q) && !meta.short.toLowerCase().includes(q)) return false;
     }
-    if (railFilter === 'configured') return Boolean(store.providers[id]?.apiKey || meta.noKey);
-    if (railFilter === 'openai-compat') return OAI_COMPAT_IDS.has(id);
-    if (railFilter === 'local') return LOCAL_IDS.has(id);
-    return true;
+    return matchFilter(id, railFilter);
   });
 
-  const configuredIds = filteredProviders.filter(id => Boolean(store.providers[id]?.apiKey || (PROVIDER_META[id].noKey && store.providers[id])));
+  const configuredIds = filteredProviders.filter(id => Boolean(store.providers[id]?.apiKey || (metaOf(id).noKey && store.providers[id])));
   const availableIds  = filteredProviders.filter(id => !configuredIds.includes(id));
 
   const hasKey = Boolean(savedState?.apiKey?.length);
@@ -1051,12 +1115,7 @@ export function ByokSection() {
           {/* Filter chips */}
           <div style={{ display: 'flex', gap: 5, marginTop: 9, flexWrap: 'wrap' }}>
             {RAIL_FILTERS.map(f => {
-              const count = PROVIDER_ORDER.filter(id => {
-                if (f.key === 'configured')    return Boolean(store.providers[id]?.apiKey || (PROVIDER_META[id].noKey && store.providers[id]));
-                if (f.key === 'openai-compat') return OAI_COMPAT_IDS.has(id);
-                if (f.key === 'local')         return LOCAL_IDS.has(id);
-                return true;
-              }).length;
+              const count = ALL_PROVIDER_IDS.filter(id => matchFilter(id, f.key)).length;
               const active = railFilter === f.key;
               return (
                 <button
@@ -1091,7 +1150,7 @@ export function ByokSection() {
           {configuredIds.map(id => (
             <ProviderRow
               key={id} id={id}
-              configured={Boolean(store.providers[id]?.apiKey || (PROVIDER_META[id].noKey && store.providers[id]))}
+              configured={Boolean(store.providers[id]?.apiKey || (metaOf(id).noKey && store.providers[id]))}
               enabled={store.providers[id]?.enabled ?? false}
               modelCount={(store.providers[id]?.models ?? []).length}
               active={selectedId === id}
@@ -1463,9 +1522,10 @@ export function ByokSection() {
             </div>
           </div>
 
-          {/* Models grid */}
-          {providerModels.length > 0 && (
-            <div>
+          {/* Models grid — 恒显示（即使 0 模型）：此前 providerModels 为空时整块
+              隐藏，「拉取列表 / 手动添加」入口全部不可达，自定义 API 的模型永远
+              加不进来（2026-11-06 修复） */}
+          <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)', letterSpacing: '-0.005em' }}>
@@ -1570,8 +1630,50 @@ export function ByokSection() {
                   );
                 });
               })()}
+
+              {providerModels.length === 0 && (
+                <div style={{
+                  padding: '18px 12px', textAlign: 'center', borderRadius: 9,
+                  background: 'var(--t-bg)', border: '1px dashed var(--t-border)',
+                  color: 'var(--t-fg-5)', fontSize: 12,
+                }}>
+                  {T('暂无模型 — 点右上「拉取列表」同步远端，或在下方手动添加模型 ID',
+                     'No models yet — pull the remote list (top right) or add a model ID below')}
+                </div>
+              )}
+
+              {/* 手动添加模型 ID（远端目录没有的自定义 / 私有部署模型） */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <input
+                  value={newModelId}
+                  onChange={e => setNewModelId(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addManualModel(); } }}
+                  placeholder={T('手动添加模型 ID，如 mimo-v2.6-flash', 'Add a model ID manually, e.g. mimo-v2.6-flash')}
+                  data-testid="byok-add-model-input"
+                  style={{
+                    flex: 1, boxSizing: 'border-box', padding: '0 12px', height: 34,
+                    background: 'var(--t-bg)', border: '1px solid var(--t-border)', borderRadius: 8,
+                    fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--t-fg)', outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void addManualModel()}
+                  disabled={!newModelId.trim()}
+                  data-testid="byok-add-model-btn"
+                  style={{
+                    padding: '0 14px', height: 34, borderRadius: 8, flexShrink: 0,
+                    background: 'var(--t-accent-tint)',
+                    border: '1px solid color-mix(in oklab, var(--t-accent) 35%, transparent)',
+                    color: 'var(--t-accent)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
+                    cursor: newModelId.trim() ? 'pointer' : 'default',
+                    opacity: newModelId.trim() ? 1 : 0.5,
+                  }}
+                >
+                  {T('添加', 'Add')}
+                </button>
+              </div>
             </div>
-          )}
 
           {/* Defaults row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 14 }}>
