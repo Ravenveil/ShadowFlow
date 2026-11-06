@@ -84,7 +84,7 @@ vi.mock('../NeoComposer', () => ({
   ),
 }));
 
-import { NeoGroupChat, segmentTurn } from '../NeoGroupChat';
+import { NeoGroupChat, segmentTurn, dropSettledThinking } from '../NeoGroupChat';
 
 function renderChat() {
   return render(
@@ -127,6 +127,18 @@ describe('segmentTurn — turn 内钉钉分段', () => {
       { id: 'a1', kind: 'assistant_text', body: 'run 输出', turn_id: 't', ts: 1 },
     ] as TimelineMessage[];
     expect(segmentTurn(msgs).map((s) => s.type)).toEqual(['process']);
+  });
+});
+
+describe('dropSettledThinking — 说完后不显示深度思考（2026-11-07 用户反馈）', () => {
+  it('只保留 streaming 思考卡，收口（done）的整卡撤下', () => {
+    const msgs = [
+      { id: 'u1', kind: 'user_turn', text: 'hi', turn_id: 't', ts: 1 },
+      { id: 'th1', kind: 'thinking', label: '正在思考', status: 'streaming', turn_id: 't', ts: 2 },
+      { id: 'th2', kind: 'thinking', label: '深度思考', status: 'done', turn_id: 't', ts: 3 },
+      { id: 'a1', kind: 'assistant_text', body: 'ok', sender_name: '读读', agent_id: 'a1', turn_id: 't', ts: 4 },
+    ] as TimelineMessage[];
+    expect(dropSettledThinking(msgs).map((m) => m.id)).toEqual(['u1', 'th1', 'a1']);
   });
 });
 
@@ -191,7 +203,7 @@ describe('NeoGroupChat — 钉钉气泡流', () => {
   it('过程卡段仍嵌在对应 turn 下（neo-gc-proc 包裹整段 NeoTimeline）', async () => {
     timelineState.messages = [
       { id: 'chat_m1', kind: 'user_turn', text: 'go', turn_id: 't1', ts: now },
-      { id: 'p1', kind: 'thinking', label: '想', status: 'done', turn_id: 't1', ts: now },
+      { id: 'p1', kind: 'thinking', label: '想', status: 'streaming', turn_id: 't1', ts: now },
     ] as TimelineMessage[];
     const { container } = renderChat();
     const proc = await waitFor(() => {
@@ -200,6 +212,22 @@ describe('NeoGroupChat — 钉钉气泡流', () => {
       return el!;
     });
     expect(proc.querySelector('[data-testid="tl-stub"]')).toHaveTextContent('p1');
+  });
+
+  it('说完后不显示深度思考：已收口 thinking 卡撤下，流式中的仍显示', async () => {
+    timelineState.messages = [
+      { id: 'chat_m1', kind: 'user_turn', text: 'hi', turn_id: 't1', ts: now },
+      { id: 'th_live', kind: 'thinking', label: '正在思考', status: 'streaming', turn_id: 't1', ts: now },
+      { id: 'th_done', kind: 'thinking', label: '深度思考', status: 'done', turn_id: 't1', ts: now },
+    ] as TimelineMessage[];
+    const { container } = renderChat();
+    const proc = await waitFor(() => {
+      const el = container.querySelector('.neo-gc-proc');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(proc.querySelector('[data-testid="tl-stub"]')).toHaveTextContent('th_live');
+    expect(proc.querySelector('[data-testid="tl-stub"]')).not.toHaveTextContent('th_done');
   });
 });
 

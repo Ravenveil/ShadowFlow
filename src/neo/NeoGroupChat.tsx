@@ -176,6 +176,18 @@ function segText(m: TimelineMessage): string {
   return '';
 }
 
+/**
+ * 2026-11-07 用户反馈「说完后不要显示深度思考」——聊天面的 thinking 过程卡
+ * 只在流式中显示（「正在思考」的实时反馈，也是生成进度的唯一可视面）；agent
+ * 说完（thinking_finalize / sweep 收口 → status 落 done）即整卡撤下，不再挂在
+ * 回复气泡下面（此前实测：气泡下方残留「深度思考 Ns」块，展开是 <sf:thinking>
+ * 原始标签 + 与气泡重复的正文）。过程细节不丢：Agent 检查器（NeoAgentInspector）
+ * 等过程视图仍全程可见。
+ */
+export function dropSettledThinking(messages: readonly TimelineMessage[]): TimelineMessage[] {
+  return messages.filter((m) => !(m.kind === 'thinking' && m.status !== 'streaming'));
+}
+
 /* ── 纯逻辑：成员推导（sender_name/agent_id + plan_card assignee 去重） ────── */
 
 interface GroupMember {
@@ -610,7 +622,10 @@ export function NeoGroupChat({
   );
 
   // 消息流 → 日分段（每段内按 turn 分块 → turn 内按钉钉段渲染）
-  const daySegments = useMemo(() => segmentByDay(groupByTurn(timeline.messages)), [timeline.messages]);
+  const daySegments = useMemo(
+    () => segmentByDay(groupByTurn(dropSettledThinking(timeline.messages))),
+    [timeline.messages],
+  );
 
   // 成员头像条（纯前端推导；推导不出 → 不渲染）
   const members = useMemo(() => deriveMembers(timeline.messages), [timeline.messages]);
