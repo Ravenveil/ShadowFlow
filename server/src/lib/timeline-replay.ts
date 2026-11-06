@@ -115,6 +115,14 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
         tasks: msg.tasks.map((t) => (t.id === patch.task_id ? { ...t, ...patch.patch } : t)),
       };
     }
+    // 2026-11-07 P0 — hop_card 生命周期推进（hop_update）。此前缺失该分支：
+    // 群时间线 REST 读路径重放时 hop_update 被静默丢弃，刷新/重连回放后 hop 卡
+    // 永卡 pending（前端 reducer 一直在收，服务端回放不收）。与前端 reducer
+    // （src/components/run-session/timeline/types.ts）保持同等语义。
+    case 'hop_update': {
+      if (msg.kind !== 'hop_card') return msg;
+      return { ...msg, ...patch.patch };
+    }
     default:
       return msg;
   }
