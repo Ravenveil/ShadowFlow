@@ -230,6 +230,17 @@ from shadowflow.api import runs as _runs_api
 from shadowflow.api import artifacts as _artifacts_api
 from shadowflow.api import opc as _opc_api
 
+# 多模态记忆库（PR #7 设计移植）：单文件 RAG 后端，BM25+向量混合检索。
+# 挂 /api/memory-bank 前缀，与 /api/knowledge、/api/memory 互不冲突；
+# 未注入 Embedder 时退化为 BM25 关键词检索（零额外依赖）。实例全局复用一次。
+from shadowflow.memory.memory_bank import (
+    MemoryBank,
+    create_memory_router as _create_memory_bank_router,
+)
+memory_bank = MemoryBank(
+    root=Path(os.getenv("SHADOWFLOW_KNOWLEDGE_DIR", ".shadowflow/knowledge")),
+)
+
 _ops_api.set_aggregator(_ops_api.OpsAggregator(
     runtime_service=runtime_service,
     event_bus=run_event_bus,
@@ -282,6 +293,8 @@ app.include_router(_artifacts_api.router)
 # OPC OS（2026-11-04，backend-poc company/orders/pay 移植）：组织 / 项目 /
 # 审批 / 账本 / 商品 / 订单 / 支付网关，独立 opc.sqlite，全部挂 /api/opc 前缀。
 app.include_router(_opc_api.router)
+# 多模态记忆库（PR #7）：/api/memory-bank，Node proxyFallback 自动转发。
+app.include_router(_create_memory_bank_router(memory_bank))
 
 
 @app.exception_handler(ShadowflowError)
