@@ -610,13 +610,16 @@ export function emitIntentCard(gw: GwLike, input: IntentCardInput): void {
   }
 }
 
-/** commit_record 卡 — agent 提交 / 编排者合并提交共用。 */
-function emitCommitCard(gw: GwLike, c: {
+/** commit_record 卡 — agent 提交 / 编排者合并提交共用。
+ *  2026-11-07 检查器产出归属 — who 可选：agent 自己的提交带 agent_id/agent_name
+ *  （检查器按 agent 筛产出）；编排者合并提交不传 = 无归属（不进单 agent 流）。 */
+export function emitCommitCard(gw: ToolGw, c: {
   repo: string; sha: string; short_sha: string; message: string; author: string;
   date?: string; files_changed: number; insertions: number; deletions: number;
   files?: WorktreeCommit['files'];
-}): void {
+}, who?: ToolOwner): void {
   if (!gw || !c.sha) return;
+  const attribution = who ? { agent_id: who.agentId, agent_name: who.agentName } : {};
   gw.emitMessage({
     id: gw.nextId(),
     kind: 'commit_record',
@@ -632,12 +635,15 @@ function emitCommitCard(gw: GwLike, c: {
     deletions: c.deletions,
     ...(c.date ? { date: c.date } : {}),
     ...(c.files && c.files.length > 0 ? { files: c.files } : {}),
+    ...attribution,
   });
 }
 
-/** file_diff 卡（每个变更文件一张，git-introspect 已限量截断）。 */
-function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
+/** file_diff 卡（每个变更文件一张，git-introspect 已限量截断）。
+ *  2026-11-07 — who 同 emitCommitCard（与 commit_record 成对归属）。 */
+export function emitFileDiffCards(gw: ToolGw, diffs: GitFileDiff[], who?: ToolOwner): void {
   if (!gw) return;
+  const attribution = who ? { agent_id: who.agentId, agent_name: who.agentName } : {};
   for (const fd of diffs) {
     gw.emitMessage({
       id: gw.nextId(),
@@ -649,6 +655,7 @@ function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
       removed: fd.removed,
       lines: fd.lines,
       ...(fd.language ? { language: fd.language } : {}),
+      ...attribution,
     });
   }
 }
@@ -657,18 +664,18 @@ function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
 async function commitAndEvidence(
   gw: GwLike,
   wt: PreparedWorktree,
-  agentName: string,
+  who: ToolOwner,
   taskTitle: string,
 ): Promise<void> {
   try {
     const commit = await commitWorktree(
       wt.dir,
-      `[sf] ${agentName}: ${taskTitle.slice(0, 60)}`,
-      agentName,
+      `[sf] ${who.agentName}: ${taskTitle.slice(0, 60)}`,
+      who.agentName,
     );
     if (!commit?.sha) return;
     emitCommitCard(gw, {
-      repo: agentName,
+      repo: who.agentName,
       sha: commit.sha,
       short_sha: commit.short_sha,
       message: commit.message,
@@ -678,9 +685,9 @@ async function commitAndEvidence(
       insertions: commit.insertions,
       deletions: commit.deletions,
       files: commit.files,
-    });
+    }, who);
     const ev = await inspectGitRun(wt.dir, wt.baseSha, undefined);
-    if (ev) emitFileDiffCards(gw, ev.fileDiffs);
+    if (ev) emitFileDiffCards(gw, ev.fileDiffs, who);
   } catch (e) {
     console.warn('[groups-chat] worktree commit/evidence failed (non-fatal):', e);
   }
@@ -915,6 +922,9 @@ async function runFanout(
                 id: `node:${id}`,
                 title: taskByAgent.get(id)?.title ?? rosterName(id),
                 assignee: rosterName(id),
+                // U0 绑角色 — 行归属 agent_id 真源（检查器按行筛「含它的任务行」；
+                // 老数据回落行 id `node:<agentId>` 同样可判归属）。
+                agent_id: id,
                 status: 'pending',
                 batch: li + 1,
               });
@@ -1152,7 +1162,7 @@ async function runFanout(
             // Polynoia MERGE 前半 — 干完即提交 worktree 产物 + 证据卡
             // （commit_record / file_diff）；无 worktree 或干净树 → 静默跳过。
             if (!errMsg && wt) {
-              await commitAndEvidence(gw, wt, name, task?.title ?? userPrompt);
+              await commitAndEvidence(gw, wt, { agentId: agentId, agentName: name }, task?.title ?? userPrompt);
             }
             // 2026-11-04 思考剥离 — 与串行路径同款：<sf:thinking> 段不进最终回复。
             return { text: stripThinking(buf), error: errMsg || undefined };
@@ -1441,7 +1451,7 @@ async function runFanout(
       });
       // 串行路径同样「干完即提交」— worktree 产物 + 证据卡。
       if (wt) {
-        await commitAndEvidence(gw, wt, agentName, prompt);
+        await commitAndEvidence(gw, wt, { agentId: agentId, agentName: agentName }, prompt);
       }
     }
     // 仅当注册表里仍是本轮 controller 时才删（避免误删后来者；DAG 路径 finally 同款）。

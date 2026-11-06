@@ -17,8 +17,9 @@
  *      - assistant_text/raw（agent_id 命中）= 它在群里说的话；
  *      - thinking（agent_id 命中；老数据回落 label 前缀匹配）= 过程流；
  *      - tool_call/tool_echo（agent_id 命中）= 工具调用与结果；
- *      - plan_card 含它的任务行 / commit_record / file_diff 等 run 产物卡 —
- *        有 agent_id 的按 id 筛；无归属的（老数据）不进流（宁可少不串台）；
+ *      - plan_card 含它的任务行（行 agent_id / 行 id `node:<agentId>` 命中）；
+ *        commit_record / file_diff 等 run 产物卡 — 有 agent_id 的按 id 筛；
+ *        无归属的（老数据/编排者合并提交）不进流（宁可少不串台）；
  *      - hop_card（from_agent 或 to_agent 命中）= 它参与的交接边。
  *      流内过滤后交给 NeoTimeline 只读渲染。
  *
@@ -72,10 +73,16 @@ function isActivity(m: TimelineMessage, agentId: string, labelPrefix: string): b
       return m.agent_id === agentId;
     case 'hop_card':
       return m.from_agent === agentId || m.to_agent === agentId;
-    default:
-      // run 产物卡（plan/commit/diff/table/verdict…）目前无 per-agent 归属，
-      // 不猜 —— 宁可少显示也不把别人的活算到它头上。
-      return false;
+    case 'plan_card':
+      // 「含它的任务行」才进流：行归属 显式 agent_id > 行 id `node:<agentId>`
+      // （2026-11-07 前的行只有 id/assignee，id 即确定性归属锚点，不猜名字）。
+      return m.tasks.some((t) => t.agent_id === agentId || t.id === `node:${agentId}`);
+    default: {
+      // 其余 run 产物卡（commit_record/file_diff/table/verdict…）：有 agent_id
+      // 的按 id 筛；无归属的（老数据/编排者合并提交）不进流（宁可少不串台）。
+      const aid = (m as { agent_id?: string }).agent_id;
+      return aid != null && aid === agentId;
+    }
   }
 }
 
