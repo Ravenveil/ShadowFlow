@@ -26,6 +26,7 @@
 
 import { randomUUID } from 'crypto';
 import { getDb } from './sqlite';
+import { getSetting } from './settings';
 
 // 一次最多带几条记忆进提示词
 export const RECALL_TOP_K = 4;
@@ -203,9 +204,49 @@ function inScope(row: MemoryLesson, scope_key: string, task_type: string): boole
 
 /** 进提示词的那段话。空字符串表示没有可用记忆（不塞废话）。 */
 export function contextBlock(scope_key = '', task_type = '', topK = RECALL_TOP_K): string {
-  const hits = recallLessons(scope_key, task_type, topK);
+  return formatRows(recallLessons(scope_key, task_type, topK));
+}
+
+function formatRows(hits: MemoryLesson[]): string {
   if (!hits.length) return '';
   return hits.map((row) => `- [${KIND_LABEL[row.kind] ?? '经验'}] ${row.content}`).join('\n');
+}
+
+/**
+ * 进提示词的经验块（含「## 过往经验」标题；2026-11-07 抽为统一入口）。
+ *
+ * 单域语义与旧内联实现逐字一致：开关 memory.autoLearn（关=不召回）、条数
+ * memory.recallTopK（1..12 缺省 4）、空（无记忆）返回 ''、绝不抛错。
+ * 传数组 = 多域合并召回（去重后整体按 score/hits/updated_at 排序，再截 topK）：
+ * 通用（域空）条目天然重复出现于各域结果，合并时按 id 去重。
+ */
+export function promptBlock(scope: string | string[] = '', task_type = ''): string {
+  try {
+    if (getSetting('memory.autoLearn') === false) return '';
+    const topK = getSetting('memory.recallTopK');
+    const k = typeof topK === 'number' && topK > 0 ? Math.min(Math.round(topK), 12) : RECALL_TOP_K;
+    const scopes = Array.isArray(scope) ? scope : [scope];
+    if (scopes.length === 1) {
+      const block = contextBlock(scopes[0], task_type, k);
+      return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
+    }
+    const seen = new Set<string>();
+    const merged: MemoryLesson[] = [];
+    for (const s of scopes) {
+      for (const row of recallLessons(s, task_type, k)) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        merged.push(row);
+      }
+    }
+    merged.sort(
+      (a, b) => b.score - a.score || b.hits - a.hits || b.updated_at - a.updated_at,
+    );
+    const block = formatRows(merged.slice(0, k));
+    return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
+  } catch {
+    return '';
+  }
 }
 
 // ---------------------------------------------------------------- 管理
