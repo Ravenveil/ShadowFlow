@@ -27,12 +27,17 @@ import KnowledgePage, { parseSourceId } from '../pages/KnowledgePage';
 import MemoryPage from '../pages/MemoryPage';
 // 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）
 import DashboardPage from '../pages/DashboardPage';
+// 定时任务管理页（2026-11-06，GrokBot/OpenBot /routines 对齐批）
+import SchedulesPage from '../pages/SchedulesPage';
 // ClawHub（2026-10-30 内嵌化）：中栏变体，左栏常驻（原独立路由保留兼容）。
 import ClawHubPage from '../pages/clawhub/ClawHubPage';
 import { useI18n } from '../common/i18n';
 import { usePythonBackendStatus } from '../core/hooks/usePythonBackendStatus';
 import { useInboxStore } from '../core/store/useInboxStore';
-import { getGroup } from '../api/groupApi';
+import { getGroup, postGroupMessage, resolveDmConversation } from '../api/groupApi';
+import { useWorkspaceStore } from '../store/workspaceStore';
+import { SECRETARY_AGENT_ID } from './secretary';
+import { NeoOnboardingModal, ONBOARDING_DONE_KEY } from './NeoOnboardingModal';
 import type { NeoNav, NeoTarget, RailSection } from './types';
 import './neo.css';
 
@@ -47,6 +52,7 @@ const SECTION_BY_NAV: Partial<Record<NeoNav['view'], RailSection>> = {
   home: 'home',
   knowledge: 'knowledge',
   memory: 'memory',
+  schedules: 'schedules',
 };
 
 export function NeoApp() {
@@ -226,6 +232,68 @@ export function NeoApp() {
     setRunId(null);
   }, [navigate]);
 
+  // ── 默认落地 = 秘书「影」的会话（2026-11-06 用户反馈：不显示首页 hero）────
+  // 每次启动：无恢复的 run（URL ?run= / localStorage）时 find-or-create 影的
+  // DM 并直接进入——打开产品即与影对话。后端对新 DM 预置「Hello World!」问候。
+  // 有 run 恢复则保持原行为（回到上次运行现场，不被拽走）。
+  // resolve 失败（Python 未起等）静默放弃，留在 home，下次启动重试。
+  useEffect(() => {
+    if (runId) return; // 有恢复的 run → 不抢
+    let alive = true;
+    resolveDmConversation(SECRETARY_AGENT_ID, useWorkspaceStore.getState().currentId)
+      .then((gid) => {
+        if (!alive || !gid) return;
+        navigate({ view: 'conversation', groupId: gid });
+      })
+      .catch(() => {
+        /* 后端未起：静默，留在 home */
+      });
+    return () => {
+      alive = false;
+    };
+    // 故意只跑一次（挂载时）；依赖数组留空。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 首访入职问卷（2026-11-06，模仿 ZCode/Codex 对话框弹出形式）────────────
+  // 时序（用户反馈 2026-11-06 15:23）：先进影的会话 → 欢迎语渲染出来 → 问卷
+  // 再弹（欢迎先行，问卷不抢首屏）。触发条件 = 首访标记缺失 + 已处于会话视图；
+  // 延迟 800ms 让「Hello World!」先上屏。跳过 = 只记完成标记，零副作用。
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  useEffect(() => {
+    if (nav.view !== 'conversation') return;
+    let done = false;
+    try {
+      done = localStorage.getItem(ONBOARDING_DONE_KEY) === '1';
+    } catch {
+      /* localStorage 不可用 → 视为已完成（不弹） */
+      done = true;
+    }
+    if (done) return;
+    const timer = setTimeout(() => setOnboardingOpen(true), 800);
+    return () => clearTimeout(timer);
+  }, [nav.view]);
+  const handleOnboardingFinished = useCallback(
+    (introMessage: string) => {
+      setOnboardingOpen(false);
+      if (!introMessage) return;
+      // 影的会话 id：首访 effect 刚 resolve 过；此处从 inbox DM 反查，查不到
+      // 就再 resolve 一次（幂等）。发送失败静默——画像已落 localStorage。
+      const wsId = useWorkspaceStore.getState().currentId;
+      const dmGid = (useInboxStore.getState().agentDMs ?? []).find(
+        (d) => d.agentId === SECRETARY_AGENT_ID,
+      )?.group_id;
+      const p = dmGid
+        ? Promise.resolve(dmGid)
+        : resolveDmConversation(SECRETARY_AGENT_ID, wsId).catch(() => null);
+      p.then((gid) => {
+        if (!gid) return;
+        return postGroupMessage(gid, introMessage, { senderKind: 'user' }).catch(() => undefined);
+      }).catch(() => undefined);
+    },
+    [],
+  );
+
   // B36 Python 后端宕机横幅：只复用 usePythonBackendStatus 状态源（单例 20s
   // 轮询 + 可见性恢复重探），UI 为 Neo 化顶部细条，不 import 旧渲染组件。
   // available === null（未探测完）不渲染，避免首屏闪烁。
@@ -242,7 +310,8 @@ export function NeoApp() {
   // 中栏按默认 flex 自然展开。dashboard 也不改左栏列表（section 保持不变）。
   const pageView =
     nav.view === 'knowledge' || nav.view === 'memory' || nav.view === 'agent-soul' ||
-    nav.view === 'runs' || nav.view === 'clawhub' || nav.view === 'dashboard';
+    nav.view === 'runs' || nav.view === 'clawhub' || nav.view === 'dashboard' ||
+    nav.view === 'schedules';
   // 主机未折叠 → 聊天列收窄，主机占满（clawsgo 运行态三栏）
   const runLayout = hostActive && !hostCollapsed && !pageView;
 
@@ -301,6 +370,8 @@ export function NeoApp() {
           <MemoryPage embedded />
         ) : nav.view === 'dashboard' ? (
           <DashboardPage embedded />
+        ) : nav.view === 'schedules' ? (
+          <SchedulesPage embedded />
         ) : nav.view === 'clawhub' ? (
           <ClawHubPage embedded />
         ) : nav.view === 'agent-soul' ? (
@@ -345,6 +416,29 @@ export function NeoApp() {
             )}
           </button>
         </aside>
+      )}
+
+      {/* 首访入职问卷（2026-11-06，ZCode/Codex 弹窗式）：提交 → 画像落盘 +
+          自我介绍发进与影的会话；跳过 → 只记标记。 */}
+      {onboardingOpen && (
+        <NeoOnboardingModal
+          onFinished={handleOnboardingFinished}
+          onSkipped={() => {
+            try {
+              localStorage.setItem(ONBOARDING_DONE_KEY, '1');
+            } catch {
+              /* ignore */
+            }
+            setOnboardingOpen(false);
+          }}
+          onAgentCreated={() => {
+            // 专属助理 Agent 创建成功 → 刷新左栏会话/员工列表（Grok 范式：
+            // 新员工即刻出现在侧栏）。
+            void useInboxStore
+              .getState()
+              .fetchWorkspaceInbox(useWorkspaceStore.getState().currentId);
+          }}
+        />
       )}
     </div>
   );

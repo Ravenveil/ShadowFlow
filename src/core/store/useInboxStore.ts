@@ -100,13 +100,19 @@ export const useInboxStore = create<InboxState>((set, get) => ({
     ) {
       return;
     }
+    // 2026-11-06 · 侧栏一次成型批（stale-while-revalidate）：已有同 workspace
+    // 数据时重拉**不清空旧列表**——只置 loading 位，响应到达后原位替换。
+    // 旧行为先清空会让侧栏「闪一下空白再全量爆发」，是「空白→爆发」的另一根因。
+    const hasStale =
+      s.currentTemplateId === null &&
+      s.currentWorkspaceId === (workspaceId ?? null) &&
+      (s.groups.length > 0 || s.agentDMs.length > 0);
     set({
       loading: true,
       error: null,
       currentTemplateId: null,
       currentWorkspaceId: workspaceId ?? null,
-      groups: [],
-      agentDMs: [],
+      ...(hasStale ? {} : { groups: [], agentDMs: [] }),
     });
     try {
       const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
@@ -119,6 +125,7 @@ export const useInboxStore = create<InboxState>((set, get) => ({
         loading: false,
       });
     } catch (err) {
+      // 失败时保留旧数据（有 stale 时不清空，只落错误位），侧栏不闪空。
       set({ loading: false, error: err instanceof Error ? err.message : 'Unknown error' });
     }
   },

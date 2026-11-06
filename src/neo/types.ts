@@ -26,7 +26,10 @@ export type NeoNav =
   | { view: 'memory' }
   /** 数据看板内嵌页（2026-11-05，整合 OPC-OS PR#3 看板设计；左栏列表保持不动）。 */
   | { view: 'dashboard' }
-  /** ClawHub 内嵌页（2026-10-30，左栏常驻；中栏 = Claw 目录/安装/卸载）。 */
+  /** 定时任务管理页（2026-11-06，GrokBot/OpenBot /routines 对齐；左栏列表 = 计划列表）。 */
+  | { view: 'schedules' }
+  /** ClawHub 内嵌页（2026-11-06 起入口迁至 /settings#clawhub；本变体保留
+   *  兼容旧深链/历史状态，NeoApp 中栏仍按它渲染 Claw 目录/安装/卸载）。 */
   | { view: 'clawhub' }
   /** 历史 runs 列表（GAP B39；左栏列表保持不动，行链接 /?run=<id>）。
    *  os-unified（2026-11-04）：左栏「历史」按钮移除（会话列表即历史），
@@ -48,7 +51,7 @@ export type NeoNav =
  * os-unified（2026-11-04 Grok Bot 范式批）：agents/teams 分区移除——成员即会话、
  * 团队即分组，全部并入 home 列表区。
  */
-export type RailSection = 'home' | 'knowledge' | 'memory';
+export type RailSection = 'home' | 'knowledge' | 'memory' | 'schedules';
 
 /** NeoRail props — 左栏导航（纯受控：状态全部来自 NeoApp）。 */
 export interface NeoRailProps {

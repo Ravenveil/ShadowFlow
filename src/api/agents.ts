@@ -83,7 +83,8 @@ export interface AgentRecord {
   workspace_id: string;
   blueprint: Record<string, unknown>;
   status: 'idle' | 'running' | 'paused' | 'error';
-  source: 'quick_hire' | 'catalog';
+  /** quick_hire（手动/快速招募）| catalog（目录）| secretary（内置秘书「影」，2026-11-06）。 */
+  source: 'quick_hire' | 'catalog' | 'secretary';
   created_at: string;
   /** 后端持久化的头像色（#rrggbb）；未设置为 null/缺省。 */
   avatar_color?: string | null;

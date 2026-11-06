@@ -101,28 +101,30 @@ beforeEach(() => {
 });
 
 describe('NeoRail — 折叠回路（弹出/收回）', () => {
-  it('默认展开：导航行齐全（os-unified 后无 团队/员工/历史 行），收回钮在', () => {
+  it('默认展开：导航行齐全（「新任务」已收起 2026-11-06；秘书常驻行在），收回钮在', () => {
     renderRail();
-    // 全局动作导航行（os-unified：团队/员工/历史按钮已移除）
-    expect(screen.getByTestId('neo-new-task')).toBeInTheDocument();
+    // 「新任务」入口已收起（主控对话由秘书「影」承担，⌘K 保留）
+    expect(screen.queryByTestId('neo-new-task')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-knowledge')).toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-memory')).toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-teams')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-agents')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-nav-runs')).not.toBeInTheDocument();
     expect(screen.getByTestId('neo-nav-search')).toBeInTheDocument();
+    // 内置秘书「影」常驻行（home 列表第一位）
+    expect(screen.getByTestId('neo-secretary-row')).toBeInTheDocument();
     // 收回钮存在，展开钮不存在
     expect(screen.getByTestId('neo-rail-collapse')).toBeInTheDocument();
     expect(screen.queryByTestId('neo-rail-expand')).not.toBeInTheDocument();
   });
 
-  it('点收回钮 → 折叠态：展开钮出现、导航行收起，localStorage 记忆', () => {
+  it('点收回钮 → 折叠态：展开钮出现、导航行收起（「新任务」图标钮也已收起），localStorage 记忆', () => {
     renderRail();
     fireEvent.click(screen.getByTestId('neo-rail-collapse'));
     expect(screen.getByTestId('neo-rail-expand')).toBeInTheDocument();
-    // 折叠态没有导航行（只有 + 新任务图标钮）
+    // 折叠态没有导航行（「新任务」图标钮 2026-11-06 一并收起）
     expect(screen.queryByTestId('neo-nav-knowledge')).not.toBeInTheDocument();
-    expect(screen.getByTestId('neo-new-task')).toBeInTheDocument();
+    expect(screen.queryByTestId('neo-new-task')).not.toBeInTheDocument();
   });
 
   it('折叠态点展开钮 → 弹回展开态，导航行恢复', () => {
@@ -197,24 +199,45 @@ describe('NeoRail — home 统一列表区（os-unified 2026-11-04）', () => {
     });
   });
 
-  // 2026-11-04 用户反馈批：移除独立「新建群聊」入口与模态。Grok 范式是
-  // 在会话里加第二个人即成群（addGroupMembers：成员数 > 1 → kind='group'），
-  // 左栏只留「造 Bot」和「建项目分组」两个创建入口。
-  it('home：只保留「新建 Agent」「新建项目」，不再有独立「新建群聊」入口', async () => {
+  // 2026-11-06「+ 新建」聚合菜单（用户反馈：三个创建入口收进一个加号）：
+  // 点加号弹出 新建 Agent / 新建项目 / 发起群聊 三项；模态本体由
+  // NeoCreateGroupModal.test / NeoCreateAgentModal.test 覆盖。
+  it('home：「+ 新建」聚合行常驻，点开弹出三入口菜单', async () => {
     renderRail();
-    expect(await screen.findByTestId('neo-new-agent')).toBeInTheDocument();
-    expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
+    // 收起态：三入口不在列表区直出
+    expect(screen.getByTestId('neo-new-plus')).toBeInTheDocument();
+    expect(screen.queryByTestId('neo-new-agent')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neo-new-group')).not.toBeInTheDocument();
-    expect(screen.queryByText('新建群聊')).not.toBeInTheDocument();
+    // 点加号 → 菜单弹出，三入口齐备
+    fireEvent.click(screen.getByTestId('neo-new-plus'));
+    expect(screen.getByTestId('neo-plus-menu')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-agent')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
+    expect(screen.getByTestId('neo-new-group')).toBeInTheDocument();
+    // 再点加号 → 菜单收回
+    fireEvent.click(screen.getByTestId('neo-new-plus'));
+    expect(screen.queryByTestId('neo-plus-menu')).not.toBeInTheDocument();
   });
 
-  it('不再挂 NeoCreateGroupModal（建群改走会话内「添加成员」）', async () => {
+  it('点「发起群聊」挂 NeoCreateGroupModal（经 + 菜单）', async () => {
     const onNavigate = renderRailWithNav();
     await waitFor(() => {
-      expect(screen.getByTestId('neo-new-agent')).toBeInTheDocument();
+      expect(screen.getByTestId('neo-new-plus')).toBeInTheDocument();
     });
-    expect(screen.queryByTestId('neo-create-group-modal-stub')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('neo-new-plus'));
+    fireEvent.click(screen.getByTestId('neo-new-group'));
+    expect(screen.getByTestId('neo-create-group-modal-stub')).toBeInTheDocument();
     expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('点外关闭：菜单展开时 mousedown 落外部 → 菜单收起', async () => {
+    renderRail();
+    fireEvent.click(screen.getByTestId('neo-new-plus'));
+    expect(screen.getByTestId('neo-plus-menu')).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByTestId('neo-plus-menu')).not.toBeInTheDocument();
+    });
   });
 });
 

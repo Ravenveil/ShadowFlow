@@ -343,6 +343,20 @@ async def resolve_dm_conversation(
 
     group_id = uuid4().hex
     created_at = datetime.now(timezone.utc).isoformat()
+    # 内置秘书「影」首聊预置问候（2026-11-06）：用户第一次点开影的会话不是
+    # 空白流，而是一条 Hello World!（用户钦定开场白）。仅 kind='dm' 且新建
+    # 时写，老会话/普通 agent 零变化。
+    messages: List[Dict[str, Any]] = []
+    if agent_id == "agent-shadow-secretary":
+        messages.append(
+            {
+                "sender_name": "影",
+                "sender_kind": "agent",
+                "agent_id": agent_id,
+                "content": "Hello World!",
+                "timestamp": created_at,
+            }
+        )
     record: Dict[str, Any] = {
         "group_id": group_id,
         "name": agent_name,
@@ -355,7 +369,7 @@ async def resolve_dm_conversation(
         "team_id": None,
         "kind": "dm",
         "created_at": created_at,
-        "messages": [],
+        "messages": messages,
     }
     _save_group(record)
     return DmResolveResponse(group_id=group_id, agent_id=agent_id, created=True)

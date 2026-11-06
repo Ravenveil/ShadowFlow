@@ -108,18 +108,19 @@ function renderHome() {
 }
 
 describe('NeoRail os-unified — 员工会话项', () => {
-  it('home 列表区：会话项带头像主机入口 + 消息预览 + 未读徽标', async () => {
+  it('home 列表区：会话项带头像 + 消息预览 + 未读徽标（点头像不再独立弹灵魂页）', async () => {
     renderHome();
     // a1 有 DM：预览文案 + 未读（DM 行升级 Grok 会话项形态后同样渲染）
     expect(await screen.findByText('海报初稿已经完成')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
-    // 头像主机入口（团队分组内成员 + 散养成员都会渲染）
+    // 2026-11-06 用户反馈：头像主机入口移除——整行（含头像）点击都进单聊
     await waitFor(() => {
-      expect(screen.getAllByTestId('neo-agent-host-btn').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByTestId('neo-agent-session-row').length).toBeGreaterThanOrEqual(2);
     });
+    expect(screen.queryByTestId('neo-agent-host-btn')).toBeNull();
   });
 
-  it('点头像 → onNavigate agent-soul 主机卡片（不进会话）', async () => {
+  it('点头像 → 进单聊通路（resolve 失败兜底 agent-target，不再跳 agent-soul）', async () => {
     const onNavigate = vi.fn();
     render(
       <MemoryRouter>
@@ -133,11 +134,17 @@ describe('NeoRail os-unified — 员工会话项', () => {
         />
       </MemoryRouter>,
     );
-    const hostBtns = await screen.findAllByTestId('neo-agent-host-btn');
-    fireEvent.click(hostBtns[0]);
+    const rows = await screen.findAllByTestId('neo-agent-session-row');
+    fireEvent.click(rows[0]);
     await waitFor(() => {
-      expect(onNavigate).toHaveBeenCalledWith({ view: 'agent-soul', agentId: 'a1' });
+      // resolveDmConversation mock 返回 null → 兜底 agent-target（原灵魂页入口移除）
+      expect(onNavigate).toHaveBeenCalledWith({
+        view: 'agent-target',
+        agentId: 'a1',
+        name: '设计助手',
+      });
     });
+    expect(onNavigate).not.toHaveBeenCalledWith({ view: 'agent-soul', agentId: 'a1' });
   });
 });
 
@@ -191,17 +198,20 @@ describe('NeoRail os-unified — 项目顶层分组混排（2026-11-04 用户反
     renderHome();
     // 本文件 mock 项目列表为空 → 无项目块，断言不渲染项目分组
     expect(screen.queryByTestId('neo-project-section')).toBeNull();
-    // 新建项目行仍在（创建入口常驻）
-    expect(screen.getByTestId('neo-new-project')).toBeInTheDocument();
+    // 「+ 新建」聚合行仍在（创建入口常驻，2026-11-06 收进加号菜单）
+    expect(screen.getByTestId('neo-new-plus')).toBeInTheDocument();
   });
 });
 
 describe('NeoRail os-unified — 2026-11-04 第二批（群组合头像 + 入口前置 + 拖拽）', () => {
-  it('新建 Agent 入口前置到列表区顶部（在新建项目之前）', async () => {
+  it('「+ 新建」聚合菜单：点加号弹出三入口（新建 Agent 在新建项目之前）', async () => {
     renderHome();
     await screen.findByTestId('neo-team-group', {}, { timeout: 3000 });
+    // 2026-11-06 聚合菜单：三入口收进加号，点开才有；菜单内 Agent 仍排项目前
+    fireEvent.click(screen.getByTestId('neo-new-plus'));
     const newAgent = screen.getByTestId('neo-new-agent');
     const newProject = screen.getByTestId('neo-new-project');
+    expect(screen.getByTestId('neo-new-group')).toBeInTheDocument();
     // DOM 顺序：新建 Agent 在新建项目之前（前置 = 用户第一眼看到）
     expect(newAgent.compareDocumentPosition(newProject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

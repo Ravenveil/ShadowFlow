@@ -390,6 +390,22 @@ async def _seed_opc_os() -> None:
 
 
 @app.on_event("startup")
+async def _seed_secretary() -> None:
+    """Seed the built-in secretary agent「影」(2026-11-06, GrokBot 主Bot范式).
+
+    幂等：固定 agent_id，已存在（含用户改过）则跳过。失败只告警不阻塞启动。
+    """
+    try:
+        from shadowflow.services.secretary_seed import ensure_secretary
+
+        record = ensure_secretary()
+        if record:
+            logger.info("Secretary: seeded builtin agent %s (%s)", record["name"], record["agent_id"])
+    except Exception as exc:  # noqa: BLE001 — 种子失败不应拖垮 server 启动
+        logger.warning("Secretary: seeding failed: %s", exc)
+
+
+@app.on_event("startup")
 async def _start_scheduler() -> None:
     """Start APScheduler BackgroundScheduler and re-register any persisted schedules (14.2)."""
     try:
