@@ -45,7 +45,9 @@ beforeEach(() => {
 describe('SettingsPage — 记忆分组（折叠批）', () => {
   it('记忆分组下四个分区入口齐全', () => {
     renderAt('#memory-entries');
-    const group = screen.getByText('记忆', { selector: '.hf-label' });
+    // main 于 2026-11-06 把设置页重写为 Neo 版，分组标签类名由 .hf-label
+    // 换成 .neo-st-group-label。两种都认，版式回退也不会把契约测试带崩。
+    const group = screen.getByText('记忆', { selector: '.neo-st-group-label, .hf-label' });
     expect(group).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '记忆条目' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '记忆画像' })).toBeInTheDocument();

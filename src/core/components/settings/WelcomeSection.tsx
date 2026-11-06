@@ -1,15 +1,17 @@
 /**
- * WelcomeSection — Settings › 账户 › 个人资料
+ * WelcomeSection — Settings › 账户 › 个人资料（含关于，2026-11-06 合并）
  *
  * Shows real auth state: avatar, DID, display_name/bio/avatar_seed (editable).
- * When not authenticated → prompt to login.
+ * When not authenticated → prompt to login（2026-11-06: 链上登录入口撤下，
+ * 只留访客模式；WalletLoginModal 不再挂载，组件保留可回退）.
  * Quick-start guide stays at the bottom for new users.
+ * 原独立 AboutSection（账户·关于）并入本页底部「关于与会话」块：
+ * 会话状态 + 退出 + 版本/运行时/协议信息。
  */
 import { useState } from 'react';
 import { Bot, Users, Link2, Wrench, Waves, Edit3, Check, X, LockKeyhole } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
-import { WalletLoginModal } from '../../../components/hifi/WalletLoginModal';
 import { updateProfile } from '../../../api/auth';
 import type { UserProfile } from '../../../api/auth';
 import { useI18n } from '../../../common/i18n';
@@ -194,8 +196,7 @@ function IdentityCard({ user }: { user: UserProfile }) {
 
 export function WelcomeSection() {
   const { t } = useI18n();
-  const { user, token, status, guestLogin } = useAuth();
-  const [showLogin, setShowLogin] = useState(false);
+  const { user, token, status, guestLogin, logout } = useAuth();
 
   // Local copy of user for optimistic profile updates
   const [localUser, setLocalUser] = useState<UserProfile | null>(null);
@@ -221,20 +222,14 @@ export function WelcomeSection() {
       {isLoading ? (
         <div style={{ padding: '32px', textAlign: 'center', fontSize: 12, color: 'var(--t-fg-4)' }}>{t('common.loading')}</div>
       ) : !displayUser ? (
-        /* ── Not logged in ── */
+        /* ── Not logged in（2026-11-06: 链上登录撤下，只留访客模式） ── */
         <div style={{ padding: '24px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', textAlign: 'center' }}>
           <div style={{ display: 'inline-flex', padding: 12, borderRadius: 14, background: 'var(--t-panel)', border: '1px solid var(--t-border)' }}>
             <LockKeyhole size={28} strokeWidth={1.5} color="var(--t-fg-4)" />
           </div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t-fg)' }}>{t('settings.profile.notLoggedIn')}</div>
-          <p style={{ fontSize: 12, color: 'var(--t-fg-4)', margin: 0, maxWidth: 320 }}>
-            {t('settings.profile.notLoggedInHint')}
-          </p>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setShowLogin(true)} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-accent)', color: 'var(--t-accent-ink)', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-              {t('settings.profile.connectWallet')}
-            </button>
-            <button onClick={() => void guestLogin()} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-panel-2)', color: 'var(--t-fg-2)', border: '1px solid var(--t-border)', cursor: 'pointer', fontSize: 13 }}>
+            <button onClick={() => void guestLogin()} style={{ padding: '8px 18px', borderRadius: 8, background: 'var(--t-accent)', color: 'var(--t-accent-ink)', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
               {t('settings.profile.guestMode')}
             </button>
           </div>
@@ -261,6 +256,53 @@ export function WelcomeSection() {
         </div>
       )}
 
+      {/* ── 关于与会话（原「账户 · 关于」并入，2026-11-06） ── */}
+      <div style={{ borderTop: '1px solid var(--t-border)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--t-fg-4)', fontWeight: 700, letterSpacing: '.06em' }}>
+          {t('settings.about.heading')} · ABOUT
+        </div>
+
+        {/* 会话状态 + 退出 */}
+        <div style={{ padding: '12px 14px', background: 'var(--t-panel)', border: '1px solid var(--t-border)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+            background: isLoading ? 'var(--t-fg-5)' : displayUser ? 'var(--t-ok)' : 'var(--t-fg-5)',
+          }} />
+          <span style={{ fontSize: 12, color: 'var(--t-fg-2)', flex: 1 }}>
+            {isLoading
+              ? t('common.loading')
+              : displayUser
+                ? (displayUser.display_name || (displayUser.type === 'guest' ? t('settings.profile.guestName') : displayUser.address.slice(0, 6) + '…' + displayUser.address.slice(-4)))
+                : t('settings.profile.notLoggedIn')}
+          </span>
+          {displayUser && (
+            <button onClick={logout} style={{ background: 'none', border: '1px solid var(--t-border)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', color: 'var(--t-fg-3)', fontSize: 11 }}>
+              {t('settings.about.signOut')}
+            </button>
+          )}
+        </div>
+
+        {/* 版本 / 运行时 / 协议 */}
+        <div style={{ border: '1px solid var(--t-border)', borderRadius: 10, overflow: 'hidden' }}>
+          {([
+            [t('settings.about.version'), 'v1.0.0'],
+            [t('settings.about.runtime'), 'React 18 + Node 20'],
+            [t('settings.about.protocol'), 'ACP / MCP'],
+          ] as Array<[string, string]>).map(([label, value], i) => (
+            <div key={label} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '9px 14px', gap: 10,
+              borderTop: i > 0 ? '1px solid var(--t-border)' : 'none',
+              background: 'var(--t-panel)',
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--t-fg-4)' }}>{label}</span>
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--t-fg-2)' }}>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+
       {/* ── Quick-start guide (always shown) ── */}
       <div style={{ borderTop: '1px solid var(--t-border)', paddingTop: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -285,8 +327,6 @@ export function WelcomeSection() {
           ))}
         </div>
       </div>
-
-      {showLogin && <WalletLoginModal onClose={() => setShowLogin(false)} />}
     </div>
   );
 }
