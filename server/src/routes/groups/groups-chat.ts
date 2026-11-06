@@ -52,6 +52,9 @@ import {
   startHop,
   summarizeHops,
 } from '../../storage/agent-hops';
+// 2026-11-07 回合交接锚 — 无 hop 落库的回合（无边团队）turn 号不被 agent_hops
+// 记账，交接包 shift_id 也参与编号预留（见 nextChatTurnSeq）。
+import { maxShiftTurnAnchor } from '../../storage/memory-handoff';
 // 2026-11-07 — hop 播报收口（running「交接中」中间态 + 帧先于补丁 + 按 hopId 索引）。
 import { createHopBroadcaster } from '../../lib/chat-dag/hop-broadcast';
 // Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
@@ -185,11 +188,27 @@ export function buildRoundHandoffPayload(
   },
 ): { shift_id: string; from_agent: string; to_agent: string; scope_key: string; task_type: string; summary: string } | null {
   if (input.autoLearnOff) return null;
-  const speakers = input.speakers.filter((s) => s.id && s.excerpt);
-  // 双方角色齐备才沉淀（单 agent 无交接语义；createHandoff 禁自环）。
+  // 按 agent 去重：同一 agent 多次发言（重试/返工/回炉）只计一次，产出取最新
+  // 一条，顺序按首次发言（执行序）。不自环：from=最后发言、to=首位——同一
+  // agent 首末都是它（A,B,A）时 to 顺延到下一位不同 agent（createHandoff 禁
+  // 自环，撞上会把整包静默丢掉）。
+  const byId = new Map<string, { id: string; name: string; excerpt: string; first: number; last: number }>();
+  input.speakers.forEach((s, i) => {
+    if (!s.id || !s.excerpt) return;
+    const prev = byId.get(s.id);
+    if (prev) {
+      prev.name = s.name;
+      prev.excerpt = s.excerpt;
+      prev.last = i;
+    } else {
+      byId.set(s.id, { id: s.id, name: s.name, excerpt: s.excerpt, first: i, last: i });
+    }
+  });
+  const speakers = [...byId.values()].sort((a, b) => a.first - b.first);
+  // 双方角色齐备才沉淀（单 agent 无交接语义）。
   if (speakers.length < 2) return null;
-  const from = speakers[speakers.length - 1]!;
-  const to = speakers[0]!;
+  const from = speakers.reduce((a, b) => (b.last > a.last ? b : a));
+  const to = speakers.find((s) => s.id !== from.id)!;
   const summary = [
     input.goal ? `任务：${input.goal.slice(0, 100)}` : '',
     ...speakers.map((s) => `${s.name}：${s.excerpt.slice(0, 120)}`),
@@ -198,7 +217,8 @@ export function buildRoundHandoffPayload(
     .join('；')
     .slice(0, 600);
   return {
-    // shift_id 幂等锚：同群同回合重复触发不重复建包。
+    // shift_id 幂等锚：一回合一锚（nextChatTurnSeq 防撞号），同回合重复触发
+    // 不重复建包（sinkRoundHandoff 落库前按 shift_id 查重）。
     shift_id: `chat:${input.groupId}:${input.turnSeq}`,
     from_agent: from.id,
     to_agent: to.id,
@@ -208,26 +228,37 @@ export function buildRoundHandoffPayload(
   };
 }
 
-/** 薄壳：组 payload → createHandoff 落库。任何失败静默（additive 增强）。 */
+/** 薄壳：组 payload → createHandoff 落库。任何失败静默（additive 增强）。返回 Promise 供测试 await。 */
 export function sinkRoundHandoff(input: {
   groupId: string;
   turnSeq: number;
   goal: string;
   speakers: Array<{ id: string; name: string; excerpt: string }>;
-}): void {
-  void (async () => {
+}): Promise<void> {
+  return (async () => {
     // 动态 import（防循环依赖；主链路零感知）。
     const { getSetting } = await import('../../storage/settings');
-    const { createHandoff } = await import('../../storage/memory-handoff');
+    const { createHandoff, findHandoffByShift } = await import('../../storage/memory-handoff');
     const payload = buildRoundHandoffPayload({
       ...input,
       autoLearnOff: getSetting('memory.autoLearn') === false,
     });
     if (!payload) return;
+    // shift_id 幂等锚：同回合已有交接包（无论 from/to）→ 不重复建包。
+    if (findHandoffByShift(payload.shift_id)) return;
     createHandoff(payload);
   })().catch(() => {
     /* 沉淀失败不影响聊天主链路（SQLite 不可用等） */
   });
+}
+
+/**
+ * 测试可见：本回合的交接锚编号 = max(hop turn_seq, 已用交接锚) + 1。
+ * 无 hop 落库的回合（无边团队/记录失败降级）turn 号不被 agent_hops 预留，
+ * 靠已用交接锚防撞号——撞号会让后一轮的交接包被幂等查重误跳过。
+ */
+export function nextChatTurnSeq(groupId: string): number {
+  return Math.max(nextTurnSeq(groupId), maxShiftTurnAnchor(`chat:${groupId}:`) + 1);
 }
 
 /**
@@ -1121,7 +1152,7 @@ async function runFanout(
           return name;
         };
         try {
-          turnSeq = nextTurnSeq(groupId);
+          turnSeq = nextChatTurnSeq(groupId);
           const dbStore: HopRecorder = {
             open: (edge) => openHop({ group_id: groupId, turn_seq: turnSeq, from_agent: edge.from, to_agent: edge.to }),
             start: (id) => { try { startHop(id); } catch { /* best-effort */ } },

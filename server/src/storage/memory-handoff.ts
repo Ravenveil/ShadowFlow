@@ -188,6 +188,39 @@ export function createHandoff(input: {
   return { handoff: getHandoff(id)!, idempotent: false };
 }
 
+/** 按 shift_id 精确取一条交接包（群回合 sink 幂等查重用）。 */
+export function findHandoffByShift(shift_id: string): Handoff | undefined {
+  const row = getDb()
+    .prepare(`SELECT * FROM memory_handoffs WHERE shift_id = ? LIMIT 1`)
+    .get((shift_id ?? '').trim()) as HandoffRow | undefined;
+  return row ? hydrate(row, true) : undefined;
+}
+
+/**
+ * 取 shift_id 形如「<prefix><正整数>」的最大数字（无匹配 → 0）。
+ * 群回合交接锚预留用：无 hop 落库的回合（无边团队等）turn 号不被 agent_hops
+ * 记账，靠已用交接锚防撞号——撞号会让后一轮交接包被幂等查重误跳过。
+ * 只认纯数字尾（负时间戳锚如 chat:g:-17… 视同无锚）；查询失败软化为 0。
+ */
+export function maxShiftTurnAnchor(prefix: string): number {
+  if (!prefix) return 0;
+  try {
+    const rows = getDb()
+      .prepare(`SELECT shift_id FROM memory_handoffs WHERE shift_id LIKE ?`)
+      .all(`${prefix}%`) as Array<{ shift_id: string }>;
+    let max = 0;
+    for (const r of rows) {
+      // LIKE 把 prefix 里的 %/_ 当通配符，粗筛后再精确前缀 + 纯数字尾过滤。
+      if (!r.shift_id.startsWith(prefix)) continue;
+      const m = /^(\d+)$/.exec(r.shift_id.slice(prefix.length));
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    return max;
+  } catch {
+    return 0;
+  }
+}
+
 export function getHandoff(id: string): Handoff | undefined {
   const row = getDb().prepare(`SELECT * FROM memory_handoffs WHERE id = ?`).get(id) as
     | HandoffRow
