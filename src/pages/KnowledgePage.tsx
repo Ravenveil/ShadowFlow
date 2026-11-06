@@ -49,6 +49,8 @@ import type { KnowledgeVault } from '../common/types/knowledgeVault';
 import { useI18n } from '../common/i18n';
 import DirPicker from '../components/DirPicker';
 import { PackDocTree } from '../components/knowledge/PackDocTree';
+// 多模态记忆库面板（PR #7 设计移植）：BM25+向量混合检索，独立 /api/memory-bank
+import MemoryBankPanel from '../components/knowledge/MemoryBankPanel';
 // 图谱页懒加载(ForceGraph2D 很重,只在切到「图谱」视图时才拉 chunk)
 const KnowledgeGraphPage = lazy(() => import('./KnowledgeGraphPage'));
 import {
@@ -177,7 +179,7 @@ export default function KnowledgePage({
 
   // ── 选中 / 视图(内容|图谱)/ 弹窗 / 菜单 ─────────────────────────────────
   const [selection, setSelection] = useState<SourceRef | null>(deepLink);
-  const [viewMode, setViewMode] = useState<'content' | 'graph'>('content');
+  const [viewMode, setViewMode] = useState<'content' | 'graph' | 'memory-bank'>('content');
   // 图谱「打开文件」跳转目标(相对路径):切回内容视图并让 VaultBrowser 选中该文件
   const [focusFile, setFocusFile] = useState<string | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -483,6 +485,17 @@ export default function KnowledgePage({
                     >
                       <Database size={13} /> 新建知识包…
                     </button>
+                    <button
+                      className="neo-kv-addmenu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setAddMenuOpen(false);
+                        setViewMode('memory-bank');
+                      }}
+                      data-testid="kv-add-memory-bank"
+                    >
+                      <Database size={13} /> 多模态记忆库…
+                    </button>
                   </div>
                 </>
               )}
@@ -612,7 +625,9 @@ export default function KnowledgePage({
             </div>
           )}
 
-          {!selVault && !selPack && (
+          {viewMode === 'memory-bank' && <MemoryBankPanel />}
+
+          {!selVault && !selPack && viewMode !== 'memory-bank' && (
             <OverviewPane
               vaultCount={vaults.length}
               packCount={packs.length}
