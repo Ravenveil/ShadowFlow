@@ -1,7 +1,9 @@
 /**
  * NeoHost — Neo 右栏「Agent 的主机」（对标 clawsgo c1_05/c1_07/c2_02/c2_03）。
  *
- * 顶部 tab：固定集 工作空间 / 产物 / 过程（+ 条件性的灵魂/编队/成员）保持原样；
+ * 顶部 tab（2026-11-06 用户反馈调整）：条件 tab 打头 —— agent 上下文
+ * 「灵魂 / 定时任务」排最前（默认激活灵魂），团队/群聊上下文「编队」排最前
+ * （默认激活编队）；其后是固定 tab 工作空间 / 产物；
  * 动态产物 tab（2026-08-23，对标 clawsgo c1_05/c1_07/c2_02/c2_03）：点「产物」
  * 行 / 「历史」行进入的 run 产物、或产物出现时自动开——在 tab 条追加一个以
  * 产物文件名命名的临时 tab（图标盒右上角 × 关闭，关闭激活 tab 回落「产物」）；
@@ -230,8 +232,14 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
       : null;
 
   // ── tab 状态 ──────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<string>('workspace');
+  // 2026-11-06 用户反馈：默认激活 tab 跟随上下文——agent 上下文首屏「灵魂」、
+  // 团队/群聊上下文首屏「编队」，其余（无上下文）保持「工作空间」。
+  const hasTeamContext = target?.kind === 'team' || convTeamEntry != null || isTeamConv;
+  const [activeTab, setActiveTab] = useState<string>(
+    hasTeamContext ? 'team' : soulAgent ? 'soul' : 'workspace',
+  );
   const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
+
   /** 已自动开过产物 tab 的 runId（同一 run 不重复自动激活）。 */
   const autoOpenedRef = useRef<Set<string>>(new Set());
   /** 已自动露出「过程」tab 的 runId（run 开始执行时抢一次 tab，之后不打扰）。 */
@@ -459,16 +467,33 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
     setActiveTab('team');
   }, [runId, session.isStreaming]);
 
-  // 会话切走/切到 DM → 编队 pane 消失（团队上下文都没了），回落工作空间。
+  // 会话切走/切到 DM → 编队 pane 消失（团队上下文没了），回落到新上下文的
+  // 打头 tab（agent → 灵魂，否则工作空间）。
   useEffect(() => {
-    if (activeTab === 'team' && target?.kind !== 'team' && !convTeamEntry && !isTeamConv)
-      setActiveTab('workspace');
-  }, [activeTab, target?.kind, convTeamEntry, isTeamConv]);
+    if (activeTab === 'team' && !hasTeamContext)
+      setActiveTab(soulAgent ? 'soul' : 'workspace');
+  }, [activeTab, hasTeamContext, soulAgent]);
 
-  // agent 上下文消失（切到群聊/团队/首页）→ 「灵魂」tab 消失，回落到工作空间。
+  // agent 上下文消失（切到群聊/团队/首页）→ 「灵魂」tab 消失，回落：
+  // 还有团队上下文 → 编队，否则工作空间（2026-11-06 tab 调整同批）。
   useEffect(() => {
-    if ((activeTab === 'soul' || activeTab === 'schedules') && !soulAgent) setActiveTab('workspace');
-  }, [activeTab, soulAgent]);
+    if ((activeTab === 'soul' || activeTab === 'schedules') && !soulAgent)
+      setActiveTab(hasTeamContext ? 'team' : 'workspace');
+  }, [activeTab, soulAgent, hasTeamContext]);
+
+  // 上下文切换 → 默认 tab 跟随打头位（2026-11-06 用户反馈）：进入新的
+  // 团队/群聊上下文 → 编队；进入新的 agent 上下文（target 或 DM）→ 灵魂；
+  // 无上下文 → 工作空间。NeoHost 跨会话保持挂载，useState 初值只在首次
+  // 挂载生效，这里按上下文 key 变化重置（手动点过其它 tab 不受影响，
+  // 除非上下文真的换了）。放在两个回落 effect 之后：同一次 commit 里
+  // 后定义的 effect 后跑，setValue 以这里为准。
+  const contextKey = `${target?.kind ?? ''}:${target?.id ?? ''}:${conversation?.groupId ?? ''}:${soulAgent?.id ?? ''}`;
+  const lastContextKeyRef = useRef(contextKey);
+  useEffect(() => {
+    if (lastContextKeyRef.current === contextKey) return;
+    lastContextKeyRef.current = contextKey;
+    setActiveTab(hasTeamContext ? 'team' : soulAgent ? 'soul' : 'workspace');
+  }, [contextKey, hasTeamContext, soulAgent]);
 
   const openRecordArtifactTab = (rec: RunRecord) => {
     const url = rec.artifact_url;
@@ -615,8 +640,8 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
     { id: 'workspace', label: t('neo.host.workspace', { defaultValue: '工作空间' }), icon: <FolderOpen size={20} strokeWidth={1.75} /> },
     { id: 'artifacts', label: t('neo.host.artifacts', { defaultValue: '产物' }), icon: <Package size={20} strokeWidth={1.75} /> },
     // os-unified（2026-11-04 用户反馈三合一）：过程/编队/成员合并为「编队」，
-    // 图标换 Waypoints。编队是条件 tab（团队 target / 团队群会话才出现），
-    // 在下方 tab 条单独条件渲染，不放这里（这里是无条件固定 tab）。
+    // 图标换 Waypoints。编队是条件 tab 且排在 tab 条最前（2026-11-06 用户
+    // 反馈：群聊上下文首屏直接是编队），在下方 tab 条条件渲染。
   ];
 
   // ── 文件树（递归，懒加载）──
@@ -1128,8 +1153,8 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
           />
         </div>
       )}
-      {/* tab 栏：Agent 的主机 + 固定 tab（工作空间/产物/过程 + 条件性灵魂/编队/成员）
-          + 动态产物 tab（可关闭）+ 「+」
+      {/* tab 栏：条件 tab 打头（编队 / 灵魂 / 定时任务，按上下文）+ 固定 tab
+          （工作空间/产物）+ 动态产物 tab（可关闭）+ 「+」
           （2026-08-15 任务 V：ClawsGo 大图标盒形态 — 44px hairline 盒 + 下方小标签） */}
       <div className="neo-host-header">
         <span className="neo-host-title" data-testid="neo-host-title">
@@ -1153,18 +1178,23 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
             : t('neo.host.title', { defaultValue: 'Agent 的主机' })}
         </span>
         <div className="neo-host-tabs" ref={tabbarRef}>
-          {fixedTabs.map((tab) => (
+          {/* 2026-11-06 用户反馈：条件 tab 打头 —— 群聊/团队上下文「编队」排
+              第一；agent 上下文「灵魂 / 定时任务」排第一、二；其后才是固定
+              tab（工作空间 / 产物）与动态产物 tab。 */}
+          {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
             <button
-              key={tab.id}
               type="button"
-              data-tab={tab.id}
-              className={`neo-host-tab${activeTab === tab.id ? ' neo-host-tab--on' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
+              data-tab="team"
+              className={`neo-host-tab${activeTab === 'team' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('team')}
+              data-testid="neo-host-team-tab"
             >
-              <span className="neo-host-tab-box">{tab.icon}</span>
-              <span className="neo-host-tab-label">{tab.label}</span>
+              <span className="neo-host-tab-box">
+                <Waypoints size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.team', { defaultValue: '编队' })}</span>
             </button>
-          ))}
+          )}
           {/* 灵魂 tab：agent 上下文（agent-target / agent 的 DM 会话）时出现，
               内嵌 NeoAgentSoul（persona/系统提示词编辑，PATCH /api/agents） */}
           {soulAgent && (
@@ -1182,8 +1212,8 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
             </button>
           )}
           {/* 定时任务 tab（os-unified 2026-11-04 用户反馈）：从灵魂面板内部
-              提出来，成为「灵魂」右边的独立 tab —— tab 顺序
-              工作空间 / 产物 / 灵魂 / 定时任务（/ 编队），与 agent 上下文同条件。 */}
+              提出来，独立 tab —— tab 顺序 灵魂 / 定时任务 / 工作空间 / 产物
+              （/ 编队按上下文打头），与 agent 上下文同条件。 */}
           {soulAgent && (
             <button
               type="button"
@@ -1198,23 +1228,18 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
               <span className="neo-host-tab-label">{t('neo.host.schedules', { defaultValue: '定时任务' })}</span>
             </button>
           )}
-          {/* 编队 tab（os-unified 2026-11-04 三合一）：团队 target 态或团队群会话
-              都出现——内含 DAG 编辑（TeamPanel）+ 过程视图（ProcessView/迭代环/
-              证据投影）。图标 Waypoints（工作流节点）。 */}
-          {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
+          {fixedTabs.map((tab) => (
             <button
+              key={tab.id}
               type="button"
-              data-tab="team"
-              className={`neo-host-tab${activeTab === 'team' ? ' neo-host-tab--on' : ''}`}
-              onClick={() => setActiveTab('team')}
-              data-testid="neo-host-team-tab"
+              data-tab={tab.id}
+              className={`neo-host-tab${activeTab === tab.id ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
             >
-              <span className="neo-host-tab-box">
-                <Waypoints size={20} strokeWidth={1.75} />
-              </span>
-              <span className="neo-host-tab-label">{t('neo.host.team', { defaultValue: '编队' })}</span>
+              <span className="neo-host-tab-box">{tab.icon}</span>
+              <span className="neo-host-tab-label">{tab.label}</span>
             </button>
-          )}
+          ))}
           {artifactTabs.map((tab) => (
             <span
               key={tab.id}

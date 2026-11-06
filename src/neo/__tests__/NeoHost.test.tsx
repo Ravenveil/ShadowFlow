@@ -107,6 +107,43 @@ describe('NeoHost — 会话上下文分岔（W2）', () => {
     expect(screen.getByTestId('neo-host-soul-tab')).toBeInTheDocument();
   });
 
+  it('2026-11-06 tab 顺序：群聊上下文编队打头（工作空间/产物在其后），且默认激活编队', () => {
+    const { container } = render(
+      <NeoHost
+        target={null}
+        runId={null}
+        soulAgent={null}
+        conversation={{ groupId: 'g1', kind: 'group', teamId: 't1', teamName: '氢能获客群' }}
+      />,
+    );
+    const teamTab = screen.getByTestId('neo-host-team-tab');
+    const wsTab = container.querySelector('[data-tab="workspace"]')!;
+    // DOM 顺序：编队在工作空间之前
+    expect(teamTab.compareDocumentPosition(wsTab) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 默认激活 = 编队（首屏即编队 pane）
+    expect(teamTab.className).toContain('neo-host-tab--on');
+    expect(screen.getByTestId('neo-host-team-pane')).not.toHaveAttribute('hidden');
+  });
+
+  it('2026-11-06 tab 顺序：agent 上下文灵魂打头（工作空间在其后），且默认激活灵魂', () => {
+    const { container } = render(
+      <NeoHost
+        target={null}
+        runId={null}
+        soulAgent={{ id: 'a1', name: '读读' }}
+        conversation={{ groupId: 'g2', kind: 'dm', teamId: null }}
+      />,
+    );
+    const soulTab = screen.getByTestId('neo-host-soul-tab');
+    const wsTab = container.querySelector('[data-tab="workspace"]')!;
+    expect(soulTab.compareDocumentPosition(wsTab) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(soulTab.className).toContain('neo-host-tab--on');
+    // 灵魂 pane 首屏可见（不 hidden）
+    const soulPane = soulTab.closest('.neo-host-header')!
+      .parentElement!.querySelector('.neo-host-soul-pane')!;
+    expect(soulPane).not.toHaveAttribute('hidden');
+  });
+
   it('os-unified 2026-11-04：定时任务 tab 在「灵魂」右边（独立 tab，不在灵魂面板内）', () => {
     render(
       <NeoHost
