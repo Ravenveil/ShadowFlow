@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../api/knowledge', () => ({
@@ -176,8 +176,10 @@ describe('统一源列表与三态右栏', () => {
   });
 
   // retry:2 —— 这两条用例依赖「点行 → 异步拉详情/lazy 图谱」，全量并行跑时
-  // 偶发点完不更新（既有 flake，与业务无关）。单次等待 6s × retry 2 = 最坏
-  // 18s，留在 20s testTimeout 预算内（此前 10s×2 会把总预算耗尽假红）。
+  // 偶发点完不更新（既有 flake，与业务无关）。根因：自动选中(selection effect)
+  // 挂起的「换源→复位 content」被动 effect 与点击图谱的时序竞态——点击前已用
+  // act() 冲刷消除，retry 留作二道保险。单次等待 6s × retry 2 = 最坏 18s，
+  // 留在 20s testTimeout 预算内（此前 10s×2 会把总预算耗尽假红）。
   it('点知识包行 → 包详情(sources/Reindex/Delete)+ 切「图谱」视图渲染嵌入图谱', { retry: 2 }, async () => {
     renderPage();
     await screen.findByTestId('rail-pack-p1');
@@ -191,6 +193,11 @@ describe('统一源列表与三态右栏', () => {
 
     // 内容 | 图谱 视图切换
     // 包详情头部 Waypoints 图标进入图谱
+    // 点击前 act 冲刷待处理 effect：自动选中挂起的「换源→视图复位 content」被动
+    // effect 若排在点击后执行，会把刚切的图谱视图拍回内容（CI 并行下偶发假红）。
+    await act(async () => {
+      /* flush pending effects */
+    });
     fireEvent.click(screen.getByTestId('pack-graph-btn'));
     // 显式放宽等待：默认 findByTestId 只等 1s，CI 2 核机器上 lazy chunk
     // 解析 + Suspense 回落经常 >1s；6s × retry 2 留在 20s testTimeout 预算内。
@@ -230,6 +237,11 @@ describe('统一源列表与三态右栏', () => {
     await screen.findByTestId('vault-browser');
 
     // 工具栏 Waypoints 图标进入图谱(Obsidian 式)
+    // 同上：先 act 冲刷掉「换源→复位 content」的挂起 effect 再点，否则复位可能
+    // 落在点击之后执行，graph-embedded 永远等不到（失败快照停在内容视图即此因）。
+    await act(async () => {
+      /* flush pending effects */
+    });
     fireEvent.click(screen.getByTestId('vault-graph-btn'));
     const graph = await screen.findByTestId('graph-embedded', {}, { timeout: 6000 });
     expect(graph.getAttribute('data-vault')).toBe('v1');
