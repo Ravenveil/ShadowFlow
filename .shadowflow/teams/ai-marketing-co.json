@@ -1,0 +1,120 @@
+{
+  "team_id": "ai-marketing-co",
+  "name": "AI 营销公司",
+  "description": "AI 营销公司组织架构：1 创始人（人类管理者/审批门）+ 1 AI 总经理 CEO + 6 部门核心员工。每名员工只向 AI 总经理汇报，不互相派单；任务经 Task API 传递，聊天仅作补充沟通。合规审核员可打回并阻断高风险内容；品牌定稿与对外发布须创始人人工批准；资金操作由人负责。",
+  "workspace_id": "default",
+  "agent_ids": [
+    "agent-ceo",
+    "agent-market-analyst",
+    "agent-brand-strategist",
+    "agent-content-creator",
+    "agent-ops-specialist",
+    "agent-biz-developer",
+    "agent-compliance-reviewer"
+  ],
+  "created_at": "2026-11-07T15:18:47.351Z",
+  "updated_at": "2026-11-07T15:18:47.351Z",
+  "workflow": {
+    "nodes": [
+      {
+        "id": "n1",
+        "data": {
+          "agentId": "agent-ceo"
+        }
+      },
+      {
+        "id": "n2",
+        "data": {
+          "agentId": "agent-market-analyst"
+        }
+      },
+      {
+        "id": "n3",
+        "data": {
+          "agentId": "agent-brand-strategist"
+        }
+      },
+      {
+        "id": "n4",
+        "data": {
+          "agentId": "agent-content-creator"
+        }
+      },
+      {
+        "id": "n5",
+        "data": {
+          "agentId": "agent-ops-specialist"
+        }
+      },
+      {
+        "id": "n6",
+        "data": {
+          "agentId": "agent-biz-developer"
+        }
+      },
+      {
+        "id": "n7",
+        "data": {
+          "agentId": "agent-compliance-reviewer"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "source": "n1",
+        "target": "n2",
+        "data": {
+          "mode": "direct"
+        }
+      },
+      {
+        "source": "n2",
+        "target": "n3",
+        "data": {
+          "mode": "direct"
+        }
+      },
+      {
+        "source": "n3",
+        "target": "n4",
+        "data": {
+          "mode": "approve"
+        }
+      },
+      {
+        "source": "n4",
+        "target": "n7",
+        "data": {
+          "mode": "direct"
+        }
+      },
+      {
+        "source": "n7",
+        "target": "n4",
+        "data": {
+          "mode": "conditional",
+          "max_retries": 2
+        }
+      },
+      {
+        "source": "n7",
+        "target": "n5",
+        "data": {
+          "mode": "approve"
+        }
+      },
+      {
+        "source": "n7",
+        "target": "n6",
+        "data": {
+          "mode": "direct"
+        }
+      }
+    ]
+  },
+  "policy_matrix": {
+    "agent-compliance-reviewer": {
+      "agent-content-creator": "permit"
+    }
+  }
+}

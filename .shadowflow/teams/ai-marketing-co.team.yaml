@@ -1,0 +1,69 @@
+id: ai-marketing-co
+version: 1
+name: AI 营销公司
+description: AI 营销公司组织架构（1 创始人审批门 + 1 AI 总经理 CEO + 6 部门核心员工）。每名员工只向 AI 总经理汇报，任务经 Task API 传递；合规审核员可打回并阻断高风险内容；品牌定稿与对外发布须创始人人工批准；资金操作由人负责。
+mode: dag
+policy:
+  retry: 2
+  escalation: approve_gate
+  timeout_per_step_ms: 300000
+members:
+  - agent-ceo
+  - agent-market-analyst
+  - agent-brand-strategist
+  - agent-content-creator
+  - agent-ops-specialist
+  - agent-biz-developer
+  - agent-compliance-reviewer
+edges:
+  - from: agent-ceo
+    to: agent-market-analyst
+    kind: sequential
+  - from: agent-market-analyst
+    to: agent-brand-strategist
+    kind: sequential
+  - from: agent-brand-strategist
+    to: agent-content-creator
+    kind: approve
+  - from: agent-content-creator
+    to: agent-compliance-reviewer
+    kind: sequential
+  - from: agent-compliance-reviewer
+    to: agent-content-creator
+    kind: conditional
+    condition: rework
+    max_retries: 2
+  - from: agent-compliance-reviewer
+    to: agent-ops-specialist
+    kind: approve
+  - from: agent-compliance-reviewer
+    to: agent-biz-developer
+    kind: sequential
+dag_layout:
+  mode: manual
+  nodes:
+    - id: agent-ceo
+      x: 400
+      y: 40
+    - id: agent-market-analyst
+      x: 400
+      y: 190
+    - id: agent-brand-strategist
+      x: 400
+      y: 340
+    - id: agent-content-creator
+      x: 400
+      y: 490
+    - id: agent-compliance-reviewer
+      x: 400
+      y: 640
+    - id: agent-ops-specialist
+      x: 230
+      y: 800
+    - id: agent-biz-developer
+      x: 570
+      y: 800
+  viewport:
+    zoom: 1
+    pan_x: 0
+    pan_y: 0

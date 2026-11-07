@@ -3,7 +3,15 @@ dist/
 .venv/
 __pycache__/
 *.py[cod]
-.shadowflow/
+*.egg-info/
+.tmp-*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+# .shadowflow 运行时数据不入库，但内置 AI 组织种子（agents/teams）要随仓库走
+.shadowflow/*
+!.shadowflow/agents/
+!.shadowflow/teams/
 .env
 .env.*
 !.env.example
