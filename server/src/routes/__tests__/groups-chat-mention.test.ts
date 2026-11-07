@@ -165,6 +165,21 @@ describe('runFanout — @ 提及定向派活（DAG 路径）', () => {
     expect(turnPrompts.map((t) => t.agentId)).toEqual(['arch']);
     expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
   });
+
+  it('CJK 无空格直连点名（@码农鸡修一下）→ 定向派发 + prompt 剔 @ 噪音（2026-11-07 边界收口）', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@码农鸡修一下登录');
+    expect(turnPrompts.map((t) => t.agentId)).toEqual(['dev']);
+    expect(turnPrompts[0].prompt).toBe('修一下登录');
+    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
+  });
+
+  it('粘连双点名（@策划喵@码农鸡）→ 两人都跑，不发 [mention] 提示', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@策划喵@码农鸡 一起看下需求');
+    const ran = turnPrompts.map((t) => t.agentId).sort();
+    expect(ran).toEqual(['dev', 'pm']);
+    expect(turnPrompts.map((t) => t.prompt)).toEqual(['一起看下需求', '一起看下需求']);
+    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
+  });
 });
 
 describe('runFanout — @ 提及定向派活（串行降级路径）', () => {
