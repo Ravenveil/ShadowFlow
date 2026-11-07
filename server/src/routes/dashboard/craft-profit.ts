@@ -28,9 +28,19 @@ import {
   seedDemo,
   timeseries,
 } from '../../storage/craft-profit';
+import {
+  autoStatus,
+  initAutoOps,
+  listEvents,
+  runRound,
+  setAutoOps,
+} from '../../storage/craft-profit-agent';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();
+
+// 自动运营：settings 里开着就恢复定时器（重启后续跑）。
+initAutoOps();
 
 function parseDays(raw: unknown, fallback: number): number {
   const n = Number(raw);
@@ -84,6 +94,24 @@ router.get('/sales', (req: Request, res: Response) => {
   }
 });
 
+// ── 代卖运营智能体（自动经营：营销 → 出单 → 联系快递员寄出）─────────────────
+
+router.get('/agent/events', (req: Request, res: Response) => {
+  try {
+    res.json({ items: listEvents(Number(req.query.limit)) });
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+router.get('/agent/status', (_req: Request, res: Response) => {
+  try {
+    res.json(autoStatus());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
 // ── 写端点（上架 / 记销售 / 演示数据）────────────────────────────────────────
 // 写接口默认只允许本机；远程调用需 SF_API_TOKEN（同 merchant-board 口径）。
 router.use(apiGuard());
@@ -117,6 +145,23 @@ router.post('/sales', (req: Request, res: Response) => {
 router.post('/demo-seed', (_req: Request, res: Response) => {
   try {
     res.json(seedDemo());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+router.post('/agent/run', (_req: Request, res: Response) => {
+  try {
+    res.json(runRound());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+router.post('/agent/auto', (req: Request, res: Response) => {
+  try {
+    const b = body(req);
+    res.json(setAutoOps({ enabled: b.enabled, interval_min: b.interval_min }));
   } catch (err) {
     fail(res, err);
   }

@@ -16,6 +16,10 @@ vi.mock('../../api/craftProfit', () => ({
   createCraftProduct: vi.fn(),
   createCraftSale: vi.fn(),
   seedCraftDemo: vi.fn(),
+  fetchAgentEvents: vi.fn(),
+  fetchAgentStatus: vi.fn(),
+  runAgentRound: vi.fn(),
+  setAgentAuto: vi.fn(),
 }));
 
 import DashboardPage from '../../pages/DashboardPage';
@@ -27,6 +31,10 @@ import {
   createCraftProduct,
   createCraftSale,
   seedCraftDemo,
+  fetchAgentEvents,
+  fetchAgentStatus,
+  runAgentRound,
+  setAgentAuto,
 } from '../../api/craftProfit';
 
 const OVERVIEW = {
@@ -98,6 +106,15 @@ beforeEach(() => {
   vi.mocked(createCraftProduct).mockResolvedValue(PRODUCTS.items[0]);
   vi.mocked(createCraftSale).mockResolvedValue(SALES.items[0]);
   vi.mocked(seedCraftDemo).mockResolvedValue({ seeded: true, products: 8, sales: 40 });
+  vi.mocked(fetchAgentStatus).mockResolvedValue({ enabled: false, interval_min: 30, last_run_at: null, rounds: 3 });
+  vi.mocked(fetchAgentEvents).mockResolvedValue({
+    items: [
+      { id: 'e1', ts: 1730172800000, kind: 'order', text: '「手工编织收纳篮」售出 2 件，入账 ¥178.00' },
+      { id: 'e2', ts: 1730172700000, kind: 'marketing', text: '给「手工编织收纳篮」做朋友圈 + 短视频推广' },
+    ],
+  });
+  vi.mocked(runAgentRound).mockResolvedValue({ events: [], sales: 1, units: 2 });
+  vi.mocked(setAgentAuto).mockResolvedValue({ enabled: true, interval_min: 30, last_run_at: null, rounds: 3 });
 });
 
 describe('DashboardPage — 产品盈利看板（2026-11-07 重构）', () => {
@@ -216,5 +233,49 @@ describe('DashboardPage — 产品盈利看板（2026-11-07 重构）', () => {
     vi.mocked(fetchCraftOverview).mockRejectedValue(new Error('boom'));
     render(<DashboardPage />);
     expect(await screen.findByTestId('db-error')).toHaveTextContent(/boom/);
+  });
+
+  it('智能体运营面板：状态 + 动态流水（营销/出单）', async () => {
+    render(<DashboardPage />);
+    expect(await screen.findByTestId('cp-agent-panel')).toBeInTheDocument();
+    // 等 agent status/events 拉取完成渲染（面板初始就在，数据是异步到位的）
+    expect(await screen.findByText(/已跑 3 轮/)).toBeInTheDocument();
+    expect(screen.getByText(/手动模式/)).toBeInTheDocument();
+    expect(screen.getByText(/售出 2 件，入账 ¥178\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/朋友圈 \+ 短视频推广/)).toBeInTheDocument();
+  });
+
+  it('盈利曲线渲染（有数据）', async () => {
+    render(<DashboardPage />);
+    expect(await screen.findByTestId('cp-curve')).toBeInTheDocument();
+  });
+
+  it('让智能体跑一轮 → 调 agent run 并刷新', async () => {
+    render(<DashboardPage />);
+    await screen.findByTestId('cp-agent-run');
+    fireEvent.click(screen.getByTestId('cp-agent-run'));
+    await waitFor(() => {
+      expect(runAgentRound).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('开启自动运营 → setAgentAuto(true, 30)', async () => {
+    render(<DashboardPage />);
+    // 等 agent status 到位（未到位时按钮 disabled 点不动）
+    await screen.findByText(/已跑 3 轮/);
+    fireEvent.click(screen.getByTestId('cp-agent-auto'));
+    await waitFor(() => {
+      expect(setAgentAuto).toHaveBeenCalledWith(true, 30);
+    });
+  });
+
+  it('agent 接口失败只降级运营面板，主看板照常', async () => {
+    vi.mocked(fetchAgentStatus).mockRejectedValue(new Error('404'));
+    vi.mocked(fetchAgentEvents).mockRejectedValue(new Error('404'));
+    render(<DashboardPage />);
+    expect(await screen.findByTestId('cp-overview-cards')).toBeInTheDocument();
+    expect(screen.getByTestId('cp-agent-panel')).toBeInTheDocument();
+    expect(screen.getByText(/还没有运营动态/)).toBeInTheDocument();
+    expect(screen.queryByTestId('db-error')).not.toBeInTheDocument();
   });
 });

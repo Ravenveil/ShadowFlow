@@ -129,6 +129,22 @@
 .neo-cp-bar.down { fill: #22C55E; }
 .neo-cp-bar-zero { stroke: var(--t-line); stroke-width: 1; stroke-dasharray: 3 3; }
 
+/* 累计盈利曲线：蓝色折线 + 淡面积 + 末点 */
+.neo-cp-curve-line { fill: none; stroke: #2563EB; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.neo-cp-curve-area { fill: rgba(37, 99, 235, 0.12); stroke: none; }
+.neo-cp-curve-dot { fill: #2563EB; stroke: var(--t-card, var(--t-bg)); stroke-width: 1.5; }
+
+/* 智能体运营：操作行 + 动态流水 */
+.neo-cp-agent-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.neo-cp-submit--inline { width: auto; padding: 0 18px; }
+.neo-cp-agent-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--t-fg-3); max-height: 170px; overflow-y: auto; }
+.neo-cp-agent-feed li { display: flex; align-items: baseline; gap: 0; line-height: 1.5; }
+.neo-cp-feed-ts { color: var(--t-fg-4); font-variant-numeric: tabular-nums; margin-right: 8px; white-space: nowrap; }
+.neo-cp-dot.kind-marketing { background: #8B5CF6; }
+.neo-cp-dot.kind-order { background: #D62828; }
+.neo-cp-dot.kind-shipping { background: #3B82F6; }
+.neo-cp-dot.seg-off { background: var(--t-fg-4); }
+
 /* 空态：紧凑一行 / 图表虚线占位（不做大片留白） */
 .neo-cp-empty { margin: 0; padding: 12px 4px; font-size: 12px; color: var(--t-fg-4); }
 .neo-cp-empty-inline { margin: 0; font-size: 12px; color: var(--t-fg-4); }

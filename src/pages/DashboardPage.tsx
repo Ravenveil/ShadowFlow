@@ -24,10 +24,16 @@ import {
   createCraftProduct,
   createCraftSale,
   seedCraftDemo,
+  fetchAgentEvents,
+  fetchAgentStatus,
+  runAgentRound,
+  setAgentAuto,
   type CraftOverview,
   type CraftDayPoint,
   type CraftProductRow,
   type CraftSale,
+  type CraftAgentEvent,
+  type CraftAgentStatus,
 } from '../api/craftProfit';
 import './dashboard-neo.css';
 
@@ -103,6 +109,43 @@ function ProfitBars({ series }: { series: CraftDayPoint[] }) {
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
+/** 累计盈利曲线（SVG 自绘）：从窗口起点累计净利，赚钱就上扬。 */
+function ProfitCurve({ series }: { series: CraftDayPoint[] }) {
+  const W = 640;
+  const H = 150;
+  const PAD = 8;
+  let acc = 0;
+  const values = series.map((d) => (acc += d.profit_cents));
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const step = series.length > 1 ? (W - PAD * 2) / (series.length - 1) : 0;
+  const pt = (v: number, i: number): [number, number] => [
+    PAD + i * step,
+    H - PAD - ((v - min) / span) * (H - PAD * 2),
+  ];
+  const points = values.map((v, i) => pt(v, i));
+  const path = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const area =
+    points.length > 1
+      ? `${path} L${points[points.length - 1][0].toFixed(1)},${H - PAD} L${points[0][0].toFixed(1)},${H - PAD} Z`
+      : '';
+  const last = points[points.length - 1];
+  return (
+    <svg
+      className="neo-db-chart-svg"
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label="cumulative profit curve"
+      data-testid="cp-curve"
+    >
+      {area && <path className="neo-cp-curve-area" d={area} />}
+      {points.length > 1 && <path className="neo-cp-curve-line" d={path} />}
+      {last && <circle className="neo-cp-curve-dot" cx={last[0]} cy={last[1]} r={3} />}
+    </svg>
+  );
+}
+
 interface ProductFormState {
   name: string;
   price: string;
@@ -130,6 +173,8 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
   const [saleQty, setSaleQty] = useState('1');
   const [formError, setFormError] = useState('');
   const [formBusy, setFormBusy] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<CraftAgentStatus | null>(null);
+  const [agentEvents, setAgentEvents] = useState<CraftAgentEvent[]>([]);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
@@ -156,6 +201,15 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
               : `Failed to load dashboard: ${err instanceof Error ? err.message : String(err)}`,
         }),
       );
+    }
+    // 智能体运营面板单独降级：接口缺失/失败不拖垮主看板。
+    try {
+      const [st, evs] = await Promise.all([fetchAgentStatus(), fetchAgentEvents(8)]);
+      setAgentStatus(st);
+      setAgentEvents(evs.items);
+    } catch {
+      setAgentStatus(null);
+      setAgentEvents([]);
     }
   }, [days, t, language]);
 
@@ -240,6 +294,34 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     setFormError('');
     try {
       await seedCraftDemo();
+      await refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  /** 让智能体跑一轮：营销 → 出单记账 → 联系快递员寄出。 */
+  const handleRunRound = async () => {
+    setFormBusy(true);
+    setFormError('');
+    try {
+      await runAgentRound();
+      await refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  /** 自动运营开关：开着时服务端到点自己跑，看板自动更新。 */
+  const handleToggleAuto = async () => {
+    setFormBusy(true);
+    setFormError('');
+    try {
+      await setAgentAuto(!(agentStatus?.enabled ?? false), agentStatus?.interval_min ?? 30);
       await refresh();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : String(err));
@@ -413,6 +495,79 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           </section>
         </div>
       )}
+
+      <div className="neo-cp-grid2">
+        <section className="neo-db-section">
+          <div className="neo-db-panel">
+            <div className="neo-cp-panel-head">
+              <h2 className="neo-cp-panel-title">{L('盈利曲线', 'Profit curve')}</h2>
+              <span className="neo-cp-panel-note">
+                {L('累计净利', 'Cumulative')} {series.length > 0 ? fmtYuan(series.reduce((a, d) => a + d.profit_cents, 0)) : '—'}
+              </span>
+            </div>
+            {series.some((d) => d.profit_cents !== 0) ? (
+              <ProfitCurve series={series} />
+            ) : (
+              <div className="neo-cp-empty-chart" data-testid="cp-curve-empty">
+                <p>{L('还没生意，卖了第一单曲线就往上走。', 'No sales yet — the first order starts the curve.')}</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="neo-db-section">
+          <div className="neo-db-panel" data-testid="cp-agent-panel">
+            <div className="neo-cp-panel-head">
+              <h2 className="neo-cp-panel-title">{L('智能体运营', 'Agent operations')}</h2>
+              <span className="neo-cp-panel-note">
+                <i className={`neo-cp-dot ${agentStatus?.enabled ? 'seg-profit' : 'seg-off'}`} />
+                {agentStatus?.enabled
+                  ? L(`自动运营中 · 每 ${agentStatus.interval_min} 分钟`, `Auto · every ${agentStatus.interval_min}m`)
+                  : L('手动模式', 'Manual')}
+                {agentStatus ? ` · ${L(`已跑 ${agentStatus.rounds} 轮`, `${agentStatus.rounds} rounds`)}` : ''}
+              </span>
+            </div>
+            <div className="neo-cp-agent-row">
+              <button
+                type="button"
+                className="neo-cp-submit neo-cp-submit--inline"
+                onClick={handleRunRound}
+                disabled={formBusy}
+                data-testid="cp-agent-run"
+              >
+                {L('让智能体跑一轮', 'Run one round')}
+              </button>
+              <button
+                type="button"
+                className="neo-db-refresh"
+                onClick={handleToggleAuto}
+                disabled={formBusy || !agentStatus}
+                data-testid="cp-agent-auto"
+              >
+                {agentStatus?.enabled ? L('暂停自动运营', 'Pause auto') : L('开启自动运营', 'Enable auto')}
+              </button>
+              <span className="neo-cp-demo-hint">
+                {L('智能体自动营销、出单记账、联系快递员寄出', 'The agent markets, records sales & arranges shipping')}
+              </span>
+            </div>
+            <ul className="neo-cp-agent-feed" data-testid="cp-agent-feed">
+              {agentEvents.length === 0 ? (
+                <li className="neo-cp-empty">
+                  {L('还没有运营动态。点「让智能体跑一轮」试试。', 'No activity yet — run one round to see it work.')}
+                </li>
+              ) : (
+                agentEvents.map((ev) => (
+                  <li key={ev.id}>
+                    <i className={`neo-cp-dot kind-${ev.kind}`} />
+                    <span className="neo-cp-feed-ts">{fmtTime(ev.ts)}</span>
+                    {ev.text}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </section>
+      </div>
 
       <div className="neo-cp-grid2">
         <section className="neo-db-section">

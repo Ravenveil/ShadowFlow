@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS cp_sales (
 );
 CREATE INDEX IF NOT EXISTS idx_cp_sales_created ON cp_sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_cp_sales_product ON cp_sales(product_id);
+CREATE TABLE IF NOT EXISTS cp_agent_events (
+  id TEXT PRIMARY KEY,
+  ts INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cp_agent_events_ts ON cp_agent_events(ts);
 `;
 
 /** 以库文件为 key 记已建表；测试 _resetForTests() 换库后会自动重建。 */
@@ -191,6 +198,30 @@ export function createSale(input: { product_id?: unknown; qty?: unknown }): Craf
     )
     .run(row.id, row.product_id, row.qty, row.price_cents, row.artisan_cents, row.shipping_cents, row.marketing_cents, row.created_at);
   return { ...row, profit_cents: profitPerUnit(row) * n };
+}
+
+// ── 运营动态（智能体活动流水）────────────────────────────────────────────────
+
+export interface AgentEvent {
+  id: string;
+  ts: number;
+  kind: 'marketing' | 'order' | 'shipping';
+  text: string;
+}
+
+export function insertAgentEvent(kind: AgentEvent['kind'], text: string, ts = Date.now()): AgentEvent {
+  const ev: AgentEvent = { id: randomUUID(), ts, kind, text };
+  db()
+    .prepare(`INSERT INTO cp_agent_events (id, ts, kind, text) VALUES (?, ?, ?, ?)`)
+    .run(ev.id, ev.ts, ev.kind, ev.text);
+  return ev;
+}
+
+export function listAgentEvents(limit = 20): AgentEvent[] {
+  const cap = Number.isFinite(limit) && limit > 0 ? Math.min(Math.round(limit), 500) : 20;
+  return db()
+    .prepare(`SELECT * FROM cp_agent_events ORDER BY ts DESC, id DESC LIMIT ?`)
+    .all(cap) as AgentEvent[];
 }
 
 export function listSales(limit = 20): CraftSale[] {
@@ -425,7 +456,16 @@ export function seedDemo(): { seeded: boolean; products: number; sales: number }
       const p = DEMO_PRODUCTS[Math.floor(Math.random() * DEMO_PRODUCTS.length)];
       const productId = ids[DEMO_PRODUCTS.indexOf(p)];
       const n = 1 + Math.floor(Math.random() * 3);
-      insertSale.run(randomUUID(), productId, n, p[1], p[2], p[3], p[4], now - Math.floor(Math.random() * 30 * DAY_MS));
+      const ts = now - Math.floor(Math.random() * 30 * DAY_MS);
+      insertSale.run(randomUUID(), productId, n, p[1], p[2], p[3], p[4], ts);
+      // 运营动态回填：出单 + 联系快递员寄出（智能体经营流水，时间与销售对齐）
+      insertAgentEvent('order', `「${p[0]}」售出 ${n} 件，入账 ¥${((p[1] * n) / 100).toFixed(2)}`, ts);
+      insertAgentEvent('shipping', `已联系快递员上门取件，寄出「${p[0]}」×${n}`, ts);
+    }
+    // 营销推广动态：12 条散在窗口内
+    for (let i = 0; i < 12; i++) {
+      const p = DEMO_PRODUCTS[Math.floor(Math.random() * DEMO_PRODUCTS.length)];
+      insertAgentEvent('marketing', `给「${p[0]}」做朋友圈 + 短视频推广`, now - Math.floor(Math.random() * 30 * DAY_MS));
     }
   })();
 

@@ -123,3 +123,42 @@ export function createCraftSale(productId: string, qty: number): Promise<CraftSa
 export function seedCraftDemo(): Promise<{ seeded: boolean; products: number; sales: number }> {
   return postJson('/api/craft-profit/demo-seed', {});
 }
+
+// ── 代卖运营智能体（自动经营：营销 → 出单 → 联系快递员寄出）────────────────
+
+export interface CraftAgentEvent {
+  id: string;
+  ts: number;
+  kind: 'marketing' | 'order' | 'shipping';
+  text: string;
+}
+
+export interface CraftAgentStatus {
+  enabled: boolean;
+  interval_min: number;
+  last_run_at: number | null;
+  rounds: number;
+}
+
+export interface CraftAgentRound {
+  events: CraftAgentEvent[];
+  sales: number;
+  units: number;
+  note?: string;
+}
+
+export function fetchAgentEvents(limit = 20): Promise<{ items: CraftAgentEvent[] }> {
+  return getJson(`/api/craft-profit/agent/events?limit=${limit}`);
+}
+
+export function fetchAgentStatus(): Promise<CraftAgentStatus> {
+  return getJson('/api/craft-profit/agent/status');
+}
+
+export function runAgentRound(): Promise<CraftAgentRound> {
+  return postJson('/api/craft-profit/agent/run', {});
+}
+
+export function setAgentAuto(enabled: boolean, intervalMin?: number): Promise<CraftAgentStatus> {
+  return postJson('/api/craft-profit/agent/auto', { enabled, interval_min: intervalMin });
+}
