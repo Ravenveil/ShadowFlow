@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Agent 协作与记忆交接全景图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 960px;
+    background: linear-gradient(180deg,#DCEAFC,#F4F9FF 30%,#EAF2FC);
+    color: #22304A;
+    font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    padding: 40px 44px 32px;
+  }
+  .title { font-size: 34px; font-weight: 800; letter-spacing: 1px;
+    background: linear-gradient(90deg,#0B3D91,#3B82F6); -webkit-background-clip: text; color: transparent; }
+  .subtitle { font-size: 12px; color: #5A6B85; margin: 6px 0 16px; line-height: 1.7; }
+  .subtitle b { color: #2C5BA9; }
+
+  .bossbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .boss { background: #fff; border-radius: 12px; padding: 12px 18px; border-left: 4px solid #FF8A3D;
+    box-shadow: 0 2px 8px rgba(31,68,131,.10); }
+  .boss .t { font-size: 15px; font-weight: 800; color: #C25E12; }
+  .boss .d { font-size: 11px; color: #5A6B85; margin-top: 2px; }
+  .arrow { color: #2E7CF6; font-size: 20px; font-weight: 700; }
+  .gm { background: linear-gradient(90deg,#0B3D91,#1E63D0); border-radius: 12px; padding: 12px 18px; color: #fff; }
+  .gm .t { font-size: 15px; font-weight: 800; }
+  .gm .d { font-size: 11px; color: #C7DAF8; margin-top: 2px; }
+
+  .panel { background: #fff; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(31,68,131,.10); }
+  .ptitle { font-size: 14px; font-weight: 700; color: #0B3D91; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 7px; }
+  .ptitle .ic { width: 22px; height: 22px; border-radius: 6px; background: #E8F0FE;
+    display: inline-flex; align-items: center; justify-content: center; color: #2E7CF6; }
+  .ptitle .tag { font-size: 10px; font-weight: 600; color: #6B7A94; background: #EDF2FA;
+    border-radius: 20px; padding: 2px 10px; margin-left: auto; }
+
+  .chain { display: flex; gap: 8px; }
+  .step { flex: 1; background: #F7FAFF; border: 1px solid #DCE7F7; border-radius: 10px;
+    padding: 9px 8px; position: relative; }
+  .step .no { width: 20px; height: 20px; border-radius: 50%; background: #2E7CF6; color: #fff;
+    font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .step .nm { font-size: 12px; font-weight: 700; color: #0B3D91; margin-top: 6px; white-space: nowrap; }
+  .step .io { font-size: 9.5px; color: #6B7A94; margin-top: 3px; line-height: 1.55; }
+  .step .code { font-size: 8.5px; color: #8B99AE; margin-top: 3px; font-family: Consolas, monospace; }
+
+  .grid2 { display: flex; gap: 14px; }
+  .grid2 .panel { flex: 1; margin-bottom: 0; }
+
+  .mech { display: flex; gap: 10px; }
+  .mcard { flex: 1; background: #F7FAFF; border: 1px solid #DCE7F7; border-radius: 10px; padding: 10px 11px; border-left: 3px solid #22B07D; }
+  .mcard .t { font-size: 12px; font-weight: 700; color: #167A54; }
+  .mcard .d { font-size: 10px; color: #5A6B85; margin-top: 4px; line-height: 1.6; }
+  .mcard .code { font-size: 8.5px; color: #8B99AE; margin-top: 4px; font-family: Consolas, monospace; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+  th, td { text-align: left; padding: 5px 7px; line-height: 1.55; }
+  thead th { color: #6B7A94; font-weight: 600; border-bottom: 1.5px solid #D8E4F4; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #EDF2FA; }
+  tbody tr:last-child { border-bottom: none; }
+  .code { font-family: Consolas, monospace; color: #7A8798; font-size: 9px; }
+  .hi { color: #167A54; font-weight: 700; }
+
+  .foot { margin-top: 4px; background: linear-gradient(90deg,#0B3D91,#1E63D0); border-radius: 12px;
+    padding: 12px 18px; color: #DCE8FB; font-size: 10.5px; line-height: 1.8; }
+  .foot b { color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="title">Agent 协作与记忆交接全景图</div>
+<div class="subtitle">JUNCTION CHINA 2026 · Xiaomi MiMo · OPC·一人公司 &nbsp;|&nbsp; 作品 <b>ShadowFlow</b> &nbsp;|&nbsp; 图 2 / 2（图 1 为组织架构图）&nbsp;|&nbsp; 编制与机制均有代码出处，实跑证据 <b>14 会话 × 167 事件逐条可回放</b></div>
+
+<div class="bossbar">
+  <div class="boss">
+    <div class="t">老板（人，不可替代）</div>
+    <div class="d">选题 · 终审 · 客情 · 拍板 —— 只做关键决策</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="gm">
+    <div class="t">总经理 GM（拆活儿 / 总控）</div>
+    <div class="d">一句话需求 → 计划卡拆解 → 派活 → 收尾汇报（secretary_seed.ts · orchestrator-parse.ts）</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="boss" style="border-left-color:#22B07D">
+    <div class="t" style="color:#167A54">9 棒接力 · 分层并行</div>
+    <div class="d">计划卡逐行状态翻转 pending→running→done，全程可看</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></span>九棒接力 · 每棒的输入与交接物<span class="tag">演示口径岗位 · 机制与库内编制同源</span></div>
+  <div class="chain">
+    <div class="step"><div class="no">1</div><div class="nm">拆活儿</div><div class="io">需求一句话<br>→ 任务拆解/计划卡</div><div class="code">orchestrator</div></div>
+    <div class="step"><div class="no">2</div><div class="nm">查市场</div><div class="io">任务拆解<br>→ 调研结论</div><div class="code">调研员</div></div>
+    <div class="step"><div class="no">3</div><div class="nm">定方向</div><div class="io">调研结论<br>→ 策略方向</div><div class="code">品牌策划师</div></div>
+    <div class="step"><div class="no">4</div><div class="nm">文案</div><div class="io">策略方向<br>→ 文案稿</div><div class="code">商品文案师</div></div>
+    <div class="step"><div class="no">5</div><div class="nm">设计</div><div class="io">策略方向<br>→ 设计稿</div><div class="code">营销专员</div></div>
+  </div>
+  <div style="height:8px"></div>
+  <div class="chain">
+    <div class="step"><div class="no">6</div><div class="nm">算钱</div><div class="io">方案<br>→ 成本单/报价</div><div class="code">运营分析师</div></div>
+    <div class="step"><div class="no">7</div><div class="nm">出执行表</div><div class="io">方案<br>→ 执行表/交付清单</div><div class="code">采购方案师+订单管家</div></div>
+    <div class="step"><div class="no">8</div><div class="nm">检查</div><div class="io">交付物<br>→ 质检评分卡</div><div class="code">critic.ts 五维</div></div>
+    <div class="step"><div class="no">9</div><div class="nm">合规</div><div class="io">交付物<br>→ 放行/拦截</div><div class="code">审批门</div></div>
+    <div class="step" style="border-left:3px solid #FF8A3D"><div class="no" style="background:#FF8A3D">⚙</div><div class="nm">代运营域</div><div class="io">上架→营销帖<br>→分发→寄出</div><div class="code">ops.agent.yaml</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg></span>组织底座 · 四件机制（不算员工编制，但组织靠它们运转）</div>
+  <div class="mech">
+    <div class="mcard"><div class="t">编排者</div><div class="d">把老板一句话拆成给每个员工的子任务（计划卡，按依赖分层并行）</div><div class="code">orchestrator-parse.ts</div></div>
+    <div class="mcard"><div class="t">团队组装器</div><div class="d">三相位推进：搭团队图 → 员工逐棒执行（identity→persona→model→tools→memory）→ 收尾</div><div class="code">prompts/phase-1/2/3</div></div>
+    <div class="mcard"><div class="t">质检评审器</div><div class="d">产物五维评审出评分卡，低于 62 分自动打回重写，改不好留原版</div><div class="code">quality/critic.ts</div></div>
+    <div class="mcard"><div class="t">记忆交接系统</div><div class="d">上一棒的上下文/经验/客户意见自动打包给下一棒；谁读过什么有审计</div><div class="code">memory-handoff.ts</div></div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg></span>协作与交接 · 六机制</div>
+    <table>
+      <thead><tr><th>机制</th><th>做什么</th><th>代码出处</th></tr></thead>
+      <tbody>
+        <tr><td>产物交接</td><td>每棒读上游文件→干活→写下游文件</td><td class="code">workflow/executor.ts</td></tr>
+        <tr><td>状态翻转</td><td>计划卡每行 pending→running→done 实时</td><td class="code">run-sessions/index.ts</td></tr>
+        <tr><td>交接边留痕</td><td>每条协作边=一次交接，全状态落库</td><td class="code">storage/agent-hops.ts</td></tr>
+        <tr><td class="hi">记忆交接</td><td class="hi">上一棒上下文自动注入下一棒+审计</td><td class="code">memory-handoff.ts</td></tr>
+        <tr><td>业务标记落账</td><td>[post]/[order]/[ship] 自动落盈利看板</td><td class="code">craft-intake.ts</td></tr>
+        <tr><td>失败传播</td><td>上游失败自动通知下游，不静默断链</td><td class="code">chat-dag/run-team-dag.ts</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>实跑证据（与材料 6 同底座）</div>
+    <table>
+      <thead><tr><th>项</th><th class="code">实测</th></tr></thead>
+      <tbody>
+        <tr><td>完整运行会话</td><td class="hi">14 个（批次 1–5）</td></tr>
+        <tr><td>每会话事件留痕</td><td class="hi">167 条逐条可回放</td></tr>
+        <tr><td>单会话流程</td><td>蓝图 → 双员工 5 substep 装配 → 双产物 → complete</td></tr>
+        <tr><td>产物落盘</td><td>调研笔记 + 营销文案 + steps/0-3.json</td></tr>
+        <tr><td>经营闭环</td><td>68 单经营流水，三叠钱对账缺口 0</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="foot">
+  <b>口径提示</b>：九棒岗位为演示叙事岗，库内实跑编制为「调研员 + 撰稿人」双员工 + 代运营域管家——<b>机制底座完全相同</b>（计划卡 / 逐棒装配 / 记忆交接 / 质检打回 / 审批门），岗位名与业务线可按客户即插即用。所有代码出处可在仓库内检索核验；运行证据见 <b>成果/06-营业日志与经营流水/</b>（14 会话事件流原始 JSON）。
+</div>
+
+</body>
+</html>
