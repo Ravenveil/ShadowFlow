@@ -30,6 +30,10 @@ export interface DagDraftNode {
   agentId?: string;
   name?: string;
   role?: string;
+  /** BE-05（T05 缺口，2026-11-07）— 交付标准：该节点产出的验收口径一句话。 */
+  acceptance?: string;
+  /** BE-05 — 风险：该节点执行的已知风险/注意点一句话。 */
+  risk?: string;
 }
 
 export interface DagDraftEdge {
@@ -97,8 +101,9 @@ export function composeDagDraftPrompt(
     '',
     '## 输出要求',
     '只输出一个 JSON 对象（可包在 ```json 围栏里），不要其他文字：',
-    '{ "nodes": [{ "id": "<节点 id>", "agentId": "<名单内 agent id，可选>", "name": "<显示名>", "role": "<职责一句话>" }], "edges": [{ "source": "<节点 id>", "target": "<节点 id>", "mode": "direct|approve|conditional" }] }',
+    '{ "nodes": [{ "id": "<节点 id>", "agentId": "<名单内 agent id，可选>", "name": "<显示名>", "role": "<职责一句话>", "acceptance": "<交付标准一句话>", "risk": "<风险/注意点一句话>" }], "edges": [{ "source": "<节点 id>", "target": "<节点 id>", "mode": "direct|approve|conditional" }] }',
     '规则：mode 只能是 direct（直接流转）/ approve（流转前人工审批）/ conditional（条件回边，允许指回上游）；',
+    '每个节点给出 acceptance（交付标准，验收口径）和 risk（风险/注意点）各一句话；',
     '边的 source/target 必须是 nodes 里的 id；禁止自环；direct/approve 边不能成环（conditional 除外）。',
   );
   if (prevErrors && prevErrors.length > 0) {
@@ -153,6 +158,13 @@ export function parseDagDraftJson(raw: string): DagDraft | null {
         ...(typeof n.agentId === 'string' && n.agentId.trim() ? { agentId: n.agentId.trim() } : {}),
         ...(typeof n.name === 'string' && n.name.trim() ? { name: n.name.trim() } : {}),
         ...(typeof n.role === 'string' && n.role.trim() ? { role: n.role.trim() } : {}),
+        // BE-05（T05 缺口）— Plan Card 交付标准/风险字段透传（各限 200 字）。
+        ...(typeof n.acceptance === 'string' && n.acceptance.trim()
+          ? { acceptance: n.acceptance.trim().slice(0, 200) }
+          : {}),
+        ...(typeof n.risk === 'string' && n.risk.trim()
+          ? { risk: n.risk.trim().slice(0, 200) }
+          : {}),
       });
     }
     if (nodes.length === 0) continue;

@@ -20,8 +20,8 @@
  * 方便单测（mock fetch）与后续替换。
  */
 
-export type { AdapterMode, PlatformAdapter, PlatformSpec, PublishInput, PublishReceipt } from './types';
-import type { AdapterMode, PlatformAdapter, PlatformSpec } from './types';
+export type { AdapterMode, PlatformAdapter, PlatformSpec, PublishInput, PublishReceipt, RealPrerequisites } from './types';
+import type { AdapterMode, PlatformAdapter, PlatformSpec, RealPrerequisites } from './types';
 import { createMockAdapter } from './mock';
 import { createWechatMpAdapter } from './real-wechat-mp';
 import { createWeiboAdapter } from './real-weibo';
@@ -86,12 +86,30 @@ const REAL_FLOW: Record<string, string> = {
   kuaishou: 'start_upload→二进制直传→photo/publish（需视频+封面）',
 };
 
+/** real 发布必需素材（对齐各 real 适配器 NEED_*_ASSET 口径，2026-11-07）。 */
+const REAL_ASSETS: Record<string, string[]> = {
+  wechat_mp: ['cover_image'],
+  douyin: ['video'],
+  kuaishou: ['video', 'cover'],
+};
+
 export function realEnvContract(platform: string): RealEnvContract | undefined {
   return REAL_ENV[platform];
 }
 
 export function realFlow(platform: string): string {
   return REAL_FLOW[platform] ?? '';
+}
+
+/** mock 回执附带的 real 前置条件（切真实发布要补的凭证/素材/链路）。 */
+export function realPrerequisites(platform: string): RealPrerequisites | undefined {
+  const env = REAL_ENV[platform];
+  if (!env) return undefined;
+  return {
+    envs: env.envs,
+    flow: REAL_FLOW[platform] ?? '',
+    assets: REAL_ASSETS[platform] ?? [],
+  };
 }
 
 const REAL_FACTORIES: Record<string, (spec: PlatformSpec) => PlatformAdapter> = {
@@ -108,7 +126,7 @@ export function getAdapter(platform: string, mode: AdapterMode): PlatformAdapter
   if (!spec) {
     throw new Error(`未知平台: ${platform}`);
   }
-  if (mode !== 'real') return createMockAdapter(spec);
+  if (mode !== 'real') return createMockAdapter(spec, realPrerequisites(platform));
   const factory = REAL_FACTORIES[platform];
-  return factory ? factory(spec) : createMockAdapter(spec);
+  return factory ? factory(spec) : createMockAdapter(spec, realPrerequisites(platform));
 }
