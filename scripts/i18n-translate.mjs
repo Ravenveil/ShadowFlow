@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
-const LOCALES_DIR = resolve('src/common/i18n/locales');
+const LOCALES_DIR = resolve("frontend/src/common/i18n/locales");
 const MODEL = 'claude-haiku-4-5-20251001';
 const BATCH_SIZE = 40; // keys per API call
 

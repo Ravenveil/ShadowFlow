@@ -78,10 +78,10 @@ const NOTICE_BODY = [
  * 调用方负责先切到独立临时库并 reset sqlite；返回摘要与生成的文件名。
  */
 export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shadowflow') } = {}) {
-  const board = await import('../server/src/storage/merchant-board');
-  const memory = await import('../server/src/storage/memory-handoff');
-  const hopsStore = await import('../server/src/storage/agent-hops');
-  const evidence = await import('../server/src/storage/evidence');
+  const board = await import('../backend/node/src/storage/merchant-board');
+  const memory = await import('../backend/node/src/storage/memory-handoff');
+  const hopsStore = await import('../backend/node/src/storage/agent-hops');
+  const evidence = await import('../backend/node/src/storage/evidence');
 
   // ① 经营闭环：一单成交 + 一单退款，让第一单链路、单位经济、账实核对都有事实可核。
   const product = board.createProduct({ name: '手冲咖啡·演示', price_cents: 19900, cost_cents: 4300 });
@@ -103,7 +103,7 @@ export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shad
   // 线上失败态由 processFeedbackRow 的 catch 落库（status='failed' + error 等补跑）；
   // 演示没法从公开 API 确定性逼出写回异常，直接把「上次自动写回挂了」的失败态种进
   // 同一条真表（不造假表、不改结构），补跑则走真实的 runFeedbackQueue 重放路径。
-  const sqlite = await import('../server/src/storage/sqlite');
+  const sqlite = await import('../backend/node/src/storage/sqlite');
   const plantFailedFeedback = (id, subjectId, text, error) =>
     sqlite.getDb()
       .prepare(
@@ -303,7 +303,7 @@ async function main() {
   const tmp = mkdtempSync(path.join(tmpdir(), 'sf-demo-decisions-'));
   process.chdir(tmp);
   try {
-    const sqlite = await import('../server/src/storage/sqlite');
+    const sqlite = await import('../backend/node/src/storage/sqlite');
     sqlite._resetForTests();
     sqlite.getDb();
     const { summary } = await generateDemoEvidence({ outDir });
@@ -312,7 +312,7 @@ async function main() {
     else printHuman(summary, verdict);
     if (!verdict.ok) process.exitCode = 1;
   } finally {
-    const sqlite = await import('../server/src/storage/sqlite').catch(() => null);
+    const sqlite = await import('../backend/node/src/storage/sqlite').catch(() => null);
     try { sqlite?._resetForTests(); } catch { /* best-effort */ }
     process.chdir(repoRoot);
     // Windows 上 SQLite 句柄释放有延迟，临时目录可能删不掉；留在 %TEMP% 无害。

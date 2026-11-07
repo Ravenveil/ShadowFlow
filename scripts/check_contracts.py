@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-WORKFLOW_TS = PROJECT_ROOT / "src" / "core" / "types" / "workflow.ts"
+WORKFLOW_TS = PROJECT_ROOT / "frontend" / "src" / "core" / "types" / "workflow.ts"
 
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 import generate_ts_types  # noqa: E402

@@ -19,7 +19,7 @@
  *   contract between writer and reader, but TypeScript can't enforce it
  *   because the key is a free string.
  *
- *   This file walks every .ts/.tsx file under `src/` and `server/src/`,
+ *   This file walks every .ts/.tsx file under `frontend/src/` and `backend/node/src/`,
  *   extracts every `setItem('sf...')` / `getItem('sf...')` AND every
  *   `_STORAGE = 'sf...'` constant + every `setStoredString(K)` /
  *   `getStoredString(K)` / `setSetting(K)` / `getSetting(K)` reference,
@@ -41,10 +41,10 @@ const ROOT = path.resolve(__dirname, '..');
 
 // ── Scope ────────────────────────────────────────────────────────────────────
 // We scan only frontend `src/` (client-side localStorage) plus the small
-// server constants file (`server/src/storage/settings.ts`) that defines
+// server constants file (`backend/node/src/storage/settings.ts`) that defines
 // disallow-lists. Server reads of `sf.*` happen via `getSetting(key)` which
 // is a server-side KV store, semantically the same contract.
-const SCAN_DIRS = [path.join(ROOT, 'src'), path.join(ROOT, 'server', 'src')];
+const SCAN_DIRS = [path.join(ROOT, 'frontend', 'src'), path.join(ROOT, 'backend', 'node', 'src')];
 
 // Skip pure tests and stubs — they intentionally read/write keys to verify
 // the contract, and would otherwise pollute the writer/reader sets.
@@ -223,7 +223,7 @@ const PATTERNS: Array<{ kind: 'writer' | 'reader'; re: RegExp }> = [
   // setStoredString(KEY, ...) / getStoredString(KEY)
   { kind: 'writer', re: /setStoredString\s*\(\s*(['"][^'"]+['"]|[A-Z][A-Z0-9_]*)/g },
   { kind: 'reader', re: /getStoredString\s*\(\s*(['"][^'"]+['"]|[A-Z][A-Z0-9_]*)/g },
-  // Server-side KV store (server/src/storage/settings.ts).
+  // Server-side KV store (backend/node/src/storage/settings.ts).
   { kind: 'writer', re: /setSetting\s*\(\s*(['"][^'"]+['"]|[A-Z][A-Z0-9_]*)/g },
   { kind: 'reader', re: /getSetting\s*\(\s*(['"][^'"]+['"]|[A-Z][A-Z0-9_]*)/g },
 ];
@@ -263,7 +263,7 @@ function resolveKey(
 
 function main() {
   console.log('\n=== Wire-contract guard ===\n');
-  console.log('Scanning src/ and server/src/ for sf.* storage key writers + readers…\n');
+  console.log('Scanning frontend/src and backend/node/src/ for sf.* storage key writers + readers…\n');
 
   const files = readAll();
   console.log(`Files scanned: ${files.size}`);

@@ -24,7 +24,7 @@ from statistics import mean, pstdev
 from typing import Any, Dict, List
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "backend" / "python"))
 
 from scripts.accumulate_training_data import DEFAULT_GOALS, _build_workflow
 from shadowflow.runtime.contracts import RuntimeRequest, WorkflowDefinition

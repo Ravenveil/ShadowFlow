@@ -65,7 +65,7 @@ Key routing rules:
 ## 双后端架构（必读）
 
 ShadowFlow 同时跑两个后端：
-- **Node Express** (`server/src/`, port 8002) — run-sessions、agents、SQLite
+- **Node Express** (`backend/node/src/`, port 8002) — run-sessions、agents、SQLite
 - **Python FastAPI** (`shadowflow/api/`, port 8000) — teams、groups、inbox、workflows、JSON 文件
 
 Express 的 `proxy-fallback` 中间件把未命中的 `/api/*` 转给 Python。Python 没启时，

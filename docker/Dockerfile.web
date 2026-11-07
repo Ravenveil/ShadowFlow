@@ -5,17 +5,17 @@ FROM node:20.14.0-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/package-lock.json ./frontend/
+RUN cd frontend && npm ci
 
-COPY tsconfig*.json vite.config.ts tailwind.config.ts postcss.config.js index.html ./
-COPY public ./public
-COPY src ./src
+COPY frontend/tsconfig*.json frontend/vite.config.ts frontend/tailwind.config.ts frontend/postcss.config.js frontend/index.html ./frontend/
+COPY frontend/public ./frontend/public
+COPY frontend/src ./frontend/src
 
 # Production bundle: call Vite directly so the container build does not block
 # on pre-existing `tsc` failures in unrelated test files (vitest remains the
 # type-checker of record for tests). Story 0.1 AC1 only requires a served SPA.
-RUN npx vite build
+RUN cd frontend && npx vite build
 
 
 FROM nginx:1.27.4-alpine AS runtime
@@ -57,7 +57,7 @@ server {
 }
 NGINXCONF
 
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 # chown nginx runtime dirs so the non-root process can write pid/cache/log
 RUN chown -R appuser:appgroup /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
     && (chown appuser:appgroup /var/run 2>/dev/null || true)

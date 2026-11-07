@@ -21,7 +21,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getDb } from '../server/src/storage/sqlite';
+import { getDb } from '../backend/node/src/storage/sqlite';
 
 interface MigrationReport {
   agents_migrated: number;
