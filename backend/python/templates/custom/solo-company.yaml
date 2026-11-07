@@ -1,0 +1,52 @@
+template_id: solo-company
+version: '0.1'
+name: Test Import Alpha
+description: ''
+parameters:
+  goal:
+    type: string
+    required: true
+    default: null
+    description: null
+agents:
+- id: agent_1
+  ref: agent_1
+  assignment: {}
+  overrides: {}
+  config_patch: {}
+  metadata: {}
+  local_activation: null
+nodes: []
+flow:
+  entrypoint: agent_1
+  edges:
+  - from_id: agent_1
+    to_id: END
+    type: final
+    condition: null
+    metadata: {}
+  enforce_stage_order: false
+policy_matrix:
+  agents: {}
+activation:
+  enabled: true
+  default_mode: always
+  signal_sources:
+  - goal
+  - context
+  - feedback
+  selection_threshold: 0.0
+  top_k: null
+  budget: null
+  signal_weights: {}
+  candidate_type_weights: {}
+  metadata: {}
+stages: []
+user_role: Founder
+default_ops_room_name: ''
+brief_board_alias: BriefBoard
+agent_roster: []
+group_roster: []
+theme_color: '#A78BFA'
+defaults: {}
+metadata: {}

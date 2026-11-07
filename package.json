@@ -1,0 +1,14 @@
+{
+  "name": "shadowflow-merged",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "ShadowFlow merged repo: new frontend (marketing site + CEO workbench) x legacy backend (Node gateway + Python FastAPI)",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "dev:web": "npm --prefix frontend run dev",
+    "dev:server": "npm --prefix backend/node run dev",
+    "dev:python": "python -m uvicorn shadowflow.server:app --app-dir backend/python --host 127.0.0.1 --port 8000"
+  }
+}
