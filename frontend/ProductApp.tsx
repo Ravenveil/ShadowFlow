@@ -2185,17 +2185,31 @@ interface SfDashOverview {
     calls: number;
     total_tokens: number;
     cost_est_usd: number;
-    deltas: { calls: number; total_tokens: number; cost_est_usd: number };
+    deltas: { calls: number | null; total_tokens: number | null; cost_est_usd: number | null };
   };
   runs: { total: number; succeeded: number; failed: number; canceled: number; success_rate: number | null };
   active: { projects: number; conversations: number };
 }
 interface SfDashBreakdownItem {
+  key?: string;
   model?: string;
   label?: string;
   calls?: number;
   total_tokens?: number;
   cost_est_usd?: number;
+}
+/** /api/dashboard/briefing —— 每日简报（零 LLM，库内现算）。 */
+interface SfDashBriefing {
+  generated_at: number;
+  today: { calls: number; total_tokens: number; cost_est_usd: number };
+  yesterday: { calls: number; total_tokens: number; cost_est_usd: number };
+  failed_top: Array<{ goal: string; n: number }>;
+  lessons_learned: Array<{ kind: string; n: number }>;
+  trend_7d: {
+    total_tokens: number;
+    daily: Array<{ day: number; calls: number; tokens: number; cost_est_usd: number }>;
+  };
+  alerts: string[];
 }
 
 /** 旧视图专用 fetch：委托 apiFetch（Bearer 鉴权 + 401 → AuthModal），保留 {data} 解包。 */
@@ -3041,59 +3055,81 @@ function KnowledgeView() {
   );
 }
 
-const dashboardSeries = {
-  7: [18, 31, 27, 46, 39, 62, 71],
-  30: [12, 18, 17, 28, 25, 39, 35, 51, 48, 58, 55, 73],
-  90: [8, 14, 12, 21, 18, 32, 29, 40, 38, 55, 49, 67],
-};
+/** 数字紧凑格式（k/M）。 */
+function fmtCompact(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
+  return String(Math.round(n));
+}
+/** 环比 delta 展示：null（上期无数据）显示 "—"。 */
+function fmtDelta(d: number | null): [string, string] {
+  if (d == null) return ["—", ""];
+  return [`${d >= 0 ? "+" : ""}${d}%`, d >= 0 ? "up" : "down"];
+}
+/** 毫秒 → MM/DD（图表 X 轴）。 */
+function fmtDayLabel(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function DashboardView() {
   const [days, setDays] = useState<7 | 30 | 90>(30);
   const [metric, setMetric] = useState<"tokens" | "calls" | "cost">("tokens");
   const [refreshing, setRefreshing] = useState(false);
-  const [live, setLive] = useState(false);
-  // 对齐后端 /api/dashboard/{overview,timeseries,breakdown}；不可达回落占位数据
+  const [reload, setReload] = useState(0);
+  const [state, setState] = useState<SfLoadState>("loading");
+  // 全部实时接 /api/dashboard/{overview,timeseries,breakdown,briefing}；不可达显示空态
   const [ov, setOv] = useState<SfDashOverview | null>(null);
   const [series, setSeries] = useState<number[] | null>(null);
+  const [seriesDays, setSeriesDays] = useState<number[]>([]);
   const [breakdown, setBreakdown] = useState<SfDashBreakdownItem[] | null>(null);
+  const [sessionRows, setSessionRows] = useState<SfDashBreakdownItem[]>([]);
+  const [brief, setBrief] = useState<SfDashBriefing | null>(null);
 
   useEffect(() => {
     let dead = false;
+    setState("loading");
     (async () => {
       try {
-        const [o, t, b] = await Promise.all([
+        const [o, t, b, br, sb] = await Promise.all([
           sfFetch<SfDashOverview>(`/api/dashboard/overview?days=${days}`),
-          sfFetch<{ series?: Array<{ tokens?: number; calls?: number; cost?: number }> }>(
+          sfFetch<{ series?: Array<{ day?: number; tokens?: number; calls?: number; cost?: number }> }>(
             `/api/dashboard/timeseries?days=${days}&metric=${metric}`,
           ),
-          sfFetch<{ items?: SfDashBreakdownItem[] }>(
-            `/api/dashboard/breakdown?days=${days}&by=model`,
-          ),
+          sfFetch<{ items?: SfDashBreakdownItem[] }>(`/api/dashboard/breakdown?days=${days}&by=model`),
+          sfFetch<SfDashBriefing>(`/api/dashboard/briefing?days=7`),
+          sfFetch<{ items?: SfDashBreakdownItem[] }>(`/api/dashboard/breakdown?days=${days}&by=session`),
         ]);
         if (dead) return;
         setOv(o ?? null);
+        const rows = t.series ?? [];
+        setSeriesDays(rows.map((row) => Number(row.day) || 0));
         setSeries(
-          (t.series ?? []).map((row) =>
+          rows.map((row) =>
             Number(metric === "cost" ? row.cost : metric === "calls" ? row.calls : row.tokens) || 0,
           ),
         );
         setBreakdown(b.items ?? []);
-        setLive(true);
+        setBrief(br ?? null);
+        setSessionRows(sb.items ?? []);
+        setState("ready");
       } catch {
-        if (!dead) {
-          setOv(null);
-          setSeries(null);
-          setBreakdown(null);
-          setLive(false);
-        }
+        if (dead) return;
+        setOv(null);
+        setSeries(null);
+        setSeriesDays([]);
+        setBreakdown(null);
+        setBrief(null);
+        setSessionRows([]);
+        setState("error");
       }
     })();
     return () => {
       dead = true;
     };
-  }, [days, metric]);
+  }, [days, metric, reload]);
 
-  const values = series ?? dashboardSeries[days];
+  const values = series ?? [];
   const maxValue = Math.max(...values, 1);
   const niceMax = Math.ceil(maxValue / 4) * 4 || 4;
   const points = values
@@ -3105,74 +3141,74 @@ function DashboardView() {
   const axisLabels = [niceMax, niceMax * 0.75, niceMax * 0.5, niceMax * 0.25, 0].map((v) =>
     v >= 1000 ? `${Math.round(v / 100) / 10}k` : `${v}`,
   );
-  const multiplier = days === 7 ? 0.34 : days === 30 ? 1 : 2.7;
+  // X 轴日期标签按真实数据日生成（首/¼/½/¾/末，末位标「今天」）
+  const xLabels = (() => {
+    const n = seriesDays.length;
+    if (n === 0) return ["—", "—", "—", "—", "今天"];
+    const picks = [...new Set([0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1])];
+    return picks.map((i) => (i === n - 1 ? "今天" : fmtDayLabel(seriesDays[i])));
+  })();
 
-  const runs = ov?.runs ?? { total: 126, succeeded: 119, failed: 4, canceled: 3, success_rate: 94.8 };
+  const runs = ov?.runs ?? { total: 0, succeeded: 0, failed: 0, canceled: 0, success_rate: null };
   const successRate = runs.success_rate ?? 0;
   const usageCards: Array<[string, string, string, string]> = ov
-    ? [
-        [
-          "LLM 调用",
-          ov.usage.calls.toLocaleString(),
-          `${ov.usage.deltas.calls >= 0 ? "+" : ""}${ov.usage.deltas.calls}%`,
-          ov.usage.deltas.calls >= 0 ? "up" : "down",
-        ],
-        [
-          "Token 消耗",
-          ov.usage.total_tokens >= 1e6
-            ? `${(ov.usage.total_tokens / 1e6).toFixed(2)}M`
-            : `${Math.round(ov.usage.total_tokens / 1e3)}k`,
-          `${ov.usage.deltas.total_tokens >= 0 ? "+" : ""}${ov.usage.deltas.total_tokens}%`,
-          ov.usage.deltas.total_tokens >= 0 ? "up" : "down",
-        ],
-        [
-          "估算成本",
-          `$${ov.usage.cost_est_usd.toFixed(2)}`,
-          `${ov.usage.deltas.cost_est_usd >= 0 ? "+" : ""}${ov.usage.deltas.cost_est_usd}%`,
-          ov.usage.deltas.cost_est_usd >= 0 ? "up" : "down",
-        ],
-        [
-          "Run 成功率",
-          ov.runs.success_rate != null ? `${ov.runs.success_rate}%` : "—",
-          `共 ${ov.runs.total} 次`,
-          "",
-        ],
-        [
-          "活跃项目",
-          String(ov.active.projects),
-          `${ov.active.conversations} 个会话`,
-          "",
-        ],
-      ]
-    : [
-        ["LLM 调用", Math.round(286 * multiplier).toLocaleString(), "+18.6%", "up"],
-        ["Token 消耗", `${(1.84 * multiplier).toFixed(2)}M`, "+12.4%", "up"],
-        ["估算成本", `$${(38.72 * multiplier).toFixed(2)}`, "-6.8%", "down"],
-        ["Run 成功率", "94.8%", "+2.1%", "up"],
-        ["活跃项目", Math.max(3, Math.round(8 * multiplier)).toString(), "12 个会话", ""],
-      ];
-  const breakdownRows: Array<[string, string, string, string, string]> = breakdown?.length
     ? (() => {
-        const totalTokens = breakdown.reduce((sum, row) => sum + (row.total_tokens ?? 0), 0) || 1;
-        return breakdown.slice(0, 5).map((row) => [
-          row.model ?? row.label ?? "—",
-          String(row.calls ?? "—"),
-          (row.total_tokens ?? 0) >= 1e6
-            ? `${((row.total_tokens ?? 0) / 1e6).toFixed(2)}M`
-            : `${Math.round((row.total_tokens ?? 0) / 1e3)}k`,
-          `$${(row.cost_est_usd ?? 0).toFixed(2)}`,
-          `${Math.round(((row.total_tokens ?? 0) / totalTokens) * 100)}%`,
-        ]);
+        const dc = fmtDelta(ov.usage.deltas.calls);
+        const dt = fmtDelta(ov.usage.deltas.total_tokens);
+        const dp = fmtDelta(ov.usage.deltas.cost_est_usd);
+        return [
+          ["LLM 调用", ov.usage.calls.toLocaleString(), dc[0], dc[1]],
+          ["Token 消耗", fmtCompact(ov.usage.total_tokens), dt[0], dt[1]],
+          ["估算成本", `$${ov.usage.cost_est_usd.toFixed(2)}`, dp[0], dp[1]],
+          [
+            "Run 成功率",
+            ov.runs.success_rate != null ? `${ov.runs.success_rate}%` : "—",
+            `共 ${ov.runs.total} 次`,
+            "",
+          ],
+          ["活跃项目", String(ov.active.projects), `${ov.active.conversations} 个会话`, ""],
+        ];
       })()
     : [
-        ["Claude 3.7 Sonnet", "128", "842k", "$18.42", "46%"],
-        ["GPT-4.1", "96", "615k", "$12.08", "33%"],
-        ["Gemini 2.5 Pro", "62", "383k", "$8.22", "21%"],
+        ["LLM 调用", "—", "—", ""],
+        ["Token 消耗", "—", "—", ""],
+        ["估算成本", "—", "—", ""],
+        ["Run 成功率", "—", "—", ""],
+        ["活跃项目", "—", "—", ""],
       ];
+  const breakdownRows: Array<[string, string, string, string, string]> = (() => {
+    const rows = breakdown ?? [];
+    const totalTokens = rows.reduce((sum, row) => sum + (row.total_tokens ?? 0), 0) || 1;
+    return rows.slice(0, 5).map((row) => [
+      row.key ?? row.model ?? row.label ?? "—",
+      String(row.calls ?? "—"),
+      fmtCompact(row.total_tokens ?? 0),
+      `$${(row.cost_est_usd ?? 0).toFixed(2)}`,
+      `${Math.round(((row.total_tokens ?? 0) / totalTokens) * 100)}%`,
+    ]);
+  })();
+  // 会话用量排行（breakdown?by=session）
+  const sessionBars: Array<[string, number]> = sessionRows
+    .slice(0, 6)
+    .map((row) => [(row.key || "未标记会话").slice(0, 8), row.total_tokens ?? 0] as [string, number]);
+  const maxSessionTok = Math.max(...sessionBars.map(([, n]) => n), 1);
 
   function refresh() {
     setRefreshing(true);
+    setReload((n) => n + 1);
     window.setTimeout(() => setRefreshing(false), 650);
+  }
+  /** 模型用量分布导出 CSV（客户端生成，带 BOM 防 Excel 乱码）。 */
+  function exportCsv() {
+    const head = "模型,调用,Tokens,成本USD,占比\n";
+    const body = breakdownRows.map((row) => row.join(",")).join("\n");
+    const blob = new Blob([`\ufeff${head}${body}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dashboard-model-usage-${days}d.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -3187,6 +3223,7 @@ function DashboardView() {
           <Zap size={14} /> {refreshing ? "刷新中…" : "刷新数据"}
         </button>
       </div>
+      <SfLoadTag state={state} okText="看板数据已同步" />
 
       <div className="sf-range-tabs">
         {([7, 30, 90] as const).map((range) => (
@@ -3265,11 +3302,9 @@ function DashboardView() {
             </svg>
           </div>
           <div className="sf-chart-x">
-            <span>05/01</span>
-            <span>05/08</span>
-            <span>05/15</span>
-            <span>05/22</span>
-            <span>今天</span>
+            {xLabels.map((label, i) => (
+              <span key={i}>{label}</span>
+            ))}
           </div>
         </article>
 
@@ -3277,7 +3312,7 @@ function DashboardView() {
           <div className="sf-card-title">
             <div>
               <strong>每日简报</strong>
-              <span>今天 09:00 更新</span>
+              <span>{brief ? `更新于 ${fmtBizTime(brief.generated_at)}` : "加载中…"}</span>
             </div>
           </div>
           <div className="sf-brief-highlight">
@@ -3286,31 +3321,33 @@ function DashboardView() {
             </span>
             <div>
               <small>今日调用</small>
-              <strong>38</strong>
+              <strong>{brief ? brief.today.calls : "—"}</strong>
             </div>
-            <em>+$4.21</em>
+            <em>{brief ? `成本 $${brief.today.cost_est_usd.toFixed(2)}` : "—"}</em>
           </div>
           <ul>
             <li>
-              <span>完成 Runs</span>
-              <strong>12</strong>
+              <span>昨日调用</span>
+              <strong>{brief ? brief.yesterday.calls : "—"}</strong>
             </li>
             <li>
-              <span>平均响应时间</span>
-              <strong>18.4s</strong>
-            </li>
-            <li>
-              <span>待人工审核</span>
-              <strong className="warm">2</strong>
+              <span>7 日 Tokens</span>
+              <strong>{brief ? fmtCompact(brief.trend_7d.total_tokens) : "—"}</strong>
             </li>
             <li>
               <span>失败任务</span>
-              <strong>1</strong>
+              <strong className={runs.failed > 0 ? "warm" : ""}>{ov ? runs.failed : "—"}</strong>
+            </li>
+            <li>
+              <span>经验记忆</span>
+              <strong>
+                {brief ? brief.lessons_learned.reduce((sum, l) => sum + l.n, 0) : "—"}
+              </strong>
             </li>
           </ul>
           <div className="sf-dashboard-alert">
             <ShieldCheck size={15} />
-            <span>品牌策略 Agent 有 2 项输出等待审核</span>
+            <span>{brief?.alerts?.[0] ?? "近 7 天无告警"}</span>
             <ChevronRight size={14} />
           </div>
         </article>
@@ -3355,31 +3392,28 @@ function DashboardView() {
         <article className="sf-agent-usage-card">
           <div className="sf-card-title">
             <div>
-              <strong>Agent 用量排行</strong>
-              <span>按 Token 统计</span>
+              <strong>会话用量排行</strong>
+              <span>按 Token 统计 · 实时</span>
             </div>
           </div>
           <ul className="sf-usage-bars">
-            {[
-              ["AI总经理", 642, "#ff5e3a"],
-              ["市场分析师", 488, "#2777e8"],
-              ["品牌策划师", 397, "#8e6cff"],
-              ["内容策划师", 313, "#2ec4a6"],
-              ["运营专员", 256, "#f5a623"],
-              ["商务专员", 198, "#12b76a"],
-              ["合规审核员", 142, "#667085"],
-            ].map(([name, tokens, color]) => (
-              <li key={name as string}>
+            {sessionBars.length === 0 && (
+              <li>
+                <span className="sf-usage-name">暂无数据</span>
+              </li>
+            )}
+            {sessionBars.map(([name, tokens], i) => (
+              <li key={name}>
                 <span className="sf-usage-name">{name}</span>
                 <span className="sf-usage-track">
                   <i
                     style={{
-                      width: `${((tokens as number) / 700) * 100}%`,
-                      background: color as string,
+                      width: `${(tokens / maxSessionTok) * 100}%`,
+                      background: SF_PALETTE[i % SF_PALETTE.length],
                     }}
                   />
                 </span>
-                <span className="sf-usage-val">{tokens}k</span>
+                <span className="sf-usage-val">{fmtCompact(tokens)}</span>
               </li>
             ))}
           </ul>
@@ -3390,9 +3424,9 @@ function DashboardView() {
         <div className="sf-card-title">
           <div>
             <strong>模型用量分布</strong>
-            <span>按 Token 统计{live ? " · 实时" : ""}</span>
+            <span>按 Token 统计{state === "ready" ? " · 实时" : ""}</span>
           </div>
-          <button>导出 CSV</button>
+          <button onClick={exportCsv}>导出 CSV</button>
         </div>
         <div className="sf-breakdown-head">
           <span>模型</span>
@@ -3401,6 +3435,7 @@ function DashboardView() {
           <span>成本</span>
           <span>占比</span>
         </div>
+        {breakdownRows.length === 0 && <p className="sf-biz-empty">暂无模型用量数据</p>}
         {breakdownRows.map((row, index) => (
           <div className="sf-breakdown-row" key={row[0]}>
             <span>
