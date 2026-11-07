@@ -50,6 +50,8 @@ import { NeoDispatchCard, type IntentMessage } from './NeoDispatchCard';
 import { NeoDeliveryCard, collectDeliverables, summarizeText } from './NeoDeliveryCard';
 import type { TimelineMessage } from '../components/run-session/timeline/types';
 import { useI18n } from '../common/i18n';
+// 拖拽传图（2026-11-07）— 附件引用块拼进群消息 content。
+import { formatAttachmentRefs } from '../lib/attachments';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 // ClawHub（2026-06，T08）：agent 气泡头像接入 DiceBear（配了头像的 Agent 生效）
 import { AgentAvatar } from '../components/agent/AgentAvatar';
@@ -724,7 +726,12 @@ export function NeoGroupChat({
     async (p: UnifiedComposerSubmitPayload) => {
       if (!groupId) return;
       const text = p.text.trim();
-      if (!text) return;
+      // 拖拽传图（2026-11-07）— 群聊消息 content 直接拼附件引用块（Python 网关
+      // 消息模型不动）：agent 从文本拿绝对路径读文件；气泡显示引用行。
+      // run 会话（NeoChat）走结构化 attachments（缩略图 + 服务端注入 goal）。
+      const refs = formatAttachmentRefs(p.attachments);
+      const content = [text, refs].filter(Boolean).join('\n\n');
+      if (!content) return;
       let executor: string | undefined;
       let model: string | undefined;
       try {
@@ -733,9 +740,9 @@ export function NeoGroupChat({
       } catch {
         /* localStorage 不可用 → 网关默认 executor */
       }
-      timeline.appendLocalUser(text);
+      timeline.appendLocalUser(content);
       try {
-        await postGroupMessage(groupId, text, {
+        await postGroupMessage(groupId, content, {
           senderName: 'user',
           senderKind: 'user',
           executor,

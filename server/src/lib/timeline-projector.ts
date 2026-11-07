@@ -44,6 +44,7 @@ import type {
   ProjectorEmit,
   StepRow,
   TimelineMessage,
+  UserAttachment,
 } from './contracts';
 
 // ─── id generation ──────────────────────────────────────────────────────────
@@ -95,8 +96,9 @@ export function summarizeToolResult(body: string): string | undefined {
 // ─── projector ──────────────────────────────────────────────────────────────
 
 export interface TimelineProjector {
-  /** Open a new turn. Closes any in-flight thinking/foot from the previous turn. */
-  onUserMessage(text: string): ProjectorEmit;
+  /** Open a new turn. Closes any in-flight thinking/foot from the previous turn.
+   *  2026-11-07 拖拽传图：attachments 非空时挂到 user_turn（前端渲染缩略图）。 */
+  onUserMessage(text: string, attachments?: UserAttachment[]): ProjectorEmit;
   /** Classify metadata → assistant_meta (only the first classify per turn). */
   onClassify(data: {
     output_type?: string;
@@ -441,7 +443,7 @@ export function createTimelineProjector(
   }
 
   return {
-    onUserMessage(text: string): ProjectorEmit {
+    onUserMessage(text: string, attachments?: UserAttachment[]): ProjectorEmit {
       const out = emit();
       // Close anything open from a prior turn before opening a new one.
       if (msgFootId) bumpMsgFoot(out, { status: 'done' });
@@ -472,6 +474,8 @@ export function createTimelineProjector(
         turn_id: turnId,
         ts: nowMs(),
         text,
+        // 2026-11-07 拖拽传图：随行附件原样挂上（无附件省略字段，旧事件兼容）。
+        ...(attachments && attachments.length > 0 ? { attachments } : {}),
       });
       // Reset statusline to a neutral state on a fresh turn.
       bumpStatusLine(out, 'Thinking', 0);

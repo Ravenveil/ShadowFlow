@@ -663,6 +663,70 @@ router.post(
 );
 
 /**
+ * POST /api/fs/chat-upload — 对话框拖拽传图/传文件（2026-11-07）。
+ *
+ * 与 /upload 不同：调用方（聊天 composer）没有可写的 root/dir 语境，服务端
+ * 统一落盘到 `.shadowflow/projects/_uploads/<ts>-<rand>/<filename>`（run 产物
+ * 根的子树，index.ts 的 `/projects` 静态托管天然覆盖），同时返回：
+ *   - path：绝对路径 —— 随消息文本引用，agent 的 read_file/CLI 工具可直接读；
+ *   - url ：`/projects/_uploads/...` 相对直链 —— 时间线 user_turn 渲染缩略图。
+ *
+ * 表单字段：file（单文件）。文件名守卫与 8MB 上限与 /upload 同款。
+ * 返回 200 { data: { path, name, size, url } }
+ *      400 NO_FILE / INVALID_NAME / BAD_MULTIPART   413 TOO_LARGE
+ */
+router.post(
+  '/chat-upload',
+  express.raw({ type: 'multipart/form-data', limit: MAX_UPLOAD_BYTES + 1024 * 1024 }),
+  (req: Request, res: Response) => {
+    const ct = String(req.headers['content-type'] ?? '');
+    const boundaryMatch = /boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(ct);
+    const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
+    const buf = req.body as Buffer | undefined;
+    if (!boundary || !Buffer.isBuffer(buf)) {
+      res.status(400).json({ error: { code: 'BAD_MULTIPART', message: '缺少 multipart boundary 或 body' } });
+      return;
+    }
+
+    const { file } = parseMultipart(buf, boundary);
+    if (!file) {
+      res.status(400).json({ error: { code: 'NO_FILE', message: '缺少文件字段 file' } });
+      return;
+    }
+    if (file.data.length > MAX_UPLOAD_BYTES) {
+      res.status(413).json({ error: { code: 'TOO_LARGE', message: '文件超过 8MB' } });
+      return;
+    }
+    // 文件名守卫：拒绝任何带路径语义的文件名（防穿越，不静默 basename）。
+    if (/[\\/]/.test(file.filename) || file.filename.includes('..') || file.filename.trim() === '') {
+      res.status(400).json({ error: { code: 'INVALID_NAME', message: '文件名不合法（含路径分隔符或 ..）' } });
+      return;
+    }
+
+    // 每个文件独占子目录：同名文件互不覆盖，URL 也唯一。
+    const subdir = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const uploadDir = path.join(process.cwd(), '.shadowflow', 'projects', '_uploads', subdir);
+    try {
+      mkdirSync(uploadDir, { recursive: true });
+    } catch (e) {
+      res.status(400).json({ error: { code: 'MKDIR_FAILED', message: e instanceof Error ? e.message : String(e) } });
+      return;
+    }
+
+    const target = path.join(uploadDir, file.filename);
+    writeFileSync(target, file.data);
+    res.json({
+      data: {
+        path: target,
+        name: file.filename,
+        size: file.data.length,
+        url: `/projects/_uploads/${subdir}/${encodeURIComponent(file.filename)}`,
+      },
+    });
+  },
+);
+
+/**
  * GET /api/fs/open-native?path=<absFile> — 用系统默认程序打开文件（Open-in-editor）。
  *
  * Workbench FileViewer 的「在编辑器中打开」按钮 + 二进制兜底用。daemon 跑在用户本机，

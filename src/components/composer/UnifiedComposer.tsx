@@ -71,6 +71,22 @@ export interface AttachedFile {
   type: AttachmentType;
   label: string;
   meta?: string;
+  /**
+   * 拖拽/点选进来的本地文件本体（2026-11-07 拖拽传图）。提交时由
+   * NeoComposer 统一上传到后端（POST /api/fs/chat-upload），补上 path/url
+   * 后随消息下发。纯 URL/cid 类附件无此字段。
+   */
+  file?: File;
+  /** 图片本地预览 URL（URL.createObjectURL；移除/提交后 revoke）。 */
+  previewUrl?: string;
+  /** 上传成功后的服务端绝对路径（agent 工具可读，随消息文本引用）。 */
+  path?: string;
+  /** 上传成功后的静态直链相对路径（/projects/_uploads/...，时间线渲染缩略图）。 */
+  url?: string;
+  /** 图片 → true（chip 显示缩略图；时间线 user_turn 走 image 预览）。 */
+  isImage?: boolean;
+  /** 文件字节数（显示用）。 */
+  size?: number;
 }
 
 export interface UnifiedComposerSubmitPayload {

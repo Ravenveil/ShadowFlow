@@ -28,6 +28,8 @@ import { createRunSession, listRunSessions } from '../api/runSessions';
 import { getAgent } from '../api/agents';
 import { createGroup } from '../api/groupApi';
 import { getApiBase, authHeaders } from '../api/_base';
+// 拖拽传图（2026-11-07）— 附件转提交体结构化字段。
+import { toUserAttachments } from '../lib/attachments';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { useI18n } from '../common/i18n';
@@ -190,7 +192,11 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
    */
   async function handleSubmit(p: UnifiedComposerSubmitPayload) {
     const text = p.text.trim();
-    if (!text) return;
+    // 拖拽传图（2026-11-07）：允许「只发附件不打字」。
+    if (!text && p.attachments.length === 0) return;
+    // 结构化附件（上传后的 path/url）随请求下发：timeline user_turn 出缩略图，
+    // 服务端把路径引用块注入 goal（LLM/agent 可读文件）。
+    const atts = toUserAttachments(p.attachments);
     try {
       if (!runId) {
         let groupId: string | undefined;
@@ -202,7 +208,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
             // 识别是哪个 Claw（替代"消息前 20 字符"的默认命名）。
             name: clawTarget
               ? `🐾 ${clawTarget.name || clawTarget.cliId}`
-              : text.slice(0, 20),
+              : (text || p.attachments[0]?.label || '附件').slice(0, 20),
             agentIds: [],
             memberEmails: [],
             policyMatrix: {},
@@ -246,6 +252,8 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
           // 对话框知识库（2026-11-06）— 记忆库 pack id 随会话落库，run 组装
           // 提示词时按 goal 检索命中注入「知识库参考」块。
           knowledge_pack_ids: p.knowledgePackIds.length > 0 ? p.knowledgePackIds : undefined,
+          // 拖拽传图（2026-11-07）— 随行附件：timeline 缩略图 + goal 引用块。
+          attachments: atts.length > 0 ? atts : undefined,
         });
         window.dispatchEvent(new CustomEvent('sf:run-created'));
         onRunChange(resp.session_id);
@@ -261,6 +269,8 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
             cwd,
             // 对话框知识库（2026-11-06）— 每轮显式给出（空数组 = 本轮取消挂载）。
             knowledge_pack_ids: p.knowledgePackIds,
+            // 拖拽传图（2026-11-07）— 每轮附件独立（空数组 = 本轮无附件）。
+            attachments: atts,
           }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

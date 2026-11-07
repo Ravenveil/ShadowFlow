@@ -203,10 +203,26 @@ export interface IntentAssignment {
   title: string;
 }
 
+/**
+ * 2026-11-07 对话框拖拽传图 — 用户消息随行附件（前端 composer 上传后随
+ * POST /api/run-sessions[/:id/messages] 的 attachments 字段下发）。
+ * path 供 agent 工具读取（随 goal 注入引用块）；url 是 /projects 静态直链，
+ * user_turn 用它渲染缩略图/文件 chip。
+ */
+export interface UserAttachment {
+  name: string;
+  path: string;
+  url: string;
+  is_image: boolean;
+  size?: number;
+}
+
 export type TimelineMessage =
   | (TimelineMessageBase & {
       kind: 'user_turn';
       text: string;
+      /** 随行附件（无附件时省略，兼容旧事件）。 */
+      attachments?: UserAttachment[];
     })
   | (TimelineMessageBase & {
       kind: 'thinking';

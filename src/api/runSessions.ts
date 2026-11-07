@@ -82,6 +82,8 @@ export interface RunSessionCreateRequest {
    * KNOWLEDGE chip 勾选）。服务端按 goal 检索命中注入「知识库参考」块。
    */
   knowledge_pack_ids?: string[];
+  /** 2026-11-07 拖拽传图 — 随行附件（结构化；LLM 引用块由服务端注入 goal）。 */
+  attachments?: import('../lib/attachments').UserAttachment[];
 }
 
 export interface RunSessionCreateResponse {

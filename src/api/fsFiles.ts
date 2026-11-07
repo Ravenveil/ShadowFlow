@@ -83,6 +83,22 @@ export async function uploadFile(
   return j.data as { path: string; name: string; size: number };
 }
 
+/**
+ * 对话框拖拽传图（2026-11-07）— 上传到服务端托管的 _uploads 目录，无需
+ * root/dir 语境。返回 path（agent 可读绝对路径）+ url（/projects 静态直链，
+ * 时间线缩略图用）。上限 8MB，超限由后端 413 拒绝。
+ */
+export async function uploadChatAttachment(
+  file: File,
+): Promise<{ path: string; name: string; size: number; url: string }> {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  const r = await fetch(`${getApiBase()}/api/fs/chat-upload`, { method: 'POST', body: fd });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((j?.error?.message as string) ?? `upload failed: ${r.status}`);
+  return j.data as { path: string; name: string; size: number; url: string };
+}
+
 /** 列出某目录下的子目录（及全部条目）。path 省略=home；'ROOT'=盘符列表。 */
 export async function listDirs(path?: string): Promise<FsListDirsResult | null> {
   try {

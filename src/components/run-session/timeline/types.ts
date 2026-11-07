@@ -10,6 +10,18 @@
  *   event: 'message-patch' → data = MessagePatch      (mutates existing by id)
  */
 
+/**
+ * 2026-11-07 对话框拖拽传图 — 用户消息随行附件（镜像 contracts.ts 的
+ * UserAttachment）。path 供 agent 工具读取；url 是 /projects 静态直链。
+ */
+export interface UserAttachment {
+  name: string;
+  path: string;
+  url: string;
+  is_image: boolean;
+  size?: number;
+}
+
 export type MessageKind =
   | 'user_turn'
   | 'thinking'
@@ -118,7 +130,12 @@ export interface IntentAssignment {
 }
 
 export type TimelineMessage =
-  | (TimelineMessageBase & { kind: 'user_turn'; text: string })
+  | (TimelineMessageBase & {
+      kind: 'user_turn';
+      text: string;
+      /** 2026-11-07 拖拽传图 — 随行附件（无附件省略，兼容旧事件）。 */
+      attachments?: UserAttachment[];
+    })
   | (TimelineMessageBase & {
       kind: 'thinking';
       label: string;

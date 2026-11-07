@@ -56,6 +56,7 @@
 /* ── user · ❯ prefix ───────────────────────────────────────── */
 .user {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: flex-start;
   font-size: 13.5px;
@@ -74,6 +75,48 @@
 }
 .userText { padding-top: 1px; }
 .userText b { color: var(--accent-bright); font-weight: 500; }
+
+/* ── user · 随行附件（2026-11-07 拖拽传图）────────────────────────────────
+   flex-basis:100% 独占一行，挂在文本行下方；chatVariant（右气泡）下取消
+   caret 对齐缩进。图片缩略图点击新窗看原图。 */
+.userAtts {
+  flex-basis: 100%;
+  margin-left: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 2px;
+}
+.chatVariant .userAtts { margin-left: 0; }
+.userAttThumb {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elev-1);
+  line-height: 0;
+}
+.userAttThumb img {
+  display: block;
+  max-width: 240px;
+  max-height: 180px;
+  object-fit: contain;
+}
+.userAttFile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 5px 10px;
+  max-width: 320px;
+}
+.userAttFile svg { flex-shrink: 0; color: var(--fg-3); }
 
 /* ── chat 变体（个人/群聊）：user 右气泡、无分隔线 ───────────────────────
    2026-06-13；纯作用域覆盖，run-session(无 .chatVariant)不受影响。

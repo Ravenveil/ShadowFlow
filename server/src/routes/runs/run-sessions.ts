@@ -94,7 +94,8 @@ import { loadTeam as loadGlobalTeam } from '../../lib/team-yaml';
 // `assemble:done`; we collect them per open step, then on `done` package a
 // StepArtifact → stepStore.put() + emit `step-artifact` for the front-end.
 import { createStepStore } from '../../lib/step-store';
-import type { OutputKind, StepArtifact } from '../../lib/contracts';
+import type { OutputKind, StepArtifact, UserAttachment } from '../../lib/contracts';
+import { goalWithAttachments } from '../../lib/attachment-refs';
 // S6.10-A — Trae/Codex-style timeline projection. Runs in parallel with the
 // legacy fine-grained event stream; emits `message` + `message-patch` SSE
 // frames that the front-end can subscribe to incrementally. Legacy events are
@@ -343,6 +344,12 @@ interface SessionRecord {
    */
   knowledge_pack_ids?: string[];
   /**
+   * 2026-11-07 对话框拖拽传图 — 用户消息随行附件（composer 上传后随 POST 落库）。
+   * timeline user_turn 据此渲染缩略图；assembler goal 注入路径引用块让 agent 可读。
+   * 每轮独立（不跨轮继承）：follow-up 未传 = 本轮无附件。
+   */
+  attachments?: UserAttachment[];
+  /**
    * Story 15.29 — conversation this run belongs to. Always set: when the
    * client omits `conversation_id` we auto-create an anonymous one under
    * the 'default' project so every run lives somewhere.
@@ -447,6 +454,34 @@ function coerceMaxTokens(raw: unknown): number | undefined {
 function coerceTemperature(raw: unknown): number | undefined {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return raw >= 0 && raw <= 1 ? raw : undefined;
+}
+
+/**
+ * 2026-11-07 拖拽传图 — 附件数组清洗。只保留 name/path/url 均为非空字符串的
+ * 项（is_image 归一布尔、size 归一非负整数）；上限 9 个（与 composer 同限）。
+ * 非数组 → undefined（调用方区分「未传」与「显式清空」）。
+ */
+function coerceAttachments(raw: unknown): UserAttachment[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: UserAttachment[] = [];
+  for (const item of raw.slice(0, 9)) {
+    if (typeof item !== 'object' || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const name = typeof rec.name === 'string' ? rec.name.trim() : '';
+    const p = typeof rec.path === 'string' ? rec.path.trim() : '';
+    const url = typeof rec.url === 'string' ? rec.url.trim() : '';
+    if (!name || !p || !url) continue;
+    out.push({
+      name: name.slice(0, 255),
+      path: p.slice(0, 1024),
+      url: url.slice(0, 1024),
+      is_image: rec.is_image === true,
+      size: typeof rec.size === 'number' && Number.isFinite(rec.size) && rec.size >= 0
+        ? Math.floor(rec.size)
+        : undefined,
+    });
+  }
+  return out;
 }
 
 // ── Story 15.29 — conversation history rendering ─────────────────────────
@@ -987,6 +1022,8 @@ router.post('/', (req: Request, res: Response) => {
     layer_toggles,
     // 2026-11-06 — 对话框知识库：记忆库 pack id 列表（coercePackIds 清洗）。
     knowledge_pack_ids,
+    // 2026-11-07 — 对话框拖拽传图：随行附件（coerceAttachments 清洗）。
+    attachments,
     // Story 15.19 v2 — optional executor selector.
     executor,
     // Story 15.18 — optional provider selector.
@@ -1016,6 +1053,7 @@ router.post('/', (req: Request, res: Response) => {
     side_files?: unknown;
     layer_toggles?: unknown;
     knowledge_pack_ids?: unknown;
+    attachments?: unknown;
     executor?: unknown;
     provider?: unknown;
     cwd?: unknown;
@@ -1025,7 +1063,13 @@ router.post('/', (req: Request, res: Response) => {
     auto_critique?: unknown;
   };
 
-  if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+  // 2026-11-07 拖拽传图 — 附件清洗前置：允许「只发附件不打字」（goal 可空）。
+  const validated_attachments = coerceAttachments(attachments);
+
+  if (
+    (!goal || typeof goal !== 'string' || goal.trim().length === 0) &&
+    (!validated_attachments || validated_attachments.length === 0)
+  ) {
     res.status(400).json({ error: 'goal is required and must be a non-empty string' });
     return;
   }
@@ -1035,7 +1079,7 @@ router.post('/', (req: Request, res: Response) => {
   // and have the server pull bmad-method out of the user library without the
   // client needing to manage state. The explicit `skill_name` body param wins
   // when both are present.
-  let goal_text = goal.trim();
+  let goal_text = typeof goal === 'string' ? goal.trim() : '';
   let inline_skill_token: string | undefined;
 
   // W2 (Lane B) — Claude Code v2.1.88-style `/<id>:<cmd>` slash. Parsed BEFORE
@@ -1281,6 +1325,8 @@ router.post('/', (req: Request, res: Response) => {
     layer_toggles: validated_layer_toggles,
     knowledge_pack_ids:
       validated_knowledge_pack_ids.length > 0 ? validated_knowledge_pack_ids : undefined,
+    attachments:
+      validated_attachments && validated_attachments.length > 0 ? validated_attachments : undefined,
     executor: validated_executor,
     cwd: validated_cwd,
     conversation_id: validated_conversation_id,
@@ -1310,7 +1356,8 @@ router.post('/', (req: Request, res: Response) => {
     `[run-sessions] Created session ${session_id} skill=${sessionStore.get(session_id)?.skill_name} ds=${ds_id}` +
       ` provider=${validated_provider} hasKey=${provider_api_key ? 'yes' : 'no'}` +
       ` model=${validated_model ?? '(default)'} max_tokens=${validated_max_tokens ?? '(default)'}` +
-      ` temperature=${validated_temperature ?? '(default)'} goal="${goal.slice(0, 60)}"`,
+      // 拖拽传图（2026-11-07）— goal 可空（只发附件），日志走 goal_text 兜底 ''。
+      ` temperature=${validated_temperature ?? '(default)'} goal="${goal_text.slice(0, 60)}"`,
   );
 
   res.status(201).json({
@@ -1358,13 +1405,16 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     executor?: unknown;
     cwd?: unknown;
     knowledge_pack_ids?: unknown;
+    attachments?: unknown;
   };
   // Accept either `content` (chat-style payload that the RunSessionPage send box
   // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
   // are present so the chat UX is unambiguous.
   const raw = typeof body.content === 'string' ? body.content : typeof body.goal === 'string' ? body.goal : '';
   const content = raw.trim();
-  if (!content) {
+  // 2026-11-07 拖拽传图 — 允许「只发附件不打字」：content 可空，附件非空即可。
+  const incomingAttachments = coerceAttachments(body.attachments);
+  if (!content && (!incomingAttachments || incomingAttachments.length === 0)) {
     res.status(400).json({
       error: { code: 'EMPTY_CONTENT', message: 'content (or goal) must be a non-empty string' },
     });
@@ -1387,6 +1437,9 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   if (Array.isArray(body.knowledge_pack_ids)) {
     overrides.knowledge_pack_ids = coercePackIds(body.knowledge_pack_ids);
   }
+  // 拖拽传图（2026-11-07）— 每轮附件独立：显式数组整体替换（空 = 本轮无附件），
+  // 未传也清空而非继承 source 上一轮（防陈旧缩略图/引用块粘连到新轮）。
+  overrides.attachments = incomingAttachments;
 
   sessionStore.set(new_session_id, {
     ...source,
@@ -1749,7 +1802,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     try {
       appendMessage(session.conversation_id, {
         role: 'user',
-        content: session.goal,
+        // 拖拽传图（2026-11-07）— 历史存带附件引用块的文本：多轮接力时 LLM
+        // 从历史自然记住文件绝对路径（后续轮不再注入也不丢上下文）。
+        content: goalWithAttachments(session.goal, session.attachments),
         run_id: null, // run_id is not yet known at user-message time
       });
     } catch (e) {
@@ -1855,7 +1910,7 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   };
   // Open the turn before the assembler kicks off — the user's goal anchors the
   // timeline as its first row even when the LLM call fails immediately.
-  flushProjector(projector.onUserMessage(session.goal));
+  flushProjector(projector.onUserMessage(session.goal, session.attachments));
 
   // ── Polynoia-parity — orchestrator plan card ─────────────────────────────
   // `node` events during team assembly describe the roster the orchestrator
@@ -1958,7 +2013,9 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     const generator = teamSpec && wantSyntheticFallback
       ? synthesizeTeamRun(teamSpec, id, abortController.signal)
       : runSkillAssembler({
-          goal: session.goal,
+          // 拖拽传图（2026-11-07）— goal 注入附件路径引用块（agent 可读文件）；
+          // timeline / 历史展示仍用 session.goal 原文。
+          goal: goalWithAttachments(session.goal, session.attachments),
           skill_name: session.skill_name,
           explicit_skill: session.explicit_skill,
           skill_requested: session.skill_requested,

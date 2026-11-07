@@ -60,7 +60,15 @@ import type {
 import { extractRows } from '../components/run-session/timeline/messages/rows/extractRows';
 import { humanizeToolName, toolIconFor } from '../components/run-session/timeline/toolMeta';
 import { useI18n } from '../common/i18n';
+// 拖拽传图（2026-11-07）：user_turn 随行附件缩略图（/projects 直链）。
+import { fmtAttachmentSize } from '../lib/attachments';
+import { getApiBase } from '../api/_base';
 import './neo-timeline.css';
+
+/** /projects 静态直链 → 绝对 URL（前端可能与后端不同源）。 */
+function attSrc(url: string): string {
+  return url.startsWith('http') ? url : `${getApiBase()}${url}`;
+}
 
 export interface NeoTimelineProps {
   messages: TimelineMessage[];
@@ -295,7 +303,42 @@ const NeoUserTurn = memo(function NeoUserTurn({
 }: {
   msg: Extract<TimelineMessage, { kind: 'user_turn' }>;
 }) {
-  return <div className="neo-tl-user">{renderUserTextWithMentions(msg.text)}</div>;
+  // 拖拽传图（2026-11-07）：带随行附件时气泡外包一层右对齐 wrap，图片出
+  // /projects 直链缩略图（点击新窗看原图），其余文件出 neo-tl-attach chip。
+  // 无附件走原 DOM（零回归）。
+  const atts = msg.attachments ?? [];
+  if (atts.length === 0) {
+    return <div className="neo-tl-user">{renderUserTextWithMentions(msg.text)}</div>;
+  }
+  return (
+    <div className="neo-tl-user-wrap" data-testid="user-turn-attachments">
+      {msg.text ? (
+        <div className="neo-tl-user">{renderUserTextWithMentions(msg.text)}</div>
+      ) : null}
+      <div className="neo-tl-user-atts">
+        {atts.map((a) =>
+          a.is_image ? (
+            <a
+              key={a.url}
+              href={attSrc(a.url)}
+              target="_blank"
+              rel="noreferrer"
+              className="neo-tl-user-thumb"
+              title={a.name}
+            >
+              <img src={attSrc(a.url)} alt={a.name} loading="lazy" />
+            </a>
+          ) : (
+            <span key={a.url} className="neo-tl-attach" title={a.path}>
+              <Paperclip size={11} aria-hidden />
+              {a.name}
+              {typeof a.size === 'number' ? ` · ${fmtAttachmentSize(a.size)}` : ''}
+            </span>
+          ),
+        )}
+      </div>
+    </div>
+  );
 });
 
 /* ═══ thinking — op 行（灯泡图标 + 标签 + chev + 耗时）+ 缩进思考体 ══════════

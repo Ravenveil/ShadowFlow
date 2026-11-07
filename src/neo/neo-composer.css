@@ -314,6 +314,34 @@
   flex-shrink: 0;
 }
 
+/* ---- 拖拽传图（2026-11-07）：file input / 悬浮遮罩 / 图片缩略图 chip ---- */
+.neo-cp-file-input { display: none; }
+.neo-cp-dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: inherit;
+  border: 2px dashed color-mix(in oklab, var(--t-accent, #6366f1) 55%, transparent);
+  background: color-mix(in oklab, var(--t-accent, #6366f1) 10%, var(--t-panel-2));
+  color: var(--t-fg-1);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none; /* 事件穿透回卡片，drop 照常触发 */
+}
+.neo-cp-attach-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+
 /* ---- pendingSkill 就绪 chip ---- */
 .neo-cp-skill-ready {
   display: flex;

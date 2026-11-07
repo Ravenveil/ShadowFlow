@@ -81,6 +81,14 @@ import { fsHome, fsList, fsPickNative, type FsEntry } from '../api/fsBrowse';
 // 语音输入（2026-11-07）：MediaRecorder 录音 + /api/asr/transcribe 转写。
 import { transcribeAudio } from '../api/asr';
 import { useVoiceRecorder } from './useVoiceRecorder';
+// 拖拽传图（2026-11-07）：附件上传 + 预览回收 + 上限常量。
+import {
+  uploadPendingAttachments,
+  revokeAttachmentPreviews,
+  fmtAttachmentSize,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENT_COUNT,
+} from '../lib/attachments';
 import { parseSkillToken } from '../lib/skillToken';
 import {
   fetchPickerCliItems,
@@ -1359,6 +1367,11 @@ export function NeoComposer({
   const [skillStatusById, setSkillStatusById] = useState<Record<string, CompileStatus>>({});
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  // 拖拽传图（2026-11-07）：拖入悬浮遮罩 + 深度计数（dragenter/leave 在子元素
+  // 间闪烁，计数归零才算真正离开）+ 隐藏 file input（chip 点选入口）。
+  const [dragging, setDragging] = useState(false);
+  const dragDepthRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [knowledge, setKnowledge] = useState<string[]>([]); // selected memory-bank pack IDs
   const [knowledgePacks, setKnowledgePacks] = useState<MemoryBankPack[] | null>(null);
   const [knowledgePacksLoading, setKnowledgePacksLoading] = useState(false);
@@ -1473,12 +1486,99 @@ export function NeoComposer({
   }, [commandMenu?.mode, installedSkills, skillStatusById]);
 
   function removeAttachment(id: string) {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    setAttachments((prev) => {
+      const gone = prev.find((a) => a.id === id);
+      if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
+  }
+
+  // 卸载时回收残留本地预览 URL（提交成功/单个移除时各自回收）。ref 每渲染
+  // 同步最新列表，避免 [] 闭包只看到首帧。
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  useEffect(() => {
+    return () => revokeAttachmentPreviews(attachmentsRef.current);
+  }, []);
+
+  // ── 拖拽传图（2026-11-07）────────────────────────────────────────────────
+  // 拖文件进卡片 → 遮罩提示 → drop 进 attachments（图片出本地缩略图）。
+  // 发送时 NeoComposer 统一上传（见 handleSubmit）。
+  function addFiles(list: FileList | File[]) {
+    const files = Array.from(list);
+    if (files.length === 0) return;
+    const next = [...attachments];
+    let notice: string | null = null;
+    for (const f of files) {
+      if (next.length >= MAX_ATTACHMENT_COUNT) {
+        notice = t('neo.composer.attachTooMany', {
+          defaultValue: `一次最多 ${MAX_ATTACHMENT_COUNT} 个附件`,
+        });
+        break;
+      }
+      if (f.size > MAX_ATTACHMENT_BYTES) {
+        notice = t('neo.composer.attachTooLarge', {
+          defaultValue: `文件超过 8MB：${f.name}`,
+        });
+        continue;
+      }
+      // 同名同大小视为同一文件（拖拽重复触发去重）。
+      if (next.some((a) => a.label === f.name && a.size === f.size)) continue;
+      const isImage = f.type.startsWith('image/');
+      next.push({
+        id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        type: 'file',
+        label: f.name,
+        meta: fmtAttachmentSize(f.size),
+        file: f,
+        size: f.size,
+        isImage,
+        previewUrl: isImage ? URL.createObjectURL(f) : undefined,
+      });
+    }
+    setAttachments(next);
+    if (notice) setToast(notice);
+  }
+
+  function dragHasFiles(e: React.DragEvent): boolean {
+    const dt = e.dataTransfer;
+    if (!dt) return false;
+    if (dt.files && dt.files.length > 0) return true;
+    return Array.from(dt.types ?? []).includes('Files');
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setDragging(true);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault(); // 必须阻止默认行为，否则浏览器直接打开文件
+    setDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragging(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setDragging(false);
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) addFiles(files);
   }
 
   async function handleSubmit() {
     const text = composer.trim();
-    if (!text) return;
+    // 拖拽传图：允许「只发附件不打字」。
+    if (!text && attachments.length === 0) return;
 
     // pendingSkill（菜单显式选择）优先；否则用 canonical parseSkillToken
     // 从文本里的 `@<skill-id>` 自动解析（与服务端路由逐字节一致，防
@@ -1501,14 +1601,18 @@ export function NeoComposer({
     setSubmitting(true);
     setSubmitError(null);
     try {
+      // 拖拽传图（2026-11-07）：先上传本地文件（补上 path/url），再随 payload
+      // 下发。任一上传失败即抛错 → 错误条展示，草稿与附件保留可重试。
+      const uploaded = await uploadPendingAttachments(attachments);
       await onSubmit({
         text,
         skillName: resolvedSkillName,
         knowledgePackIds: knowledge,
-        attachments,
+        attachments: uploaded,
       });
       // 提交成功清空输入框 + 附件（发出即清，不残留）；失败保留文字方便重发。
       setComposer('');
+      revokeAttachmentPreviews(uploaded);
       setAttachments([]);
       // skill 只在「当轮 @ 或显式选中」生效，提交后清 pendingSkill 不静默粘住。
       setPendingSkill(null);
@@ -1775,6 +1879,8 @@ export function NeoComposer({
   }
 
   const hasText = composer.trim().length > 0;
+  // 拖拽传图：有附件也算可发送（只发图不打字）。
+  const hasContent = hasText || attachments.length > 0;
 
   return (
     <div className={`neo-composer neo-composer-${variant}`}>
@@ -1783,7 +1889,20 @@ export function NeoComposer({
         className={`neo-cp-card hf-card${variant === 'hero' ? ' sf-uc-hero' : ''}`}
         data-testid="unified-composer"
         data-variant={variant}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
+        {/* 拖拽传图（2026-11-07）：文件拖入时的悬浮遮罩 */}
+        {dragging && (
+          <div className="neo-cp-dropzone" data-testid="composer-dropzone">
+            <MonitorUp size={22} strokeWidth={1.8} aria-hidden />
+            <span>
+              {t('neo.composer.dropHint', { defaultValue: '松开以添加图片 / 文件' })}
+            </span>
+          </div>
+        )}
         {(() => {
           if (pendingSkill) {
             return (
@@ -1859,15 +1978,20 @@ export function NeoComposer({
                 data-testid={`start-attachment-${a.type}`}
                 className="neo-cp-attach"
               >
-                <span aria-hidden className="neo-cp-attach-icon">
-                  {a.type === 'file' ? (
-                    <Paperclip size={12} strokeWidth={2} />
-                  ) : a.type === 'url' ? (
-                    <Link2 size={12} strokeWidth={2} />
-                  ) : (
-                    <Hash size={12} strokeWidth={2} />
-                  )}
-                </span>
+                {/* 拖拽传图：图片附件出本地缩略图，其余回落类型图标 */}
+                {a.previewUrl ? (
+                  <img src={a.previewUrl} alt="" className="neo-cp-attach-thumb" />
+                ) : (
+                  <span aria-hidden className="neo-cp-attach-icon">
+                    {a.type === 'file' ? (
+                      <Paperclip size={12} strokeWidth={2} />
+                    ) : a.type === 'url' ? (
+                      <Link2 size={12} strokeWidth={2} />
+                    ) : (
+                      <Hash size={12} strokeWidth={2} />
+                    )}
+                  </span>
+                )}
                 <span className="neo-cp-attach-label">{a.label}</span>
                 {a.meta && <span className="neo-cp-attach-meta">· {a.meta}</span>}
                 <button
@@ -2089,6 +2213,28 @@ export function NeoComposer({
             )}
           </div>
 
+          {/* 拖拽传图（2026-11-07）：📎 chip = 文件选择入口（拖拽之外的第二入口）。
+              hidden input 每次选完清 value，同一文件可重复选择。 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="neo-cp-file-input"
+            data-testid="start-file-input"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <NeoChipBtn
+            glyph={<Paperclip size={16} strokeWidth={1.75} />}
+            onClick={() => fileInputRef.current?.click()}
+            testId="start-chip-attach"
+            title={t('neo.composer.attachFile', {
+              defaultValue: '添加图片 / 文件（或直接拖入输入框）',
+            })}
+          />
+
           {/* 语音输入（2026-11-07）：麦克风 chip；录音中同位变红点计时 +
               完成/取消；转写中 glyph 变 spinner。不支持录音的环境不渲染。 */}
           {recorder.supported &&
@@ -2160,8 +2306,8 @@ export function NeoComposer({
             <button
               type="button"
               onClick={() => void handleSubmit()}
-              disabled={submitting || !hasText}
-              className={`neo-cp-submit sf-press sf-focus-ring${hasText ? '' : ' is-empty'}`}
+              disabled={submitting || !hasContent}
+              className={`neo-cp-submit sf-press sf-focus-ring${hasContent ? '' : ' is-empty'}`}
               data-testid="start-submit"
               aria-label={t('start.submit')}
               title={t('start.submit')}
