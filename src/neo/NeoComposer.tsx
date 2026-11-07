@@ -1765,6 +1765,15 @@ export function NeoComposer({
     if (knowledgePacks === null && !knowledgePacksLoading) loadKnowledgePacks();
   }
 
+  // 知识库管理页入口（管理知识库/新建知识包）：NeoApp 壳内是中栏内部视图
+  // （view:'knowledge'，NeoRail 侧边栏常驻）——走 NeoApp 透传的 onNavigate；
+  // 独立路由页无 NeoApp 壳时回落 react-router（原 navigate('/knowledge') 行为）。
+  function goToKnowledgePage() {
+    setKnowledgeOpen(false);
+    if (onNavigate) onNavigate({ view: 'knowledge' });
+    else navigate('/knowledge');
+  }
+
   const hasText = composer.trim().length > 0;
 
   return (
@@ -2054,7 +2063,7 @@ export function NeoComposer({
                     })}
                     <button
                       type="button"
-                      onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
+                      onClick={goToKnowledgePage}
                       className="neo-cp-pop-row neo-cp-pop-row--footer"
                       data-testid="start-knowledge-manage"
                     >
@@ -2067,7 +2076,7 @@ export function NeoComposer({
                     <p className="neo-cp-pop-empty-text">{t('start.knowledgeEmpty')}</p>
                     <button
                       type="button"
-                      onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
+                      onClick={goToKnowledgePage}
                       className="neo-cp-pop-empty-link"
                       data-testid="start-knowledge-create"
                     >
