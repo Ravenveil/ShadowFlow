@@ -56,6 +56,14 @@ import { DEFAULT_MODELS } from './types';
 export interface GoogleApiClientOptions {
   /** BYOK key. If absent and env GOOGLE_API_KEY also empty, stream() throws. */
   apiKey?: string;
+  /**
+   * BYOK 自定义 API 地址（2026-11-07 模型链路断点全清）。透传给 SDK 的
+   * `RequestOptions.baseUrl`。注意 Gemini SDK 自己拼 `/{apiVersion}/{model}:{task}`
+   * （默认 v1beta）—— 这里应传"主机根"（如
+   * `https://generativelanguage.googleapis.com`），不要带 `/v1beta`。
+   * 未配置时用 SDK 内置默认地址。
+   */
+  baseURL?: string;
   /** Model id (e.g. 'gemini-2.5-flash'). Falls back to DEFAULT_MODELS.google. */
   model?: string;
   /** Per-turn output cap → mapped to generationConfig.maxOutputTokens. */
@@ -287,7 +295,14 @@ export class GoogleApiClient implements ApiClient {
           : {}),
       },
     };
-    const model = genAI.getGenerativeModel(modelParams);
+    // 2026-11-07：BYOK 自定义端点透传（RequestOptions.baseUrl）。SDK 拼
+    // `{baseUrl}/{apiVersion}/{model}:{task}`，故传主机根。缺省时不传 → SDK
+    // 内置默认地址。
+    const requestOptions =
+      this.opts.baseURL && this.opts.baseURL.length > 0
+        ? { baseUrl: this.opts.baseURL }
+        : undefined;
+    const model = genAI.getGenerativeModel(modelParams, requestOptions);
 
     const contents = toGeminiContents(args.messages);
     this.turnSeq += 1;

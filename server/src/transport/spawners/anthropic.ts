@@ -123,8 +123,10 @@ export async function* runAnthropicDirect(input: RunnerInput): AsyncGenerator<Ss
       buffer = remaining;
       for (const e of events) yield e;
     } else if (chunk.type === 'error') {
+      // 2026-11-07：chunk.provider 可能是 settings 注册的自定义 id（无
+      // PROVIDER_LABEL 条目）→ 回落原始 id 作标签。
       const label = chunk.provider
-        ? PROVIDER_LABEL[chunk.provider]
+        ? (PROVIDER_LABEL[chunk.provider as keyof typeof PROVIDER_LABEL] ?? String(chunk.provider))
         : PROVIDER_LABEL[providerId];
       yield {
         event: 'error',

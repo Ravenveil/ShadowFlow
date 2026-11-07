@@ -28,8 +28,10 @@ export interface SessionRecord {
   workspace_id?: string;
   mode?: string;
   anthropic_key?: string;
-  /** Story 15.18 — selected LLM provider (default 'anthropic'). */
-  provider?: ProviderId;
+  /** Story 15.18 — selected LLM provider (default 'anthropic').
+   *  2026-11-07：放宽为 string —— settings/byok 注册的自定义 provider（custom-*）
+   *  同样可作为会话 provider（executor=byok:<id> 时以其为准）。 */
+  provider?: ProviderId | string;
   /** Story 15.18 — BYOK key for the selected provider. */
   api_key?: string;
   /** Story 15.5 — Design System id chosen by user; defaults to 'none'. */

@@ -23,6 +23,7 @@
 import { AnthropicApiClient } from './anthropic-api-client';
 import { GoogleApiClient } from './google-api-client';
 import { OpenAiCompatApiClient } from './openai-compat-api-client';
+import { resolveProviderBaseUrl } from '../providerBaseUrl';
 import {
   isProviderId,
   type ProviderChunk,
@@ -46,20 +47,11 @@ export {
   isProviderId,
 } from './types';
 
-/** OpenAI-compatible providers (all routed through OpenAiCompatApiClient). */
-const OPENAI_COMPAT: ReadonlySet<ProviderId> = new Set<ProviderId>([
-  'openai',
-  'deepseek',
-  'zhipu',
-  'qwen',
-  'moonshot',
-  'mistral',
-  'groq',
-  'openrouter',
-  'ollama',
-  'lmstudio',
-  'azure',
-]);
+// OpenAI 兼容族（全部经 OpenAiCompatApiClient）：内置 11 家
+// （openai/deepseek/zhipu/qwen/moonshot/mistral/groq/openrouter/ollama/
+// lmstudio）+ azure + 带 baseURL 的 custom-* 自定义 provider。2026-11-07 起
+// 不再维护显式白名单集合——非 anthropic/google 的一律走 OpenAI 兼容构造
+// （这也顺带修掉了 mimo 此前不在集合里、被误判 "Unsupported provider" 的断点）。
 
 /**
  * Single-turn streaming entry — adapts ApiClient.stream() into the simple
@@ -80,7 +72,15 @@ export async function* callProvider(
   providerId: string,
   input: ProviderInput,
 ): AsyncGenerator<ProviderChunk> {
-  if (!isProviderId(providerId)) {
+  // 2026-11-07 模型链路断点全清：settings/byok 的自定义 baseUrl 在此兜底
+  // （显式 input.base_url > settings 配置 > client 内置默认），与 byok:*
+  // 执行器的 dispatcher 同口径。此前本 shim 不认 settings，用户在设置页配了
+  // 自定义网关/本地端点，chat / spawner 链路上仍打默认公网地址。
+  const baseURL = input.base_url ?? resolveProviderBaseUrl(providerId);
+
+  // 未知 provider（custom-* 等 settings 注册的自定义 id）：只要能解析出
+  // baseURL 就按 OpenAI 兼容端点走（fallback 见下）；否则保留大声报错契约。
+  if (!isProviderId(providerId) && !baseURL) {
     yield {
       type: 'error',
       message: `Unknown provider: "${providerId}"`,
@@ -98,26 +98,20 @@ export async function* callProvider(
   let client;
   try {
     if (providerId === 'anthropic') {
-      client = new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
+      client = new AnthropicApiClient({ apiKey, baseURL, model, max_tokens, temperature });
     } else if (providerId === 'google') {
-      client = new GoogleApiClient({ apiKey, model, max_tokens, temperature });
-    } else if (OPENAI_COMPAT.has(providerId)) {
+      client = new GoogleApiClient({ apiKey, baseURL, model, max_tokens, temperature });
+    } else {
+      // OpenAI 兼容族：内置 11 家 + azure + 带 baseURL 的 custom-* 自定义
+      // provider（2026-11-07）。baseURL 缺省时 client 回退内置默认地址。
       client = new OpenAiCompatApiClient({
         providerId,
         apiKey,
         model,
         max_tokens,
         temperature,
-        baseURL: input.base_url,
+        ...(baseURL && baseURL.length > 0 ? { baseURL } : {}),
       });
-    } else {
-      yield {
-        type: 'error',
-        message: `Unsupported provider: "${providerId}"`,
-        code: 'PROVIDER_ERROR',
-        provider: providerId,
-      };
-      return;
     }
   } catch (err) {
     yield {

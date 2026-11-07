@@ -21,7 +21,8 @@ import { ApiClientCallable } from './ApiClientCallable';
 import { CliCallable } from './CliCallable';
 import { AcpCallable } from './AcpCallable';
 import { McpCallable } from './McpCallable';
-import { resolveProviderBaseUrl } from './byokKey';
+import { resolveProviderBaseUrl, resolveProviderKey, normalizeSdkBaseUrl } from './byokKey';
+import { getSetting } from '../storage/settings';
 
 /**
  * Executor string grammar.
@@ -95,12 +96,14 @@ export interface ResolveOptions {
  * 值 = 用户在设置页配的 key。CLI 自带认证（claude login / hermes portal）
  * 的会忽略这些变量，不受影响；读 env 的 Claw（ARC 读 OPENAI_API_KEY 等）
  * 从此能用平台设置的 key，不再 Connection error。
+ * 2026-11-07：补 mimo（此前 settings 里的 mimo key 到不了子进程）。
  */
 const CLI_ENV_BY_PROVIDER: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
   zhipu: 'ZHIPU_API_KEY',
+  mimo: 'MIMO_API_KEY',
   google: 'GEMINI_API_KEY',
   qwen: 'DASHSCOPE_API_KEY',
   moonshot: 'MOONSHOT_API_KEY',
@@ -109,9 +112,34 @@ const CLI_ENV_BY_PROVIDER: Record<string, string> = {
   openrouter: 'OPENROUTER_API_KEY',
 };
 
+/**
+ * BYOK provider → 自定义 API 地址的子进程 env 名（2026-11-07 模型链路断点
+ * 全清）。与 CLI_ENV_BY_PROVIDER 同哲学："只注入、不强求"——CLI 自带配置
+ * 的忽略即可；读 env 的 Claw（claude 读 ANTHROPIC_BASE_URL、OpenAI SDK 系
+ * 读 OPENAI_BASE_URL 等）从此能用平台设置的自定义网关/本地端点。
+ */
+const CLI_BASEURL_ENV_BY_PROVIDER: Record<string, string> = {
+  anthropic: 'ANTHROPIC_BASE_URL',
+  openai: 'OPENAI_BASE_URL',
+  deepseek: 'DEEPSEEK_BASE_URL',
+  zhipu: 'ZHIPU_BASE_URL',
+  mimo: 'MIMO_BASE_URL',
+  google: 'GEMINI_BASE_URL',
+  qwen: 'DASHSCOPE_BASE_URL',
+  moonshot: 'MOONSHOT_BASE_URL',
+  mistral: 'MISTRAL_BASE_URL',
+  groq: 'GROQ_BASE_URL',
+  openrouter: 'OPENROUTER_BASE_URL',
+};
+
 function cliKeyEnv(provider: string, apiKey: string): Record<string, string> {
   const name = CLI_ENV_BY_PROVIDER[provider];
   return name ? { [name]: apiKey } : {};
+}
+
+function cliBaseUrlEnv(provider: string, baseUrl?: string): Record<string, string> {
+  const name = CLI_BASEURL_ENV_BY_PROVIDER[provider];
+  return name && baseUrl ? { [name]: baseUrl } : {};
 }
 
 /**
@@ -119,20 +147,30 @@ function cliKeyEnv(provider: string, apiKey: string): Record<string, string> {
  * key 的 provider，按标准 env 名全部注入 Claw 子进程。Claw 只消费自己认识
  * 的变量（ARC 读 OPENAI_API_KEY，hermes 读自己的配置），互不干扰。读取失败
  * 静默返回 {}（联动是增强，不是依赖）。
+ * 2026-11-07：同表联动自定义 API 地址（*_BASE_URL），无 key 但配了地址的
+ * provider 也注入（本地网关可能不需要 key）。
  */
 function cliByokEnvFromSettings(): Record<string, string> {
   try {
-    // 惰性 require 防循环依赖（storage → 无 transport 引用，安全，但保守起见）。
-    const { getSetting } = require('../storage/settings') as {
-      getSetting: (k: string) => unknown;
-    };
+    // 2026-11-07：改静态 import（byokKey → storage/settings 已在依赖图里，
+    // 无新增耦合）。此前惰性 require 在 vitest 的 ESM 变换下是静默 no-op
+    // （require 不存在 → catch → {}），设置层注入在单测里根本跑不到、
+    // prod-vs-test 行为分叉。静态 import 后 vi.mock 可注入、两侧同径。
     const byok = getSetting('byok') as
-      | { providers?: Record<string, { apiKey?: string; enabled?: boolean }> }
+      | {
+          providers?: Record<
+            string,
+            { apiKey?: string; enabled?: boolean; baseUrl?: string }
+          >;
+        }
       | undefined;
     const env: Record<string, string> = {};
     for (const [id, p] of Object.entries(byok?.providers ?? {})) {
-      if (!p?.enabled || !p.apiKey) continue;
-      Object.assign(env, cliKeyEnv(id, p.apiKey));
+      if (!p?.enabled) continue;
+      if (p.apiKey) Object.assign(env, cliKeyEnv(id, p.apiKey));
+      if (typeof p.baseUrl === 'string' && p.baseUrl.trim()) {
+        Object.assign(env, cliBaseUrlEnv(id, normalizeSdkBaseUrl(id, p.baseUrl)));
+      }
     }
     return env;
   } catch {
@@ -180,9 +218,17 @@ export function resolveCallable(
       //  1) 本 session 显式 provider+key（请求头 BYOK）→ 注入该 provider 的 env
       //  2) 设置页全部 enabled 的 BYOK key → 按标准 env 名全量注入
       // Claw 只消费自己认识的变量；自带认证的 CLI（claude login 等）不受影响。
+      // 2026-11-07：同两层联动自定义 API 地址（*_BASE_URL env），显式
+      // opts.baseUrl > settings 配置（与 byok:* 调用链同优先序）。
       env: {
         ...cliByokEnvFromSettings(),
         ...(opts.apiKey && opts.provider ? cliKeyEnv(opts.provider, opts.apiKey) : {}),
+        ...(opts.provider
+          ? cliBaseUrlEnv(
+              opts.provider,
+              opts.baseUrl ?? resolveProviderBaseUrl(opts.provider),
+            )
+          : {}),
       },
     });
   }
@@ -227,10 +273,15 @@ export function resolveCallable(
       );
     }
     return new ApiClientCallable(provider, {
-      apiKey: opts.apiKey,
+      // 2026-11-07 模型链路断点全清：key 同样三级优先（显式 > settings/byok >
+      // env，`resolveProviderKey`），与 baseUrl 对齐。此前只收显式 apiKey，
+      // 调用方没传时 settings 里明明配了 key 也会走到 client 报
+      // "API key not configured"。
+      apiKey: opts.apiKey ?? resolveProviderKey(provider),
       // 2026-11-07 Day1 打通修复：显式 baseUrl > settings/byok 里同 provider
       // 的 baseUrl > client 内置默认地址。此前完全不透传，自定义网关/本地
       // 端点一律打偏到默认公网地址（SDK "Request timed out."）。
+      // settings 值经 normalizeSdkBaseUrl 归一（与设置页探针同口径）。
       baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(provider),
       model: opts.model,
       maxTokens: opts.maxTokens,
