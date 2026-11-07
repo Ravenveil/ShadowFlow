@@ -24,6 +24,8 @@ import { AnthropicApiClient } from './anthropic-api-client';
 import { GoogleApiClient } from './google-api-client';
 import { OpenAiCompatApiClient } from './openai-compat-api-client';
 import {
+  PROVIDER_ENV_VAR,
+  PROVIDERS_NO_KEY,
   isProviderId,
   type ProviderChunk,
   type ProviderId,
@@ -87,6 +89,29 @@ export async function* callProvider(
       code: 'PROVIDER_ERROR',
     };
     return;
+  }
+
+  // Missing-key gate — restores the documented taxonomy (types.ts): emit
+  // `NO_API_KEY` when input.api_key + env are both empty. The ApiClient
+  // adapters throw plain Errors on missing keys (their own tested policy),
+  // which this shim would otherwise collapse into generic PROVIDER_ERROR;
+  // routes/llm.ts maps NO_API_KEY → 401 via errorCodeToStatus.
+  // Keyed providers only — ollama/lmstudio don't need keys.
+  if (!PROVIDERS_NO_KEY.has(providerId)) {
+    const envVar = PROVIDER_ENV_VAR[providerId];
+    const envKey = envVar ? process.env[envVar] : undefined;
+    const hasKey =
+      (typeof input.api_key === 'string' && input.api_key.length > 0) ||
+      (typeof envKey === 'string' && envKey.length > 0);
+    if (!hasKey) {
+      yield {
+        type: 'error',
+        message: `${providerId} API key not configured`,
+        code: 'NO_API_KEY',
+        provider: providerId,
+      };
+      return;
+    }
   }
 
   const apiKey = input.api_key;
