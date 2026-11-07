@@ -257,7 +257,7 @@ let _structuredSpecCache: StructuredSpec | null = null;
 function loadStructuredSpec(): StructuredSpec {
   if (_structuredSpecCache) return _structuredSpecCache;
   const candidates = [
-    path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'skills', 'agent-team-assembly', 'assembly_workflow.yaml'),
+    path.join(process.cwd(), '..', '..', '.shadowflow', 'skills', 'agent-team-assembly', 'assembly_workflow.yaml'),
     path.join(process.cwd(), '.shadowflow', 'skills', 'agent-team-assembly', 'assembly_workflow.yaml'),
   ];
   let spec: StructuredSpec = { ...DEFAULT_STRUCTURED_SPEC };
