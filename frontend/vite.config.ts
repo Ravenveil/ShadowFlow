@@ -35,6 +35,8 @@ export default defineConfig(({ mode }) => {
       host: process.env.FIGMA_DEV_SERVER_HOST || "0.0.0.0",
       port: parseInt(process.env.PORT || "8443"),
       strictPort: true,
+      // 关闭 host 白名单：允许任意域名（如隧道域名）访问
+      allowedHosts: true,
       // 合并仓库：把旧后端 API 直接代理进来（Node 网关 :8002）
       proxy: {
         "/api": { target: "http://127.0.0.1:8002", changeOrigin: true },
