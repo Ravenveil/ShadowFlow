@@ -475,8 +475,9 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
       ) : (
         /* 空态（首页 hero 已下线 2026-11-07 用户反馈「这个首页不要再显示了」）：
            直接落聊天框——一行轻提示 + composer 钉列底，无问候/版本 pill/轮播/
-           模板卡。agent-target 兜底态由 NeoApp 常驻重试自动升级进真会话，
-           此态多为后端未起时的过渡。 */
+           模板卡。target 在场（秘书默认落点 / agent-target 兜底态）时 composer
+           用 chat 形态 + 「发消息」文案，首帧即 agent 单聊观感；该态由 NeoApp
+           目标态自动升级 effect 解析成功后无缝换入真会话（NeoGroupChat）。 */
         <>
           <div className="neo-empty">
             <div className="neo-empty-hint">
@@ -489,7 +490,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
           </div>
           <div className="neo-empty-composer">
             <NeoComposer
-              variant="hero"
+              variant={target ? 'chat' : 'hero'}
               onSubmit={handleSubmit}
               onNavigate={onNavigate}
               clawTarget={clawTarget}
@@ -499,9 +500,13 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
                   ? t('neo.chat.clawPlaceholder', {
                       defaultValue: `与 ${clawTarget.cliId} 对话中 · 输入内容直接发送`,
                     })
-                  : t('neo.chat.heroPlaceholder', {
-                      defaultValue: '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令',
-                    })
+                  : target
+                    ? t('neo.chat.targetPlaceholder', {
+                        defaultValue: '发消息，TA 就开始干活 · 试试 @ 提及 Skill 或 / 命令',
+                      })
+                    : t('neo.chat.heroPlaceholder', {
+                        defaultValue: '描述一个目标，直接开干 · 试试 @ 提及 Skill 或 / 命令',
+                      })
               }
             />
           </div>
