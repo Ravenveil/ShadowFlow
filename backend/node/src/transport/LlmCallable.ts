@@ -42,6 +42,7 @@
 
 import type { ConversationMessage } from '../lib/conversation-types';
 import type { TurnChunk as _TurnChunk } from '../workflow/types';
+import type { UsageStamp } from '../storage/token-usage';
 
 // ─── Canonical types from workflow/types (Lane 1) ─────────────────────────────
 //
@@ -99,6 +100,13 @@ export interface LlmCallableTurnInput {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * 成本归属戳（2026-11-07 T12/BE-07）— 本次 turn 的 run/agent/project 归属，
+   * Transport 层在 usage 事件流出时落 token_usage 流水。可选：缺省按空归属
+   * 记录（成本照算，只是不知道记在谁头上）。per-turn 传参而非实例可变字段，
+   * 因为同一个 callable 实例会被 DAG 并行节点共享。
+   */
+  usageCtx?: UsageStamp;
 }
 
 /**

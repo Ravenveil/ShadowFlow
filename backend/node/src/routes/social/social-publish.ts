@@ -6,6 +6,9 @@
  *
  * 产业方向（手工艺人代运营）：对方上架商品，我们营销发布 + 寄出。
  *   GET  /api/social-publish/platforms            → 六大平台规格 + mock/real 凭证契约
+ *   POST /api/social-publish/lint                 → 发布前合规预检（P0-3：三红线
+ *                                                   词表 + 结构 + AIGC 标识检查，
+ *                                                   不落库，返回 violations + 版本）
  *   GET  /api/social-publish/stats                → 各表计数
  *   GET  /api/social-publish/accounts             → 账号列表
  *   POST /api/social-publish/accounts             → 建账号（platform/account_name/auth_mode）
@@ -24,6 +27,7 @@
 import { Router, Request, Response } from 'express';
 import { PLATFORMS, realEnvContract, realFlow } from '../../lib/social-platforms';
 import { marketingCopy } from '../../lib/social-platforms/copy';
+import { lintContent } from '../../lib/social-platforms/compliance-lint';
 import {
   SocialPublishError,
   createAccount,
@@ -72,6 +76,25 @@ router.get('/platforms', (_req: Request, res: Response) => {
       real_flow: realFlow(p.id),
     })),
   });
+});
+
+// ── 合规预检（P0-3，不落库）─────────────────────────────────────────────────
+// 发布前四道检查的机器可判三道：词表（三红线）/ 结构（title_max·content_max）/
+// AIGC 标识。第四道人工门在发布链（WAITING_HUMAN，T09 语义）。
+router.post('/lint', (req: Request, res: Response) => {
+  try {
+    const b = body(req);
+    const result = lintContent({
+      platform: str(b.platform, 64),
+      title: str(b.title, 1024),
+      content: str(b.content, 20000),
+      ai_label: b.ai_label === true,
+      label_text: str(b.label_text, 128),
+    });
+    res.json(result);
+  } catch (err) {
+    fail(res, err);
+  }
 });
 
 router.get('/stats', (_req: Request, res: Response) => {
@@ -168,6 +191,9 @@ router.post('/posts', (req: Request, res: Response) => {
       content,
       media: b.media,
       product_id: productId,
+      // P0-4 AIGC 标识透传（缺省带标；V07 平台入口未核前保守全带标）。
+      ai_label: b.ai_label !== false,
+      label_text: str(b.label_text, 128) || undefined,
     });
     res.status(201).json({ post });
   } catch (err) {

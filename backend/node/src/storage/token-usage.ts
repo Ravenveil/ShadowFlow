@@ -46,6 +46,14 @@ export interface TokenUsageRecord {
   input_tokens: number;
   output_tokens: number;
   cost_est_usd: number;
+  /** 一轮 run 的归属（群 turn id / DAG run session）。空串=未知。 */
+  run_id: string;
+  /** 执行 agent 归属（node.id / agent id）。空串=未知。 */
+  agent_id: string;
+  /** 项目归属。空串=未知。 */
+  project_id: string;
+  /** 本次模型调用墙钟耗时（毫秒）。0=未计时（旧流水）。 */
+  duration_ms: number;
 }
 
 /** 每百万 token 美元单价（settings.llm.priceTable 的条目形状）。 */
@@ -54,11 +62,22 @@ export interface ModelPrice {
   output: number;
 }
 
-export interface UsageToRecord {
-  session_id?: string;
+/**
+ * 归属戳（2026-11-07 T12/BE-07）— 一次模型调用关联到 run/agent/project，
+ * 供经营指标「交付成本」按项目/agent 维度核算。全字段可选，缺省记空串。
+ */
+export interface UsageStamp {
   model?: string;
+  session_id?: string;
+  run_id?: string;
+  agent_id?: string;
+  project_id?: string;
+}
+
+export interface UsageToRecord extends UsageStamp {
   input_tokens?: number;
   output_tokens?: number;
+  duration_ms?: number;
   ts?: number;
 }
 
@@ -78,10 +97,23 @@ export function recordUsage(usage: UsageToRecord, priceTable?: Record<string, Mo
         : 0;
     getDb()
       .prepare(
-        `INSERT INTO token_usage (id, ts, session_id, model, input_tokens, output_tokens, cost_est_usd)
-         VALUES (?,?,?,?,?,?,?)`,
+        `INSERT INTO token_usage (id, ts, session_id, model, input_tokens, output_tokens, cost_est_usd,
+                                  run_id, agent_id, project_id, duration_ms)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       )
-      .run(randomUUID(), usage.ts ?? Date.now(), usage.session_id || '', model, input, output, cost);
+      .run(
+        randomUUID(),
+        usage.ts ?? Date.now(),
+        usage.session_id || '',
+        model,
+        input,
+        output,
+        cost,
+        usage.run_id || '',
+        usage.agent_id || '',
+        usage.project_id || '',
+        Math.max(0, Math.round(Number(usage.duration_ms) || 0)),
+      );
   } catch {
     /* best-effort — 统计流水绝不影响主链路 */
   }
@@ -144,14 +176,14 @@ export function usageDailyBetween(fromTs: number, toTs: number): Array<{
     .map(([day, v]) => ({ day, ...v }));
 }
 
-/** 按维度 TopN（model / session）。 */
+/** 按维度 TopN（model / session / run / agent / project）。 */
 export function usageBreakdown(
   fromTs: number,
   toTs: number,
-  by: 'model' | 'session_id',
+  by: 'model' | 'session_id' | 'run_id' | 'agent_id' | 'project_id',
   limit = 10,
 ): Array<{ key: string; calls: number; input_tokens: number; output_tokens: number; cost_est_usd: number }> {
-  const col = by === 'session_id' ? 'session_id' : 'model';
+  const col = by === 'session_id' || by === 'run_id' || by === 'agent_id' || by === 'project_id' ? by : 'model';
   return getDb()
     .prepare(
       `SELECT COALESCE(${col}, '') AS key,

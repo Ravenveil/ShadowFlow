@@ -127,6 +127,68 @@ async function main() {
     );
   });
 
+  console.log('\n[7] T03/BE-02 marketing fields persist (no silent drop)');
+  await inIsolated(async ({ projects }) => {
+    const p = projects.createProject({
+      name: '营销项目',
+      client_name: '阳光工疗站',
+      goal: '小红书起号 3 个月 500 粉',
+      period: '2026-11~2027-01',
+      budget: '¥499/月',
+      deliverables: ['品牌资料档案', '店铺商品页', '月度营销内容 12 条'],
+      brief: '手作皂礼盒，主打节日礼品场景',
+    });
+    check('client_name 落库回读', p.client_name === '阳光工疗站');
+    check('goal 落库回读', p.goal === '小红书起号 3 个月 500 粉');
+    check('period 落库回读', p.period === '2026-11~2027-01');
+    check('budget 落库回读', p.budget === '¥499/月');
+    check(
+      'deliverables 结构化回读（数组原样）',
+      JSON.stringify(p.deliverables) ===
+        JSON.stringify(['品牌资料档案', '店铺商品页', '月度营销内容 12 条']),
+      p.deliverables,
+    );
+    check('brief 落库回读', p.brief === '手作皂礼盒，主打节日礼品场景');
+
+    // 刷新回读（GET /:id 同源）——保存后仍存在
+    const got = projects.getProject(p.project_id);
+    check(
+      '刷新后营销字段仍在',
+      got?.client_name === '阳光工疗站' &&
+        got?.brief === '手作皂礼盒，主打节日礼品场景' &&
+        got?.deliverables.length === 3,
+    );
+
+    // PATCH 部分更新
+    const updated = projects.updateProject(p.project_id, {
+      budget: '¥1,299/月',
+      deliverables: ['追加交付物'],
+    });
+    check('PATCH budget 更新', updated?.budget === '¥1,299/月');
+    check('PATCH deliverables 覆盖', updated?.deliverables.length === 1);
+    check('PATCH 未提字段保留', updated?.client_name === '阳光工疗站');
+  });
+
+  console.log('\n[8] T02/BE-02 workspace_id filter');
+  await inIsolated(async ({ projects }) => {
+    projects.createProject({ name: 'ws-a-1', workspace_id: 'ws-a' });
+    projects.createProject({ name: 'ws-a-2', workspace_id: 'ws-a' });
+    projects.createProject({ name: 'ws-b-1', workspace_id: 'ws-b' });
+    projects.createProject({ name: 'orphan' });
+
+    const all = projects.listProjects();
+    check('无过滤返回全量（含未归属）', all.length === 4);
+
+    const inA = projects.listProjects('ws-a');
+    check('workspace_id=ws-a 只返本空间', inA.length === 2 && inA.every((p) => p.workspace_id === 'ws-a'));
+
+    const inB = projects.listProjects('ws-b');
+    check('workspace_id=ws-b 只返本空间', inB.length === 1 && inB[0]?.name === 'ws-b-1');
+
+    const inNone = projects.listProjects('ws-none');
+    check('未知空间返回空', inNone.length === 0);
+  });
+
   console.log('\n────────────────────────────────────────');
   console.log(`  ${pass} passed,  ${fail} failed`);
   console.log('────────────────────────────────────────\n');

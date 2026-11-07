@@ -22,6 +22,7 @@ import {
   type PublishInput,
   type PublishReceipt,
 } from '../lib/social-platforms';
+import { lintContent } from '../lib/social-platforms/compliance-lint';
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS sp_accounts (
@@ -46,7 +47,13 @@ CREATE TABLE IF NOT EXISTS sp_posts (
   external_id TEXT,
   error TEXT,
   created_at INTEGER NOT NULL,
-  published_at INTEGER
+  published_at INTEGER,
+  -- T124 道检查 + P0-4（2026-11-07）：AIGC 显式标识（《人工智能生成合成
+  -- 内容标识办法》2025-09 施行，法定义务）+ 合规 lint 结果落库可回溯。
+  ai_label INTEGER NOT NULL DEFAULT 1,
+  label_text TEXT NOT NULL DEFAULT '内容由 AI 生成',
+  compliance_json TEXT NOT NULL DEFAULT '{}',
+  ruleset_version TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_sp_posts_status ON sp_posts(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_sp_posts_account ON sp_posts(account_id);
@@ -72,6 +79,19 @@ function db(): Database.Database {
   const key = (conn as { name?: string }).name ?? 'default';
   if (!ready.has(key)) {
     conn.exec(DDL);
+    // 旧库补列（CREATE IF NOT EXISTS 不会给已建表加列）——幂等：PRAGMA 检查
+    // 列存在才 ALTER。新库 DDL 已全列，此处跳过。
+    for (const [col, def] of [
+      ['ai_label', 'INTEGER'],
+      ['label_text', 'TEXT'],
+      ['compliance_json', 'TEXT'],
+      ['ruleset_version', 'TEXT'],
+    ] as const) {
+      const cols = conn.prepare(`PRAGMA table_info(sp_posts)`).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === col)) {
+        conn.exec(`ALTER TABLE sp_posts ADD COLUMN ${col} ${def}`);
+      }
+    }
     ready.add(key);
   }
   return conn;
@@ -110,6 +130,14 @@ export interface PostRow {
   error: string | null;
   created_at: number;
   published_at: number | null;
+  /** P0-4 AIGC 显式标识（默认 1=带标，V07 平台入口未核前保守全带标）。 */
+  ai_label: number;
+  /** 声明文案（默认「内容由 AI 生成」）。 */
+  label_text: string;
+  /** 合规 lint 结果 JSON（LINTResult 整体；未过 lint 也落，含 violations）。 */
+  compliance_json: string;
+  /** 词表版本（可回溯「当时按哪版规则判的」）。 */
+  ruleset_version: string;
 }
 
 export interface PublishLogRow {
@@ -204,6 +232,10 @@ export function createPost(input: {
   content?: string;
   media?: unknown;
   product_id?: string;
+  /** P0-4 AIGC 标识：缺省 true（法定义务 + V07 未核前保守全带标）。 */
+  ai_label?: boolean;
+  /** 声明文案，缺省「内容由 AI 生成」。 */
+  label_text?: string;
 }): PostRow {
   const account = getAccount(String(input.account_id ?? ''));
   if (!account) {
@@ -225,6 +257,18 @@ export function createPost(input: {
     throw new SocialPublishError(400, 'CONTENT_LIMIT', `${spec.name} 正文最多 ${spec.content_max} 字`);
   }
   const media = parseMedia(spec, input.media);
+  // 合规审计（P0-3）：任何写路径自动落 lint 结果，可回溯到词表版本。
+  // 命中不阻断入库——sp_posts 是草稿箱，打回由发布链/人工门决定（T09 语义），
+  // 但 violations 一律留痕。
+  const aiLabel = input.ai_label !== false;
+  const labelText = String(input.label_text ?? '').trim() || '内容由 AI 生成';
+  const lint = lintContent({
+    platform: account.platform,
+    title,
+    content,
+    ai_label: aiLabel,
+    label_text: labelText,
+  });
   const row: PostRow = {
     id: randomUUID(),
     account_id: account.id,
@@ -238,13 +282,19 @@ export function createPost(input: {
     error: null,
     created_at: Date.now(),
     published_at: null,
+    ai_label: aiLabel ? 1 : 0,
+    label_text: labelText,
+    compliance_json: JSON.stringify(lint),
+    ruleset_version: lint.ruleset_version,
   };
   db()
     .prepare(
       `INSERT INTO sp_posts (id, account_id, platform, title, content, media, product_id, status,
-                             external_id, error, created_at, published_at)
+                             external_id, error, created_at, published_at,
+                             ai_label, label_text, compliance_json, ruleset_version)
        VALUES (@id, @account_id, @platform, @title, @content, @media, @product_id, @status,
-               @external_id, @error, @created_at, @published_at)`,
+               @external_id, @error, @created_at, @published_at,
+               @ai_label, @label_text, @compliance_json, @ruleset_version)`,
     )
     .run(row);
   return row;

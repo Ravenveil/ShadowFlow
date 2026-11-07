@@ -20,6 +20,20 @@ export interface ProjectRecord {
   design_system_id: string | null;
   created_at: string;
   updated_at: string;
+  /** T03/BE-02 营销录入：客户/机构名。 */
+  client_name: string;
+  /** 营销目标。 */
+  goal: string;
+  /** 服务周期（自由文本，如 2026-11~2026-12）。 */
+  period: string;
+  /** 预算（自由文本，如 ¥499/月）。 */
+  budget: string;
+  /** 交付物清单（结构化数组，落库为 JSON 文本）。 */
+  deliverables: string[];
+  /** 营销 Brief 全文。 */
+  brief: string;
+  /** T02/BE-02 空间归属（ws-*）。空串=未归属空间。 */
+  workspace_id: string;
 }
 
 interface ProjectRow {
@@ -30,6 +44,24 @@ interface ProjectRow {
   design_system_id: string | null;
   created_at: string;
   updated_at: string;
+  client_name: string | null;
+  goal: string | null;
+  period: string | null;
+  budget: string | null;
+  deliverables: string | null;
+  brief: string | null;
+  workspace_id: string | null;
+}
+
+/** deliverables 落库为 JSON 文本；坏数据/缺列回退空数组，绝不炸读取链。 */
+function parseDeliverables(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function rowToRecord(r: ProjectRow): ProjectRecord {
@@ -41,13 +73,29 @@ function rowToRecord(r: ProjectRow): ProjectRecord {
     design_system_id: r.design_system_id,
     created_at: r.created_at,
     updated_at: r.updated_at,
+    client_name: r.client_name ?? '',
+    goal: r.goal ?? '',
+    period: r.period ?? '',
+    budget: r.budget ?? '',
+    deliverables: parseDeliverables(r.deliverables),
+    brief: r.brief ?? '',
+    workspace_id: r.workspace_id ?? '',
   };
 }
 
-export function listProjects(): ProjectRecord[] {
-  const rows = getDb()
-    .prepare(`SELECT * FROM projects ORDER BY updated_at DESC`)
-    .all() as ProjectRow[];
+/**
+ * 项目列表。`workspace_id` 传入时只返回该空间的项目（T02/BE-02 空间隔离：
+ * 此前 ?workspace_id= 被忽略返回全量，多机构并行必串数据）。
+ */
+export function listProjects(workspace_id?: string): ProjectRecord[] {
+  const rows =
+    workspace_id && workspace_id.length > 0
+      ? (getDb()
+          .prepare(`SELECT * FROM projects WHERE workspace_id = ? ORDER BY updated_at DESC`)
+          .all(workspace_id) as ProjectRow[])
+      : (getDb()
+          .prepare(`SELECT * FROM projects ORDER BY updated_at DESC`)
+          .all() as ProjectRow[]);
   return rows.map(rowToRecord);
 }
 
@@ -63,6 +111,14 @@ export interface CreateProjectInput {
   workspace_path?: string;
   skill_id?: string | null;
   design_system_id?: string | null;
+  /** T03/BE-02 营销录入七字段（全部可选，缺省空）。 */
+  client_name?: string;
+  goal?: string;
+  period?: string;
+  budget?: string;
+  deliverables?: string[];
+  brief?: string;
+  workspace_id?: string;
 }
 
 export function createProject(input: CreateProjectInput): ProjectRecord {
@@ -85,23 +141,7 @@ export function createProject(input: CreateProjectInput): ProjectRecord {
     );
   }
 
-  getDb()
-    .prepare(
-      `INSERT INTO projects
-       (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      project_id,
-      input.name,
-      workspace_path,
-      input.skill_id ?? null,
-      input.design_system_id ?? null,
-      now,
-      now,
-    );
-
-  return {
+  const row: ProjectRow = {
     project_id,
     name: input.name,
     workspace_path,
@@ -109,7 +149,40 @@ export function createProject(input: CreateProjectInput): ProjectRecord {
     design_system_id: input.design_system_id ?? null,
     created_at: now,
     updated_at: now,
+    client_name: input.client_name ?? '',
+    goal: input.goal ?? '',
+    period: input.period ?? '',
+    budget: input.budget ?? '',
+    deliverables: JSON.stringify(input.deliverables ?? []),
+    brief: input.brief ?? '',
+    workspace_id: input.workspace_id ?? '',
   };
+
+  getDb()
+    .prepare(
+      `INSERT INTO projects
+       (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at,
+        client_name, goal, period, budget, deliverables, brief, workspace_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      row.project_id,
+      row.name,
+      row.workspace_path,
+      row.skill_id,
+      row.design_system_id,
+      row.created_at,
+      row.updated_at,
+      row.client_name,
+      row.goal,
+      row.period,
+      row.budget,
+      row.deliverables,
+      row.brief,
+      row.workspace_id,
+    );
+
+  return rowToRecord(row);
 }
 
 export interface UpdateProjectInput {
@@ -117,6 +190,13 @@ export interface UpdateProjectInput {
   workspace_path?: string;
   skill_id?: string | null;
   design_system_id?: string | null;
+  client_name?: string;
+  goal?: string;
+  period?: string;
+  budget?: string;
+  deliverables?: string[];
+  brief?: string;
+  workspace_id?: string;
 }
 
 export function updateProject(
@@ -136,13 +216,27 @@ export function updateProject(
     ...('design_system_id' in patch
       ? { design_system_id: patch.design_system_id ?? null }
       : {}),
+    ...('client_name' in patch && patch.client_name !== undefined
+      ? { client_name: patch.client_name }
+      : {}),
+    ...('goal' in patch && patch.goal !== undefined ? { goal: patch.goal } : {}),
+    ...('period' in patch && patch.period !== undefined ? { period: patch.period } : {}),
+    ...('budget' in patch && patch.budget !== undefined ? { budget: patch.budget } : {}),
+    ...('deliverables' in patch && patch.deliverables !== undefined
+      ? { deliverables: patch.deliverables }
+      : {}),
+    ...('brief' in patch && patch.brief !== undefined ? { brief: patch.brief } : {}),
+    ...('workspace_id' in patch && patch.workspace_id !== undefined
+      ? { workspace_id: patch.workspace_id }
+      : {}),
     updated_at: new Date().toISOString(),
   };
 
   getDb()
     .prepare(
       `UPDATE projects
-       SET name = ?, workspace_path = ?, skill_id = ?, design_system_id = ?, updated_at = ?
+       SET name = ?, workspace_path = ?, skill_id = ?, design_system_id = ?, updated_at = ?,
+           client_name = ?, goal = ?, period = ?, budget = ?, deliverables = ?, brief = ?, workspace_id = ?
        WHERE project_id = ?`,
     )
     .run(
@@ -151,6 +245,13 @@ export function updateProject(
       merged.skill_id,
       merged.design_system_id,
       merged.updated_at,
+      merged.client_name,
+      merged.goal,
+      merged.period,
+      merged.budget,
+      JSON.stringify(merged.deliverables),
+      merged.brief,
+      merged.workspace_id,
       id,
     );
 
@@ -197,8 +298,9 @@ export function getOrCreateProject(
     getDb()
       .prepare(
         `INSERT OR IGNORE INTO projects
-         (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (project_id, name, workspace_path, skill_id, design_system_id, created_at, updated_at,
+          client_name, goal, period, budget, deliverables, brief, workspace_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '', '', '[]', '', '')`,
       )
       .run(project_id, name, workspace_path, null, null, now, now);
   } catch (err) {
@@ -219,6 +321,13 @@ export function getOrCreateProject(
     design_system_id: null,
     created_at: now,
     updated_at: now,
+    client_name: '',
+    goal: '',
+    period: '',
+    budget: '',
+    deliverables: [],
+    brief: '',
+    workspace_id: '',
   };
 }
 

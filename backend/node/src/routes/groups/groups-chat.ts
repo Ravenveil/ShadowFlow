@@ -1333,7 +1333,13 @@ async function runFanout(
             // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
             const thinkStream = createThinkingTagStream();
             try {
-              const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
+              const callable = resolveCallable(executor, {
+                apiKey,
+                model,
+                workspace: wt?.dir ?? workspace,
+                // T12/BE-07 成本归属：run=群 turn、agent=被调 agent、session=群。
+                usageCtx: { session_id: groupId, run_id: gw?.turnId ?? '', agent_id: agentId },
+              });
               for await (const chunk of callable.turn({
                 // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
                 system: soul + chatLessonsBlock(agentId),
@@ -1592,7 +1598,13 @@ async function runFanout(
       // worktree 隔离 — 该 agent 专属目录（git 仓库 workspace 时）。
       const wt = serialWt.get(agentId);
       try {
-        const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
+        const callable = resolveCallable(executor, {
+          apiKey,
+          model,
+          workspace: wt?.dir ?? workspace,
+          // T12/BE-07 成本归属：串行路径同口径（run=群 turn、agent=被调 agent）。
+          usageCtx: { session_id: groupId, run_id: gw?.turnId ?? '', agent_id: agentId },
+        });
         for await (const chunk of callable.turn({
           // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
           system: soul + chatLessonsBlock(agentId),
