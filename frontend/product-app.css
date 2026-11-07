@@ -4508,3 +4508,162 @@
   align-items: center;
   gap: 6px;
 }
+
+/* ── 生意看板（手工艺品代销业务域） ─────────────────────────── */
+.sf-biz-kpi {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 22px;
+}
+.sf-biz-kpi-card {
+  border: 1px solid #ded7cc;
+  border-radius: 12px;
+  background: #fffdf9;
+  padding: 13px 15px;
+}
+.sf-biz-kpi-card p {
+  color: #99938c;
+  font-size: 10px;
+}
+.sf-biz-kpi-card strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 19px;
+  color: #3c3833;
+}
+.sf-biz-kpi-card span {
+  display: block;
+  margin-top: 3px;
+  color: #b3ada4;
+  font-size: 9px;
+}
+.sf-biz-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.sf-biz-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e6e0d6;
+  border-radius: 999px;
+  background: #fffdf9;
+  padding: 6px 12px;
+}
+.sf-biz-step > span {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ece7de;
+  color: #8c867f;
+  font-size: 9px;
+}
+.sf-biz-step.done > span {
+  background: #e4f5ef;
+  color: #16a34a;
+}
+.sf-biz-step strong {
+  font-size: 10px;
+  color: #4c4741;
+}
+.sf-biz-step small {
+  color: #99938c;
+  font-size: 9px;
+}
+.sf-biz-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 22px;
+  border-bottom: 1px solid #e6e0d6;
+  padding-bottom: 8px;
+}
+.sf-biz-tabs button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  padding: 5px 13px;
+  color: #8c867f;
+  font-size: 10px;
+  cursor: pointer;
+}
+.sf-biz-tabs button.active {
+  border-color: #ded7cc;
+  background: #fffdf9;
+  color: #ff5e3a;
+  font-weight: 650;
+}
+.sf-biz-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+.sf-biz-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.sf-biz-table th {
+  text-align: left;
+  color: #99938c;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e6e0d6;
+}
+.sf-biz-table td {
+  color: #4c4741;
+  font-size: 10px;
+  padding: 10px;
+  border-bottom: 1px solid #f0ebe2;
+}
+.sf-biz-empty {
+  color: #b3ada4;
+  text-align: center;
+  padding: 26px 10px !important;
+}
+.sf-biz-badge {
+  display: inline-block;
+  border-radius: 999px;
+  background: #ece7de;
+  color: #8c867f;
+  padding: 2px 8px;
+  font-size: 9px;
+}
+.sf-biz-badge.ok {
+  background: #e4f5ef;
+  color: #16a34a;
+}
+.sf-biz-badge.warn {
+  background: #fdf1dd;
+  color: #b45309;
+}
+.sf-biz-badge.bad {
+  background: #fde8e4;
+  color: #dc2626;
+}
+.sf-biz-err {
+  display: block;
+  margin-top: 3px;
+  color: #dc2626;
+  font-size: 8px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-biz-act {
+  padding: 2px 9px;
+  border: 1px solid #ded7cc;
+  border-radius: 999px;
+  background: #fff;
+  color: #55525c;
+  font-size: 10px;
+  cursor: pointer;
+}
+.sf-biz-act:hover {
+  border-color: #ff5e3a;
+  color: #ff5e3a;
+}

@@ -118,9 +118,12 @@ function normalizePlatform(raw: string): string {
   return hit ? hit.id : 'xiaohongshu';
 }
 
-/** 代卖演示账号（每平台一个 mock 账号，幂等复用）。 */
+/** 发布账号选择：优先 real 账号（真实发布），否则复用/创建 mock 演示账号（幂等）。 */
 function ensureSocialAccount(platformId: string): string {
-  const existing = listAccounts().find((a) => a.platform === platformId && a.auth_mode === 'mock');
+  const accounts = listAccounts().filter((a) => a.platform === platformId);
+  const real = accounts.find((a) => a.auth_mode === 'real');
+  if (real) return real.id;
+  const existing = accounts.find((a) => a.auth_mode === 'mock');
   if (existing) return existing.id;
   const spec = PLATFORMS.find((p) => p.id === platformId);
   return createAccount({

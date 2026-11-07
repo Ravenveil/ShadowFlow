@@ -35,6 +35,8 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Store,
+  Truck,
   UserRound,
   Users,
   X,
@@ -100,12 +102,13 @@ function SfLoadTag({ state, okText }: { state: SfLoadState; okText?: string }) {
   return okText ? <p className="sf-live-tag on">{okText}</p> : null;
 }
 
-type View = "chat" | "agents" | "knowledge" | "dashboard" | "projects" | "schedules" | "settings";
+type View = "chat" | "agents" | "knowledge" | "dashboard" | "biz" | "projects" | "schedules" | "settings";
 
 const viewCopy: Record<Exclude<View, "chat">, { title: string; subtitle: string }> = {
   agents: { title: "Agent 团队", subtitle: "管理角色、能力与协作关系" },
   knowledge: { title: "知识库", subtitle: "管理团队共享的知识与上下文" },
   dashboard: { title: "数据看板", subtitle: "用量、成本、Run 成功率与每日简报" },
+  biz: { title: "生意看板", subtitle: "手工艺品代销：商品、销售、快递、社媒与盈利" },
   projects: { title: "项目", subtitle: "管理工作空间、会话与交付成果" },
   schedules: { title: "定时任务", subtitle: "管理所有 Agent 的周期与一次性计划" },
   settings: { title: "设置", subtitle: "模型、Skills、集成、记忆与工作空间" },
@@ -142,9 +145,8 @@ function groupPreview(group: GroupRecord): string {
 }
 
 /**
- * 展示口径的 6 名部门核心员工（对齐后端 .shadowflow/agents 内置 agent：
- * agent-market-analyst / agent-brand-strategist / agent-content-creator /
- * agent-ops-specialist / agent-biz-developer / agent-compliance-reviewer）。
+ * 展示口径的 6 名部门核心员工（对齐后端 .shadowflow/agents 的手工艺品代卖团队成员，
+ * 由 craft-team-setup 播种；旧「AI 营销公司」seed 编制已于 2026-11-08 清理）。
  * 后端不可达时作为各视图的兜底占位数据；id 同时用作 DEMO_TEAM 的 DAG 节点 id。
  */
 const agents = [
@@ -199,7 +201,7 @@ const agents = [
 ];
 
 /** 后端内置的调度中枢 / 服务账号不计入「AI 员工」展示（员工恒为 6 名部门核心员工）。 */
-const HIDDEN_AGENT_IDS = new Set(["agent-ceo", "agent-shadow-secretary"]);
+const HIDDEN_AGENT_IDS = new Set(["agent-shadow-secretary"]);
 
 /** 「AI 员工」展示口径：API 列表过滤掉内置中枢与秘书。 */
 function displayAgents(list: AgentRecord[]): AgentRecord[] {
@@ -338,14 +340,14 @@ export default function ProductApp() {
     if (window.innerWidth <= 820) setPanelOpen(false);
   }
 
-  /** 「董事长」置顶：resolve DM（agent-ceo）→ 打开；失败回落第一个 agent 的 DM。 */
+  /** 「董事长」置顶：resolve DM（总经理 agent-shadow-secretary）→ 打开；失败回落第一个 agent 的 DM。 */
   async function openCeoDm() {
-    const candidates = ["agent-ceo", ...agentsList.map((a) => a.agent_id)];
+    const candidates = ["agent-shadow-secretary", ...agentsList.map((a) => a.agent_id)];
     for (const agentId of candidates) {
       try {
         const res = await resolveDm(agentId);
         if (res?.group_id) {
-          const label = agentId === "agent-ceo" ? "董事长" : agentsList.find((a) => a.agent_id === agentId)?.name || "单聊";
+          const label = agentId === "agent-shadow-secretary" ? "董事长" : agentsList.find((a) => a.agent_id === agentId)?.name || "单聊";
           setActiveGroupId(res.group_id);
           setActiveTitle(label);
           setView("chat");
@@ -694,6 +696,10 @@ export default function ProductApp() {
           >
             <BarChart3 size={17} />
             <span>数据看板</span>
+          </button>
+          <button className={view === "biz" ? "active" : ""} onClick={() => navigate("biz")}>
+            <Store size={17} />
+            <span>生意看板</span>
           </button>
         </nav>
 
@@ -1193,9 +1199,11 @@ export default function ProductApp() {
                               <p className="sf-plus-group">发布通道</p>
                               {plusConnectors === null && <p className="sf-plus-note">加载中…</p>}
                               {(() => {
-                                const xhs = plusConnectors?.accounts.find((a) =>
+                                const xhsAccounts = plusConnectors?.accounts.filter((a) =>
                                   a.platform.includes("xiaohongshu"),
                                 );
+                                const xhs =
+                                  xhsAccounts?.find((a) => a.auth_mode === "real") ?? xhsAccounts?.[0];
                                 const xhsStatus = xhs
                                   ? `${xhs.auth_mode === "real" ? "真实发布" : "mock 演示"}${xhs.account_name ? ` · ${xhs.account_name}` : ""}`
                                   : "未配置账号 · 默认 mock 演示";
@@ -1292,6 +1300,7 @@ export default function ProductApp() {
         {view === "agents" && <AgentsView />}
         {view === "knowledge" && <KnowledgeView />}
         {view === "dashboard" && <DashboardView />}
+        {view === "biz" && <BizView />}
         {view === "projects" && <ProjectsView />}
         {view === "schedules" && <SchedulesView />}
         {view === "settings" && <SettingsView />}
@@ -3404,6 +3413,437 @@ function DashboardView() {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+// ── 生意看板（手工艺品代销业务域）──────────────────────────────────────────
+// 数据全部来自后端：/api/craft-profit（商品/销售/盈利）、/api/ops（快递/运营步骤）、
+// /api/social-publish（社媒账号/帖子）。不再回落演示假数据——空就是空。
+
+type BizOverview = {
+  sales_count: number;
+  units: number;
+  revenue_cents: number;
+  cost_cents: number;
+  shipping_cents: number;
+  profit_cents: number;
+  margin_pct: number | null;
+};
+type BizProduct = {
+  id: string;
+  name: string;
+  price_cents: number;
+  cost_cents: number;
+  shipping_cents: number;
+  sold_units: number;
+  revenue_cents: number;
+  profit_cents: number;
+};
+type BizSale = {
+  id: string;
+  product_name: string;
+  qty: number;
+  price_cents: number;
+  status: string;
+  tracking: string;
+  created_at: number;
+  profit_cents: number;
+};
+type BizShipment = {
+  id: string;
+  carrier: string;
+  mode: string;
+  tracking_no: string;
+  receiver_name: string;
+  receiver_address: string;
+  status: string;
+  remark: string;
+  created_at: number;
+  shipped_at: number | null;
+};
+type BizPost = {
+  id: string;
+  platform: string;
+  title: string;
+  content: string;
+  status: string;
+  external_id: string | null;
+  error: string | null;
+  created_at: number;
+  published_at: number | null;
+};
+type BizOpsStep = {
+  key: string;
+  name: string;
+  count: number;
+  done: boolean;
+  gap: string[];
+  next_hint: string;
+};
+
+/** 分 → 元。 */
+function fmtYuan(cents: number): string {
+  return `¥${(cents / 100).toFixed(2)}`;
+}
+/** 毫秒时间戳 → MM-DD HH:mm。 */
+function fmtBizTime(ts: number | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+const BIZ_POST_STATUS: Record<string, { label: string; cls: string }> = {
+  published: { label: "已发布", cls: "ok" },
+  failed: { label: "失败", cls: "bad" },
+  draft: { label: "草稿", cls: "" },
+};
+const BIZ_SALE_STATUS: Record<string, { label: string; cls: string }> = {
+  shipped: { label: "已发货", cls: "ok" },
+  pending: { label: "待发货", cls: "warn" },
+  refunded: { label: "已退款", cls: "bad" },
+};
+
+function BizView() {
+  const [tab, setTab] = useState<"overview" | "products" | "sales" | "shipments" | "posts">("overview");
+  const [state, setState] = useState<SfLoadState>("loading");
+  const [ov, setOv] = useState<BizOverview | null>(null);
+  const [products, setProducts] = useState<BizProduct[]>([]);
+  const [sales, setSales] = useState<BizSale[]>([]);
+  const [shipments, setShipments] = useState<BizShipment[]>([]);
+  const [posts, setPosts] = useState<BizPost[]>([]);
+  const [steps, setSteps] = useState<BizOpsStep[]>([]);
+  const load = useCallback(() => {
+    setState("loading");
+    sfFetch<BizOverview>("/api/craft-profit/overview")
+      .then((d) => {
+        setOv(d);
+        setState("ready");
+      })
+      .catch(() => {
+        setOv(null);
+        setState("error");
+      });
+    sfFetch<{ items?: BizProduct[] }>("/api/craft-profit/products")
+      .then((d) => setProducts(d.items ?? []))
+      .catch(() => setProducts([]));
+    sfFetch<{ items?: BizSale[] }>("/api/craft-profit/sales")
+      .then((d) => setSales(d.items ?? []))
+      .catch(() => setSales([]));
+    sfFetch<{ shipments?: BizShipment[] }>("/api/ops/shipments")
+      .then((d) => setShipments(d.shipments ?? []))
+      .catch(() => setShipments([]));
+    sfFetch<{ posts?: BizPost[] }>("/api/social-publish/posts")
+      .then((d) => setPosts(d.posts ?? []))
+      .catch(() => setPosts([]));
+    sfFetch<{ steps?: BizOpsStep[] }>("/api/ops/overview")
+      .then((d) => setSteps(d.steps ?? []))
+      .catch(() => setSteps([]));
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  /** 发布/重试发布帖子（POST /api/social-publish/posts/:id/publish）。 */
+  async function publishPost(id: string) {
+    try {
+      await sfFetch(`/api/social-publish/posts/${id}/publish`, { method: "POST" });
+    } finally {
+      load();
+    }
+  }
+  /** 发货（POST /api/ops/shipments/:id/ship，mock/真实由运单 mode 决定）。 */
+  async function shipShipment(id: string) {
+    try {
+      await sfFetch(`/api/ops/shipments/${id}/ship`, { method: "POST" });
+    } finally {
+      load();
+    }
+  }
+
+  const kpis: Array<[string, string, string]> = [
+    ["营收", ov ? fmtYuan(ov.revenue_cents) : "—", "近 30 天"],
+    ["盈利", ov ? fmtYuan(ov.profit_cents) : "—", ov?.margin_pct != null ? `利润率 ${ov.margin_pct}%` : "利润率 —"],
+    ["售出", ov ? `${ov.units} 件` : "—", ov ? `${ov.sales_count} 单` : "—"],
+    ["成本", ov ? fmtYuan(ov.cost_cents + ov.shipping_cents) : "—", "货本 + 运费"],
+  ];
+
+  return (
+    <section className="sf-subview">
+      <div className="sf-subview-intro">
+        <div>
+          <p>BUSINESS BOARD</p>
+          <h1>生意看板</h1>
+          <span>手工艺品代销：商品、销售、快递、社媒与盈利，实时同步自后端业务域。</span>
+        </div>
+        <button onClick={load}>
+          <RotateCcw size={15} /> 刷新
+        </button>
+      </div>
+      <SfLoadTag state={state} okText="业务数据已同步" />
+
+      <div className="sf-biz-kpi">
+        {kpis.map(([label, value, sub]) => (
+          <article key={label} className="sf-biz-kpi-card">
+            <p>{label}</p>
+            <strong>{value}</strong>
+            <span>{sub}</span>
+          </article>
+        ))}
+      </div>
+
+      {steps.length > 0 && (
+        <div className="sf-biz-steps">
+          {steps.map((s) => (
+            <div key={s.key} className={`sf-biz-step ${s.done ? "done" : ""}`} title={s.next_hint}>
+              <span>{s.done ? "✓" : "·"}</span>
+              <strong>{s.name}</strong>
+              <small>{s.done ? `${s.count} 项完成` : s.gap[0] || `${s.count} 项`}</small>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="sf-biz-tabs">
+        {(
+          [
+            ["overview", "总览"],
+            ["products", `商品 ${products.length}`],
+            ["sales", `销售 ${sales.length}`],
+            ["shipments", `快递 ${shipments.length}`],
+            ["posts", `社媒 ${posts.length}`],
+          ] as Array<[typeof tab, string]>
+        ).map(([key, label]) => (
+          <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div className="sf-biz-table-wrap">
+          <table className="sf-biz-table">
+            <thead>
+              <tr>
+                <th>指标</th>
+                <th>数值</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>营收</td>
+                <td>{ov ? fmtYuan(ov.revenue_cents) : "—"}</td>
+                <td>全部销售流水</td>
+              </tr>
+              <tr>
+                <td>货本</td>
+                <td>{ov ? fmtYuan(ov.cost_cents) : "—"}</td>
+                <td>商品成本合计</td>
+              </tr>
+              <tr>
+                <td>运费</td>
+                <td>{ov ? fmtYuan(ov.shipping_cents) : "—"}</td>
+                <td>快递费用合计</td>
+              </tr>
+              <tr>
+                <td>盈利</td>
+                <td>{ov ? fmtYuan(ov.profit_cents) : "—"}</td>
+                <td>营收 − 货本 − 运费</td>
+              </tr>
+              <tr>
+                <td>利润率</td>
+                <td>{ov?.margin_pct != null ? `${ov.margin_pct}%` : "—"}</td>
+                <td>盈利 / 营收</td>
+              </tr>
+              <tr>
+                <td>社媒发布</td>
+                <td>{posts.filter((p) => p.status === "published").length} / {posts.length}</td>
+                <td>已发布帖子 / 全部帖子</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "products" && (
+        <div className="sf-biz-table-wrap">
+          <table className="sf-biz-table">
+            <thead>
+              <tr>
+                <th>商品</th>
+                <th>售价</th>
+                <th>货本</th>
+                <th>运费</th>
+                <th>已售</th>
+                <th>营收</th>
+                <th>盈利</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="sf-biz-empty">
+                    还没有商品 —— 让团队执行 [intake] 登记商品
+                  </td>
+                </tr>
+              )}
+              {products.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.name}</td>
+                  <td>{fmtYuan(p.price_cents)}</td>
+                  <td>{fmtYuan(p.cost_cents)}</td>
+                  <td>{fmtYuan(p.shipping_cents)}</td>
+                  <td>{p.sold_units}</td>
+                  <td>{fmtYuan(p.revenue_cents)}</td>
+                  <td>{fmtYuan(p.profit_cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "sales" && (
+        <div className="sf-biz-table-wrap">
+          <table className="sf-biz-table">
+            <thead>
+              <tr>
+                <th>商品</th>
+                <th>数量</th>
+                <th>单价</th>
+                <th>状态</th>
+                <th>快递单号</th>
+                <th>时间</th>
+                <th>盈利</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="sf-biz-empty">
+                    还没有销售记录 —— 让团队执行 [order] 登记订单
+                  </td>
+                </tr>
+              )}
+              {sales.map((s) => {
+                const st = BIZ_SALE_STATUS[s.status] ?? { label: s.status, cls: "" };
+                return (
+                  <tr key={s.id}>
+                    <td>{s.product_name || "—"}</td>
+                    <td>{s.qty}</td>
+                    <td>{fmtYuan(s.price_cents)}</td>
+                    <td>
+                      <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
+                    </td>
+                    <td>{s.tracking || "—"}</td>
+                    <td>{fmtBizTime(s.created_at)}</td>
+                    <td>{fmtYuan(s.profit_cents)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "shipments" && (
+        <div className="sf-biz-table-wrap">
+          <table className="sf-biz-table">
+            <thead>
+              <tr>
+                <th>承运</th>
+                <th>运单号</th>
+                <th>收件人</th>
+                <th>状态</th>
+                <th>寄出时间</th>
+                <th>备注</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shipments.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="sf-biz-empty">
+                    还没有快递单 —— 让团队执行 [ship] 寄件
+                  </td>
+                </tr>
+              )}
+              {shipments.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    {s.carrier.toUpperCase()} · {s.mode}
+                  </td>
+                  <td>{s.tracking_no || "—"}</td>
+                  <td>{s.receiver_name}</td>
+                  <td>
+                    <span className={`sf-biz-badge ${s.status === "shipped" ? "ok" : "warn"}`}>
+                      {s.status === "shipped" ? "已寄出" : s.status}
+                    </span>
+                  </td>
+                  <td>{fmtBizTime(s.shipped_at)}</td>
+                  <td>{s.remark || "—"}</td>
+                  <td>
+                    {s.status !== "shipped" && (
+                      <button className="sf-biz-act" onClick={() => void shipShipment(s.id)}>
+                        发货
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "posts" && (
+        <div className="sf-biz-table-wrap">
+          <table className="sf-biz-table">
+            <thead>
+              <tr>
+                <th>平台</th>
+                <th>标题</th>
+                <th>状态</th>
+                <th>外部 ID</th>
+                <th>时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {posts.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="sf-biz-empty">
+                    还没有帖子 —— 让团队执行 [post] 发帖
+                  </td>
+                </tr>
+              )}
+              {posts.map((p) => {
+                const st = BIZ_POST_STATUS[p.status] ?? { label: p.status, cls: "" };
+                return (
+                  <tr key={p.id}>
+                    <td>{p.platform}</td>
+                    <td title={p.content}>{p.title || "（无标题）"}</td>
+                    <td>
+                      <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
+                      {p.error ? <small className="sf-biz-err">{p.error}</small> : null}
+                    </td>
+                    <td>{p.external_id || "—"}</td>
+                    <td>{fmtBizTime(p.published_at ?? p.created_at)}</td>
+                    <td>
+                      {p.status !== "published" && (
+                        <button className="sf-biz-act" onClick={() => void publishPost(p.id)}>
+                          发布
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
