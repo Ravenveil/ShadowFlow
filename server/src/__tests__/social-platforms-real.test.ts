@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeAll, afterEach, beforeEach } from 'vitest';
 import { getAdapter } from '../lib/social-platforms';
+import { marketingCopy } from '../lib/social-platforms/copy';
 
 // ── fetch mock 基建 ───────────────────────────────────────────────────────────
 
@@ -422,5 +423,124 @@ describe('网络失败映射', () => {
     const receipt = await adapter.publish('p', { title: '', content: 'c', media: [] }, 1);
     expect(receipt.ok).toBe(false);
     expect(receipt.code).toBe('NETWORK_ERROR');
+  });
+});
+
+// ── 平台长度限制边界契约（审计缺口⑤）────────────────────────────────────────
+// 两种策略要分清：weibo 是**拒绝**（PLATFORM_LIMIT 回执、零网络调用），
+// douyin/kuaishou 是**截断**（caption slice 到 content_max 照发）。
+// 长度一律按 JS string.length（UTF-16 code unit）计——emoji 算 2、截断可能
+// 劈开代理对，这是当前钉死的契约；将来换 grapheme 截断时同步更新本组用例。
+
+describe('weibo 拒绝策略：140 字边界逐字钉死', () => {
+  it('恰好 140 字（title+空格+content 拼接后）放行，真的发出去', async () => {
+    clearEnv();
+    process.env.SP_WEIBO_ACCESS_TOKEN = 'wb-tok';
+    responder = () => jsonRes({ idstr: 'w-140' });
+    const adapter = getAdapter('weibo', 'real');
+    // 40 + 1（拼接空格）+ 99 = 140
+    const receipt = await adapter.publish('p', { title: 't'.repeat(40), content: 'c'.repeat(99), media: [] }, 1);
+    expect(receipt.ok).toBe(true);
+    expect(receipt.external_id).toBe('w-140');
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  it('超一字（141）→ PLATFORM_LIMIT：文案带上限与当前字数，且零网络调用', async () => {
+    clearEnv();
+    process.env.SP_WEIBO_ACCESS_TOKEN = 'wb-tok';
+    const adapter = getAdapter('weibo', 'real');
+    const receipt = await adapter.publish('p', { title: '', content: 'x'.repeat(141), media: [] }, 1);
+    expect(receipt.ok).toBe(false);
+    expect(receipt.code).toBe('PLATFORM_LIMIT');
+    expect(receipt.error).toContain('140');
+    expect(receipt.error).toContain('141');
+    // 拒绝发生在发请求之前：一次 fetch 都不该有
+    expect(calls).toHaveLength(0);
+  });
+
+  it('按拼接后总长计（title+空格+content），不是标题正文分别计', async () => {
+    clearEnv();
+    process.env.SP_WEIBO_ACCESS_TOKEN = 'wb-tok';
+    const adapter = getAdapter('weibo', 'real');
+    // 70 + 1 + 70 = 141：title、content 各自都不超 140，拼起来超 → 拒
+    const receipt = await adapter.publish('p', { title: 't'.repeat(70), content: 'c'.repeat(70), media: [] }, 1);
+    expect(receipt.code).toBe('PLATFORM_LIMIT');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('长度按 UTF-16 code unit 计：70 个 emoji（140 unit）放行，71 个（142）拒绝', async () => {
+    clearEnv();
+    process.env.SP_WEIBO_ACCESS_TOKEN = 'wb-tok';
+    responder = () => jsonRes({ idstr: 'w-emoji' });
+    const adapter = getAdapter('weibo', 'real');
+    const ok = await adapter.publish('p', { title: '', content: '😀'.repeat(70), media: [] }, 1);
+    expect(ok.ok).toBe(true);
+    const bad = await adapter.publish('p', { title: '', content: '😀'.repeat(71), media: [] }, 1);
+    expect(bad.code).toBe('PLATFORM_LIMIT');
+  });
+
+  it('凭证缺失优先于长度检查：无 token 的超长文案回 CREDENTIALS_MISSING', async () => {
+    clearEnv();
+    const adapter = getAdapter('weibo', 'real');
+    const receipt = await adapter.publish('p', { title: '', content: 'x'.repeat(200), media: [] }, 1);
+    expect(receipt.code).toBe('CREDENTIALS_MISSING');
+  });
+});
+
+describe('截断策略：copy.clip 与 douyin/kuaishou caption', () => {
+  it('xhs 标题恰好 20 字不截断，21 字截到 20', () => {
+    // title = `${name}｜手作控必收`（后缀占 6 unit）
+    const exact = marketingCopy({ name: 'n'.repeat(14), price_cents: 2900 }, 'xiaohongshu');
+    expect(exact.title).toHaveLength(20);
+    expect(exact.title.endsWith('手作控必收')).toBe(true);
+    const over = marketingCopy({ name: 'n'.repeat(15), price_cents: 2900 }, 'xiaohongshu');
+    expect(over.title).toHaveLength(20);
+  });
+
+  it('未知平台走默认规格：title_max=0 不截标题，content 按默认 500 截', () => {
+    const copy = marketingCopy({ name: 'x'.repeat(600), price_cents: 2900 }, 'mystery-platform');
+    expect(copy.title).toHaveLength(600); // clip(_, 0) = 原样
+    expect(copy.content).toHaveLength(500); // spec 缺省 content_max=500
+  });
+
+  it('截断按 code unit slice，会劈开 emoji 代理对（现契约，douyin title_max=55）', () => {
+    // '😀' = 2 unit；60 unit > 55 → slice(0,55) = 27 整 emoji + 前半个代理对
+    const copy = marketingCopy({ name: '😀'.repeat(30), price_cents: 2900 }, 'douyin');
+    expect(copy.title).toHaveLength(55);
+    expect(copy.title).toBe('😀'.repeat(27) + '\uD83D');
+  });
+
+  it('douyin/kuaishou 超长 caption 截到 content_max 照发（不拒绝）', async () => {
+    clearEnv();
+    process.env.SP_DOUYIN_ACCESS_TOKEN = 'dy-tok';
+    process.env.SP_DOUYIN_OPEN_ID = 'dy-open';
+    responder = (url) => {
+      if (url.includes('/video/upload_video/')) {
+        return jsonRes({ data: { error_code: 0, video: { video_id: 'vid-enc' } }, extra: { error_code: 0 } });
+      }
+      return jsonRes({ data: { error_code: 0, item_id: 'item-9' }, extra: { error_code: 0 } });
+    };
+    const dy = getAdapter('douyin', 'real');
+    const dyReceipt = await dy.publish('p', { title: 't'.repeat(600), content: 'c'.repeat(600), media: ['https://assets/v.mp4'] }, 1);
+    expect(dyReceipt.ok).toBe(true);
+    const text = jsonOf(call('/video/create_video/')).text as string;
+    expect(text).toHaveLength(1000); // douyin content_max=1000
+    expect(text.startsWith('tttt')).toBe(true);
+
+    calls = [];
+    clearEnv();
+    process.env.SP_KUAISHOU_ACCESS_TOKEN = 'ks-tok';
+    process.env.SP_KUAISHOU_APP_ID = 'ks-app';
+    responder = (url) => {
+      if (url.includes('/photo/start_upload')) return jsonRes({ result: 1, upload_token: 'ut-b', endpoint: 'up.test.gifshow.com' });
+      if (url.includes('/api/upload')) return jsonRes({ result: 1 });
+      return jsonRes({ result: 1, video_info: { photo_id: 'ph-b', pending: false } });
+    };
+    const ks = getAdapter('kuaishou', 'real');
+    const ksReceipt = await ks.publish('p', { title: 'k'.repeat(300), content: 'p'.repeat(300), media: ['https://assets/v.mp4', 'https://assets/c.jpg'] }, 1);
+    expect(ksReceipt.ok).toBe(true);
+    const caption = formDataOf(call('/photo/publish')).get('caption') as string;
+    expect(caption).toHaveLength(500); // kuaishou content_max=500
+    expect(caption.startsWith('kkkk')).toBe(true);
   });
 });
