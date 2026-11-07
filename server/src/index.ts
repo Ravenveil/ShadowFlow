@@ -11,57 +11,57 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
-import runSessionsRouter, { shutdownActiveRuns } from './routes/run-sessions';
-import runsRouter from './routes/runs';
-import runSuggestionsRouter from './routes/run-suggestions';
-import agentsRouter from './routes/agents';
-import teamsRouter from './routes/teams';
-import skillsRouter from './routes/skills';
-import designSystemsRouter from './routes/design-systems';
-import exportRouter from './routes/export';
-import settingsRouter from './routes/settings';
-import cliRouter from './routes/cli';
+import runSessionsRouter, { shutdownActiveRuns } from './routes/runs/run-sessions';
+import runsRouter from './routes/runs/runs';
+import runSuggestionsRouter from './routes/runs/run-suggestions';
+import agentsRouter from './routes/agents/agents';
+import teamsRouter from './routes/agents/teams';
+import skillsRouter from './routes/skills/skills';
+import designSystemsRouter from './routes/system/design-systems';
+import exportRouter from './routes/system/export';
+import settingsRouter from './routes/system/settings';
+import cliRouter from './routes/system/cli';
 // ClawHub（2026-06）— 安装会话 REST + SSE
-import clawhubRouter from './routes/clawhub';
-import acpRouter from './routes/acp';
-import { groupsChatRouter } from './routes/groups-chat';
+import clawhubRouter from './routes/skills/clawhub';
+import acpRouter from './routes/system/acp';
+import { groupsChatRouter } from './routes/groups/groups-chat';
 // 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
 // 时挂载，挂在 proxyFallback 之前）。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
-import { groupsNodeRouter, handleDmResolve } from './routes/groups-node';
+import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
-import { fsBrowseRouter } from './routes/fs-browse';
+import { fsBrowseRouter } from './routes/system/fs-browse';
 // 2026-08-19 — 本地仓库知识库(注册表 + 扫描 + 安全读取,Obsidian vault 模式)
-import { knowledgeVaultsRouter } from './routes/knowledge-vaults';
+import { knowledgeVaultsRouter } from './routes/knowledge/knowledge-vaults';
 // Story 15.14 — POST /api/artifacts/lint
-import artifactsRouter from './routes/artifacts';
+import artifactsRouter from './routes/system/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
-import llmRouter from './routes/llm';
-import { detectAll } from './cli-detector';
-import { detectAcpAgents } from './acp-detector';
-import projectsRouter from './routes/projects';
-import memoryEntriesRouter from './routes/memory-entries';
+import llmRouter from './routes/system/llm';
+import { detectAll } from './detectors/cli-detector';
+import { detectAcpAgents } from './detectors/acp-detector';
+import projectsRouter from './routes/projects/projects';
+import memoryEntriesRouter from './routes/memory/memory-entries';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
-import memoryLessonsRouter from './routes/memory-lessons';
-import dashboardRouter from './routes/dashboard';
+import memoryLessonsRouter from './routes/memory/memory-lessons';
+import dashboardRouter from './routes/dashboard/dashboard';
 // 功能线③ 另一半（2026-11-05）：agent 间记忆交接 + 长期画像写回。外接 Router，
 // 主入口只挂一行，不新增服务/端口，也不改既有路由语义。
-import memoryHandoffRouter from './routes/memory-handoff';
+import memoryHandoffRouter from './routes/memory/memory-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
-import merchantBoardRouter from './routes/merchant-board';
+import merchantBoardRouter from './routes/dashboard/merchant-board';
 import conversationsRouter, {
   projectScopedConversationsRouter,
-} from './routes/conversations';
-import authRouter from './routes/auth';
+} from './routes/projects/conversations';
+import authRouter from './routes/system/auth';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
 import { sweepOrphanHops } from './storage/agent-hops';
 import { sweepOrphanRunIndex } from './storage/run-index';
-import { reloadSkills } from './skills';
+import { reloadSkills } from './loaders/skills';
 import {
   reloadDesignSystems,
   seedBuiltinDesignSystems,
-} from './design-systems';
+} from './loaders/design-systems';
 
 const PORT = Number(process.env.PORT ?? 8002);
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://localhost:3007';

@@ -232,7 +232,7 @@ async function main() {
   // ── Test 8: HTTP route integration ─────────────────────────────────────────
   console.log('\n[8] route integration (PUT/GET/DELETE/KEY_FORBIDDEN)');
   await inIsolatedCwd(async () => {
-    const settingsRouter = (await import('../routes/settings')).default;
+    const settingsRouter = (await import('../routes/system/settings')).default;
     const app = express();
     app.use(express.json());
     app.use('/api/settings', settingsRouter);

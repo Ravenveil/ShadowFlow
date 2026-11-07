@@ -22,7 +22,7 @@ import {
   registerPendingApproval,
   swapDagRun,
   tryResolveApprovalFromText,
-} from '../groups-chat';
+} from '../groups/groups-chat';
 
 function settledFlag(p: Promise<unknown>): { done: boolean } {
   const flag = { done: false };

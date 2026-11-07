@@ -26,7 +26,7 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-step-get-'));
   process.chdir(tmp);
-  const mod = await import('../run-sessions');
+  const mod = await import('../runs/run-sessions');
   runSessionsRouter = mod.default;
 });
 

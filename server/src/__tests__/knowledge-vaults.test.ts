@@ -21,7 +21,7 @@ import os from 'os';
 import path from 'path';
 import { walkVault, readVaultTextFile, VaultFsError, type WalkVaultResult } from '../lib/vault-fs';
 import { _resetForTests } from '../storage/sqlite';
-import knowledgeVaultsRouter from '../routes/knowledge-vaults';
+import knowledgeVaultsRouter from '../routes/knowledge/knowledge-vaults';
 
 // ── fixture:一个仿真 Obsidian vault ─────────────────────────────────────────
 

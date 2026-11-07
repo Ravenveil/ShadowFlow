@@ -32,7 +32,7 @@ let tmp: string;
 let origCwd: string;
 let sqlite: typeof import('../storage/sqlite');
 let board: typeof import('../storage/merchant-board');
-let router: typeof import('../routes/merchant-board').default;
+let router: typeof import('../routes/dashboard/merchant-board').default;
 let server: ReturnType<express.Express['listen']>;
 let baseUrl = '';
 let readiness: Readiness;
@@ -44,7 +44,7 @@ beforeAll(async () => {
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
   board = await import('../storage/merchant-board');
-  router = (await import('../routes/merchant-board')).default;
+  router = (await import('../routes/dashboard/merchant-board')).default;
   sqlite.getDb();
 
   // 造两单（成交 + 退款）：第一单五步通、账实一致，与演示口径一致。

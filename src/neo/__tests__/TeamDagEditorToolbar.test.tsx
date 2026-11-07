@@ -34,11 +34,17 @@ vi.mock('reactflow', () => ({
     zoomIn: vi.fn(), zoomOut: vi.fn(), fitView: vi.fn(),
     screenToFlowPosition: vi.fn((p: { x: number; y: number }) => p),
   })),
-  useNodesState: vi.fn((initial: unknown = []) => [initial, vi.fn(), vi.fn()]),
-  useEdgesState: vi.fn((initial: unknown = []) => [initial, vi.fn(), vi.fn()]),
+  // 真状态（2026-11-07）：roster 增员同步要靠 setNodes 更新画布，冻结的
+  // [initial, noop, noop] 测不出「加人进画布」；useState 挂进渲染树即可。
+  useNodesState: vi.fn((initial: unknown = []) => React.useState(initial)),
+  useEdgesState: vi.fn((initial: unknown = []) => React.useState(initial)),
   addEdge: vi.fn((edge: unknown, eds: unknown[]) => [...(eds as unknown[]), edge]),
   applyEdgeChanges: vi.fn(() => []),
   applyNodeChanges: vi.fn(() => []),
+  BaseEdge: ({ path }: { path?: string }) => React.createElement('path', { d: path }),
+  EdgeLabelRenderer: ({ children }: { children?: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
+  getSmoothStepPath: vi.fn(() => ['M0 0 L0 0', 50, 0]),
   Handle: ({ id, ...rest }: React.HTMLAttributes<HTMLDivElement> & { id?: string }) =>
     React.createElement('div', { 'data-handleid': id, ...rest }),
   Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
@@ -70,8 +76,15 @@ vi.mock('../../api/agents', () => ({
   AgentAvatar: () => null,
 }));
 
-import { TeamDagEditor } from '../projections/TeamDagEditor';
+import {
+  TeamDagEditor,
+  TeamDagEdge,
+  TeamAgentNode,
+  TeamDagActionCtx,
+  makeRosterOrphanNodes,
+} from '../projections/TeamDagEditor';
 import { TeamApiError } from '../../api/teams';
+import type { EdgeProps } from 'reactflow';
 import type { AgentRecord } from '../../api/agents';
 import type { TeamWorkflow } from '../../api/teams';
 
@@ -255,5 +268,130 @@ describe('TeamDagEditor — 撤销/重做与空图引导（2026-11-05 三/四轮
     await screen.findByTestId('team-dag-save-btn');
     expect(screen.queryByTestId('team-dag-empty-hint')).not.toBeInTheDocument();
     expect(screen.getByTestId('team-dag-layout-btn')).toBeEnabled();
+  });
+});
+
+describe('TeamDagEditor — 一键删除（2026-11-07 顺手化）', () => {
+  /** 构造自定义边所需的最小 EdgeProps（jsdom 里 getSmoothStepPath 已 mock）。 */
+  const makeEdgeProps = (over: Partial<EdgeProps> = {}): EdgeProps =>
+    ({
+      id: 'e1',
+      source: 'n1',
+      target: 'n2',
+      sourceX: 0,
+      sourceY: 0,
+      targetX: 100,
+      targetY: 0,
+      sourcePosition: 'right',
+      targetPosition: 'left',
+      selected: false,
+      animated: false,
+      data: { mode: 'direct' },
+      ...over,
+    }) as unknown as EdgeProps;
+
+  it('边药丸「×」不选中也可一键删边（context deleteEdge 收到边 id）', () => {
+    const deleteEdge = vi.fn();
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge, deleteNode: vi.fn() }}>
+        <TeamDagEdge {...makeEdgeProps()} />
+      </TeamDagActionCtx.Provider>,
+    );
+    fireEvent.click(screen.getByTestId('team-dag-edge-del-e1'));
+    expect(deleteEdge).toHaveBeenCalledWith('e1');
+  });
+
+  it('审批边无自定义 label 时药丸补「审批」标记（mode 可读）', () => {
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge: vi.fn(), deleteNode: vi.fn() }}>
+        <TeamDagEdge {...makeEdgeProps({ data: { mode: 'approve' } })} />
+      </TeamDagActionCtx.Provider>,
+    );
+    expect(screen.getByText('审批')).toBeInTheDocument();
+  });
+
+  it('有自定义 label 的边药丸显示 label 原文（驳回回炉等）', () => {
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge: vi.fn(), deleteNode: vi.fn() }}>
+        <TeamDagEdge {...makeEdgeProps({ label: '驳回回炉' })} />
+      </TeamDagActionCtx.Provider>,
+    );
+    expect(screen.getByText('驳回回炉')).toBeInTheDocument();
+  });
+
+  it('节点角「×」一键删节点（context deleteNode 收到节点 id）', () => {
+    const deleteNode = vi.fn();
+    render(
+      <TeamDagActionCtx.Provider value={{ deleteEdge: vi.fn(), deleteNode }}>
+        <TeamAgentNode id="n1" data={{ agentId: 'a1', name: '甲', soul: '', nodeType: 'agentTask' }} />
+      </TeamDagActionCtx.Provider>,
+    );
+    fireEvent.click(screen.getByTestId('team-dag-node-del-n1'));
+    expect(deleteNode).toHaveBeenCalledWith('n1');
+  });
+});
+
+describe('makeRosterOrphanNodes — roster 孤点投影（2026-11-07 增员同步）', () => {
+  it('只补画布上没有的成员；网格排在既有节点下方；id 规则 n-<agentId>', () => {
+    const nodes = makeRosterOrphanNodes(AGENTS, [
+      { position: { x: 5, y: 300 }, data: { agentId: 'a1' } },
+    ]);
+    expect(nodes.map((n) => n.id)).toEqual(['n-a2']);
+    expect(nodes[0].position).toEqual({ x: 0, y: 420 }); // baseY = 300 + 120
+    expect(nodes[0].data.name).toBe('乙');
+    expect(nodes[0].data.nodeType).toBe('agentTask');
+  });
+
+  it('全员已在画布 → 不产出节点；策略染色/头像字段随 roster 带出', () => {
+    const all = makeRosterOrphanNodes(
+      AGENTS,
+      AGENTS.map((a, i) => ({ position: { x: 0, y: i * 100 }, data: { agentId: a.agent_id } })),
+    );
+    expect(all).toHaveLength(0);
+
+    const policy = new Map([['a2', 'deny' as const]]);
+    const nodes = makeRosterOrphanNodes(AGENTS, [], policy);
+    const n = nodes.find((x) => x.data.agentId === 'a2')!;
+    expect(n.data.policyState).toBe('deny');
+    expect(n.data.avatarSeed).toBe('乙'); // avatar_seed ?? name 兜底
+    expect(n.data.avatarImage).toBeNull();
+  });
+});
+
+describe('TeamDagEditor — roster 增员同步（2026-11-07「成员增加后 DAG 没有新成员」修复）', () => {
+  const A3 = {
+    agent_id: 'a3',
+    name: '丙',
+    soul: '',
+    workspace_id: 'ws1',
+    blueprint: {},
+    status: 'idle',
+    source: 'quick_hire',
+    created_at: '',
+  } as unknown as AgentRecord;
+
+  it('常驻编辑器：agents 增员后新成员补成孤点进画布，且不算未保存修改', async () => {
+    const onDirtyChange = vi.fn();
+    const ui = (agents: AgentRecord[]) => (
+      <TeamDagEditor
+        teamId="t1"
+        workflow={WF}
+        agents={agents}
+        onSaved={vi.fn()}
+        onCancel={vi.fn()}
+        onDirtyChange={onDirtyChange}
+      />
+    );
+    const { rerender } = render(ui(AGENTS));
+    // 成员管理加人 → rosterAgents 更新 → agents prop 变化（编辑器不重挂）
+    rerender(ui([...AGENTS, A3]));
+    fireEvent.click(await screen.findByTestId('team-dag-save-btn'));
+    await waitFor(() => expect(putWorkflowMock).toHaveBeenCalled());
+    const saved = putWorkflowMock.mock.calls[0][1] as TeamWorkflow;
+    expect(saved.nodes.map((n) => n.id)).toContain('n-a3');
+    expect(saved.nodes.find((n) => n.id === 'n-a3')?.data?.agentId).toBe('a3');
+    // roster 同步是数据对齐不是用户编辑：全程不亮「● 未保存」
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+    expect(screen.queryByTestId('team-dag-dirty')).not.toBeInTheDocument();
   });
 });

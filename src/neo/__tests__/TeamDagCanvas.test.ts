@@ -11,6 +11,7 @@ import type { TeamWorkflow } from '../../api/teams';
 import { buildPairPolicyColor } from '../projections/teamPolicyVisual';
 import {
   computeTeamDagColumns,
+  computeTeamDagSeedLayout,
   teamWorkflowToFlowEdges,
   teamWorkflowToFlowNodes,
 } from '../projections/TeamDagCanvas';
@@ -54,6 +55,48 @@ describe('computeTeamDagColumns — 最长路径分层', () => {
     const cols = computeTeamDagColumns(cyclic);
     expect(cols.get('x')).toBe(0);
     expect(cols.get('y')).toBe(0);
+  });
+});
+
+describe('computeTeamDagSeedLayout — 种子布局决策（2026-11-07「DAG 太乱」修复）', () => {
+  it('退化竖列（全 x 同窄带且有边）→ 分层展开成左→右流水线', () => {
+    // chain 的 4 个节点全在 (0,0)（老数据竖列的极端形态），必须展开
+    const pos = computeTeamDagSeedLayout(chain);
+    expect(pos.get('n1')).toEqual({ x: 0, y: 0 });
+    expect(pos.get('n2')).toEqual({ x: 180, y: 0 });
+    expect(pos.get('n3')).toEqual({ x: 360, y: 0 });
+    expect(pos.get('n4')).toEqual({ x: 540, y: 0 });
+  });
+
+  it('缺坐标的老数据 → 同样分层展开（不再 x=0 竖列种子）', () => {
+    const noPos: TeamWorkflow = {
+      nodes: chain.nodes.map((n) => ({ ...n, position: undefined })),
+      edges: chain.edges,
+    };
+    const pos = computeTeamDagSeedLayout(noPos);
+    expect(pos.get('n2')).toEqual({ x: 180, y: 0 });
+    expect(pos.get('n4')).toEqual({ x: 540, y: 0 });
+  });
+
+  it('真实横向布局 → 原样保留（只做坐标取整）', () => {
+    const laid: TeamWorkflow = {
+      nodes: chain.nodes.map((n, i) => ({ ...n, position: { x: i * 200 + 5.4, y: i * 50 + 0.6 } })),
+      edges: chain.edges,
+    };
+    const pos = computeTeamDagSeedLayout(laid);
+    expect(pos.get('n1')).toEqual({ x: 5, y: 1 });
+    expect(pos.get('n2')).toEqual({ x: 205, y: 51 });
+    expect(pos.get('n4')).toEqual({ x: 605, y: 151 });
+  });
+
+  it('同列孤立点（无边）→ 保留存量坐标（没有边可绕圈，不动用户摆位）', () => {
+    const column: TeamWorkflow = {
+      nodes: chain.nodes.slice(0, 2).map((n, i) => ({ ...n, position: { x: 0, y: i * 106 } })),
+      edges: [],
+    };
+    const pos = computeTeamDagSeedLayout(column);
+    expect(pos.get('n1')).toEqual({ x: 0, y: 0 });
+    expect(pos.get('n2')).toEqual({ x: 0, y: 106 });
   });
 });
 

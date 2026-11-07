@@ -16,7 +16,7 @@
  *   npx vitest run src/routes/__tests__/groups-chat-dag-branch.test.ts
  */
 import { describe, it, expect } from 'vitest';
-import { shouldRunTeamDag } from '../groups-chat';
+import { shouldRunTeamDag } from '../groups/groups-chat';
 
 describe('shouldRunTeamDag — 分支判定', () => {
   it('team_id 有值 → 走 DAG 路径', () => {

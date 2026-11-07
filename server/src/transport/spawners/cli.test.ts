@@ -17,7 +17,7 @@ import { dispatchSkillRunner } from './index';
 import type { RunnerInput } from './types';
 import { runCliSpawn } from './cli';
 import { parsePlainLine } from '../../parsers/cli-streams/plain-line';
-import type { SseEvent } from '../../parser';
+import type { SseEvent } from '../../parsers/parser';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';

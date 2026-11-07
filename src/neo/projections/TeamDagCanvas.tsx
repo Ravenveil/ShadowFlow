@@ -115,6 +115,56 @@ export function computeTeamDagColumns(workflow: TeamWorkflow): Map<string, numbe
   return col;
 }
 
+/**
+ * 种子布局决策（2026-11-07「DAG 太乱」修复）：决定画布初次铺开时每个
+ * workflow 节点用什么坐标。
+ *
+ * 背景：老数据/未存坐标的图被 seed 成 x=0 的一条竖列（y=i*106），smoothstep
+ * 边在竖列间绕成大圈、互相压叠，连接/删除都难下手。这里做「退化布局」检测：
+ *   - 坐标不全 → 一律分层展开（最长路径分层 × 列内行序，与 autoLayout 同参）
+ *   - 坐标齐全但所有 x 挤在一条窄带里（<40px）且存在边 → 同样分层展开
+ *     （竖列 + 连边 = 必然的意大利面，用户手动摆成竖列保存的场景极少）
+ *   - 其余（有真实横向分布的用户布局）→ 原样保留，只做坐标取整
+ *
+ * 与 TeamDagEditor 的关系：seedNodes 用它铺画布，initialSerialized 也从
+ * seed 结果派生 —— 分层展开不算「未保存修改」，打开即 dirty=false。
+ */
+export function computeTeamDagSeedLayout(
+  workflow: TeamWorkflow,
+): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  const nodes = workflow.nodes;
+  const storedAll = nodes.length > 0 && nodes.every((n) => n.position != null);
+  const useLayered =
+    !storedAll ||
+    (workflow.edges.length > 0 &&
+      nodes.length > 1 &&
+      Math.max(...nodes.map((n) => n.position!.x)) - Math.min(...nodes.map((n) => n.position!.x)) < 40);
+
+  if (!useLayered) {
+    for (const n of nodes) {
+      pos.set(n.id, { x: Math.round(n.position!.x), y: Math.round(n.position!.y) });
+    }
+    return pos;
+  }
+
+  const cols = computeTeamDagColumns(workflow);
+  const buckets = new Map<number, string[]>();
+  for (const n of nodes) {
+    const c = cols.get(n.id) ?? 0;
+    const arr = buckets.get(c) ?? [];
+    arr.push(n.id);
+    buckets.set(c, arr);
+  }
+  // 与 TeamDagEditor.autoLayout 同参（180×110），「自动排列」= 重跑本布局
+  for (const n of nodes) {
+    const c = cols.get(n.id) ?? 0;
+    const row = (buckets.get(c) ?? []).indexOf(n.id);
+    pos.set(n.id, { x: c * 180, y: row * 110 });
+  }
+  return pos;
+}
+
 /** TeamWorkflow 节点 → reactflow nodes（分层列 × 列内行序布局 + 策略染色）。 */
 export function teamWorkflowToFlowNodes(
   workflow: TeamWorkflow,

@@ -14,7 +14,7 @@
  */
 
 import type { Readable } from 'node:stream';
-import { parseAndExtract, type SseEvent } from '../../parser';
+import { parseAndExtract, type SseEvent } from '../parser';
 
 export interface CliStreamArtifactCb {
   (filename: string, content: string, type: string): void;

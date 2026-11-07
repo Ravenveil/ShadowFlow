@@ -18,7 +18,7 @@
  * 幂等查重与异常静默由 groups-chat-handoff-idempotent.test.ts 覆盖。
  */
 import { describe, it, expect } from 'vitest';
-import { buildRoundHandoffPayload } from '../groups-chat';
+import { buildRoundHandoffPayload } from '../groups/groups-chat';
 
 describe('buildRoundHandoffPayload — 会话回合自动沉淀交接包', () => {
   const twoSpeakers = [

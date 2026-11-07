@@ -19,7 +19,7 @@ import {
   persistAssembledTeam,
   tapAssemblyTeamPersistence,
   deriveTeamName,
-} from '../team-persistence';
+} from '../storage/team-persistence';
 
 const PY = 'http://localhost:8000';
 

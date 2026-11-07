@@ -20,7 +20,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { platform } from 'node:os';
-import { findCli, type InstallSpec, type UninstallSpec } from '../cli-registry';
+import { findCli, type InstallSpec, type UninstallSpec } from '../detectors/cli-registry';
 
 /** 包管理器白名单 —— install_spec.pm 与 parseInstallCommand 首 token 的唯一准入集。
  *  （2026-10-30 增补：gh——gh extension install/remove；hermes——自带 uninstall 子命令） */
