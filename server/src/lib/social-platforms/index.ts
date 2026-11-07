@@ -1,60 +1,34 @@
 /**
- * social-platforms/index.ts — 社交平台发布适配器（2026-11-07）。
+ * social-platforms/index.ts — 社交平台发布适配器公共门面（2026-11-07）。
  *
  * 产业方向（手工艺人代运营）：对方只需上架商品，我们负责营销发布、联系快递
  * 寄出。本模块是「营销发布」的平台出口：统一 PlatformAdapter 接口 + 六大主流
  * 平台注册表（微信公众号 / 小红书 / 抖音 / 微博 / 微信视频号 / 快手）。
  *
  * mock / real 双模（按账号选）：
- *   - mock（默认）：确定性回执（external_id = sha256(post#attempt) 前 12 位），
- *     不发外网、可测试可演示 —— 无凭证环境的「直接发布」走这条。
- *   - real：按平台读 env 凭证（见 REAL_ENV）。缺凭证返回结构化
- *     CREDENTIALS_MISSING 回执（不是异常、不 5xx）；微博已接真实
- *     statuses/update 单发链路作参照，其余平台留接线位（多步授权 + 内容审核，
- *     拿到企业凭证后逐个补，接口不变）。
+ *   - mock（默认）：确定性回执（mock.ts），不发外网、可测试可演示。
+ *   - real：按平台真实开放接口接线（real-*.ts，契约经官方文档核实）：
+ *     · 微信公众号：token→素材→draft/add→freepublish/submit（异步）
+ *     · 微博：statuses/update / statuses/upload（图，≤140 字）
+ *     · 小红书：OAuth2→upload/image→note/publish（需「笔记发布」权限）
+ *     · 抖音：upload_video→create_video（需视频素材）
+ *     · 快手：start_upload→二进制直传→photo/publish（需视频+封面）
+ *     · 视频号：仅服务商权限集代发布，未开通前返回 REAL_WIRING_PENDING
+ *     缺凭证一律结构化 CREDENTIALS_MISSING 回执（不 5xx）。
  *
- * 纯函数模块：不 import storage、无 DB 依赖，方便单测与后续替换真实现。
+ * 纯函数模块：不 import storage、无 DB 依赖（real 适配器仅出网 fetch），
+ * 方便单测（mock fetch）与后续替换。
  */
 
-import { createHash } from 'node:crypto';
-
-export type AdapterMode = 'mock' | 'real';
-
-/** 平台规格：文案长度 / 图片数上限，创建帖子时按此校验。 */
-export interface PlatformSpec {
-  id: string;
-  name: string;
-  /** 0 = 平台无独立标题（如微博正文即全部）。 */
-  title_max: number;
-  content_max: number;
-  max_media: number;
-}
-
-export interface PublishInput {
-  title: string;
-  content: string;
-  media: string[];
-}
-
-/** 发布回执：成功失败都是结构化对象，统一落 sp_publish_log。 */
-export interface PublishReceipt {
-  ok: boolean;
-  /** 平台侧帖子 ID（mock 模式为确定性派生值）。 */
-  external_id?: string;
-  /** 失败时的结构化码：CREDENTIALS_MISSING / REAL_WIRING_PENDING /
-   *  PLATFORM_REJECTED / NETWORK_ERROR。 */
-  code?: string;
-  error?: string;
-  /** mock 模式模拟的内容审核状态。 */
-  audit?: string;
-  raw?: unknown;
-}
-
-export interface PlatformAdapter {
-  platform: string;
-  mode: AdapterMode;
-  publish(postId: string, input: PublishInput, attempt: number): Promise<PublishReceipt>;
-}
+export type { AdapterMode, PlatformAdapter, PlatformSpec, PublishInput, PublishReceipt } from './types';
+import type { AdapterMode, PlatformAdapter, PlatformSpec } from './types';
+import { createMockAdapter } from './mock';
+import { createWechatMpAdapter } from './real-wechat-mp';
+import { createWeiboAdapter } from './real-weibo';
+import { createXiaohongshuAdapter } from './real-xiaohongshu';
+import { createDouyinAdapter } from './real-douyin';
+import { createKuaishouAdapter } from './real-kuaishou';
+import { createShipinhaoAdapter } from './real-shipinhao';
 
 export const PLATFORMS: PlatformSpec[] = [
   { id: 'wechat_mp', name: '微信公众号', title_max: 64, content_max: 20000, max_media: 9 },
@@ -69,103 +43,72 @@ export function findPlatform(id: string): PlatformSpec | undefined {
   return PLATFORMS.find((p) => p.id === id);
 }
 
-/** real 模式各平台的凭证契约（env 变量名 + 说明），也用于 /platforms 端点自描述。 */
-const REAL_ENV: Record<string, { env: string; note: string }> = {
-  wechat_mp: { env: 'SP_WECHAT_MP_ACCESS_TOKEN', note: '公众号 access_token（草稿 + 发布接口）' },
-  xiaohongshu: { env: 'SP_XHS_ACCESS_TOKEN', note: '小红书开放平台 token' },
-  douyin: { env: 'SP_DOUYIN_ACCESS_TOKEN', note: '抖音开放平台 token' },
-  weibo: { env: 'SP_WEIBO_ACCESS_TOKEN', note: '微博 OAuth2 access_token' },
-  shipinhao: { env: 'SP_SHIPINHAO_ACCESS_TOKEN', note: '视频号 access_token' },
-  kuaishou: { env: 'SP_KUAISHOU_ACCESS_TOKEN', note: '快手开放平台 token' },
+export interface RealEnvContract {
+  envs: string[];
+  note: string;
+}
+
+/** real 模式各平台的凭证契约（env 变量名 + 说明），/platforms 端点自描述用。 */
+const REAL_ENV: Record<string, RealEnvContract> = {
+  wechat_mp: {
+    envs: ['SP_WECHAT_MP_APP_ID', 'SP_WECHAT_MP_APP_SECRET'],
+    note: '公众号 appid/secret 换 access_token（可选 SP_WECHAT_MP_ACCESS_TOKEN 覆盖，服务商代发布用）',
+  },
+  xiaohongshu: {
+    envs: ['SP_XHS_ACCESS_TOKEN'],
+    note: '小红书开放平台 OAuth2 access_token（需企业资质 + 「笔记发布」权限，约 2h 有效需续期）',
+  },
+  douyin: {
+    envs: ['SP_DOUYIN_ACCESS_TOKEN', 'SP_DOUYIN_OPEN_ID'],
+    note: '抖音开放平台用户授权 token + open_id（能力实验室「代替用户发布内容到抖音」）',
+  },
+  weibo: {
+    envs: ['SP_WEIBO_ACCESS_TOKEN'],
+    note: '微博 OAuth2 用户授权 access_token（单条 ≤140 字）',
+  },
+  shipinhao: {
+    envs: ['SP_SHIPINHAO_ACCESS_TOKEN'],
+    note: '微信第三方平台 authorizer_access_token（服务商权限集代发布，开通前仅登记不直发）',
+  },
+  kuaishou: {
+    envs: ['SP_KUAISHOU_ACCESS_TOKEN', 'SP_KUAISHOU_APP_ID'],
+    note: '快手开放平台用户授权 token + app_id（scope user_video_publish）',
+  },
 };
 
-export function realEnvContract(platform: string): { env: string; note: string } | undefined {
+/** real 发布链一句话描述，/platforms 端点自描述用。 */
+const REAL_FLOW: Record<string, string> = {
+  wechat_mp: 'token→素材上传→draft/add→freepublish/submit（异步出结果）',
+  xiaohongshu: 'OAuth2→upload/image→note/publish',
+  douyin: 'upload_video→create_video（需视频素材）',
+  weibo: 'statuses/update / statuses/upload（图，≤140 字）',
+  shipinhao: '服务商权限集代发布（未开通前 REAL_WIRING_PENDING）',
+  kuaishou: 'start_upload→二进制直传→photo/publish（需视频+封面）',
+};
+
+export function realEnvContract(platform: string): RealEnvContract | undefined {
   return REAL_ENV[platform];
 }
 
-/** 确定性 mock 外部 ID：同一帖子同一次尝试永远同值，测试可断言、演示可复现。 */
-function mockExternalId(platform: string, postId: string, attempt: number): string {
-  const digest = createHash('sha256').update(`${postId}#${attempt}`).digest('hex');
-  return `mock_${platform}_${digest.slice(0, 12)}`;
+export function realFlow(platform: string): string {
+  return REAL_FLOW[platform] ?? '';
 }
 
-function mockAdapter(spec: PlatformSpec): PlatformAdapter {
-  return {
-    platform: spec.id,
-    mode: 'mock',
-    async publish(postId, input, attempt) {
-      return {
-        ok: true,
-        external_id: mockExternalId(spec.id, postId, attempt),
-        audit: 'passed',
-        raw: {
-          mode: 'mock',
-          platform: spec.id,
-          title_chars: input.title.length,
-          content_chars: input.content.length,
-          media_count: input.media.length,
-          attempt,
-        },
-      };
-    },
-  };
-}
-
-function realAdapter(spec: PlatformSpec): PlatformAdapter {
-  const contract = REAL_ENV[spec.id];
-  return {
-    platform: spec.id,
-    mode: 'real',
-    async publish(_postId, input, _attempt) {
-      const token = (process.env[contract?.env ?? ''] ?? '').trim();
-      if (!token) {
-        return {
-          ok: false,
-          code: 'CREDENTIALS_MISSING',
-          error: `缺少环境变量 ${contract?.env ?? '(未定义)'}（${contract?.note ?? ''}），无法真实发布`,
-        };
-      }
-      // 微博：单发 statuses/update 是一步式公开接口，作为 real 接线参照实现。
-      // 其余平台是多步授权（草稿/素材/审核），凭证到位后按同一接口补，不改调用方。
-      if (spec.id === 'weibo') {
-        const status = [input.title, input.content].filter(Boolean).join(' ').slice(0, spec.content_max);
-        try {
-          const res = await fetch('https://api.weibo.com/2/statuses/update.json', {
-            method: 'POST',
-            headers: { 'content-type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ access_token: token, status }),
-          });
-          const data = (await res.json().catch(() => ({}))) as {
-            idstr?: string;
-            error_code?: number | string;
-            error?: string;
-          };
-          if (!res.ok || data.error_code) {
-            return {
-              ok: false,
-              code: 'PLATFORM_REJECTED',
-              error: data.error ?? `HTTP ${res.status}`,
-              raw: data,
-            };
-          }
-          return { ok: true, external_id: String(data.idstr ?? ''), raw: data };
-        } catch (e) {
-          return { ok: false, code: 'NETWORK_ERROR', error: (e as Error).message };
-        }
-      }
-      return {
-        ok: false,
-        code: 'REAL_WIRING_PENDING',
-        error: `${spec.name} 真实发布链路待接线（多步授权 + 内容审核），适配器接口已就位`,
-      };
-    },
-  };
-}
+const REAL_FACTORIES: Record<string, (spec: PlatformSpec) => PlatformAdapter> = {
+  wechat_mp: createWechatMpAdapter,
+  xiaohongshu: createXiaohongshuAdapter,
+  douyin: createDouyinAdapter,
+  weibo: createWeiboAdapter,
+  shipinhao: createShipinhaoAdapter,
+  kuaishou: createKuaishouAdapter,
+};
 
 export function getAdapter(platform: string, mode: AdapterMode): PlatformAdapter {
   const spec = findPlatform(platform);
   if (!spec) {
     throw new Error(`未知平台: ${platform}`);
   }
-  return mode === 'real' ? realAdapter(spec) : mockAdapter(spec);
+  if (mode !== 'real') return createMockAdapter(spec);
+  const factory = REAL_FACTORIES[platform];
+  return factory ? factory(spec) : createMockAdapter(spec);
 }

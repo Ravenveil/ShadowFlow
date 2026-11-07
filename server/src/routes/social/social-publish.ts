@@ -22,7 +22,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { PLATFORMS, realEnvContract } from '../../lib/social-platforms';
+import { PLATFORMS, realEnvContract, realFlow } from '../../lib/social-platforms';
 import { marketingCopy } from '../../lib/social-platforms/copy';
 import {
   SocialPublishError,
@@ -64,11 +64,12 @@ function str(v: unknown, max = 256): string {
 // ── 平台自描述 ────────────────────────────────────────────────────────────────
 
 router.get('/platforms', (_req: Request, res: Response) => {
-  res.json({
+    res.json({
     platforms: PLATFORMS.map((p) => ({
       ...p,
       modes: ['mock', 'real'],
       real_env: realEnvContract(p.id) ?? null,
+      real_flow: realFlow(p.id),
     })),
   });
 });

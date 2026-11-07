@@ -58,7 +58,9 @@ describe('平台自描述', () => {
     for (const p of res.body.platforms) {
       expect(p.modes).toEqual(['mock', 'real']);
       expect(p.content_max).toBeGreaterThan(0);
-      expect(p.real_env.env).toMatch(/^SP_/);
+      expect(p.real_env.envs.length).toBeGreaterThan(0);
+      expect(p.real_env.envs.every((e: string) => /^SP_/.test(e))).toBe(true);
+      expect(p.real_flow.length).toBeGreaterThan(0);
     }
   });
 
