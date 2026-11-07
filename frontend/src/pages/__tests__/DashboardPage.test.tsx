@@ -43,13 +43,11 @@ const OVERVIEW = {
   sales_count: 4,
   units: 10,
   revenue_cents: 8900,
-  artisan_cents: 4200,
+  cost_cents: 4200,
   shipping_cents: 800,
-  marketing_cents: 600,
-  cost_cents: 5600,
-  profit_cents: 3300,
-  margin_pct: 37.1,
-  per100: { artisan: 47.2, shipping: 9, marketing: 6.7, profit: 37.1 },
+  profit_cents: 3900,
+  margin_pct: 43.8,
+  per100: { cost: 47.2, shipping: 9, profit: 43.8 },
   delta_pct: { profit: null, revenue: 12.5, units: -3 },
 };
 
@@ -68,14 +66,13 @@ const PRODUCTS = {
       id: 'p1',
       name: '手工编织收纳篮',
       price_cents: 8900,
-      artisan_cents: 4200,
+      cost_cents: 4200,
       shipping_cents: 800,
-      marketing_cents: 600,
-      profit_per_unit_cents: 3300,
+      profit_per_unit_cents: 3900,
       created_at: 1730000000000,
       sold_units: 5,
       revenue_cents: 44500,
-      profit_cents: 16500,
+      profit_cents: 19500,
     },
   ],
 };
@@ -88,10 +85,9 @@ const SALES = {
       product_name: '手工编织收纳篮',
       qty: 2,
       price_cents: 8900,
-      artisan_cents: 4200,
+      cost_cents: 4200,
       shipping_cents: 800,
-      marketing_cents: 600,
-      profit_cents: 6600,
+      profit_cents: 7800,
       created_at: 1730172800000,
     },
   ],
@@ -118,25 +114,24 @@ beforeEach(() => {
 });
 
 describe('DashboardPage — 产品盈利看板（2026-11-07 重构）', () => {
-  it('渲染五张大卡：赚了/卖了多少钱/给手艺人/快递+营销/卖出件数', async () => {
+  it('渲染五张大卡：赚了/卖了多少钱/成本/快递费/卖出件数', async () => {
     render(<DashboardPage />);
     const cards = await screen.findByTestId('cp-overview-cards');
-    // 赚了 ¥33.00（净利 3300 分）+ 环比「新增」（上期为 0）
-    expect(within(cards).getByText('¥33.00')).toBeInTheDocument();
+    // 赚了 ¥39.00（净利 3900 分）+ 环比「新增」（上期为 0）
+    expect(within(cards).getByText('¥39.00')).toBeInTheDocument();
     expect(within(cards).getByText('新增')).toBeInTheDocument();
     expect(within(cards).getByText('¥89.00')).toBeInTheDocument(); // 卖了多少钱
-    expect(within(cards).getByText('¥42.00')).toBeInTheDocument(); // 给手艺人
-    expect(within(cards).getByText('¥14.00')).toBeInTheDocument(); // 快递 8 + 营销 6
+    expect(within(cards).getByText('¥42.00')).toBeInTheDocument(); // 成本
+    expect(within(cards).getByText('¥8.00')).toBeInTheDocument(); // 快递费
     expect(within(cards).getByText('10')).toBeInTheDocument(); // 卖出件数
   });
 
-  it('每卖 100 元去向条：四个分段百分比', async () => {
+  it('每卖 100 元去向条：三个分段百分比（成本/快递/净赚）', async () => {
     render(<DashboardPage />);
     expect(await screen.findByTestId('cp-per100')).toBeInTheDocument();
-    expect(screen.getByText(/给手艺人 47\.2%/)).toBeInTheDocument();
+    expect(screen.getByText(/成本 47\.2%/)).toBeInTheDocument();
     expect(screen.getByText(/快递 9%/)).toBeInTheDocument();
-    expect(screen.getByText(/营销 6\.7%/)).toBeInTheDocument();
-    expect(screen.getByText(/净赚 37\.1%/)).toBeInTheDocument();
+    expect(screen.getByText(/净赚 43\.8%/)).toBeInTheDocument();
   });
 
   it('每天赚多少柱状图 + 商品排行 + 最近的生意', async () => {
@@ -144,11 +139,11 @@ describe('DashboardPage — 产品盈利看板（2026-11-07 重构）', () => {
     expect(await screen.findByTestId('cp-bars')).toBeInTheDocument();
     const productTable = await screen.findByTestId('cp-products-table');
     expect(within(productTable).getByText('手工编织收纳篮')).toBeInTheDocument();
-    expect(within(productTable).getByText('¥165.00')).toBeInTheDocument(); // 商品总盈利
+    expect(within(productTable).getByText('¥195.00')).toBeInTheDocument(); // 商品总盈利
     const salesTable = await screen.findByTestId('cp-sales-table');
     expect(within(salesTable).getByText('手工编织收纳篮')).toBeInTheDocument();
     expect(within(salesTable).getByText('¥178.00')).toBeInTheDocument(); // 2 件 × ¥89
-    expect(within(salesTable).getByText('¥66.00')).toBeInTheDocument(); // 2 件 × 每件赚 ¥33
+    expect(within(salesTable).getByText('¥78.00')).toBeInTheDocument(); // 2 件 × 每件赚 ¥39
   });
 
   it('窗口 tab 切换（7/30/90 天）触发重新拉取', async () => {
@@ -173,16 +168,14 @@ describe('DashboardPage — 产品盈利看板（2026-11-07 重构）', () => {
     fireEvent.change(screen.getByPlaceholderText('89'), { target: { value: '89' } });
     fireEvent.change(screen.getByPlaceholderText('42'), { target: { value: '42' } });
     fireEvent.change(screen.getByPlaceholderText('8'), { target: { value: '8' } });
-    fireEvent.change(screen.getByPlaceholderText('6'), { target: { value: '6' } });
-    expect(screen.getByTestId('cp-profit-preview')).toHaveTextContent('每件赚 ¥33.00');
+    expect(screen.getByTestId('cp-profit-preview')).toHaveTextContent('每件赚 ¥39.00');
     fireEvent.click(screen.getByTestId('cp-product-submit'));
     await waitFor(() => {
       expect(createCraftProduct).toHaveBeenCalledWith({
         name: '手工编织收纳篮',
         price_cents: 8900,
-        artisan_cents: 4200,
+        cost_cents: 4200,
         shipping_cents: 800,
-        marketing_cents: 600,
       });
     });
   });

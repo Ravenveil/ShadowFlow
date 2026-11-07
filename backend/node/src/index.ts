@@ -51,7 +51,7 @@ import dashboardRouter from './routes/dashboard/dashboard';
 import memoryHandoffRouter from './routes/memory/memory-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
 import merchantBoardRouter from './routes/dashboard/merchant-board';
-// 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 给手艺人 − 快递 − 营销
+// 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 成本 − 快递
 import craftProfitRouter from './routes/dashboard/craft-profit';
 // 社交发布（2026-11-07）— 社交平台直连发布：账号/营销帖/发布回执 + 平台适配器
 // （mock/real 双模）。外接模块，自带幂等建表，不改既有逻辑。

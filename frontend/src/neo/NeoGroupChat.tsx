@@ -54,6 +54,9 @@ import { useI18n } from '../common/i18n';
 // 拖拽传图（2026-11-07）— 附件引用块拼进群消息 content。
 import { formatAttachmentRefs } from '../lib/attachments';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
+// 定价提问卡（2026-11-07）— 手工艺品代卖：收到产品图片后输入框上方固定提问。
+import { NeoPricingQuestions } from './NeoPricingQuestions';
+import { SECRETARY_AGENT_ID } from './secretary';
 // ClawHub（2026-06，T08）：agent 气泡头像接入 DiceBear（配了头像的 Agent 生效）
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { AgentAvatarSwitcher } from '../components/agent/AgentAvatarSwitcher';
@@ -751,6 +754,22 @@ export function NeoGroupChat({
   // 发言 = 在群里说话 → 网关触发新一轮派发（INTENT_PARSE → 分层并行）。
   // executor/model 与其他 composer 调用方同源：UnifiedComposer 的内部
   // picker 写 localStorage（sf.defaultExecutor / sf.model），此处原样读取。
+  //
+  // ── 定价提问卡（2026-11-07「收到图片后固定一些提问」）────────────────────
+  // 手工艺品代卖作用域（群成员含总经理：总经理 DM + 代卖工作群）：发出带图片
+  // 的提交后，输入框上方弹出固定提问卡（售价/成本/快递费）；回答（下一条无图
+  // 提交）或点 × 后收起。点卡经 NeoComposer initialText 填答案脚手架。
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [pricingPick, setPricingPick] = useState<{ text: string; n: number } | null>(null);
+  const isCraftScope = groupAgentIds.includes(SECRETARY_AGENT_ID);
+  const pricingInitialText = pricingPick
+    ? pricingPick.text + (pricingPick.n % 2 ? ' ' : '')
+    : undefined;
+  useEffect(() => {
+    setPricingOpen(false);
+    setPricingPick(null);
+  }, [groupId]);
+
   const handleSubmit = useCallback(
     async (p: UnifiedComposerSubmitPayload) => {
       if (!groupId) return;
@@ -761,6 +780,8 @@ export function NeoGroupChat({
       const refs = formatAttachmentRefs(p.attachments);
       const content = [text, refs].filter(Boolean).join('\n\n');
       if (!content) return;
+      // 定价提问卡触发信号：本轮提交带图片（手工艺品产品图）。
+      const hasImage = p.attachments.some((a) => a.isImage === true);
       let executor: string | undefined;
       let model: string | undefined;
       try {
@@ -782,6 +803,11 @@ export function NeoGroupChat({
           // 连接器作用域（2026-11-07 OpenBot 对齐批）— 随消息下发。
           connectorIds: p.connectorIds,
         });
+        // 定价提问卡：带图提交 → 弹出固定提问；无图提交（= 回答）→ 收起。
+        if (isCraftScope) {
+          setPricingOpen(hasImage);
+          if (!hasImage) setPricingPick(null);
+        }
       } catch (err) {
         throw new Error(
           t('neo.group.sendFailed', {
@@ -790,7 +816,7 @@ export function NeoGroupChat({
         );
       }
     },
-    [groupId, timeline, t],
+    [groupId, timeline, t, isCraftScope],
   );
 
   if (!groupId) return null;
@@ -1263,6 +1289,13 @@ export function NeoGroupChat({
             {scheduleToast}
           </div>
         )}
+        {/* 定价提问卡（代卖作用域，收图后弹出）— 挂 NeoComposer 之前 */}
+        {isCraftScope && pricingOpen && (
+          <NeoPricingQuestions
+            onPick={(text) => setPricingPick((p) => ({ text, n: (p?.n ?? 0) + 1 }))}
+            onDismiss={() => setPricingOpen(false)}
+          />
+        )}
         <NeoComposer
           variant="chat"
           onSubmit={handleSubmit}
@@ -1271,6 +1304,7 @@ export function NeoGroupChat({
           onNavigate={onNavigate}
           mentionItems={mentionItems}
           onScheduleCommand={() => setScheduleOpen(true)}
+          initialText={pricingInitialText}
           placeholder={
             isDm
               ? t('neo.dm.placeholder', { defaultValue: '发消息，TA 就开始干活 · /schedule 定时任务' })

@@ -7,7 +7,7 @@ import { parseCraftMarkers } from '../lib/craft-markers';
 
 describe('parseCraftMarkers — 标记识别与剥除', () => {
   it('单行紧凑 JSON：解析动作且从 cleaned 剥掉', () => {
-    const text = '我来登记商品。\n[intake] {"name":"苗绣杯垫","price":68,"artisan":30,"shipping":8,"marketing":5}\n已登记！';
+    const text = '我来登记商品。\n[intake] {"name":"苗绣杯垫","price":68,"cost":20,"shipping":8}\n已登记！';
     const r = parseCraftMarkers(text);
     expect(r.markers).toHaveLength(1);
     expect(r.markers[0]).toMatchObject({ tag: 'intake', ok: true });
@@ -15,11 +15,24 @@ describe('parseCraftMarkers — 标记识别与剥除', () => {
       kind: 'intake',
       name: '苗绣杯垫',
       price_cents: 6800,
-      artisan_cents: 3000,
+      cost_cents: 2000,
       shipping_cents: 800,
-      marketing_cents: 500,
     });
     expect(r.cleaned).toBe('我来登记商品。\n已登记！');
+  });
+
+  it('旧格式 artisan/marketing 兜底（口径切换前存量消息）：artisan 当成本、marketing 忽略', () => {
+    const r = parseCraftMarkers(
+      '[intake] {"name":"苗绣杯垫","price":68,"artisan":30,"shipping":8,"marketing":5}',
+    );
+    expect(r.actions[0]).toEqual({
+      kind: 'intake',
+      name: '苗绣杯垫',
+      price_cents: 6800,
+      cost_cents: 3000,
+      shipping_cents: 800,
+    });
+    expect(r.cleaned).toBe('');
   });
 
   it('多行美化 JSON（花括号配平跨行）也能解析', () => {
@@ -32,7 +45,7 @@ describe('parseCraftMarkers — 标记识别与剥除', () => {
   it('[craft:xxx] 别名等价；金额可用 *_cents 直给', () => {
     const r = parseCraftMarkers('[craft:intake] {"name":"竹编灯","price_cents":12800}');
     expect(r.actions[0]).toMatchObject({ kind: 'intake', name: '竹编灯', price_cents: 12800 });
-    expect(r.actions[0]).toMatchObject({ artisan_cents: 0, shipping_cents: 0, marketing_cents: 0 });
+    expect(r.actions[0]).toMatchObject({ cost_cents: 0, shipping_cents: 0 });
     expect(r.cleaned).toBe('');
   });
 
