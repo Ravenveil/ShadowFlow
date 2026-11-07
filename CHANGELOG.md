@@ -33,6 +33,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - 测试：`server/src/__tests__/platform-tools.test.ts` 27 例（注册表完整性、stub 契约、
   provider 请求映射、入参校验、微信/时间过滤映射），server 全量 231 例通过。
 
+## [Unreleased] — 2026-11-06～07
+
+### Added — 功能登记补记（此前 PR 未登记，2026-11-06～07 已合并）
+- **① 商家数据看板**：渠道获客经济性（#26）、产品贡献与定价（#28）——渠道/产品维度的钱口径
+  与 `overview` 同源，合计逐字段=概览可当场对账；标价 vs 单均实收暴露退款水分。
+- **③ 记忆交接 / 画像写回**：反馈自动写回队列（#19）；演示证据包——七章 Markdown 报告 +
+  订单 CSV + 评委速览 + 第一单/异常样例一键复现 + 上台前就绪自检（#20、#23 补失败反馈→人工补跑）；
+  记忆闭环可见性——失败原因列 + 记忆消费留痕审计（#24）。
+- **记忆库 / 知识库**：多模态记忆库前端（#21）；对话框知识库接多模态记忆库，检索命中注入
+  Agent 提示词（#25，同批补齐 `ensureGroupTeam` 群↔编队双向同步）。
+- **协作 / 群聊**：Windows 8.3 短路径误判修复 + 测试断言纠偏（#22）；timeline-replay 补
+  `hop_update` 分支（#27）；run_artifacts 多产物登记，一 run 多件产物可见（#29）。
+
+### Fixed
+- 前端构建：`d683f41` 引用未导出的 `ensureGroupTeam` 致 `vite build` 失败，由 #25 补齐实现恢复。
+
 ## [Unreleased] — 2026-11-06（根目录结构合并：按功能归箱，tracked 文件夹 15 → 12）
 
 ### Changed — 目录合并（`git mv` 保留历史）

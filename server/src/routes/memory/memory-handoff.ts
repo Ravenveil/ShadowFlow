@@ -5,7 +5,8 @@
  * proxyFallback 之前）。这是外接模块，主入口不改任何既有逻辑。
  *
  * GET    /api/memory/handoff/stats                  → 概览计数
- * GET    /api/memory/handoff/context?agent=B        → B 当前可读上下文（带来源）
+ * GET    /api/memory/handoff/context?agent=B        → B 当前可读上下文（带来源，每次调用落消费留痕）
+ * GET    /api/memory/handoff/context/reads          → 记忆消费留痕审计（谁读走了哪些来源）
  * GET    /api/memory/handoff/profiles/conflicts     → 待裁决的画像冲突（人工定夺入口）
  * POST   /api/memory/handoff/profiles/conflicts/resolve → 裁决冲突（accept 采纳 / dismiss 驳回）
  * GET    /api/memory/handoff/profiles/:subjectId    → 当前画像 + append-only 流水
@@ -27,6 +28,7 @@ import {
   MemoryHandoffError,
   acceptHandoff,
   contextFor,
+  contextReads,
   createHandoff,
   feedbackQueue,
   getHandoff,
@@ -82,6 +84,22 @@ router.get('/context', (req: Request, res: Response) => {
       str(req.query.task_type, 64),
       Number.isFinite(limit) && limit > 0 ? limit : 20,
     ),
+  );
+});
+
+// ── 记忆消费留痕审计 ─────────────────────────────────────────────────────────
+// 纯只读：谁在什么时候读走了哪些来源的记忆（可按 from/to 窗口筛，脏参数回落默认值）。
+router.get('/context/reads', (req: Request, res: Response) => {
+  const num = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  res.json(
+    contextReads({
+      limit: num(req.query.limit),
+      from: num(req.query.from),
+      to: num(req.query.to),
+    }),
   );
 });
 

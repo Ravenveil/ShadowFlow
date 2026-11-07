@@ -135,13 +135,90 @@ export function saveRun(record: RunRecord, linkage?: RunLinkage): void {
          SELECT completed_at FROM runs ORDER BY completed_at DESC LIMIT 1 OFFSET ?
        )`,
     ).run(MAX_RUNS - 1);
+
+    // 多产物登记（2026-11-07）— 清掉被 trim 掉的 run 留下的孤儿产物行
+    // （run_artifacts 不挂 FK，需手动同步）。
+    db.prepare(
+      `DELETE FROM run_artifacts WHERE run_id NOT IN (SELECT run_id FROM runs)`,
+    ).run();
   });
   tx();
 }
 
+// ── 多产物登记（2026-11-07）─────────────────────────────────────────────────
+// run_artifacts 表的读写。动机见 storage/sqlite.ts 内 DDL 注释：
+// runs 三字段只留「主产物」（最后一件，向后兼容），每件 blueprint 产物
+// 在本表按捕获序独立登记。
+
+/** 一件登记产物（不含 run_id/seq —— 由容器决定）。 */
+export interface RunArtifact {
+  artifact_type: ArtifactType | null;
+  artifact_filename: string | null;
+  artifact_url: string | null;
+}
+
+/**
+ * saveRunArtifacts — 全量重登记（幂等）：先清空该 run 的旧行，再按传入序
+ * （seq = 数组下标）逐件插入。重复调用（回调触发两次/重放）不会堆行。
+ * 空数组 = 清空登记（合法：run 可能没有产出任何产物）。
+ */
+export function saveRunArtifacts(runId: string, artifacts: RunArtifact[]): void {
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM run_artifacts WHERE run_id = ?`).run(runId);
+    const ins = db.prepare(
+      `INSERT INTO run_artifacts
+         (run_id, seq, artifact_type, artifact_filename, artifact_url, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    const now = new Date().toISOString();
+    artifacts.forEach((a, seq) => {
+      ins.run(runId, seq, a.artifact_type, a.artifact_filename, a.artifact_url, now);
+    });
+  });
+  tx();
+}
+
+/** listRunArtifacts — 该 run 登记的全部产物，按捕获序（seq ASC）。 */
+export function listRunArtifacts(runId: string): RunArtifact[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT artifact_type, artifact_filename, artifact_url
+       FROM run_artifacts WHERE run_id = ? ORDER BY seq ASC`,
+    )
+    .all(runId) as RunArtifact[];
+  return rows;
+}
+
+/** listAllRunArtifacts — 全表按 run 分组（GET /api/runs 行内嵌 artifacts 用）。 */
+export function listAllRunArtifacts(): Map<string, RunArtifact[]> {
+  const rows = getDb()
+    .prepare(
+      `SELECT run_id, artifact_type, artifact_filename, artifact_url
+       FROM run_artifacts ORDER BY run_id, seq ASC`,
+    )
+    .all() as Array<RunArtifact & { run_id: string }>;
+  const byRun = new Map<string, RunArtifact[]>();
+  for (const r of rows) {
+    const list = byRun.get(r.run_id) ?? [];
+    list.push({
+      artifact_type: r.artifact_type,
+      artifact_filename: r.artifact_filename,
+      artifact_url: r.artifact_url,
+    });
+    byRun.set(r.run_id, list);
+  }
+  return byRun;
+}
+
 export function deleteRun(runId: string): boolean {
-  const result = getDb().prepare(`DELETE FROM runs WHERE run_id = ?`).run(runId);
-  return result.changes > 0;
+  const db = getDb();
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM run_artifacts WHERE run_id = ?`).run(runId);
+    const result = db.prepare(`DELETE FROM runs WHERE run_id = ?`).run(runId);
+    return result.changes > 0;
+  });
+  return tx() as boolean;
 }
 
 /**

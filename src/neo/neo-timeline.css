@@ -921,6 +921,9 @@ button.neo-tl-op[data-status="running"]:hover { background: none; }
   color: var(--t-fg-2);
 }
 .neo-tl-hop[data-status='pending'] { color: var(--t-fg-4); }
+/* 「交接中」中间态（2026-11-07，start→running 上屏）：整体仍弱化，状态词点 accent 表活。 */
+.neo-tl-hop[data-status='running'] { color: var(--t-fg-3); }
+.neo-tl-hop[data-status='running'] .neo-tl-hop-status { color: var(--t-accent); }
 .neo-tl-hop[data-status='done'] .neo-tl-hop-status { color: var(--t-ok, #10B981); }
 .neo-tl-hop[data-status='failed'],
 .neo-tl-hop[data-status='timeout'],

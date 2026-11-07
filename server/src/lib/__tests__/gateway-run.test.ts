@@ -268,6 +268,215 @@ describe('emit → runBus 事件日志 → B2 读回', () => {
     expect(think).toMatchObject({ kind: 'thinking', status: 'done', duration_ms: 999 });
     // 清扫没有追加任何额外 thinking_finalize（duration_ms 仍是生产者的 999）。
   });
+
+  // 2026-11-07 hop 卡收口 — 崩溃/中断时 hop 的 settle 从未发生，SQLite 侧有
+  // sweepOrphanHops 兜底，日志侧此前无人收口 → 回放 hop 卡永卡 pending/「交接中」。
+  it('finish 兜底清扫：未 settle 的 hop_card 补 hop_update aborted 终态', () => {
+    const groupId = 'g-sweep-hop-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '中断轮')!;
+    const hopId = gw.nextId();
+    gw.emitMessage({
+      id: hopId,
+      kind: 'hop_card',
+      turn_id: gw.turnId,
+      ts: Date.now() - 5_000,
+      from_agent: 'a1',
+      to_agent: 'a2',
+      from_name: '小张',
+      to_name: '小李',
+      status: 'pending',
+    });
+    // start 已播报「交接中」，但 settle 永远没来（进程中断）。
+    gw.emitPatch({ id: hopId, op: 'hop_update', patch: { status: 'running' } });
+
+    const before = timelineReplay.replayTimeline(
+      runSessions.getRunReplay(gw.sessionId)!.events,
+    );
+    expect(before.find((m) => m.id === hopId)).toMatchObject({ status: 'running' });
+
+    gw.finish('canceled');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    const after = timelineReplay.replayTimeline(replay.events);
+    const hop = after.find((m) => m.id === hopId)!;
+    expect(hop).toMatchObject({ kind: 'hop_card', status: 'aborted' });
+    if (hop.kind === 'hop_card') {
+      expect(hop.detail).toBeTruthy();
+      expect(typeof hop.duration_ms === 'number').toBe(true);
+    }
+    // 补丁只发一条（aborted 终态）。
+    const terminalPatches = replay.events.filter(
+      (e) =>
+        e.event === 'message-patch' &&
+        (e.data as { id?: string; op?: string; patch?: { status?: string } }).id === hopId &&
+        (e.data as { op?: string }).op === 'hop_update' &&
+        (e.data as { patch?: { status?: string } }).patch?.status === 'aborted',
+    );
+    expect(terminalPatches).toHaveLength(1);
+  });
+
+  it('终态清扫不改写已 settle 的 hop 卡（done 结算原样保留）', () => {
+    const groupId = 'g-sweep-hop-idem-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '正常轮')!;
+    const hopId = gw.nextId();
+    gw.emitMessage({
+      id: hopId,
+      kind: 'hop_card',
+      turn_id: gw.turnId,
+      ts: Date.now() - 1_000,
+      from_agent: 'a1',
+      to_agent: 'a2',
+      from_name: '小张',
+      to_name: '小李',
+      status: 'pending',
+    });
+    gw.emitPatch({
+      id: hopId,
+      op: 'hop_update',
+      patch: { status: 'done', output_chars: 42, duration_ms: 800 },
+    });
+    gw.finish('succeeded');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    const after = timelineReplay.replayTimeline(replay.events);
+    expect(after.find((m) => m.id === hopId)).toMatchObject({
+      kind: 'hop_card',
+      status: 'done',
+      output_chars: 42,
+      duration_ms: 800,
+    });
+    // 清扫没有追加 aborted 改写（该卡 hop_update 补丁仍只有生产者那一条）。
+    const hopPatches = replay.events.filter(
+      (e) =>
+        e.event === 'message-patch' &&
+        (e.data as { id?: string }).id === hopId &&
+        (e.data as { op?: string }).op === 'hop_update',
+    );
+    expect(hopPatches).toHaveLength(1);
+  });
+
+  // 2026-11-07 plan 卡任务行收口 — 崩溃/中断时行级 settle（plan_update_task）
+  // 从未发生，running 行回放永转圈（Loader2）。sweepOpenProcessCards 现补
+  // plan_update_task {status:'failed'} 终态。
+  it('finish 兜底清扫：未 settle 的 plan_card 任务行补 failed 终态', () => {
+    const groupId = 'g-sweep-plan-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '中断轮')!;
+    const planId = gw.nextId();
+    gw.emitMessage({
+      id: planId,
+      kind: 'plan_card',
+      turn_id: gw.turnId,
+      ts: Date.now() - 5_000,
+      title: '编排计划',
+      tasks: [
+        { id: 'node:a1', title: '甲', assignee: '小张', status: 'pending' },
+        { id: 'node:a2', title: '乙', assignee: '小李', status: 'pending' },
+      ],
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a1',
+      patch: { status: 'running' },
+    });
+    // a2 从未派发（有意 pending）。
+
+    const before = timelineReplay.replayTimeline(
+      runSessions.getRunReplay(gw.sessionId)!.events,
+    );
+    const beforePlan = before.find((m) => m.id === planId)!;
+    if (beforePlan.kind === 'plan_card') {
+      expect(beforePlan.tasks.find((t) => t.id === 'node:a1')!.status).toBe('running');
+    }
+
+    gw.finish('canceled');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    const after = timelineReplay.replayTimeline(replay.events);
+    const plan = after.find((m) => m.id === planId)!;
+    expect(plan.kind).toBe('plan_card');
+    if (plan.kind === 'plan_card') {
+      expect(plan.tasks.find((t) => t.id === 'node:a1')).toMatchObject({
+        status: 'failed',
+        note: '回合中断，任务未结算',
+      });
+      expect(plan.tasks.find((t) => t.id === 'node:a2')).toMatchObject({ status: 'pending' });
+    }
+    // 合成补丁只发一条（a1 的 failed 终态）。
+    const swept = replay.events.filter(
+      (e) =>
+        e.event === 'message-patch' &&
+        (e.data as { id?: string }).id === planId &&
+        (e.data as { op?: string }).op === 'plan_update_task' &&
+        (e.data as { patch?: { status?: string } }).patch?.status === 'failed',
+    );
+    expect(swept).toHaveLength(1);
+  });
+
+  it('终态清扫不改写已结算的计划行（done/blocked 原样保留）', () => {
+    const groupId = 'g-sweep-plan-idem-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '正常轮')!;
+    const planId = gw.nextId();
+    gw.emitMessage({
+      id: planId,
+      kind: 'plan_card',
+      turn_id: gw.turnId,
+      ts: Date.now() - 1_000,
+      title: '编排计划',
+      tasks: [
+        { id: 'node:a1', title: '甲', status: 'pending' },
+        { id: 'node:a2', title: '乙', status: 'pending' },
+        { id: 'node:a3', title: '丙', status: 'pending' },
+      ],
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a1',
+      patch: { status: 'running' },
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a1',
+      patch: { status: 'done', elapsed_ms: 800 },
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a2',
+      patch: { status: 'blocked' },
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a3',
+      patch: { status: 'running' },
+    });
+    gw.finish('succeeded');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    const plan = timelineReplay.replayTimeline(replay.events).find((m) => m.id === planId)!;
+    if (plan.kind === 'plan_card') {
+      // 生产者的结算原样保留；只有 a3 的悬空行被收口。
+      expect(plan.tasks.find((t) => t.id === 'node:a1')).toMatchObject({
+        status: 'done',
+        elapsed_ms: 800,
+      });
+      expect(plan.tasks.find((t) => t.id === 'node:a2')).toMatchObject({ status: 'blocked' });
+      expect(plan.tasks.find((t) => t.id === 'node:a3')).toMatchObject({ status: 'failed' });
+    }
+    // a1/a2 无 failed 合成补丁；a3 恰一条。
+    const failedPatches = replay.events.filter(
+      (e) =>
+        e.event === 'message-patch' &&
+        (e.data as { id?: string }).id === planId &&
+        (e.data as { op?: string }).op === 'plan_update_task' &&
+        (e.data as { patch?: { status?: string } }).patch?.status === 'failed',
+    );
+    expect(failedPatches).toHaveLength(1);
+    expect((failedPatches[0]!.data as { task_id?: string }).task_id).toBe('node:a3');
+  });
 });
 
 describe('失败语义 — 绝不反向破坏聊天主链路', () => {
