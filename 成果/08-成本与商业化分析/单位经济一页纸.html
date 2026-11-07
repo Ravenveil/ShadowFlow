@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>单位经济一页纸</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 960px;
+    background: linear-gradient(180deg,#DCEAFC,#F4F9FF 30%,#EAF2FC);
+    color: #22304A;
+    font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    padding: 40px 44px 32px;
+  }
+  .title { font-size: 36px; font-weight: 800; letter-spacing: 1px;
+    background: linear-gradient(90deg,#0B3D91,#3B82F6); -webkit-background-clip: text; color: transparent; }
+  .subtitle { font-size: 12px; color: #5A6B85; margin: 6px 0 18px; }
+  .subtitle b { color: #2C5BA9; }
+
+  .hero { display: flex; gap: 14px; margin-bottom: 18px; }
+  .hcard { flex: 1; background: #fff; border-radius: 12px; padding: 16px 18px;
+    box-shadow: 0 2px 8px rgba(31,68,131,.10); border-left: 4px solid #2E7CF6; }
+  .hcard .num { font-size: 30px; font-weight: 800; color: #0B3D91; white-space: nowrap; }
+  .hcard .lbl { font-size: 12px; color: #5A6B85; margin-top: 4px; line-height: 1.6; }
+  .hcard.c2 { border-left-color: #22B07D; } .hcard.c2 .num { color: #167A54; }
+  .hcard.c3 { border-left-color: #FF8A3D; } .hcard.c3 .num { color: #C25E12; }
+
+  .cols { display: flex; gap: 14px; }
+  .col { flex: 1; }
+  .panel { background: #fff; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(31,68,131,.10); }
+  .ptitle { font-size: 14px; font-weight: 700; color: #0B3D91; margin-bottom: 9px;
+    display: flex; align-items: center; gap: 7px; }
+  .ptitle .ic { width: 22px; height: 22px; border-radius: 6px; background: #E8F0FE;
+    display: inline-flex; align-items: center; justify-content: center; color: #2E7CF6; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th, td { text-align: left; padding: 6px 7px; line-height: 1.5; }
+  thead th { color: #6B7A94; font-weight: 600; border-bottom: 1.5px solid #D8E4F4; white-space: nowrap; }
+  tbody tr { border-bottom: 1px solid #EDF2FA; }
+  tbody tr:last-child { border-bottom: none; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hi { color: #167A54; font-weight: 700; }
+  .hi-b { color: #0B3D91; font-weight: 700; }
+
+  .note { font-size: 10.5px; color: #6B7A94; line-height: 1.7; }
+  .foot { margin-top: 4px; background: linear-gradient(90deg,#0B3D91,#1E63D0); border-radius: 12px;
+    padding: 12px 18px; color: #DCE8FB; font-size: 10.5px; line-height: 1.8; }
+  .foot b { color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="title">单位经济一页纸</div>
+<div class="subtitle">JUNCTION CHINA 2026 · Xiaomi MiMo · OPC·一人公司 &nbsp;|&nbsp; 作品 <b>ShadowFlow</b> &nbsp;|&nbsp; 实跑底数：54 单 / 10 会话（材料 6 批次 1–4）&nbsp;|&nbsp; <b>2026-11-07</b></div>
+
+<div class="hero">
+  <div class="hcard">
+    <div class="num">¥0.019</div>
+    <div class="lbl">每个完整营销会话的模型费（mimo-v2.6-pro 实测载荷 × 官方定价）；10 会话窗口累计 ¥0.19</div>
+  </div>
+  <div class="hcard c2">
+    <div class="num">¥11–12</div>
+    <div class="lbl">代运营每单综合成本（AI≈0 + 人工监督折算 + 工具摊销）；对佣金收入 ¥19–25，毛利率 35–55%</div>
+  </div>
+  <div class="hcard c3">
+    <div class="num">≈ 23×</div>
+    <div class="lbl">与传统 9 岗位团队同等工作量对比：每场交付 ¥460 vs ¥20，每单 ¥46 vs ¥2.2</div>
+  </div>
+</div>
+
+<div class="cols">
+  <div class="col">
+    <div class="panel">
+      <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg></span>Token 实测（三层交叉验证）</div>
+      <table>
+        <thead><tr><th>层</th><th>实测</th><th class="num">折算 Token</th></tr></thead>
+        <tbody>
+          <tr><td>A · 事件流计数</td><td>10 会话 × 167 事件，记录计数器累计</td><td class="num">11,410</td></tr>
+          <tr><td>B · API 请求载荷</td><td>1 次调用/会话；输入 315–395 字符、输出 4,545 字符</td><td class="num">≈ 3,240–3,295 / 会话</td></tr>
+          <tr><td>C · 产物落盘</td><td>调研笔记 + 营销文案 + 步骤记录</td><td class="num">1,956 字节 / 会话</td></tr>
+          <tr><td class="hi-b">窗口合计（10 会话）</td><td>估算系数 1.5 字符/Token（敏感性 1.2–2.0）</td><td class="num hi-b">≈ 32.4–33.0K</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>40+ 小时窗口成本结构</div>
+      <table>
+        <thead><tr><th>成本项</th><th class="num">金额</th><th class="num">占比</th></tr></thead>
+        <tbody>
+          <tr><td>模型调用费（Pro 实测）</td><td class="num">¥0.19</td><td class="num">&lt;0.1%</td></tr>
+          <tr><td>服务器 / 工具（自有+开源）</td><td class="num">≈ ¥0</td><td class="num">0%</td></tr>
+          <tr><td>人工监督（老板，机会成本 ¥80/h）</td><td class="num">≈ ¥400–500</td><td class="num">≈ 98%</td></tr>
+          <tr><td class="hi-b">合计</td><td class="num hi-b">≈ ¥400–500</td><td class="num">现金仅 ¥0.2</td></tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:6px">结构性结论：成本 ≈ 人工监督时间。模型费放大 100 倍也只占 4% —— 边际交付成本由老板的监督分钟数决定。</div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="panel">
+      <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>单位经济（双口径）</div>
+      <table>
+        <thead><tr><th>项</th><th class="num">代运营（佣金制）</th><th class="num">内容包（¥99/单）</th></tr></thead>
+        <tbody>
+          <tr><td>收入 / 单</td><td class="num">¥19–25（GMV 15–20%）</td><td class="num">¥99</td></tr>
+          <tr><td>AI 模型费</td><td class="num">¥0.002–0.02</td><td class="num">¥0.02</td></tr>
+          <tr><td>人工监督折算</td><td class="num">≈ ¥10</td><td class="num">≈ ¥20</td></tr>
+          <tr><td>工具/托管摊销</td><td class="num">≈ ¥1–2</td><td class="num">≈ ¥1</td></tr>
+          <tr><td class="hi-b">毛利 / 单</td><td class="num hi">¥7–14（35–55%）</td><td class="num hi">≈ ¥79（80%）</td></tr>
+          <tr><td>盈亏平衡</td><td class="num">590–1,170 单/月（4–9 店）</td><td class="num">105 单/月</td></tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:6px">底数：实跑 54 单，客单价 ¥126.51；佣金率与时薪为显式假设；获客成本未计入。</div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>同等工作量 · 人机分工对比</div>
+      <table>
+        <thead><tr><th>职能（1 场营销交付）</th><th>传统 9 岗位</th><th>一人公司 + Agent</th></tr></thead>
+        <tbody>
+          <tr><td>调研 / 文案 / 策划</td><td>3 岗 5 人时 ≈ ¥330</td><td class="hi">Agent 双员工 ¥0.02</td></tr>
+          <tr><td>设计 / 质检 / 合规初筛</td><td>3 岗 2 人时 ≈ ¥100</td><td class="hi">Agent 留痕可回放</td></tr>
+          <tr><td>财务 / 项目 / 客服</td><td>3 岗 1.5 人时 ≈ ¥30</td><td>Agent 对账 + 老板 15 分钟</td></tr>
+          <tr><td class="hi-b">每场交付成本</td><td class="num hi-b">≈ ¥460（¥46/单）</td><td class="num hi">≈ ¥20（¥2.2/单）</td></tr>
+        </tbody>
+      </table>
+      <div class="note" style="margin-top:6px">薪资参照：谈职公开数据（2026-10）文案策划中位 ¥6.5–9.5k/月、内容策划 ¥10k/月，雇主系数 1.35。保守口径（监督 ×3 或分轮模型上限）仍有 12× 差距。</div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <b>数据口径</b>：经营底数 = 材料 6 实跑 54 单（收入 ¥6368 − 退款 ¥1434 = 营收 ¥4934，对账缺口 0）；Token 为实测（事件流计数 + API 载荷计量，系数 1.5 字符/Token 显式标注）；模型价 = MiMo 官方按量计费（pro ¥3/¥6 每百万 Token，缓存命中 ¥0.025）。
+  <b>风险披露</b>：演练数据（模拟沙箱 + 确定性桩）；佣金率/时薪/监督时长/复购率为假设；获客成本未计入；真实支付资质未办。详见《08-成本与商业化分析.md》。
+</div>
+
+</body>
+</html>
