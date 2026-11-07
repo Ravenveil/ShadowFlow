@@ -235,6 +235,36 @@ export function listShipEvents(shipmentId: string): ShipEventRow[] {
     .all(shipmentId) as ShipEventRow[];
 }
 
+/** 待寄出订单（只读关联 mb_orders）：已付款但还没有运单的订单，按下单时间先到先寄。 */
+export interface UnshippedOrder {
+  id: string;
+  product_id: string;
+  amount_cents: number;
+  created_at: number;
+}
+
+/**
+ * 已付款（paid）且尚无运单的订单。只读对方模块的表 —— 不写 mb_orders，
+ * 表不存在（未初始化商家域）时优雅降级为空数组，不抛错。
+ * 口径：refunded 不寄、created（未付款）不寄，避免错寄。
+ */
+export function listUnshippedOrders(limit = 10): UnshippedOrder[] {
+  try {
+    return db()
+      .prepare(
+        `SELECT o.id, o.product_id, o.amount_cents, o.created_at
+         FROM mb_orders o
+         WHERE o.status = 'paid'
+           AND NOT EXISTS (SELECT 1 FROM ops_shipments s WHERE s.order_id = o.id)
+         ORDER BY o.created_at ASC
+         LIMIT ?`,
+      )
+      .all(limit) as UnshippedOrder[];
+  } catch {
+    return [];
+  }
+}
+
 // ── 交运 / 轨迹 ───────────────────────────────────────────────────────────────
 
 /**

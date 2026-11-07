@@ -10,7 +10,8 @@
  *   ③ 多平台分发（本域编排：一次调用按平台/账号批量建帖 + 发布）
  *   ④ 快递寄出（本域新增：建运单 → 交运取面单 → 同步轨迹）
  *
- *   GET  /api/ops/overview                     → 四步各自进度（智能体决策入口）
+ *   GET  /api/ops/overview                     → 四步进度 + plan.next_action 可照抄
+ *                                                行动（智能体决策入口，每轮先读）
  *   POST /api/ops/marketing/launch             → 一键分发：商品 → 多账号建帖并发布
  *                                                （已发过的账号跳过 = 幂等）
  *   GET  /api/ops/carriers                     → 六家承运商规格 + real 凭证契约
@@ -42,6 +43,7 @@ import {
   getShipment,
   listShipEvents,
   listShipments,
+  listUnshippedOrders,
   shipShipment,
   stats as shipStats,
   syncShipmentTracking,
@@ -94,11 +96,24 @@ interface LaunchItem {
   skipped: boolean;
 }
 
+/** 可照抄的下一步动作：智能体不用拼参数，直接按 method+path+body 发请求。 */
+interface NextAction {
+  method: 'POST';
+  path: string;
+  body?: Record<string, unknown>;
+  /** 一句话说明为什么是这个动作 / 前置条件（如「收件信息须向买家索取」）。 */
+  note: string;
+}
+
 // ── 全流程进度 ────────────────────────────────────────────────────────────────
 
 /**
- * 四步进度汇总。智能体每轮先读这个：哪一步是空的，就把动作放在那一步上
- * （没有商品 → 先上架；有商品没帖 → 生成；有帖没发 → 分发；有单没运单 → 寄出）。
+ * 四步进度 + **可执行行动清单**。智能体每轮先读这个，然后只做 plan.next_action：
+ *   - 每步带 gap（缺口明细，如「哪个商品还没帖」「哪个订单还没运单」）
+ *     和 next_action（可照抄的请求，已带具体 id）；
+ *   - done 口径是「无缺口」而不是「发生过」：第二个商品上架后 copywriting
+ *     会转回未完成 —— 不让智能体误判收工；
+ *   - plan.next_action = 第一个未完成步骤的动作，四步全清时为 null。
  */
 router.get('/overview', (_req: Request, res: Response) => {
   try {
@@ -106,38 +121,123 @@ router.get('/overview', (_req: Request, res: Response) => {
     const posts = listPosts();
     const byStatus = (s: string): number => posts.filter((p) => p.status === s).length;
     const ship = shipStats();
+    const accounts = listAccounts();
+
+    // 各步缺口（明细带具体 id，智能体照抄即可）。
+    const unlisted = products.length === 0;
+    const noPostProducts = products.filter((p) => !posts.some((q) => q.product_id === p.id));
+    const unpostedProducts = products.filter(
+      (p) => !posts.some((q) => q.product_id === p.id && q.status === 'published'),
+    );
+    const unshippedOrders = listUnshippedOrders(10);
+    const awaitingShip = [...listShipments('pending'), ...listShipments('failed')].slice(0, 10);
+    const activePlatforms = [
+      ...new Set(accounts.filter((a) => a.status === 'active').map((a) => a.platform)),
+    ];
+
+    const listingAction: NextAction | null = unlisted
+      ? {
+          method: 'POST',
+          path: '/api/merchant/products',
+          note: '先向商家索取商品名称与售价再上架；商品信息不许编造',
+        }
+      : null;
+    const copyAction: NextAction | null = noPostProducts[0]
+      ? {
+          method: 'POST',
+          path: '/api/ops/marketing/launch',
+          body: { product_id: noPostProducts[0].id },
+          note: '生成营销帖并发布（文案由平台风味模板生成）',
+        }
+      : null;
+    let distributeAction: NextAction | null = null;
+    if (unpostedProducts[0]) {
+      distributeAction =
+        activePlatforms.length > 0
+          ? {
+              method: 'POST',
+              path: '/api/ops/marketing/launch',
+              body: { product_id: unpostedProducts[0].id, platforms: activePlatforms },
+              note: '已发过的账号会自动跳过（幂等），重跑即重试未发成功的平台',
+            }
+          : {
+              method: 'POST',
+              path: '/api/social-publish/accounts',
+              note: '没有 active 发布账号，先建号再分发',
+            };
+    }
+    let fulfillAction: NextAction | null = null;
+    if (awaitingShip[0]) {
+      fulfillAction = {
+        method: 'POST',
+        path: `/api/ops/shipments/${awaitingShip[0].id}/ship`,
+        note:
+          awaitingShip[0].status === 'failed'
+            ? '该运单上次交运失败，重试交运（failed 可重试）'
+            : '该运单已建单待交运，交运取面单',
+      };
+    } else if (unshippedOrders[0]) {
+      fulfillAction = {
+        method: 'POST',
+        path: '/api/ops/shipments',
+        body: { order_id: unshippedOrders[0].id, carrier: 'sf' },
+        note: '收件人姓名/电话/地址必须向买家或商家索取真实信息，不许编造；carrier 可换六家任一',
+      };
+    }
+
+    const steps = [
+      {
+        key: 'listing',
+        name: '上架商品',
+        count: products.length,
+        done: !unlisted,
+        gap: unlisted ? ['还没有商品'] : [],
+        next_action: listingAction,
+        next_hint: 'POST /api/merchant/products（商品信息须来自商家，不许编造）',
+      },
+      {
+        key: 'copywriting',
+        name: '生成营销帖',
+        count: posts.length,
+        done: products.length > 0 && noPostProducts.length === 0,
+        gap: noPostProducts.map((p) => p.id),
+        next_action: copyAction,
+        next_hint: 'POST /api/ops/marketing/launch（带 product_id，文案由平台风味模板生成）',
+      },
+      {
+        key: 'distribution',
+        name: '多平台分发',
+        count: byStatus('published'),
+        done: products.length > 0 && unpostedProducts.length === 0,
+        gap: unpostedProducts.map((p) => p.id),
+        next_action: distributeAction,
+        next_hint: 'POST /api/ops/marketing/launch（带 platforms 或 account_ids）',
+      },
+      {
+        key: 'fulfillment',
+        name: '快递寄出',
+        count: ship.shipments,
+        done: unshippedOrders.length === 0 && awaitingShip.length === 0,
+        gap: [
+          ...awaitingShip.map((s) => `${s.id}（${s.status === 'failed' ? '待重试交运' : '待交运'}）`),
+          ...unshippedOrders.map((o) => `订单 ${o.id} 待建运单`),
+        ],
+        next_action: fulfillAction,
+        next_hint: 'POST /api/ops/shipments → POST /api/ops/shipments/:id/ship',
+      },
+    ];
+
+    const planAction = steps.find((s) => !s.done)?.next_action ?? null;
+    const plan = {
+      next_action: planAction,
+      reason: planAction
+        ? `先做「${steps.find((s) => s.next_action === planAction)?.name ?? ''}」这一步：${planAction.note}`
+        : '四步全部完成，没有待办',
+    };
 
     res.json({
-      steps: [
-        {
-          key: 'listing',
-          name: '上架商品',
-          count: products.length,
-          done: products.length > 0,
-          next_hint: 'POST /api/merchant/products',
-        },
-        {
-          key: 'copywriting',
-          name: '生成营销帖',
-          count: posts.length,
-          done: posts.length > 0,
-          next_hint: 'POST /api/ops/marketing/launch（带 product_id，文案由平台风味模板生成）',
-        },
-        {
-          key: 'distribution',
-          name: '多平台分发',
-          count: byStatus('published'),
-          done: byStatus('published') > 0,
-          next_hint: 'POST /api/ops/marketing/launch（带 platforms 或 account_ids）',
-        },
-        {
-          key: 'fulfillment',
-          name: '快递寄出',
-          count: ship.shipments,
-          done: ship.shipped + ship.in_transit + ship.delivered > 0,
-          next_hint: 'POST /api/ops/shipments → POST /api/ops/shipments/:id/ship',
-        },
-      ],
+      steps,
+      plan,
       products: products.length,
       posts: {
         total: posts.length,
@@ -147,7 +247,14 @@ router.get('/overview', (_req: Request, res: Response) => {
         failed: byStatus('failed'),
       },
       shipments: ship,
-      accounts: listAccounts().length,
+      accounts: accounts.length,
+      pending_orders: unshippedOrders,
+      awaiting_shipment: awaitingShip.map((s) => ({
+        id: s.id,
+        order_id: s.order_id,
+        status: s.status,
+        attempts: s.attempts,
+      })),
     });
   } catch (err) {
     fail(res, err);

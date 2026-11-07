@@ -8,7 +8,7 @@
  *   - real 模式缺凭证 → 结构化 CREDENTIALS_MISSING（不 5xx）
  *   - 轨迹同步：事件去重、只前进不回退
  *   - 一键分发：多平台建帖并发布、二次调用幂等跳过、无账号平台 NO_ACCOUNT
- *   - overview 四步计数
+ *   - overview 四步计数 + plan 决策入口（gap 缺口明细 / next_action 可照抄行动）
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -297,5 +297,107 @@ describe('overview 四步进度', () => {
     for (const step of res.body.steps) {
       expect(step.next_hint).toBeTruthy();
     }
+  });
+});
+
+describe('overview 决策入口（plan / gap / 可照抄行动）', () => {
+  let p2Id = '';
+  let orderId = '';
+
+  it('无帖商品进 copywriting/distribution 缺口；done 口径收紧；plan 指向为其建帖', async () => {
+    p2Id = merchant.createProduct({ name: '手作陶土花器', price_cents: 8800 }).id;
+    const res = await request(app()).get('/api/ops/overview');
+    const copy = res.body.steps.find((s: { key: string }) => s.key === 'copywriting');
+    const dist = res.body.steps.find((s: { key: string }) => s.key === 'distribution');
+    // p1 有帖有发布，但 p2 什么都没有 —— 老口径会误判「已完成」
+    expect(copy.gap).toContain(p2Id);
+    expect(dist.gap).toContain(p2Id);
+    expect(copy.done).toBe(false);
+    expect(dist.done).toBe(false);
+    expect(res.body.plan.next_action.method).toBe('POST');
+    expect(res.body.plan.next_action.path).toBe('/api/ops/marketing/launch');
+    expect(res.body.plan.next_action.body.product_id).toBe(p2Id);
+    expect(res.body.plan.reason).toContain('生成营销帖');
+  });
+
+  it('paid 订单进 pending_orders 与 fulfillment 缺口；待交运运单优先于新订单建单', async () => {
+    // 把 p2 发掉 → copywriting/distribution 全清，只剩履约缺口
+    await request(app())
+      .post('/api/ops/marketing/launch')
+      .send({ product_id: p2Id, platforms: ['xiaohongshu', 'douyin'] });
+    const order = merchant.createOrder({ product_id: p2Id });
+    merchant.payOrder(order.id, 'txn-ops-1');
+    orderId = order.id;
+
+    const res = await request(app()).get('/api/ops/overview');
+    const copy = res.body.steps.find((s: { key: string }) => s.key === 'copywriting');
+    const dist = res.body.steps.find((s: { key: string }) => s.key === 'distribution');
+    const full = res.body.steps.find((s: { key: string }) => s.key === 'fulfillment');
+    expect(copy.done).toBe(true);
+    expect(dist.done).toBe(true);
+    expect(res.body.pending_orders.map((o: { id: string }) => o.id)).toContain(orderId);
+    expect(full.done).toBe(false);
+    expect(full.gap.join('｜')).toContain(`订单 ${orderId} 待建运单`);
+
+    const plan = res.body.plan.next_action;
+    expect(plan.path.startsWith('/api/ops/shipments')).toBe(true);
+    if (res.body.awaiting_shipment.length > 0) {
+      // 库里有待交运/待重试的遗留运单（如 real 缺凭证 failed 单）→ 优先消化它们
+      expect(plan.path).toBe(`/api/ops/shipments/${res.body.awaiting_shipment[0].id}/ship`);
+    } else {
+      expect(plan.body.order_id).toBe(orderId);
+    }
+  });
+
+  it('订单建单交运后出缺口；已交运运单不再出现在 awaiting_shipment', async () => {
+    const created = await request(app())
+      .post('/api/ops/shipments')
+      .send({ carrier: 'zto', order_id: orderId, ...RECEIVER });
+    expect(created.status).toBe(201);
+    const shipped = await request(app())
+      .post(`/api/ops/shipments/${created.body.shipment.id}/ship`)
+      .send({});
+    expect(shipped.body.receipt.ok).toBe(true);
+
+    const res = await request(app()).get('/api/ops/overview');
+    expect(res.body.pending_orders.map((o: { id: string }) => o.id)).not.toContain(orderId);
+    expect(res.body.steps.find((s: { key: string }) => s.key === 'fulfillment').gap.join('｜')).not.toContain(
+      `订单 ${orderId} 待建运单`,
+    );
+    expect(res.body.awaiting_shipment.map((s: { id: string }) => s.id)).not.toContain(
+      created.body.shipment.id,
+    );
+  });
+});
+
+describe('空库冷启动', () => {
+  // 换一个全新 cwd：_resetForTests 只重开连接，同目录仍是同一个库文件。
+  let tmp2 = '';
+  let savedCwd = '';
+
+  beforeAll(() => {
+    savedCwd = process.cwd();
+    tmp2 = mkdtempSync(path.join(tmpdir(), 'sf-ops-cold-'));
+    process.chdir(tmp2);
+    sqlite._resetForTests();
+    sqlite.getDb();
+  });
+
+  afterAll(() => {
+    sqlite._resetForTests();
+    process.chdir(savedCwd);
+    rmSync(tmp2, { recursive: true, force: true });
+  });
+
+  it('四步全空：plan 指向上架商品（信息须来自商家），fulfillment 无缺口不欠账', async () => {
+    const res = await request(app()).get('/api/ops/overview');
+    const listing = res.body.steps.find((s: { key: string }) => s.key === 'listing');
+    const full = res.body.steps.find((s: { key: string }) => s.key === 'fulfillment');
+    expect(listing.done).toBe(false);
+    expect(listing.gap).toEqual(['还没有商品']);
+    expect(full.done).toBe(true);
+    expect(res.body.plan.next_action.path).toBe('/api/merchant/products');
+    expect(res.body.plan.next_action.note).toContain('不许编造');
+    expect(res.body.plan.reason).toContain('上架商品');
   });
 });
