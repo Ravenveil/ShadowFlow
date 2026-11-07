@@ -53,6 +53,12 @@ import memoryHandoffRouter from './routes/memory/memory-handoff';
 import merchantBoardRouter from './routes/dashboard/merchant-board';
 // 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 给手艺人 − 快递 − 营销
 import craftProfitRouter from './routes/dashboard/craft-profit';
+// 社交发布（2026-11-07）— 社交平台直连发布：账号/营销帖/发布回执 + 平台适配器
+// （mock/real 双模）。外接模块，自带幂等建表，不改既有逻辑。
+import socialPublishRouter from './routes/social/social-publish';
+// 代运营全流程（2026-11-07）— 上架商品 → 生营销帖 → 多平台分发 → 快递寄出。
+// 营销侧复用 social 域，履约侧自带运单/轨迹表与承运商适配器（mock/real 双模）。
+import opsRouter from './routes/ops/ops';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/projects/conversations';
@@ -160,6 +166,10 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/merchant', merchantBoardRouter);
 // 产品盈利看板（2026-11-07）：/api/craft-profit/*，挂 proxyFallback 之前
 app.use('/api/craft-profit', craftProfitRouter);
+// 社交发布（营销帖直发六大平台），挂 proxyFallback 之前
+app.use('/api/social-publish', socialPublishRouter);
+// 代运营全流程（分发编排 + 快递履约），挂 proxyFallback 之前
+app.use('/api/ops', opsRouter);
 app.use('/api/conversations', conversationsRouter);
 // Chat/DM/群聊 发消息网关 — 拦下 POST /api/groups/:id/messages 用 Node dispatcher
 // 生成回复（CLI + API 都真生效）。其余 /api/groups/* 不在此定义 → next() →

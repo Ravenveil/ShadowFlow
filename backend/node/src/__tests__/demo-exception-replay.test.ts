@@ -40,6 +40,8 @@ interface DemoSummary {
     pending_conflicts: number;
     handoffs: number;
     accepted_handoffs: number;
+    context_reads: number;
+    context_items: number;
     pending_conflict_action: string;
     resolved_conflict_action: string;
     resolution_action: string;
@@ -110,6 +112,8 @@ describe('demo-exception-replay 演示证据包', () => {
       expect(s.memory.pending_conflicts).toBeGreaterThanOrEqual(1);
       expect(s.memory.handoffs).toBeGreaterThanOrEqual(1);
       expect(s.memory.accepted_handoffs).toBeGreaterThanOrEqual(1);
+      expect(s.memory.context_reads).toBeGreaterThanOrEqual(1);
+      expect(s.memory.context_items).toBeGreaterThanOrEqual(1);
       expect(s.memory.audit_total).toBeGreaterThan(0);
 
       // 编排层异常与人工审批拒绝，且不把 policy deny 混成老板决策。
@@ -169,18 +173,29 @@ describe('demo-exception-replay 演示证据包', () => {
     }
   });
 
-  it('自检函数对缺项不放行（纯函数，不需要跑 CLI）', async () => {
+  it('自检函数对缺项不放行（纯函数，子进程原生调）', () => {
+    // 子进程 + 原生 import：vitest 会把非 node_modules 的 .mjs 塞进 vite-node
+    // 转换链（缺口⑥），而这个脚本顶层纯净、裸 node 可直接 import —— 用 eval
+    // 子进程拿纯函数结果，与 CLI 全流程用例互为正交。
     const scriptUrl = pathToFileURL(SCRIPT).href;
-    const mod = (await import(scriptUrl)) as {
-      verifyDemoEvidence(summary: Record<string, unknown>): { ok: boolean; problems: string[] };
-      OUTPUT_FILES: { markdown: string; scorecard: string; csv: string; notice: string };
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const m = await import(${JSON.stringify(scriptUrl)});
+const empty = m.verifyDemoEvidence({ merchant: {}, memory: {}, collaboration: {}, human_decisions: {} });
+console.log(JSON.stringify({ empty, OUTPUT_FILES: m.OUTPUT_FILES }));`,
+      ],
+      { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60000 },
+    );
+    const { empty, OUTPUT_FILES } = JSON.parse(stdout) as {
+      empty: { ok: boolean; problems: string[] };
+      OUTPUT_FILES: { markdown: string };
     };
-    const empty = mod.verifyDemoEvidence({
-      merchant: {}, memory: {}, collaboration: {}, human_decisions: {},
-    });
     expect(empty.ok).toBe(false);
     expect(empty.problems.length).toBeGreaterThanOrEqual(8);
     expect(empty.problems.join('；')).toContain('系统擅自覆盖');
-    expect(mod.OUTPUT_FILES.markdown).toContain('sample-decisions');
+    expect(OUTPUT_FILES.markdown).toContain('sample-decisions');
   });
 });

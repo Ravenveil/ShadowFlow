@@ -78,6 +78,19 @@ const TERMINAL: ReadonlySet<RunStatus> = new Set<RunStatus>([
   'canceled',
 ]);
 
+/**
+ * hop 卡终态集合 — contracts.ts hop_update patch.status 里除 'running' 外皆终态
+ * （done/failed/timeout/empty/denied/aborted）。清扫用它判「已有结算、勿再补」。
+ */
+const HOP_TERMINAL: ReadonlySet<string> = new Set([
+  'done',
+  'failed',
+  'timeout',
+  'empty',
+  'denied',
+  'aborted',
+]);
+
 /** A connected SSE view. The route layer implements these against `res`. */
 export interface RunEventSink {
   /** Write one event frame. Called for replayed AND live events. */
@@ -240,20 +253,46 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
    * 只认 message/message-patch 事件，这些卡就永远停在 streaming（前端转圈
    * 23 小时的根因）。这里扫一遍日志，给每张未终态卡就地补一条终态 patch
    * （'message-patch' 事件追加到日志尾部），使任何回放路径都干净落定。
-   * 幂等：已终态的卡直接跳过。
+   * 2026-11-07 hop 卡收口 — hop_card 帧（pending/running）同样在此补
+   * hop_update {status:'aborted'} 终态：SQLite 侧有 sweepOrphanHops 兜底，
+   * 但重放可见的时间线侧此前无人收口，崩溃/中断后 hop 卡永卡「交接中」。
+   * 2026-11-07 plan 卡任务行收口 — plan_card 的行级 settle（plan_update_task）
+   * 同样可能在中断时缺席，running 行在回放里永远转圈（Loader2）：按行归并
+   * message 初值 + 补丁取最终状态，仍 'running' 的行补
+   * plan_update_task {status:'failed'} 终态补丁。pending 行有意不动 ——
+   * 「待派发」如实反映从未开始，且正常收尾可能存在有意不派发的行，不误标。
+   * 幂等：已终态的卡直接跳过（含本清扫补过的 —— 合成 patch 也在日志里，
+   * 行级同理：合成 plan_update_task 归并后不再是 'running'，二次清扫不命中）。
    */
   const sweepOpenProcessCards = (run: Run): number => {
     // 按消息 id 归并已见过的终态信号（append/中间帧不算）——后写的终态优先。
     const finalized = new Set<string>();
+    // plan_card 行级最终状态：(卡 id, task id) → status（后写覆盖；无 status
+    // 的补丁如 elapsed_ms 不改行状态）。
+    const rowStatus = new Map<string, Map<string, string>>();
     for (const rec of run.events) {
       if (rec.event !== 'message-patch') continue;
-      const p = rec.data as { id?: string; op?: string } | null;
+      const p = rec.data as {
+        id?: string;
+        op?: string;
+        task_id?: string;
+        patch?: { status?: string };
+      } | null;
       if (!p || typeof p.id !== 'string') continue;
+      if (p.op === 'plan_update_task' && typeof p.task_id === 'string') {
+        let byTask = rowStatus.get(p.id);
+        if (!byTask) {
+          byTask = new Map<string, string>();
+          rowStatus.set(p.id, byTask);
+        }
+        if (typeof p.patch?.status === 'string') byTask.set(p.task_id, p.patch.status);
+        continue;
+      }
       if (
         p.op === 'thinking_finalize' ||
         p.op === 'tool_finalize' ||
-        (p.op === 'msg_foot_update' &&
-          (p as { patch?: { status?: string } }).patch?.status === 'done')
+        (p.op === 'msg_foot_update' && p.patch?.status === 'done') ||
+        (p.op === 'hop_update' && HOP_TERMINAL.has(p.patch?.status ?? ''))
       ) {
         finalized.add(p.id);
       }
@@ -266,6 +305,7 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
         kind?: string;
         status?: string;
         ts?: number;
+        tasks?: Array<{ id?: string; status?: string }>;
       } | null;
       if (!m || typeof m.id !== 'string' || finalized.has(m.id)) continue;
       if (m.kind === 'thinking' && m.status === 'streaming') {
@@ -303,6 +343,51 @@ export function createRunBus(opts: RunBusOptions = {}): RunBus {
         });
         finalized.add(m.id);
         swept += 1;
+      } else if (m.kind === 'hop_card' && (m.status === 'pending' || m.status === 'running')) {
+        // hop 卡收口 — 中断/崩溃时 hop 的 settle 从未发生（SQLite 侧由
+        // sweepOrphanHops 补 aborted），日志侧在此对齐：补 aborted 终态
+        // patch，回放不再永卡「交接中」。已 settle 的卡在上面 finalized
+        // 已收集（终态 hop_update），不会被改写。
+        run.events.push({
+          id: run.nextEventId++,
+          event: 'message-patch',
+          data: {
+            id: m.id,
+            op: 'hop_update',
+            patch: {
+              status: 'aborted',
+              detail: '回合中断，交接未结算',
+              duration_ms: Math.max(0, now() - (m.ts ?? now())),
+            },
+          },
+          ts: now(),
+        });
+        finalized.add(m.id);
+        swept += 1;
+      } else if (m.kind === 'plan_card') {
+        // plan 卡任务行收口 — 崩溃/中断时行级 settle（plan_update_task）从未
+        // 发生，running 行回放永转圈（Loader2）。行最终状态 = message 初值 +
+        // 补丁归并（rowStatus 后写覆盖）；仅收 'running' 行 → failed。已结算
+        // 行（done/failed/blocked）与 pending 行不碰；合成补丁进日志后二次
+        // 清扫归并出 'failed' 不再命中，幂等。
+        const byTask = rowStatus.get(m.id);
+        for (const t of Array.isArray(m.tasks) ? m.tasks : []) {
+          if (!t || typeof t.id !== 'string') continue;
+          const status = byTask?.get(t.id) ?? t.status;
+          if (status !== 'running') continue;
+          run.events.push({
+            id: run.nextEventId++,
+            event: 'message-patch',
+            data: {
+              id: m.id,
+              op: 'plan_update_task',
+              task_id: t.id,
+              patch: { status: 'failed', note: '回合中断，任务未结算' },
+            },
+            ts: now(),
+          });
+          swept += 1;
+        }
       }
     }
     return swept;

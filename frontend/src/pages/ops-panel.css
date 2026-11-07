@@ -1,0 +1,179 @@
+/* ops-panel.css — 代运营看板差异样式（2026-11-07）。
+   基底复用 dashboard-neo.css 的 neo-db-* 体系，这里只放面板新增件：
+   四步卡片 / 缺口 chip / plan 盒 / 状态色 / 行内按钮。 */
+
+.ops-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 14px;
+  flex-wrap: wrap;
+}
+
+.ops-action-msg {
+  margin: 0;
+  font-size: 12px;
+  color: var(--neo-text-2, #6b7280);
+}
+
+.ops-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ops-step {
+  border: 1px solid var(--neo-line, #e5e7eb);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--neo-panel, #fff);
+}
+
+.ops-step.done {
+  border-color: var(--neo-ok, #16a34a);
+}
+
+.ops-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ops-step-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--neo-text-1, #111827);
+}
+
+.ops-step-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--neo-warn-bg, #fef3c7);
+  color: var(--neo-warn-fg, #92400e);
+}
+
+.ops-step-badge.ok {
+  background: var(--neo-ok-bg, #dcfce7);
+  color: var(--neo-ok-fg, #166534);
+}
+
+.ops-step-count {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 6px 0 4px;
+  color: var(--neo-text-1, #111827);
+}
+
+.ops-gap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ops-gap-chip {
+  display: inline-block;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--neo-chip-bg, #f3f4f6);
+  color: var(--neo-text-2, #4b5563);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-gap-chip.more {
+  background: var(--neo-warn-bg, #fef3c7);
+}
+
+.ops-plan {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+}
+
+.ops-plan-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--neo-text-2, #6b7280);
+}
+
+.ops-plan-reason {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--neo-text-1, #111827);
+}
+
+.ops-plan-endpoint {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ops-plan-endpoint code {
+  font-size: 12px;
+  background: var(--neo-chip-bg, #f3f4f6);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.ops-plan-body {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-plan-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--neo-text-2, #6b7280);
+}
+
+.ops-launch-btn {
+  margin-right: 6px;
+}
+
+.ops-launch-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--neo-text-2, #4b5563);
+}
+
+.ops-muted {
+  font-size: 12px;
+  color: var(--neo-text-2, #9ca3af);
+}
+
+.ops-status {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--neo-chip-bg, #f3f4f6);
+  color: var(--neo-text-2, #4b5563);
+  margin-right: 6px;
+}
+
+.ops-status--failed {
+  background: var(--neo-err-bg, #fee2e2);
+  color: var(--neo-err-fg, #991b1b);
+}
+
+.ops-status--delivered {
+  background: var(--neo-ok-bg, #dcfce7);
+  color: var(--neo-ok-fg, #166534);
+}
+
+.ops-status--in_transit,
+.ops-status--shipped {
+  background: var(--neo-info-bg, #dbeafe);
+  color: var(--neo-info-fg, #1e40af);
+}

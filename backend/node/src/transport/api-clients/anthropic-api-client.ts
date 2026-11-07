@@ -48,6 +48,15 @@ import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../prompts/prompt-assembly';
 export interface AnthropicApiClientOptions {
   /** BYOK key. If absent and env ANTHROPIC_API_KEY also empty, stream() throws. */
   apiKey?: string;
+  /**
+   * BYOK 自定义 API 地址（2026-11-07 模型链路断点全清）。透传给 Anthropic
+   * SDK 的 `baseURL`。注意 SDK 自己拼 `/v1/messages` —— 这里应传"主机根"
+   * （如 `https://api.anthropic.com` 或 mimo 的 anthropic 兼容端点
+   * `https://api.xiaomimimo.com/anthropic`），不要带 `/v1`。未配置时用
+   * SDK 内置默认（api.anthropic.com）。此前该字段缺失，settings/byok 里
+   * 配的自定义网关/私有端点在调用链上被静默忽略。
+   */
+  baseURL?: string;
   /** Model id (e.g. 'claude-sonnet-4-6'). Falls back to DEFAULT_MODELS.anthropic. */
   model?: string;
   /** Per-turn output cap. Falls back to 8192 to match llm-providers/anthropic.ts. */
@@ -191,7 +200,13 @@ export class AnthropicApiClient implements ApiClient {
     const max_tokens = this.opts.max_tokens ?? 8192;
     const think = resolveThinking(this.opts.thinking, max_tokens);
 
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({
+      apiKey,
+      // 2026-11-07：BYOK 自定义端点透传。缺省时不传 → SDK 内置默认地址。
+      ...(this.opts.baseURL && this.opts.baseURL.length > 0
+        ? { baseURL: this.opts.baseURL }
+        : {}),
+    });
     const wireMessages = toAnthropicMessages(args.messages);
 
     // Per-stream state for tool_use input accumulation. The SDK emits the

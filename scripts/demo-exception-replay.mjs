@@ -161,6 +161,9 @@ export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shad
     summary: '客户偏好简洁文案；预算口径有冲突待老板裁决',
   });
   memory.acceptHandoff(handoff.id, '交付岗');
+  // B 接班后真实拉一次上下文：消费留痕自动落库，证明「交接出来的记忆被用上了」，
+  // 闭环变成 交接 → 接班 → 消费 → 反馈写回 → 冲突裁决。
+  const consumed = memory.contextFor('交付岗', 'demo-service', 'copy', 20);
 
   // 编排层协作留痕（别人的模块，这里只写事实表，不改其代码）：
   // 正常交接 / 失败 / 返工 / 人工审批拒绝 / 系统策略拦截 / 悬挂中的交接。
@@ -200,6 +203,8 @@ export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shad
       pending_conflicts: report.human_decisions.pending_conflicts,
       handoffs: report.memory.stats.handoffs,
       accepted_handoffs: report.memory.stats.accepted,
+      context_reads: report.memory.context_reads.total,
+      context_items: consumed.count,
       pending_conflict_action: pendingConflict.action,
       resolved_conflict_action: resolvedConflict.action,
       resolution_action: resolution.action,
@@ -247,6 +252,7 @@ export function verifyDemoEvidence(summary) {
   need(summary.memory.resolutions >= 1, '人工裁决留痕为 0');
   need(summary.memory.pending_conflicts >= 1, '待裁决冲突为 0（系统擅自覆盖了？）');
   need(summary.memory.handoffs >= 1 && summary.memory.accepted_handoffs >= 1, '岗位交接包未接班');
+  need((summary.memory.context_reads ?? 0) >= 1, '记忆消费留痕为 0（交接出来的记忆没人读过）');
   need(summary.collaboration.failures >= 1, '协作异常终态为 0');
   need(summary.collaboration.reworks >= 1, '返工留痕为 0');
   need(summary.collaboration.approval_rejections >= 1, '人工审批拒绝为 0');
@@ -265,7 +271,7 @@ function printHuman(summary, verdict) {
   console.log('ShadowFlow · 异常处理 / 老板决策演示证据包（临时独立库样例，非线上库导出）');
   console.log(`输出目录：${summary.out_dir}`);
   console.log(`① 第一单 ${summary.merchant.first_order_complete ? '五步全通 ✓' : '未通 ×'} · 订单 ${summary.merchant.orders_total}（成交 ${summary.merchant.paid_orders} / 退款 ${summary.merchant.refunded_orders}）· 营收 ${summary.merchant.revenue_cents} 分 · 账实一致 ${summary.merchant.balanced ? '✓' : '×'}`);
-  console.log(`③ 写回事件 ${summary.memory.audit_total} · 人工裁决 ${summary.memory.resolutions} · 待裁决 ${summary.memory.pending_conflicts} · 交接包 ${summary.memory.handoffs}（已接班 ${summary.memory.accepted_handoffs}）`);
+  console.log(`③ 写回事件 ${summary.memory.audit_total} · 人工裁决 ${summary.memory.resolutions} · 待裁决 ${summary.memory.pending_conflicts} · 交接包 ${summary.memory.handoffs}（已接班 ${summary.memory.accepted_handoffs}）· 记忆消费 ${summary.memory.context_reads} 次（带出 ${summary.memory.context_items} 条）`);
   console.log(`协作 hop ${summary.collaboration.total} · 异常 ${summary.collaboration.failures} · 返工 ${summary.collaboration.reworks} · 人工审批拒绝 ${summary.collaboration.approval_rejections} · 悬挂 ${summary.collaboration.open}`);
   console.log(`反馈自动写回队列：${summary.feedback_module_available
     ? `已启用 · 累计 ${summary.feedback.total}（已处理 ${summary.feedback.processed} / 跳过 ${summary.feedback.skipped} / 失败待补跑 ${summary.feedback.failed}）· 人工补跑重放 ${summary.feedback.rerun_processed} 条`

@@ -75,4 +75,11 @@ assert('[GREEN] 新逻辑修正同一 case 为 true',
   shouldOrchestrate(bmadCase) === true && shouldOrchestrate(bmadCase) !== oldShouldOrchestrate(bmadCase));
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
-process.exit(fail === 0 ? 0 : 1);
+// Standalone script: keep the shell exit code. Under vitest a direct
+// process.exit() is an "unexpected exit" that reds out the whole file, so only
+// throw on failure there (the runner then reports the real failed checks).
+if (process.env.VITEST) {
+  if (fail > 0) throw new Error(`${fail} checks failed`);
+} else {
+  process.exit(fail === 0 ? 0 : 1);
+}

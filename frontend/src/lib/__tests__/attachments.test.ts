@@ -22,6 +22,8 @@ import {
   toUserAttachments,
   uploadPendingAttachments,
   revokeAttachmentPreviews,
+  deriveAttachmentUrl,
+  parseAttachmentRefs,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_COUNT,
 } from '../attachments';
@@ -168,5 +170,72 @@ describe('上限常量', () => {
   it('8MB / 9 个（与服务端 coerceAttachments 同限）', () => {
     expect(MAX_ATTACHMENT_BYTES).toBe(8 * 1024 * 1024);
     expect(MAX_ATTACHMENT_COUNT).toBe(9);
+  });
+});
+
+// ── 群聊历史回放反解析（2026-11-07 修复「我上传了图片，应该显示图片」）────
+
+describe('deriveAttachmentUrl', () => {
+  it('Windows 落盘路径 → /projects 直链（中文/特殊字符文件名 encode）', () => {
+    expect(
+      deriveAttachmentUrl('D:\\repo\\backend\\node\\.shadowflow\\projects\\_uploads\\abc123-x7y8z9\\头绳.jpg'),
+    ).toBe(`/projects/_uploads/abc123-x7y8z9/${encodeURIComponent('头绳.jpg')}`);
+    expect(
+      deriveAttachmentUrl('/home/u/proj/.shadowflow/projects/_uploads/s1/my photo.png'),
+    ).toBe(`/projects/_uploads/s1/${encodeURIComponent('my photo.png')}`);
+  });
+
+  it('非 _uploads 树 / 残缺路径 → null（渲染端回落文件 chip）', () => {
+    expect(deriveAttachmentUrl('D:\\elsewhere\\a.png')).toBeNull();
+    expect(deriveAttachmentUrl('/x/projects/_uploads/lonely')).toBeNull();
+    expect(deriveAttachmentUrl('')).toBeNull();
+  });
+});
+
+describe('parseAttachmentRefs', () => {
+  it('标准引用块 → 剥离正文 + 结构化附件（与 formatAttachmentRefs 互逆）', () => {
+    const refs = formatAttachmentRefs([
+      att({ label: '头绳.jpg', path: 'D:\\p\\.shadowflow\\projects\\_uploads\\s1\\头绳.jpg', url: '/u/1', isImage: true, size: 113 * 1024 }),
+      att({ label: 'b.pdf', path: '/p/.shadowflow/projects/_uploads/s2/b.pdf', url: '/u/2', size: 2048 }),
+    ]);
+    const text = `看看这个\n\n${refs}`;
+    const out = parseAttachmentRefs(text);
+    expect(out.text).toBe('看看这个');
+    expect(out.attachments).toEqual([
+      {
+        name: '头绳.jpg',
+        path: 'D:\\p\\.shadowflow\\projects\\_uploads\\s1\\头绳.jpg',
+        url: `/projects/_uploads/s1/${encodeURIComponent('头绳.jpg')}`,
+        is_image: true,
+        size: 113 * 1024,
+      },
+      {
+        name: 'b.pdf',
+        path: '/p/.shadowflow/projects/_uploads/s2/b.pdf',
+        url: '/projects/_uploads/s2/b.pdf',
+        is_image: false,
+        size: 2048,
+      },
+    ]);
+  });
+
+  it('无引用块 / 空文本 → 原样返回，附件空', () => {
+    expect(parseAttachmentRefs('就这个头绳')).toEqual({ text: '就这个头绳', attachments: [] });
+    expect(parseAttachmentRefs('')).toEqual({ text: '', attachments: [] });
+  });
+
+  it('无 size 行、非 _uploads 路径、纯引用块消息', () => {
+    const out = parseAttachmentRefs(
+      '[用户上传了 1 个附件，可用工具读取这些绝对路径]\n- c.txt (文件) 路径: /elsewhere/c.txt',
+    );
+    expect(out.text).toBe('');
+    expect(out.attachments).toEqual([
+      { name: 'c.txt', path: '/elsewhere/c.txt', url: '', is_image: false },
+    ]);
+  });
+
+  it('用户手打的相似文字不误剥（头行/条目行格式必须严格匹配）', () => {
+    const fake = '[用户上传了 2 个附件]\n- 假的 (图片) 路径: x';
+    expect(parseAttachmentRefs(fake)).toEqual({ text: fake, attachments: [] });
   });
 });

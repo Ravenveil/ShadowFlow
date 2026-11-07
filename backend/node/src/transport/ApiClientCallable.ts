@@ -47,6 +47,11 @@ import { LlmCallError, type TurnChunk } from '../workflow/types';
  * `assembler.ts:487-541` plus the two CLI-backed clients (S14.2). Keep this
  * set in lockstep with `buildApiClient`; when a 14th provider is added it
  * should appear in both places.
+ *
+ * 2026-11-07 模型链路断点全清：补入 azure。此前 azure 故意缺席（担心请求体
+ * 泄漏到默认公网地址），但 PROVIDER_IDS 含 azure → run-sessions 接受后炸在
+ * resolve 阶段，是条"半开的死路"。现在 azure 经 OpenAiCompatApiClient 走
+ * 显式部署地址（无 baseURL 时 client.resolveBaseURL() 照旧大声抛错）。
  */
 const OPENAI_COMPAT_PROVIDERS = new Set([
   'openai',
@@ -60,11 +65,19 @@ const OPENAI_COMPAT_PROVIDERS = new Set([
   'openrouter',
   'ollama',
   'lmstudio',
+  'azure',
 ]);
 
 export interface ApiClientCallableOptions {
   /** BYOK key. Optional for ollama / lmstudio; otherwise required at turn time. */
   apiKey?: string;
+  /**
+   * BYOK 自定义 API 地址（2026-11-07 Day1 打通修复）。目前透传给
+   * OpenAI-compat 系 client 的 `baseURL`；未配置时回退各 provider 内置
+   * 默认地址。此前该字段缺失，settings/byok 里配的自定义网关/本地端点
+   * 在 run-session 管线上被静默忽略，请求打到默认公网地址后超时。
+   */
+  baseUrl?: string;
   /** Model pin; falls back to provider's default via DEFAULT_MODELS. */
   model?: string;
   /** Per-turn output cap; falls back to each ApiClient's internal 8192 default. */
@@ -77,12 +90,14 @@ function buildApiClient(
   provider: string,
   opts: ApiClientCallableOptions,
 ): ApiClient | null {
-  const { apiKey, model, maxTokens: max_tokens, temperature } = opts;
+  const { apiKey, baseUrl, model, maxTokens: max_tokens, temperature } = opts;
   if (provider === 'anthropic') {
-    return new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
+    // 2026-11-07：baseURL 透传（Anthropic SDK 自拼 /v1/messages，传主机根）。
+    return new AnthropicApiClient({ apiKey, baseURL: baseUrl, model, max_tokens, temperature });
   }
   if (provider === 'google') {
-    return new GoogleApiClient({ apiKey, model, max_tokens, temperature });
+    // 2026-11-07：baseURL 透传（Gemini SDK 自拼 /{apiVersion}/…，传主机根）。
+    return new GoogleApiClient({ apiKey, baseURL: baseUrl, model, max_tokens, temperature });
   }
   if (provider === 'claude-code-cli') {
     return new ClaudeCodeCliApiClient({ apiKey, model, max_tokens });
@@ -94,6 +109,20 @@ function buildApiClient(
     return new OpenAiCompatApiClient({
       providerId: provider,
       apiKey,
+      ...(baseUrl && baseUrl.length > 0 ? { baseURL: baseUrl } : {}),
+      model,
+      max_tokens,
+      temperature,
+    });
+  }
+  // 2026-11-07：settings/byok 注册的自定义 provider（custom-* 等）——只要有
+  // 显式/配置的 baseUrl 就按 OpenAI 兼容端点构造（dispatcher 已从 settings
+  // 兜底解析 baseUrl）。无 baseUrl 的未知 id 维持 null → 下面大声抛错。
+  if (baseUrl && baseUrl.length > 0) {
+    return new OpenAiCompatApiClient({
+      providerId: provider,
+      apiKey,
+      baseURL: baseUrl,
       model,
       max_tokens,
       temperature,
@@ -130,7 +159,8 @@ export class ApiClientCallable implements LlmCallable {
       throw new LlmCallError(
         'provider-error',
         `ApiClientCallable: unknown provider "${provider}". Expected one of: ` +
-          `anthropic, google, claude-code-cli, codex-cli, ${[...OPENAI_COMPAT_PROVIDERS].join(', ')}`,
+          `anthropic, google, claude-code-cli, codex-cli, ${[...OPENAI_COMPAT_PROVIDERS].join(', ')}` +
+          ` — 或一个 settings/byok 里配置了 API 地址的自定义 provider（custom-* 需先配 baseUrl）`,
       );
     }
     this.client = client;

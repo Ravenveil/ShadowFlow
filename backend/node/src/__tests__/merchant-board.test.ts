@@ -695,3 +695,604 @@ describe('单笔毛利 / 环比 / 对账可解释（口径要能自证）', () =
     expect(after.body.issues).toEqual([]);
   });
 });
+
+describe('渠道获客经济性（渠道的钱口径，合计=概览）', () => {
+  it('按来源渠道归集营收/成本/毛利，合计与 overview 同窗口逐字段一致', async () => {
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '渠道测试品', price_cents: 10000, cost_cents: 3000 });
+
+    // 渠道 xhs：卖一单不退，营收 10000、成本 3000、毛利 7000
+    const v1 = await request(app()).post('/api/merchant/visits').send({ visitor_id: 'ch-v1', channel: 'xhs' });
+    const o1 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: p.body.id, visit_id: v1.body.id, trace_id: 'ch-1' });
+    await request(app()).post(`/api/merchant/orders/${o1.body.id}/pay`).send({ pay_txn_id: 'txn-ch-1' });
+
+    // 渠道 douyin：卖一单后全退，收入退、成本冲，钱和毛利都不能留
+    const v2 = await request(app()).post('/api/merchant/visits').send({ visitor_id: 'ch-v2', channel: 'douyin' });
+    const o2 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: p.body.id, visit_id: v2.body.id, trace_id: 'ch-2' });
+    await request(app()).post(`/api/merchant/orders/${o2.body.id}/pay`).send({ pay_txn_id: 'txn-ch-2' });
+    await request(app()).post(`/api/merchant/orders/${o2.body.id}/refund`);
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    const xhs = res.body.channels.find((c: { channel: string }) => c.channel === 'xhs');
+    expect(xhs).toBeTruthy();
+    expect(xhs).toMatchObject({
+      orders_total: 1,
+      paid_orders: 1,
+      refunded_orders: 0,
+      revenue_cents: 10000,
+      cost_cents: 3000,
+      gross_profit_cents: 7000,
+    });
+    expect(xhs.gross_margin_pct).toBe(70);
+
+    const dy = res.body.channels.find((c: { channel: string }) => c.channel === 'douyin');
+    expect(dy).toBeTruthy();
+    // 全额退款：营收/成本/毛利都归零，不给渠道留假毛利（与 overview 的净口径一致）
+    expect(dy).toMatchObject({
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 1,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(dy.gross_margin_pct).toBeNull();
+
+    // 没有来源访客的单归 '(unknown)'，钱和单都不丢（前面用例造过无 visit 的单）
+    const unk = res.body.channels.find((c: { channel: string }) => c.channel === '(unknown)');
+    expect(unk).toBeTruthy();
+    expect(unk.orders_total).toBeGreaterThanOrEqual(1);
+
+    // 合计与概览同窗口逐字段一致：渠道表不是另算一套，是同一本账换维度看
+    const ov = await request(app()).get(
+      `/api/merchant/overview?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.body.total.revenue_cents).toBe(ov.body.revenue_cents);
+    expect(res.body.total.cost_cents).toBe(ov.body.cost_cents);
+    expect(res.body.total.gross_profit_cents).toBe(ov.body.gross_profit_cents);
+    expect(res.body.total.orders_total).toBe(ov.body.orders_total);
+    expect(res.body.total.paid_orders).toBe(ov.body.paid_orders);
+    expect(res.body.total.refunded_orders).toBe(ov.body.refunded_orders);
+    expect(res.body.total.gross_margin_pct).toBe(ov.body.gross_margin_pct);
+  });
+
+  it('营收占比按渠道营收算：有营收的合计约 100%，零营收渠道是 0 不是编的数', async () => {
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+    // 每行四舍五入到 0.1%，合计允许 1 个百分点内的舍入误差
+    const shareSum = res.body.channels.reduce(
+      (a: number, c: { revenue_share_pct: number | null }) => a + (c.revenue_share_pct ?? 0),
+      0,
+    );
+    expect(Math.abs(shareSum - 100)).toBeLessThanOrEqual(1);
+    // 营收为 0 的渠道（douyin 全退）占比是 0；但整段区间净营收为 0 时后端回 null 不硬编
+    const dy = res.body.channels.find((c: { channel: string }) => c.channel === 'douyin');
+    expect(dy.revenue_share_pct).toBe(0);
+
+    // 隔离窗口（30 天前，其它用例的数据都在近几天）：只有一笔全退的单，
+    // 净营收为 0 → 占比/毛利率都是 null，不能编出 0% 或 100%。
+    const db = sqlite.getDb();
+    const T = Date.now() - 30 * 86400_000;
+    db.prepare(
+      `INSERT INTO mb_visits (id, visitor_id, channel, trace_id, converted, order_id, created_at)
+       VALUES ('only-refund-visit', 'only-refund-v', 'only-refund', 'only-refund', 1, 'only-refund-order', ?)`,
+    ).run(T);
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('only-refund-order', 'only-refund-p', 'only-refund-visit', 500, 100, 'refunded', 'txn-only-refund', 'only-refund', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    for (const [id, kind, amt] of [
+      ['or-1', 'income', 500],
+      ['or-2', 'expense', 100],
+      ['or-3', 'refund', 500],
+      ['or-4', 'expense', -100],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES (?, ?, ?, 'only-refund-order', 'only-refund', ?)`,
+      ).run(id, kind, amt, T + 60000);
+    }
+    const isolated = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(new Date(T).toISOString())}&end=${encodeURIComponent(new Date(T + 3600_000).toISOString())}`,
+    );
+    expect(isolated.status).toBe(200);
+    expect(isolated.body.channels).toHaveLength(1);
+    expect(isolated.body.channels[0]).toMatchObject({
+      channel: 'only-refund',
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(isolated.body.channels[0].gross_margin_pct).toBeNull();
+    expect(isolated.body.channels[0].revenue_share_pct).toBeNull();
+  });
+
+  it('区间隔离与脏参数：未来窗口全零，非法时间 400 不 5xx', async () => {
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const empty = await request(app()).get(
+      `/api/merchant/channels?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}`,
+    );
+    expect(empty.status).toBe(200);
+    expect(empty.body.channels).toEqual([]);
+    expect(empty.body.total).toMatchObject({
+      orders_total: 0,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(empty.body.total.gross_margin_pct).toBeNull();
+
+    expect((await request(app()).get('/api/merchant/channels?start=not-a-date')).status).toBe(400);
+    const inverted = await request(app()).get('/api/merchant/channels?start=2026-01-02&end=2026-01-01');
+    expect(inverted.status).toBe(400);
+  });
+});
+
+describe('产品贡献与定价（产品的钱口径 + 标价对照，合计=概览）', () => {
+  it('标价对照单均实收：卖两单退一单，退款吃掉的水分一眼可见；合计与 overview 同窗口逐字段一致', async () => {
+    // 定价测试课 21900/4300：卖两单退一单 —— 营收 21900、成本 4300、毛利 17600
+    const course = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '定价测试课', price_cents: 21900, cost_cents: 4300 });
+    const c1 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: course.body.id, trace_id: 'pe-1' });
+    await request(app()).post(`/api/merchant/orders/${c1.body.id}/pay`).send({ pay_txn_id: 'txn-pe-1' });
+    const c2 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: course.body.id, trace_id: 'pe-2' });
+    await request(app()).post(`/api/merchant/orders/${c2.body.id}/pay`).send({ pay_txn_id: 'txn-pe-2' });
+    await request(app()).post(`/api/merchant/orders/${c2.body.id}/refund`);
+
+    // 定价测试卡 5000/1000：卖一单全退 —— 钱没留住
+    const card = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '定价测试卡', price_cents: 5000, cost_cents: 1000 });
+    const k1 = await request(app())
+      .post('/api/merchant/orders')
+      .send({ product_id: card.body.id, trace_id: 'pe-3' });
+    await request(app()).post(`/api/merchant/orders/${k1.body.id}/pay`).send({ pay_txn_id: 'txn-pe-3' });
+    await request(app()).post(`/api/merchant/orders/${k1.body.id}/refund`);
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    const courseRow = res.body.products.find((p: { product_id: string }) => p.product_id === course.body.id);
+    expect(courseRow).toBeTruthy();
+    expect(courseRow).toMatchObject({
+      product_name: '定价测试课',
+      list_price_cents: 21900,
+      orders_total: 2,
+      paid_orders: 1,
+      refunded_orders: 1,
+      revenue_cents: 21900,
+      cost_cents: 4300,
+      gross_profit_cents: 17600,
+    });
+    expect(courseRow.gross_margin_pct).toBe(80.4);
+    // 单均实收 = 21900 ÷ 成交 2 单 = 10950，只有标价的一半 —— 差额就是退款吃掉的水分
+    expect(courseRow.avg_realized_price_cents).toBe(10950);
+    expect(courseRow.unit_gross_profit_cents).toBe(8800);
+
+    const cardRow = res.body.products.find((p: { product_id: string }) => p.product_id === card.body.id);
+    expect(cardRow).toBeTruthy();
+    expect(cardRow).toMatchObject({
+      list_price_cents: 5000,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    // 全退成交过：单均实收如实是 0（钱确实没留住），不是 null；营收 0 时毛利率不编数
+    expect(cardRow.gross_margin_pct).toBeNull();
+    expect(cardRow.avg_realized_price_cents).toBe(0);
+    expect(cardRow.unit_gross_profit_cents).toBe(0);
+    expect(cardRow.revenue_share_pct).toBe(0);
+
+    // 合计与概览同窗口逐字段一致：产品表不是另算一套，是同一本账换维度看
+    const ov = await request(app()).get(
+      `/api/merchant/overview?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.body.total.revenue_cents).toBe(ov.body.revenue_cents);
+    expect(res.body.total.cost_cents).toBe(ov.body.cost_cents);
+    expect(res.body.total.gross_profit_cents).toBe(ov.body.gross_profit_cents);
+    expect(res.body.total.orders_total).toBe(ov.body.orders_total);
+    expect(res.body.total.paid_orders).toBe(ov.body.paid_orders);
+    expect(res.body.total.refunded_orders).toBe(ov.body.refunded_orders);
+    expect(res.body.total.gross_margin_pct).toBe(ov.body.gross_margin_pct);
+    // 合计单均实收的分母是成交单数（与 overview 的客单价分母不同，口径写在字段注释里）
+    expect(res.body.total.avg_realized_price_cents).toBe(
+      Math.round(res.body.total.revenue_cents / (res.body.total.paid_orders + res.body.total.refunded_orders)),
+    );
+    expect(res.body.total.unit_gross_profit_cents).toBe(
+      Math.round(res.body.total.gross_profit_cents / (res.body.total.paid_orders + res.body.total.refunded_orders)),
+    );
+  });
+
+  it('营收占比合计约 100%；无归属流水归 (unknown) 不编名字/标价，缺档案产品同样不编', async () => {
+    // 手工流水没有对应订单 → 归 '(unknown)'，钱和单都不丢
+    sqlite.getDb()
+      .prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES ('pe-orphan', 'income', 777, 'pe-no-order', 'pe-orphan', ?)`,
+      )
+      .run(Date.now());
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    // 每行四舍五入到 0.1%，合计允许 1 个百分点内的舍入误差
+    const shareSum = res.body.products.reduce(
+      (a: number, p: { revenue_share_pct: number | null }) => a + (p.revenue_share_pct ?? 0),
+      0,
+    );
+    expect(Math.abs(shareSum - 100)).toBeLessThanOrEqual(1);
+
+    const unk = res.body.products.find((p: { product_id: string }) => p.product_id === '(unknown)');
+    expect(unk).toBeTruthy();
+    expect(unk.product_name).toBe('(unknown)');
+    expect(unk.list_price_cents).toBeNull();
+    expect(unk.revenue_cents).toBe(777);
+
+    // 环比用例手工插入的老单 'cmp-product' 从来不在产品档案里：名字/标价都不编数
+    const noCat = res.body.products.find((p: { product_id: string }) => p.product_id === 'cmp-product');
+    expect(noCat).toBeTruthy();
+    expect(noCat.product_name).toBe('(unknown)');
+    expect(noCat.list_price_cents).toBeNull();
+  });
+
+  it('隔离窗口缺档案的全退单：单均实收如实 0，毛利率/占比是 null 不编 0%', async () => {
+    // 20 天前（±1 天主窗口与 30 天前渠道用例的数据都不在这段），一单买完即全退
+    const db = sqlite.getDb();
+    const T = Date.now() - 20 * 86400_000;
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('pe-nocat-order', 'pe-nocat-p', '', 500, 100, 'refunded', 'txn-pe-nocat', 'pe-nocat', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    for (const [id, kind, amt] of [
+      ['pn-1', 'income', 500],
+      ['pn-2', 'expense', 100],
+      ['pn-3', 'refund', 500],
+      ['pn-4', 'expense', -100],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES (?, ?, ?, 'pe-nocat-order', 'pe-nocat', ?)`,
+      ).run(id, kind, amt, T + 60000);
+    }
+
+    const isolated = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(new Date(T).toISOString())}&end=${encodeURIComponent(new Date(T + 3600_000).toISOString())}`,
+    );
+    expect(isolated.status).toBe(200);
+    expect(isolated.body.products).toHaveLength(1);
+    const row = isolated.body.products[0];
+    expect(row.product_id).toBe('pe-nocat-p');
+    // 产品已不在档案里：名字/标价不编数
+    expect(row.product_name).toBe('(unknown)');
+    expect(row.list_price_cents).toBeNull();
+    expect(row).toMatchObject({
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 1,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    // 全退成交过：单均实收如实是 0 不是 null；营收为 0：毛利率/占比是 null 不编 0%
+    expect(row.avg_realized_price_cents).toBe(0);
+    expect(row.unit_gross_profit_cents).toBe(0);
+    expect(row.gross_margin_pct).toBeNull();
+    expect(row.revenue_share_pct).toBeNull();
+    expect(isolated.body.total.gross_margin_pct).toBeNull();
+    expect(isolated.body.total.avg_realized_price_cents).toBe(0);
+    expect(isolated.body.total.unit_gross_profit_cents).toBe(0);
+  });
+
+  it('区间隔离与脏参数：未来窗口全零且单均为 null，非法时间 400 不 5xx', async () => {
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const empty = await request(app()).get(
+      `/api/merchant/products/economics?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}`,
+    );
+    expect(empty.status).toBe(200);
+    expect(empty.body.products).toEqual([]);
+    expect(empty.body.total).toMatchObject({
+      orders_total: 0,
+      paid_orders: 0,
+      refunded_orders: 0,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    // 没成交过：单均是 null 不是 0；营收为 0：毛利率是 null
+    expect(empty.body.total.gross_margin_pct).toBeNull();
+    expect(empty.body.total.avg_realized_price_cents).toBeNull();
+    expect(empty.body.total.unit_gross_profit_cents).toBeNull();
+
+    expect((await request(app()).get('/api/merchant/products/economics?start=not-a-date')).status).toBe(400);
+    const inverted = await request(app()).get('/api/merchant/products/economics?start=2026-01-02&end=2026-01-01');
+    expect(inverted.status).toBe(400);
+  });
+});
+
+describe('客户贡献与复购（复购拆分 + 合计=概览）', () => {
+  it('复购人群口径：复购客户（成交≥2）与单次人群营收相加恒等于总营收；只下单未付不算客户，手工流水归 (unknown)', async () => {
+    // 25 天前隔离窗口（避开 ±1 天主窗口、20 天前产品隔离、30 天前渠道数据）
+    const db = sqlite.getDb();
+    const T = Date.now() - 25 * 86400_000;
+    for (const [id, vid] of [
+      ['ce-visit-rp', 'ce-v-rp'],
+      ['ce-visit-once', 'ce-v-once'],
+      ['ce-visit-nopay', 'ce-v-nopay'],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO mb_visits (id, visitor_id, channel, trace_id, created_at)
+         VALUES (?, ?, 'wechat', ?, ?)`,
+      ).run(id, vid, vid, T);
+    }
+
+    // 复购客户 ce-v-rp：两单成交（一付一退）—— 成交 2 单即复购，退款的钱如实扣
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('ce-rp-paid', 'ce-p', 'ce-visit-rp', 10000, 2000, 'paid', 'txn-ce-p', 'ce', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('ce-rp-refund', 'ce-p', 'ce-visit-rp', 6000, 1200, 'refunded', 'txn-ce-r', 'ce', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    // 单次客户 ce-v-once：成交 1 单
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('ce-once-paid', 'ce-p', 'ce-visit-once', 5000, 1000, 'paid', 'txn-ce-o', 'ce', ?, ?)`,
+    ).run(T + 60000, T + 60000);
+    // 只下单未付：有单无钱，不算客户
+    db.prepare(
+      `INSERT INTO mb_orders
+       (id, product_id, visit_id, amount_cents, cost_cents, status, pay_txn_id, trace_id, created_at, paid_at)
+       VALUES ('ce-nopay', 'ce-p', 'ce-visit-nopay', 3000, 0, 'created', NULL, 'ce', ?, NULL)`,
+    ).run(T + 60000);
+
+    for (const [id, kind, amt, oid] of [
+      ['ce-l1', 'income', 10000, 'ce-rp-paid'],
+      ['ce-l2', 'income', 6000, 'ce-rp-refund'],
+      ['ce-l3', 'refund', 6000, 'ce-rp-refund'],
+      ['ce-l4', 'expense', 2000, 'ce-rp-paid'],
+      ['ce-l5', 'expense', 1200, 'ce-rp-refund'],
+      ['ce-l6', 'expense', -1200, 'ce-rp-refund'],
+      ['ce-l7', 'income', 5000, 'ce-once-paid'],
+      ['ce-l8', 'expense', 1000, 'ce-once-paid'],
+      // 手工流水没有对应订单 → 归 '(unknown)'，钱不丢
+      ['ce-l9', 'income', 777, 'ce-no-order'],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO mb_ledger (id, kind, amount_cents, order_id, trace_id, created_at)
+         VALUES (?, ?, ?, ?, 'ce', ?)`,
+      ).run(id, kind, amt, oid, T + 60000);
+    }
+
+    const res = await request(app()).get(
+      `/api/merchant/customers?start=${encodeURIComponent(new Date(T).toISOString())}&end=${encodeURIComponent(new Date(T + 3600_000).toISOString())}`,
+    );
+    expect(res.status).toBe(200);
+
+    const rp = res.body.top.find((c: { customer_id: string }) => c.customer_id === 'ce-v-rp');
+    expect(rp).toBeTruthy();
+    expect(rp).toMatchObject({
+      orders_total: 2,
+      paid_orders: 1,
+      refunded_orders: 1,
+      transacted_orders: 2,
+      is_repeat: true,
+      // 一付一退：营收 10000、退款的单成本冲回后 cost 只剩 2000
+      revenue_cents: 10000,
+      cost_cents: 2000,
+      gross_profit_cents: 8000,
+    });
+    expect(rp.gross_margin_pct).toBe(80);
+    expect(rp.avg_realized_price_cents).toBe(5000);
+    expect(rp.unit_gross_profit_cents).toBe(4000);
+
+    const once = res.body.top.find((c: { customer_id: string }) => c.customer_id === 'ce-v-once');
+    expect(once).toBeTruthy();
+    expect(once).toMatchObject({
+      orders_total: 1,
+      paid_orders: 1,
+      refunded_orders: 0,
+      transacted_orders: 1,
+      is_repeat: false,
+      revenue_cents: 5000,
+      cost_cents: 1000,
+      gross_profit_cents: 4000,
+    });
+    expect(once.gross_margin_pct).toBe(80);
+
+    // 只下单未付：行在（有单），但没成交不算客户，单均是 null 不编 0
+    const nopay = res.body.top.find((c: { customer_id: string }) => c.customer_id === 'ce-v-nopay');
+    expect(nopay).toBeTruthy();
+    expect(nopay).toMatchObject({
+      orders_total: 1,
+      paid_orders: 0,
+      refunded_orders: 0,
+      transacted_orders: 0,
+      is_repeat: false,
+      revenue_cents: 0,
+    });
+    expect(nopay.avg_realized_price_cents).toBeNull();
+    expect(nopay.unit_gross_profit_cents).toBeNull();
+    expect(nopay.gross_margin_pct).toBeNull();
+
+    // 手工流水归 '(unknown)'：钱不丢、不编客户名，没成交过单均是 null
+    const unk = res.body.top.find((c: { customer_id: string }) => c.customer_id === '(unknown)');
+    expect(unk).toBeTruthy();
+    expect(unk).toMatchObject({
+      customer_id: '(unknown)',
+      revenue_cents: 777,
+      transacted_orders: 0,
+      is_repeat: false,
+    });
+    expect(unk.avg_realized_price_cents).toBeNull();
+
+    // Top 按营收降序（贡献大的人一眼在最上面）
+    expect(res.body.top.map((c: { customer_id: string }) => c.customer_id)).toEqual([
+      'ce-v-rp',
+      'ce-v-once',
+      '(unknown)',
+      'ce-v-nopay',
+    ]);
+
+    // 摘要：复购率看「人」，复购贡献看「钱」
+    expect(res.body.summary).toMatchObject({
+      customers: 2,
+      repeat_customers: 1,
+      repeat_rate_pct: 50,
+      repeat_customer_revenue_cents: 10000,
+      // 单次人群含只下单未付（营收 0）与 (unknown) 手工流水 777
+      single_customer_revenue_cents: 5777,
+    });
+    expect(res.body.summary.repeat_revenue_share_pct).toBe(63.4);
+    expect(res.body.summary.avg_revenue_per_customer_cents).toBe(7889);
+    // 铁律：两行相加恒等于总营收，复购拆分没有拆不平的缺口
+    expect(res.body.summary.repeat_customer_revenue_cents + res.body.summary.single_customer_revenue_cents).toBe(
+      res.body.total.revenue_cents,
+    );
+
+    // 合计逐字段自洽：与 overview 同一本账换维度看
+    expect(res.body.total).toMatchObject({
+      orders_total: 4,
+      paid_orders: 2,
+      refunded_orders: 1,
+      transacted_orders: 3,
+      revenue_cents: 15777,
+      cost_cents: 3000,
+      gross_profit_cents: 12777,
+    });
+    expect(res.body.total.gross_margin_pct).toBe(81);
+    expect(res.body.total.avg_realized_price_cents).toBe(5259);
+    expect(res.body.total.unit_gross_profit_cents).toBe(4259);
+  });
+
+  it('合计与 overview 同窗口逐字段一致；复购率/客户均贡献公式自洽；主窗口复购客户归因正确', async () => {
+    // 主窗口内走 API 造一个复购客户：同一访客成交两单
+    const p = await request(app())
+      .post('/api/merchant/products')
+      .send({ name: '复购测试课', price_cents: 8000, cost_cents: 1000 });
+    const v = await request(app())
+      .post('/api/merchant/visits')
+      .send({ visitor_id: 'ce-api-v', channel: 'wechat', trace_id: 'ce-api-1' });
+    for (const tid of ['ce-api-1', 'ce-api-2']) {
+      const o = await request(app())
+        .post('/api/merchant/orders')
+        .send({ product_id: p.body.id, visit_id: v.body.id, trace_id: tid });
+      await request(app()).post(`/api/merchant/orders/${o.body.id}/pay`).send({ pay_txn_id: `txn-${tid}` });
+    }
+
+    const q = window();
+    const res = await request(app()).get(
+      `/api/merchant/customers?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.status).toBe(200);
+
+    // 合计与概览同窗口逐字段一致：客户表不是另算一套，是同一本账换维度看
+    const ov = await request(app()).get(
+      `/api/merchant/overview?start=${encodeURIComponent(q.start)}&end=${encodeURIComponent(q.end)}`,
+    );
+    expect(res.body.total.revenue_cents).toBe(ov.body.revenue_cents);
+    expect(res.body.total.cost_cents).toBe(ov.body.cost_cents);
+    expect(res.body.total.gross_profit_cents).toBe(ov.body.gross_profit_cents);
+    expect(res.body.total.orders_total).toBe(ov.body.orders_total);
+    expect(res.body.total.paid_orders).toBe(ov.body.paid_orders);
+    expect(res.body.total.refunded_orders).toBe(ov.body.refunded_orders);
+    expect(res.body.total.gross_margin_pct).toBe(ov.body.gross_margin_pct);
+
+    // 恒等式与公式自洽（不硬编码数字：共享库里还有别的用例数据）
+    const s = res.body.summary;
+    expect(s.repeat_customer_revenue_cents + s.single_customer_revenue_cents).toBe(res.body.total.revenue_cents);
+    expect(s.customers).toBeGreaterThanOrEqual(2);
+    expect(s.repeat_customers).toBeGreaterThanOrEqual(1);
+    expect(s.repeat_rate_pct).toBe(Math.round((s.repeat_customers / s.customers) * 1000) / 10);
+    expect(s.avg_revenue_per_customer_cents).toBe(Math.round(res.body.total.revenue_cents / s.customers));
+    if (res.body.total.revenue_cents) {
+      expect(s.repeat_revenue_share_pct).toBe(
+        Math.round((s.repeat_customer_revenue_cents / res.body.total.revenue_cents) * 1000) / 10,
+      );
+    }
+
+    // Top ≤ 5 行、营收降序（同营收按 ID，排序稳定）
+    expect(res.body.top.length).toBeLessThanOrEqual(5);
+    for (let i = 1; i < res.body.top.length; i += 1) {
+      expect(res.body.top[i - 1].revenue_cents).toBeGreaterThanOrEqual(res.body.top[i].revenue_cents);
+    }
+
+    // 走 API 造的复购客户：成交 2 单归因正确、is_repeat 如实
+    const apiRow = res.body.top.find((c: { customer_id: string }) => c.customer_id === 'ce-api-v');
+    expect(apiRow).toBeTruthy();
+    expect(apiRow).toMatchObject({
+      orders_total: 2,
+      paid_orders: 2,
+      refunded_orders: 0,
+      transacted_orders: 2,
+      is_repeat: true,
+    });
+  });
+
+  it('区间隔离与脏参数：未来窗口全零且复购率/单均是 null 不编数，非法时间 400 不 5xx', async () => {
+    const future = new Date(Date.now() + 86400_000).toISOString();
+    const far = new Date(Date.now() + 2 * 86400_000).toISOString();
+    const empty = await request(app()).get(
+      `/api/merchant/customers?start=${encodeURIComponent(future)}&end=${encodeURIComponent(far)}`,
+    );
+    expect(empty.status).toBe(200);
+    expect(empty.body.top).toEqual([]);
+    // 没客户：复购率/客户均贡献是 null 不编 0%
+    expect(empty.body.summary).toMatchObject({
+      customers: 0,
+      repeat_customers: 0,
+      repeat_customer_revenue_cents: 0,
+      single_customer_revenue_cents: 0,
+    });
+    expect(empty.body.summary.repeat_rate_pct).toBeNull();
+    expect(empty.body.summary.repeat_revenue_share_pct).toBeNull();
+    expect(empty.body.summary.avg_revenue_per_customer_cents).toBeNull();
+    expect(empty.body.total).toMatchObject({
+      orders_total: 0,
+      paid_orders: 0,
+      refunded_orders: 0,
+      transacted_orders: 0,
+      revenue_cents: 0,
+      cost_cents: 0,
+      gross_profit_cents: 0,
+    });
+    expect(empty.body.total.gross_margin_pct).toBeNull();
+    expect(empty.body.total.avg_realized_price_cents).toBeNull();
+    expect(empty.body.total.unit_gross_profit_cents).toBeNull();
+
+    expect((await request(app()).get('/api/merchant/customers?start=not-a-date')).status).toBe(400);
+    const inverted = await request(app()).get('/api/merchant/customers?start=2026-01-02&end=2026-01-01');
+    expect(inverted.status).toBe(400);
+  });
+});

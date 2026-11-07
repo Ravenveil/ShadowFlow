@@ -61,7 +61,8 @@ import { extractRows } from '../components/run-session/timeline/messages/rows/ex
 import { humanizeToolName, toolIconFor } from '../components/run-session/timeline/toolMeta';
 import { useI18n } from '../common/i18n';
 // 拖拽传图（2026-11-07）：user_turn 随行附件缩略图（/projects 直链）。
-import { fmtAttachmentSize } from '../lib/attachments';
+// 群聊历史消息无结构化附件 → parseAttachmentRefs 从正文反解析引用块。
+import { fmtAttachmentSize, parseAttachmentRefs } from '../lib/attachments';
 import { getApiBase } from '../api/_base';
 import './neo-timeline.css';
 
@@ -305,21 +306,29 @@ const NeoUserTurn = memo(function NeoUserTurn({
 }) {
   // 拖拽传图（2026-11-07）：带随行附件时气泡外包一层右对齐 wrap，图片出
   // /projects 直链缩略图（点击新窗看原图），其余文件出 neo-tl-attach chip。
+  // 附件来源两路（结构化优先）：
+  //   1. msg.attachments — run 会话的结构化随行附件（服务端注入 goal，text 干净）；
+  //   2. parseAttachmentRefs — 群聊/DM 历史消息 text 里的附件引用块反解析
+  //      （修复「我上传了图片，应该显示图片」：此前引用块原文直出气泡），
+  //      正文剥离引用块只显用户文字。
   // 无附件走原 DOM（零回归）。
-  const atts = msg.attachments ?? [];
+  const structured = msg.attachments && msg.attachments.length > 0 ? msg.attachments : null;
+  const parsed = structured ? null : parseAttachmentRefs(msg.text);
+  const atts = structured ?? parsed?.attachments ?? [];
+  const text = parsed ? parsed.text : msg.text;
   if (atts.length === 0) {
     return <div className="neo-tl-user">{renderUserTextWithMentions(msg.text)}</div>;
   }
   return (
     <div className="neo-tl-user-wrap" data-testid="user-turn-attachments">
-      {msg.text ? (
-        <div className="neo-tl-user">{renderUserTextWithMentions(msg.text)}</div>
+      {text ? (
+        <div className="neo-tl-user">{renderUserTextWithMentions(text)}</div>
       ) : null}
       <div className="neo-tl-user-atts">
         {atts.map((a) =>
-          a.is_image ? (
+          a.is_image && a.url ? (
             <a
-              key={a.url}
+              key={a.url || a.path}
               href={attSrc(a.url)}
               target="_blank"
               rel="noreferrer"
@@ -329,7 +338,7 @@ const NeoUserTurn = memo(function NeoUserTurn({
               <img src={attSrc(a.url)} alt={a.name} loading="lazy" />
             </a>
           ) : (
-            <span key={a.url} className="neo-tl-attach" title={a.path}>
+            <span key={a.url || a.path} className="neo-tl-attach" title={a.path}>
               <Paperclip size={11} aria-hidden />
               {a.name}
               {typeof a.size === 'number' ? ` · ${fmtAttachmentSize(a.size)}` : ''}

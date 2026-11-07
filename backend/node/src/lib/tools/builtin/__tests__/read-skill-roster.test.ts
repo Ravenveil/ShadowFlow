@@ -50,4 +50,11 @@ assert('无 edges 不崩、含 member', bare.includes('agent: solo') && !bare.in
 assert('无 name → (unnamed)', bare.includes('(unnamed)'));
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
-process.exit(fail === 0 ? 0 : 1);
+// Standalone script: keep the shell exit code. Under vitest a direct
+// process.exit() is an "unexpected exit" that reds out the whole file, so only
+// throw on failure there (the runner then reports the real failed checks).
+if (process.env.VITEST) {
+  if (fail > 0) throw new Error(`${fail} checks failed`);
+} else {
+  process.exit(fail === 0 ? 0 : 1);
+}

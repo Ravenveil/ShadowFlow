@@ -14,13 +14,42 @@
  * transport/spawners 的内部队列事件（delta/end）不上面，见命名表头注。
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import * as path from 'path';
+
+/**
+ * 定位仓库根：从 cwd 逐级向上找，以 server/package.json 为锚点。
+ * 这个脚本既会被 `npx tsx src/...`（cwd=server/）跑，也会被 vitest
+ * （cwd=仓库根）跑，写死 `../docs` 只有前者成立，后者会指到仓库外。
+ *
+ * 注意锚点不能用 docs/EVENT_NAMING.md：docs/ 已从版本控制移除（见下），
+ * 干净克隆里没有这个文件，用它当锚点会直接抛异常。
+ */
+function findRepoRoot(from: string): string {
+  let cur = path.resolve(from);
+  for (;;) {
+    if (existsSync(path.join(cur, 'backend', 'node', 'package.json'))) return cur;
+    const up = path.dirname(cur);
+    if (up === cur) throw new Error(`server/package.json not found above ${from}`);
+    cur = up;
+  }
+}
+
+const REPO_ROOT = findRepoRoot(process.cwd());
+const SERVER_ROOT = path.join(REPO_ROOT, 'backend', 'node');
 
 let pass = 0;
 let fail = 0;
+let skipped = 0;
+/** 命名表是否在仓库里（docs/ 已从版本控制移除，干净克隆没有）。在下方赋值。 */
+let docTracked = false;
 
 function check(label: string, cond: boolean, detail?: string): void {
+  if (!docTracked) {
+    skipped++;
+    console.log(`  SKIP  ${label}（命名表不在仓库里）`);
+    return;
+  }
   if (cond) {
     pass++;
     console.log(`  PASS  ${label}`);
@@ -32,17 +61,26 @@ function check(label: string, cond: boolean, detail?: string): void {
 
 /** run-session 链的生产发射面。新增发射文件时同步此清单与命名表。 */
 const WIRE_EMITTERS = [
-  'src/routes/run-sessions.ts',
+  'src/routes/runs/run-sessions/index.ts',
+  'src/routes/runs/run-sessions/registry.ts',
   'src/lib/timeline-projector.ts',
   'src/lib/timeline-replay.ts',
-  'src/assembler.ts',
-  'src/parser.ts',
+  'src/assembly/assembler.ts',
+  'src/parsers/parser.ts',
   'src/lib/tool-approval.ts',
   'src/lib/tool-runner.ts',
 ];
 
-const docPath = path.resolve('../../docs/EVENT_NAMING.md');
-const doc = readFileSync(docPath, 'utf-8');
+const docPath = path.join(REPO_ROOT, 'docs', 'EVENT_NAMING.md');
+
+/**
+ * docs/ 自 7240d96（chore(repo): slim tracked tree）起不再纳入版本控制——协作者把
+ * 历史遗留的 docs/ 从 tracked tree 摘掉，docs/ 本就在 .gitignore 里。干净克隆没有
+ * 命名表，四向对账无从对起；此时逐条 SKIP 而不是让 readFileSync 直接抛异常或让
+ * A/B 方向对比空表而全红。
+ */
+docTracked = existsSync(docPath);
+const doc = docTracked ? readFileSync(docPath, 'utf-8') : '';
 
 // §1 主表区域（供 B 方向精确解析）。
 const sec1 = doc.split('## 1.')[1]?.split('## 2.')[0] ?? '';
@@ -50,7 +88,7 @@ const sec1 = doc.split('## 1.')[1]?.split('## 2.')[0] ?? '';
 // ── A. 代码 → 表 ────────────────────────────────────────────────────────────
 const codeEvents = new Set<string>();
 for (const file of WIRE_EMITTERS) {
-  const text = readFileSync(path.resolve(file), 'utf-8');
+  const text = readFileSync(path.join(SERVER_ROOT, file), 'utf-8');
   for (const m of text.matchAll(/event:\s*'([a-z_-]+)'/g)) codeEvents.add(m[1]!);
   for (const m of text.matchAll(/\.emit\([^,]+,\s*'([a-z_-]+)'/g)) codeEvents.add(m[1]!);
 }
@@ -84,7 +122,7 @@ check(
 
 // ── C. Python durable → 表 ─────────────────────────────────────────────────
 const pySource = readFileSync(
-  path.resolve('../python/shadowflow/runtime/run_event_log.py'),
+  path.join(REPO_ROOT, 'backend', 'python', 'shadowflow', 'runtime', 'run_event_log.py'),
   'utf-8',
 );
 const durableBlock = pySource.match(/DURABLE_EVENT_TYPES[^=]*=\s*frozenset\(([\s\S]*?)\)/)?.[1] ?? '';
@@ -97,7 +135,7 @@ check(
 );
 
 // ── D. message kind → 表 §3 ────────────────────────────────────────────────
-const projector = readFileSync(path.resolve('src/lib/timeline-projector.ts'), 'utf-8');
+const projector = readFileSync(path.join(SERVER_ROOT, 'src', 'lib', 'timeline-projector.ts'), 'utf-8');
 const kinds = new Set<string>();
 for (const m of projector.matchAll(/kind:\s*'([a-z_-]+)'/g)) kinds.add(m[1]!);
 const sec3 = doc.split('## 3.')[1]?.split('## 4.')[0] ?? '';
@@ -108,5 +146,6 @@ check(
   missingKinds.length ? `未登记: ${missingKinds.join(', ')}` : undefined,
 );
 
-console.log(`\nevent-naming: ${pass} passed, ${fail} failed`);
+const skipNote = docTracked ? '' : `, ${skipped} skipped（docs/EVENT_NAMING.md 不在仓库里）`;
+console.log(`\nevent-naming: ${pass} passed, ${fail} failed${skipNote}`);
 if (fail > 0) process.exit(1);

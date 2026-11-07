@@ -84,8 +84,9 @@ jobs:
         run: cd backend/node && npx tsc --noEmit
 
   # ------------------------------------------------------------------
-  # Backend tests — vitest over backend/node/src/__tests__ (real Express
-  # routers, temp cwd)
+  # Backend tests — 两轨全量（2026-11-07 main 线扩容语义随拆分落地）：
+  # vitest 式全量（backend/node/src/**，脚本式程序化排除）+ 脚本式
+  # test:scripts（tsx 子进程、退出码判结果）。
   # ------------------------------------------------------------------
   test-backend:
     name: test (backend)
@@ -107,8 +108,11 @@ jobs:
       - name: Install npm dependencies (backend/node)
         run: cd backend/node && npm ci
 
-      - name: vitest (src/__tests__)
-        run: cd backend/node && npx vitest run src/__tests__
+      - name: vitest (backend/node 全量 vitest 式)
+        run: cd backend/node && npx vitest run
+
+      - name: script-style tests (tsx 子进程)
+        run: node scripts/run-script-tests.mjs
 
   # ------------------------------------------------------------------
   # Frontend tests — vitest project "web" (jsdom)

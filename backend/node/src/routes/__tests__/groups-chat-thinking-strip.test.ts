@@ -9,12 +9,15 @@
  *     `byok:<id>`（替代无脑 cli:claude——CLI 挂起时群聊 thinking 卡永远
  *     streaming 的根因）；无 BYOK → 'cli:claude' 历史兜底；settings 异常
  *     NeverThrow。
+ *   - createThinkingTagStream（2026-11-07）：B3 过程卡逐 chunk 流式剥
+ *     `<sf[:-]thinking>` 定界符（思考内容保留）；跨 chunk 切断的标签 hold
+ *     住不闪现，流中断残段 flush 丢弃。
  *
  * Run:
  *   npx vitest run --config vitest.server.config.ts server/src/routes/__tests__/groups-chat-thinking-strip.test.ts
  */
 import { describe, it, expect } from 'vitest';
-import { stripThinking, pickDefaultExecutor } from '../groups/groups-chat';
+import { stripThinking, pickDefaultExecutor, createThinkingTagStream } from '../groups/groups-chat';
 
 describe('stripThinking — 最终回复剥离 <sf:thinking> 思考段', () => {
   it('成对标签整体剥离，正文保留', () => {
@@ -71,6 +74,71 @@ describe('stripThinking — 最终回复剥离 <sf:thinking> 思考段', () => {
     const s =
       '<sf:thinking>想一下</sf:thinking>第一段。<sf-thinking>再想想</sf-thinking>第二段。';
     expect(stripThinking(s)).toBe('第一段。第二段。');
+  });
+});
+
+describe('createThinkingTagStream — 流式定界符剥离（2026-11-07 B3 过程卡）', () => {
+  it('无标签正文逐 chunk 原样透传', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('你好')).toBe('你好');
+    expect(f.push('，世界')).toBe('，世界');
+    f.flush();
+  });
+
+  it('思考内容保留、仅剥定界符（与 stripThinking 整段丢弃语义对齐）', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('<sf:thinking>想一下</sf:thinking>结论')).toBe('想一下结论');
+    f.flush();
+  });
+
+  it('开标签被切断在 chunk 尾 → 不闪现半截标签，补全后定界符消失', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('<sf:thinkin')).toBe('');
+    expect(f.push('g>想</sf:thinkin')).toBe('想');
+    expect(f.push('g>好')).toBe('好');
+    f.flush();
+  });
+
+  it('连字符形态 + 多段混排：定界符全消失，内容按序保留', () => {
+    const f = createThinkingTagStream();
+    const out =
+      f.push('<sf-thinking>英文思考</sf-thinking>正文') + f.push('<sf:thinking>二想');
+    expect(out).toBe('英文思考正文二想');
+    f.flush();
+  });
+
+  it('带属性开标签切断在属性段（属性含 < 也不误切）', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('<sf:thinking x=')).toBe('');
+    expect(f.push('y>内容</sf:thinking>')).toBe('内容');
+    f.flush();
+  });
+
+  it('裸 `<` 结尾 hold 一拍，下一片证实非标签立即释放（拼接无损）', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('a <')).toBe('a '); // hold 起点在 `<`，之前的字符照常放出
+    expect(f.push(' b')).toBe('< b');
+    f.flush();
+  });
+
+  it('字面 `<` 非标签（`< b`）不误伤、不 hold', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('a < b > c')).toBe('a < b > c');
+    f.flush();
+  });
+
+  it('名字被空白提前终结的碎片按字面文本放行（不吞正文）', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('<sf:thi <b')).toBe('<sf:thi <b');
+    f.flush();
+  });
+
+  it('流中断（未补全的疑似标签残段）flush 丢弃，不以碎片进卡体', () => {
+    const f = createThinkingTagStream();
+    expect(f.push('好<sf:thin')).toBe('好');
+    f.flush(); // void：残段直接丢弃
+    expect(f.push('king>迟到的补全')).toBe('king>迟到的补全'); // flush 后按新字面文本
+    f.flush();
   });
 });
 

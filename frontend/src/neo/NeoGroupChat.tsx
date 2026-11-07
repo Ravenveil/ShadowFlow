@@ -45,6 +45,7 @@ import {
 } from '../api/groupApi';
 import { listAgents, type AgentRecord } from '../api/agents';
 import { NeoTimeline } from './NeoTimeline';
+import { isAgentActivity, thinkingLabelPrefix } from './agent-activity';
 import { NeoGroupMsgActions } from './NeoGroupMsgActions';
 import { NeoDispatchCard, type IntentMessage } from './NeoDispatchCard';
 import { NeoDeliveryCard, collectDeliverables, summarizeText } from './NeoDeliveryCard';
@@ -260,8 +261,11 @@ export function fmtElapsed(since: number, now: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** 该 agent 本回合有过程卡流出（thinking 卡存在即算干过活）。 */
-function agentHasActivity(messages: readonly TimelineMessage[], agentId: string): boolean {
+/** 该 agent 本轮已给出回复（气泡级产出：assistant_text/raw 带 agent_id）。 */
+export function agentHasReply(
+  messages: readonly TimelineMessage[],
+  agentId: string,
+): boolean {
   return messages.some(
     (m) =>
       (m.kind === 'assistant_text' || m.kind === 'raw') && m.agent_id === agentId,
@@ -334,6 +338,21 @@ function NeoTurnBackstage({
       )}
     </div>
   );
+}
+
+/**
+ * 该 agent 干过活 — 发言/思考/工具调用/任务行/交接边任一即算。
+ * 归属判定委托 agent-activity.isAgentActivity（与检查器活动流同源语义，
+ * thinking 卡、tool_call/tool_echo、plan_card 任务行都认；老数据 thinking
+ * 回落 label 前缀匹配），避免双实现漂移。
+ */
+export function agentHasActivity(
+  messages: readonly TimelineMessage[],
+  agentId: string,
+  displayName: string,
+): boolean {
+  const labelPrefix = thinkingLabelPrefix(displayName);
+  return messages.some((m) => isAgentActivity(m, agentId, labelPrefix));
 }
 
 /* ── 组件 ─────────────────────────────────────────────────────────────────── */
@@ -447,16 +466,26 @@ export function NeoGroupChat({
   }, [timeline.pendingTurn?.turnId, busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // busy roster：多成员会话在执行中时，顶栏显示每个成员的干活状态点。
-  // 依据（零新端点，全部从已有 timeline 数据推导）：
-  //   - done  = 已有该 agent 的回复（assistant_text/raw 带 agent_id）
-  //   - 转圈  = busy 且还没有回复（正在被派活）
-  //   - 待命  = busy 但既无回复也无 plan_card 任务行（未被点名，串行等待）
+  // 三态（2026-11-07 补全；零新端点，全部从已有 timeline 数据推导）：
+  //   - done    = 已有该 agent 的回复（assistant_text/raw 带 agent_id）
+  //   - working = 干过活但还没回复（thinking/工具卡/任务行/交接边流出 —— 真在干活）
+  //   - idle    = 一点动静都没有（还没被派活/串行等待）—「待命」
   const busyRoster = useMemo(() => {
     if (!busy || isDm || groupAgentIds.length <= 1) return [];
     return groupAgentIds.map((id) => {
       const rec = agentById.get(id);
-      const replied = agentHasActivity(timeline.messages, id);
-      return { agentId: id, name: rec?.name ?? id, rec, replied };
+      const name = rec?.name ?? id;
+      const replied = agentHasReply(timeline.messages, id);
+      const active = agentHasActivity(timeline.messages, id, name);
+      return {
+        agentId: id,
+        name,
+        rec,
+        state: (replied ? 'done' : active ? 'working' : 'idle') as
+          | 'done'
+          | 'working'
+          | 'idle',
+      };
     });
   }, [busy, isDm, groupAgentIds, agentById, timeline.messages]);
 
@@ -985,16 +1014,19 @@ export function NeoGroupChat({
         )}
         {busy && (
           <span className="neo-gc-live" data-testid="neo-group-live">
-            {/* OpenBot busy roster（2026-11-05）— 多成员执行中时逐人状态点：
-                done 绿勾 / 干活中转圈 / 待命灰点；单人/单聊不展开（顶栏太挤）。 */}
+            {/* OpenBot busy roster（2026-11-05；2026-11-07 三态补全）— 多成员
+                执行中时逐人状态点：done 绿 / 干活中转圈（有过程卡流出）/
+                待命灰点（没动静）；单人/单聊不展开（顶栏太挤）。 */}
             {busyRoster.length > 0 && (
               <span className="neo-gc-roster" data-testid="neo-gc-roster">
                 {busyRoster.map((m) => (
                   <span
                     key={m.agentId}
                     className="neo-gc-roster-item"
-                    data-state={m.replied ? 'done' : 'working'}
-                    title={`${m.name} · ${m.replied ? '已完成' : '处理中'}`}
+                    data-state={m.state}
+                    title={`${m.name} · ${
+                      m.state === 'done' ? '已完成' : m.state === 'working' ? '处理中' : '待命'
+                    }`}
                   >
                     {m.rec ? (
                       <AgentAvatar
@@ -1162,6 +1194,7 @@ export function NeoGroupChat({
                                     name={sender}
                                     style={agentRec.avatar_style}
                                     seed={agentRec.avatar_seed ?? sender}
+                                    image={agentRec.avatar_image ?? null}
                                     size={28}
                                     className="neo-gc-msg-avatar"
                                     fallback={

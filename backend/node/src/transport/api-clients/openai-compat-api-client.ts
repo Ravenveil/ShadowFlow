@@ -92,10 +92,11 @@ const PROVIDER_BASE_URLS: Record<string, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   ollama: 'http://localhost:11434/v1',
   lmstudio: 'http://localhost:1234/v1',
-  // azure is deliberately omitted — see transport/ApiClientCallable.ts
-  // buildApiClient() (Checker S14.1 P0-1). If anyone constructs this client
-  // directly with providerId='azure' and no explicit baseURL, resolveBaseURL()
-  // throws so the request body never leaves the machine.
+  // azure 的部署级地址（…/openai/deployments/<name>?api-version=…）刻意不进
+  // 这张表——Azure 没有"默认部署名"可言，必须由用户在 settings/byok 显式配
+  // baseUrl（2026-11-07 起 buildApiClient 已把 azure 路由到本 client，query
+  // 里的 api-version 会拆进 SDK defaultQuery）。无显式 baseURL 时
+  // resolveBaseURL() 照旧抛错，请求体不会外泄。
 };
 
 /** Providers that allow an empty api_key (local runtimes). Mirror of
@@ -362,9 +363,26 @@ export class OpenAiCompatApiClient implements ApiClient {
     // SDK validation doesn't reject the call upfront.
     const effectiveKey = apiKey.length > 0 ? apiKey : 'sk-no-key';
 
+    // 2026-11-07 azure 打通：Azure 的 `?api-version=` 是 query 参数，而 OpenAI
+    // SDK 只会把 `/chat/completions` 拼在 baseURL 后面（query 夹在中间会拼坏）。
+    // 统一把 baseURL 里的 query 拆进 SDK `defaultQuery`（对任何需要 query 的
+    // 网关都成立）；azure 另补 `api-key` 头（Azure 门户鉴权头，与 Bearer 双发，
+    // 与 settings.ts 探针的 dualKeyHeaders 同策略，对普通网关无副作用）。
+    let wireBaseURL = baseURL;
+    let defaultQuery: Record<string, string> | undefined;
+    const qIdx = baseURL.indexOf('?');
+    if (qIdx >= 0) {
+      wireBaseURL = baseURL.slice(0, qIdx);
+      defaultQuery = Object.fromEntries(new URLSearchParams(baseURL.slice(qIdx + 1)));
+    }
+
     const client = new OpenAI({
       apiKey: effectiveKey,
-      ...(baseURL.length > 0 ? { baseURL } : {}),
+      ...(wireBaseURL.length > 0 ? { baseURL: wireBaseURL } : {}),
+      ...(defaultQuery ? { defaultQuery } : {}),
+      ...(this.opts.providerId === 'azure'
+        ? { defaultHeaders: { 'api-key': effectiveKey } }
+        : {}),
     });
 
     // Build wire messages: system_prompt becomes the first system entry
