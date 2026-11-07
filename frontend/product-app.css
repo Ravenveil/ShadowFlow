@@ -988,7 +988,7 @@
     left: max(30px, calc((100% - 760px) / 2));
     right: max(30px, calc((100% - 760px) / 2));
     bottom: 20px;
-    overflow: hidden;
+    overflow: visible; /* 加号弹层向上涨出（2026-11-08），内容仍由内层圆角裁剪 */
     border: 1px solid #d8d8d6;
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.96);
@@ -1047,6 +1047,132 @@
   .sf-composer .sf-send:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+
+  /* ── 聊天框加号菜单（2026-11-08）：技能 / 连接器两级弹层 ───────────── */
+  .sf-composer-tools {
+    position: relative;
+  }
+  .sf-composer .sf-plus-trigger.open {
+    background: #f2f2f0;
+    color: #333;
+  }
+  .sf-plus-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    background: transparent;
+  }
+  .sf-plus-menu {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: -6px;
+    z-index: 10;
+    width: 248px;
+    max-height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px;
+    border: 1px solid #e3e1dc;
+    border-radius: 13px;
+    background: #fffefb;
+    box-shadow: 0 20px 48px -16px rgba(22, 22, 28, 0.32);
+  }
+  .sf-plus-menu .sf-plus-item {
+    width: 100%;
+    height: 36px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 10px;
+    border-radius: 9px;
+    color: #2f2e2b;
+    font-size: 12px;
+  }
+  .sf-plus-menu .sf-plus-item:hover {
+    background: #f4f2ec;
+    color: #2f2e2b;
+  }
+  .sf-plus-menu .sf-plus-item .sf-plus-chev {
+    margin-left: auto;
+    color: #b3b1ac;
+  }
+  .sf-plus-menu .sf-plus-head {
+    height: 30px;
+    color: #8d8a83;
+    font-size: 11px;
+  }
+  .sf-plus-group {
+    margin: 7px 9px 3px;
+    color: #a5a29a;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+  }
+  .sf-plus-note {
+    margin: 10px;
+    color: #999;
+    font-size: 10px;
+  }
+  .sf-plus-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sf-plus-menu .sf-plus-row-main {
+    flex: 1;
+    min-width: 0;
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    padding: 7px 10px;
+    border-radius: 9px;
+  }
+  .sf-plus-menu .sf-plus-row-main:hover {
+    background: #f4f2ec;
+  }
+  .sf-plus-menu .sf-plus-row-main.static {
+    cursor: default;
+  }
+  .sf-plus-menu .sf-plus-row-main.static:hover {
+    background: transparent;
+  }
+  .sf-plus-menu .sf-plus-row-main strong {
+    max-width: 190px;
+    overflow: hidden;
+    color: #2f2e2b;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sf-plus-menu .sf-plus-row-main small {
+    display: block;
+    max-width: 190px;
+    overflow: hidden;
+    color: #8d8a83;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sf-plus-menu .sf-plus-tag {
+    flex: none;
+    height: 22px;
+    padding: 0 9px;
+    border: 1px solid #e3e1dc;
+    border-radius: 999px;
+    background: #fff;
+    color: #4d8a5c;
+    font-size: 10px;
+  }
+  .sf-plus-menu .sf-plus-tag:hover {
+    background: #f4f2ec;
+    color: #4d8a5c;
+  }
+  .sf-plus-menu .sf-plus-tag.off {
+    color: #b06a6a;
   }
 
   .sf-run-panel {
@@ -3330,6 +3456,20 @@
 }
 .sf-settings-list article > span {
   font-size: 10.5px;
+  color: #7c5cff;
+}
+.sf-settings-list .sf-settings-act {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--sf-line);
+  border-radius: 999px;
+  background: #fff;
+  color: #55525c;
+  font-size: 10px;
+  cursor: pointer;
+}
+.sf-settings-list .sf-settings-act:hover {
+  border-color: #7c5cff;
   color: #7c5cff;
 }
 

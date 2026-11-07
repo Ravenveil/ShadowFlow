@@ -16,6 +16,7 @@ import {
   CalendarClock,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FileText,
   Folder,
@@ -484,6 +485,105 @@ export default function ProductApp() {
       if (hit?.previewUrl) URL.revokeObjectURL(hit.previewUrl);
       return cur.filter((a) => a.id !== id);
     });
+  }
+
+  // ── 聊天框加号菜单（2026-11-08）：技能 / 连接器两级弹层，数据接后端 ──────
+
+  type PlusView = "root" | "skills" | "connectors";
+  type PlusSkill = {
+    skill_id: string;
+    name: string;
+    description?: string;
+    example_prompt?: string;
+    enabled?: boolean;
+  };
+  type PlusConnector = {
+    id: string;
+    name: string;
+    kind?: string;
+    transport?: string;
+    status?: string;
+    policy?: { enabled?: boolean; approval_mode?: string };
+  };
+  type PlusPublishAccount = {
+    id: string;
+    platform: string;
+    account_name?: string;
+    auth_mode?: string;
+    status?: string;
+  };
+
+  const [plusView, setPlusView] = useState<PlusView | null>(null);
+  const [plusSkills, setPlusSkills] = useState<PlusSkill[] | null>(null);
+  const [plusConnectors, setPlusConnectors] = useState<{
+    connectors: PlusConnector[];
+    accounts: PlusPublishAccount[];
+  } | null>(null);
+
+  /** 打开加号子菜单；首次进入拉真实数据（技能列表 / 连接器+发布通道）。 */
+  function openPlusView(view: "skills" | "connectors") {
+    setPlusView(view);
+    if (view === "skills" && plusSkills === null) {
+      sfFetch<PlusSkill[]>("/api/skills")
+        .then((list) => setPlusSkills(Array.isArray(list) ? list : []))
+        .catch(() => setPlusSkills([]));
+    }
+    if (view === "connectors" && plusConnectors === null) {
+      Promise.all([
+        sfFetch<{ items?: PlusConnector[] }>("/api/connectors"),
+        sfFetch<{ accounts?: PlusPublishAccount[] }>("/api/social-publish/accounts"),
+      ])
+        .then(([c, a]) =>
+          setPlusConnectors({ connectors: c.items ?? [], accounts: a.accounts ?? [] }),
+        )
+        .catch(() => setPlusConnectors({ connectors: [], accounts: [] }));
+    }
+  }
+
+  /** 向输入框注入文本（保留已输入内容，换行衔接）并收起菜单。 */
+  function insertIntoComposer(text: string) {
+    setMessage((cur) => (cur.trim() ? `${cur.replace(/\n+$/, "")}\n${text}` : text));
+    setPlusView(null);
+  }
+
+  /** 技能启用/停用（PATCH /api/skills/:id/enabled）。 */
+  async function togglePlusSkill(row: PlusSkill) {
+    const enabled = !(row.enabled ?? true);
+    try {
+      await sfFetch(`/api/skills/${encodeURIComponent(row.skill_id)}/enabled`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      setPlusSkills(
+        (cur) => cur?.map((s) => (s.skill_id === row.skill_id ? { ...s, enabled } : s)) ?? null,
+      );
+    } catch {
+      /* 失败保持原状态 */
+    }
+  }
+
+  /** 连接器启用/停用（POST /api/connectors/:id/policy，执行前裁定+留痕）。 */
+  async function togglePlusConnector(row: PlusConnector) {
+    const enabled = !(row.policy?.enabled ?? true);
+    try {
+      await sfFetch(`/api/connectors/${encodeURIComponent(row.id)}/policy`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      setPlusConnectors(
+        (cur) =>
+          cur && {
+            ...cur,
+            connectors: cur.connectors.map((c) =>
+              c.id === row.id ? { ...c, policy: { ...(c.policy ?? {}), enabled } } : c,
+            ),
+          },
+      );
+    } catch {
+      /* 失败保持原状态 */
+    }
   }
 
   /** 拖拽上传：仅接管文件拖入；enter/leave 计数防闪烁。 */
@@ -982,7 +1082,7 @@ export default function ProductApp() {
                   }
                 />
                 <div>
-                  <span>
+                  <span className="sf-composer-tools">
                     <button
                       type="button"
                       aria-label="添加附件"
@@ -1001,9 +1101,154 @@ export default function ProductApp() {
                         event.currentTarget.value = ""; // 允许重复选同一文件
                       }}
                     />
-                    <button type="button">
-                      <Sparkles size={15} /> Skills
+                    <button
+                      type="button"
+                      aria-label="更多"
+                      className={plusView ? "sf-plus-trigger open" : "sf-plus-trigger"}
+                      onClick={() => setPlusView(plusView ? null : "root")}
+                    >
+                      <Plus size={15} />
                     </button>
+                    {plusView && (
+                      <>
+                        <div
+                          className="sf-plus-backdrop"
+                          aria-hidden="true"
+                          onClick={() => setPlusView(null)}
+                        />
+                        <div className="sf-plus-menu" role="menu">
+                          {plusView === "root" && (
+                            <>
+                              <button
+                                type="button"
+                                className="sf-plus-item"
+                                role="menuitem"
+                                onClick={() => openPlusView("skills")}
+                              >
+                                <Sparkles size={14} />
+                                <span>技能</span>
+                                <ChevronRight size={13} className="sf-plus-chev" />
+                              </button>
+                              <button
+                                type="button"
+                                className="sf-plus-item"
+                                role="menuitem"
+                                onClick={() => openPlusView("connectors")}
+                              >
+                                <Link2 size={14} />
+                                <span>连接器</span>
+                                <ChevronRight size={13} className="sf-plus-chev" />
+                              </button>
+                            </>
+                          )}
+                          {plusView === "skills" && (
+                            <>
+                              <button
+                                type="button"
+                                className="sf-plus-item sf-plus-head"
+                                onClick={() => setPlusView("root")}
+                              >
+                                <ChevronLeft size={13} />
+                                <span>技能</span>
+                              </button>
+                              {plusSkills === null && <p className="sf-plus-note">加载中…</p>}
+                              {plusSkills?.length === 0 && <p className="sf-plus-note">暂无技能</p>}
+                              {plusSkills?.map((s) => (
+                                <div key={s.skill_id} className="sf-plus-row">
+                                  <button
+                                    type="button"
+                                    className="sf-plus-row-main"
+                                    title={s.description || s.skill_id}
+                                    onClick={() =>
+                                      insertIntoComposer(
+                                        s.example_prompt?.trim() || `【技能】${s.name || s.skill_id}`,
+                                      )
+                                    }
+                                  >
+                                    <strong>{s.name || s.skill_id}</strong>
+                                    <small>{s.description || s.skill_id}</small>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={s.enabled === false ? "sf-plus-tag off" : "sf-plus-tag"}
+                                    title={s.enabled === false ? "点击启用" : "点击停用"}
+                                    onClick={() => void togglePlusSkill(s)}
+                                  >
+                                    {s.enabled === false ? "停用" : "启用"}
+                                  </button>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                          {plusView === "connectors" && (
+                            <>
+                              <button
+                                type="button"
+                                className="sf-plus-item sf-plus-head"
+                                onClick={() => setPlusView("root")}
+                              >
+                                <ChevronLeft size={13} />
+                                <span>连接器</span>
+                              </button>
+                              <p className="sf-plus-group">发布通道</p>
+                              {plusConnectors === null && <p className="sf-plus-note">加载中…</p>}
+                              {(() => {
+                                const xhs = plusConnectors?.accounts.find((a) =>
+                                  a.platform.includes("xiaohongshu"),
+                                );
+                                const xhsStatus = xhs
+                                  ? `${xhs.auth_mode === "real" ? "真实发布" : "mock 演示"}${xhs.account_name ? ` · ${xhs.account_name}` : ""}`
+                                  : "未配置账号 · 默认 mock 演示";
+                                return (
+                                  <div className="sf-plus-row">
+                                    <button
+                                      type="button"
+                                      className="sf-plus-row-main"
+                                      title="插入 [post] 发帖标记，发到总经理 DM / 代卖群即落库发布"
+                                      onClick={() =>
+                                        insertIntoComposer(
+                                          '[post] {"platform":"小红书","title":"（请替换标题）","text":"（请替换正文）"}',
+                                        )
+                                      }
+                                    >
+                                      <strong>小红书发布</strong>
+                                      <small>{xhsStatus}</small>
+                                    </button>
+                                    <span className="sf-plus-tag">发帖</span>
+                                  </div>
+                                );
+                              })()}
+                              <p className="sf-plus-group">MCP / ACP</p>
+                              {plusConnectors?.connectors.length === 0 && (
+                                <p className="sf-plus-note">未检测到连接器</p>
+                              )}
+                              {plusConnectors?.connectors.map((c) => {
+                                const on = c.policy?.enabled ?? true;
+                                return (
+                                  <div key={c.id} className="sf-plus-row">
+                                    <div className="sf-plus-row-main static" title={c.id}>
+                                      <strong>{c.name || c.id}</strong>
+                                      <small>
+                                        {c.kind ?? "connector"} · {c.status ?? "未知状态"} ·{" "}
+                                        {c.policy?.approval_mode ?? "auto"}
+                                      </small>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className={on ? "sf-plus-tag" : "sf-plus-tag off"}
+                                      title={on ? "点击停用" : "点击启用"}
+                                      onClick={() => void togglePlusConnector(c)}
+                                    >
+                                      {on ? "启用" : "停用"}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </span>
                   <span>
                     <small>Enter 发送 · Shift + Enter 换行</small>
@@ -3866,20 +4111,63 @@ function ConnectorsSection({ mcp }: { mcp?: boolean }) {
         setLoadState("error");
       });
   }, [mcp]);
+
+  // 策略操作（POST /api/connectors/:id/policy）：启用/停用 + 审批模式循环
+  const APPROVAL_CYCLE = ["auto", "prompt", "block"] as const;
+  async function patchPolicy(row: Row, patch: { enabled?: boolean; approval_mode?: string }) {
+    try {
+      await sfFetch(`/api/connectors/${encodeURIComponent(row.id)}/policy`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      setItems((cur) =>
+        (cur ?? []).map((c) =>
+          c.id === row.id ? { ...c, policy: { ...(c.policy ?? {}), ...patch } } : c,
+        ),
+      );
+    } catch {
+      /* 失败保持原状态 */
+    }
+  }
+  function cycleApproval(row: Row) {
+    const cur = row.policy?.approval_mode ?? "auto";
+    const next = APPROVAL_CYCLE[(APPROVAL_CYCLE.indexOf(cur as (typeof APPROVAL_CYCLE)[number]) + 1) % APPROVAL_CYCLE.length];
+    void patchPolicy(row, { approval_mode: next });
+  }
+
   return (
     <div className="sf-settings-list">
       <SfLoadTag state={loadState} />
-      {(items ?? []).map((row) => (
-        <article key={row.id}>
-          <strong>{row.name || row.id}</strong>
-          <p>
-            {row.kind ?? "connector"} · {row.transport ?? "stdio"} · {row.status ?? "未知状态"}
-          </p>
-          <span>
-            {row.policy?.enabled === false ? "已禁用" : "已启用"} · 审批 {row.policy?.approval_mode ?? "auto"}
-          </span>
-        </article>
-      ))}
+      {(items ?? []).map((row) => {
+        const on = row.policy?.enabled !== false;
+        return (
+          <article key={row.id}>
+            <strong>{row.name || row.id}</strong>
+            <p>
+              {row.kind ?? "connector"} · {row.transport ?? "stdio"} · {row.status ?? "未知状态"}
+            </p>
+            <span>
+              {on ? "已启用" : "已禁用"} · 审批 {row.policy?.approval_mode ?? "auto"}
+              <button
+                type="button"
+                className="sf-settings-act"
+                onClick={() => void patchPolicy(row, { enabled: !on })}
+              >
+                {on ? "停用" : "启用"}
+              </button>
+              <button
+                type="button"
+                className="sf-settings-act"
+                title="切换审批模式 auto → prompt → block"
+                onClick={() => cycleApproval(row)}
+              >
+                切换审批
+              </button>
+            </span>
+          </article>
+        );
+      })}
       {items !== null && items.length === 0 && <em className="sf-byok-empty">暂无{mcp ? " MCP " : " "}连接器</em>}
     </div>
   );
