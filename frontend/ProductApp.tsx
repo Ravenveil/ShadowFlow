@@ -1,4 +1,13 @@
-import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  DragEvent as ReactDragEvent,
+  FormEvent,
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -44,6 +53,8 @@ import { authGuest, authLogout, displayNameOf, initialsOf, useAuthState } from "
 import {
   ApiError,
   apiFetch,
+  CHAT_UPLOAD_MAX_BYTES,
+  chatAssetUrl,
   decideApproval,
   createGroup,
   createProject,
@@ -57,11 +68,13 @@ import {
   resolveDm,
   retryRunStep,
   setUnauthorizedHandler,
+  uploadChatAttachment,
   type AgentRecord,
   type GroupRecord,
   type PendingApprovalItem,
   type SfTeamDag as ApiTeamDag,
   type TimelineMessage,
+  type UserAttachment,
 } from "./src/chat-api";
 import { useGroupChat, type GroupChat } from "./src/useGroupChat";
 import { isTerminalRunStatus } from "./src/message-patches";
@@ -74,6 +87,16 @@ function sfAvatarUrl(label: string, color: string): string {
   return `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(
     label,
   )}&backgroundColor=${bg}&radius=0`;
+}
+
+/** 数据加载三态（加载中 / 成功 / 失败）：各视图状态标签统一入口，
+ *  避免把「加载中」与「加载失败」混为一态而在加载过程闪现错误提示。 */
+type SfLoadState = "loading" | "ready" | "error";
+
+function SfLoadTag({ state, okText }: { state: SfLoadState; okText?: string }) {
+  if (state === "loading") return <p className="sf-live-tag">加载中…</p>;
+  if (state === "error") return <p className="sf-live-tag">数据加载失败 · 请刷新重试</p>;
+  return okText ? <p className="sf-live-tag on">{okText}</p> : null;
 }
 
 type View = "chat" | "agents" | "knowledge" | "dashboard" | "projects" | "schedules" | "settings";
@@ -121,7 +144,7 @@ function groupPreview(group: GroupRecord): string {
  * 展示口径的 6 名部门核心员工（对齐后端 .shadowflow/agents 内置 agent：
  * agent-market-analyst / agent-brand-strategist / agent-content-creator /
  * agent-ops-specialist / agent-biz-developer / agent-compliance-reviewer）。
- * 后端不可达时作为各视图的兜底演示数据；id 同时用作 DEMO_TEAM 的 DAG 节点 id。
+ * 后端不可达时作为各视图的兜底占位数据；id 同时用作 DEMO_TEAM 的 DAG 节点 id。
  */
 const agents = [
   {
@@ -182,6 +205,21 @@ function displayAgents(list: AgentRecord[]): AgentRecord[] {
   return list.filter((a) => !HIDDEN_AGENT_IDS.has(String(a.agent_id ?? "")));
 }
 
+/** composer 附件条目（2026-11-07 对话框拖拽传图）：上传中/成功/失败三态可见。 */
+interface ComposerAtt {
+  id: string;
+  name: string;
+  size: number;
+  isImage: boolean;
+  /** 本地缩略图 object URL（上传中预览，完成后回收）。 */
+  previewUrl?: string;
+  status: "uploading" | "done" | "error";
+  /** 上传成功后的服务端附件（status=done）。 */
+  data?: UserAttachment;
+  /** 失败原因（status=error）。 */
+  error?: string;
+}
+
 export default function ProductApp() {
   const [view, setView] = useState<View>("chat");
   const [panelOpen, setPanelOpen] = useState(true);
@@ -199,6 +237,7 @@ export default function ProductApp() {
   const [groups, setGroups] = useState<GroupRecord[]>([]);
   const [groupsState, setGroupsState] = useState<"loading" | "ready" | "error">("loading");
   const [agentsList, setAgentsList] = useState<AgentRecord[]>([]);
+  const [agentsState, setAgentsState] = useState<SfLoadState>("loading");
   const [projectsTree, setProjectsTree] = useState<SfProject[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeTitle, setActiveTitle] = useState("新对话");
@@ -206,6 +245,14 @@ export default function ProductApp() {
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
   const chat = useGroupChat(activeGroupId);
+
+  // ── 聊天附件（2026-11-07 对话框拖拽传图）：拖拽/点选文件 → 上传 → 随消息发送 ──
+  const [atts, setAtts] = useState<ComposerAtt[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0); // dragenter/leave 计数，避免经过子元素时遮罩闪烁
+  const attIdRef = useRef(0);
+  const sendingRef = useRef(false); // submitMessage 异步窗口防重入
 
   function openAuth(mode: "login" | "register") {
     setAuthMode(mode);
@@ -237,8 +284,14 @@ export default function ProductApp() {
   useEffect(() => {
     void reloadGroups();
     listAgents()
-      .then(setAgentsList)
-      .catch(() => setAgentsList([]));
+      .then((list) => {
+        setAgentsList(list);
+        setAgentsState("ready");
+      })
+      .catch(() => {
+        setAgentsList([]);
+        setAgentsState("error");
+      });
     listProjects()
       .then(setProjectsTree)
       .catch(() => setProjectsTree([]));
@@ -342,32 +395,143 @@ export default function ProductApp() {
     if (window.innerWidth <= 820) setPanelOpen(false);
   }
 
-  function sendText(text: string) {
+  /**
+   * 发送消息。返回 true=已发出或已排入补发；false=建群失败（调用方保留 composer 内容供重试）。
+   * 无活动会话时先建群，成功后跨群补发（2026-11-08 主理人裁决：不再静默丢内容）。
+   */
+  async function sendText(text: string, attachments?: UserAttachment[]): Promise<boolean> {
     if (!activeGroupId) {
-      // 无活动会话：先建群再发（快捷指令路径）
-      void (async () => {
-        const name = text.trim().slice(0, 40) || `新对话 ${groups.length + 1}`;
-        try {
-          const group = await createGroup({ name, kind: "group" });
-          if (group?.group_id) {
-            setActiveGroupId(group.group_id);
-            setActiveTitle(group.name || name);
-            await reloadGroups();
-          }
-        } catch {
-          /* 建群失败 → 无处可发 */
-        }
-      })();
-      return;
+      const name = text.trim().slice(0, 40) || `新对话 ${groups.length + 1}`;
+      try {
+        const group = await createGroup({ name, kind: "group" });
+        if (!group?.group_id) return false;
+        setActiveGroupId(group.group_id);
+        setActiveTitle(group.name || name);
+        await reloadGroups();
+        // 建群成功 → 跨群补发（gidOverride 指向新群，消息随新会话服务端回读出现）
+        void chat.send(text, attachments, group.group_id);
+        return true;
+      } catch {
+        return false; // 建群失败 → 无处可发
+      }
     }
-    void chat.send(text);
+    void chat.send(text, attachments);
+    return true;
   }
 
-  function submitMessage(event: FormEvent) {
+  // ── 聊天附件（2026-11-07 对话框拖拽传图）────────────────────────────────
+
+  /** 批量加入附件：逐个上传 /api/fs/chat-upload，单个失败不阻塞其它。 */
+  function addChatFiles(files: File[]) {
+    // 非失败条目计数：后端 coerceAttachments 单条消息上限 9 个附件，超出会被丢弃，前端同步拦截
+    let slots = atts.filter((a) => a.status !== "error").length;
+    for (const file of files) {
+      const id = `att-${(attIdRef.current += 1)}`;
+      const isImage =
+        file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name);
+      // 与后端守卫一致：8MB 上限；文件名不允许路径分隔符或 ..；单条消息最多 9 个附件
+      const badName = /[\\/]/.test(file.name) || file.name.includes("..");
+      const overCount = slots >= 9;
+      if (badName || overCount || file.size > CHAT_UPLOAD_MAX_BYTES) {
+        setAtts((cur) => [
+          ...cur,
+          {
+            id,
+            name: file.name,
+            size: file.size,
+            isImage,
+            status: "error",
+            error: badName
+              ? "文件名含非法字符"
+              : overCount
+                ? "单条消息最多 9 个附件"
+                : "超过 8MB 上限",
+          },
+        ]);
+        continue;
+      }
+      slots += 1;
+      const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
+      setAtts((cur) => [
+        ...cur,
+        { id, name: file.name, size: file.size, isImage, previewUrl, status: "uploading" },
+      ]);
+      void (async () => {
+        try {
+          const data = await uploadChatAttachment(file);
+          patchChatAtt(id, { status: "done", data, previewUrl: undefined });
+        } catch (err) {
+          patchChatAtt(id, {
+            status: "error",
+            error: err instanceof Error ? err.message : "上传失败",
+            previewUrl: undefined,
+          });
+        } finally {
+          // 完成后回收本地预览（成功态改用服务端直链）
+          if (previewUrl) URL.revokeObjectURL(previewUrl);
+        }
+      })();
+    }
+  }
+
+  function patchChatAtt(id: string, patch: Partial<ComposerAtt>) {
+    setAtts((cur) => cur.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  }
+
+  function removeChatAtt(id: string) {
+    setAtts((cur) => {
+      const hit = cur.find((a) => a.id === id);
+      if (hit?.previewUrl) URL.revokeObjectURL(hit.previewUrl);
+      return cur.filter((a) => a.id !== id);
+    });
+  }
+
+  /** 拖拽上传：仅接管文件拖入；enter/leave 计数防闪烁。 */
+  function onChatDragEnter(event: ReactDragEvent) {
+    if (!event.dataTransfer.types.includes("Files")) return;
     event.preventDefault();
-    if (!message.trim()) return;
-    sendText(message.trim());
-    setMessage("");
+    dragDepthRef.current += 1;
+    setDragOver(true);
+  }
+
+  function onChatDragOver(event: ReactDragEvent) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault(); // 必须阻止默认行为，否则浏览器直接打开文件
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function onChatDragLeave(event: ReactDragEvent) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDragOver(false);
+  }
+
+  function onChatDrop(event: ReactDragEvent) {
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragOver(false);
+    const files = Array.from(event.dataTransfer.files ?? []);
+    if (files.length > 0) addChatFiles(files);
+  }
+
+  async function submitMessage(event: FormEvent) {
+    event.preventDefault();
+    // 上传完成前不发送，防丢附件；失败条目不随消息发出（可删除后重试）
+    if (atts.some((a) => a.status === "uploading")) return;
+    const ready = atts.flatMap((a) => (a.data ? [a.data] : []));
+    if (!message.trim() && ready.length === 0) return;
+    if (sendingRef.current) return; // 建群补发路径有异步窗口，防回车连发重复建群
+    sendingRef.current = true;
+    try {
+      // 发出/排入补发才清空 composer；失败保留输入与附件 chips 供重试（2026-11-08 主理人裁决）
+      const ok = await sendText(message.trim(), ready.length > 0 ? ready : undefined);
+      if (ok) {
+        setMessage("");
+        setAtts([]);
+      }
+    } finally {
+      sendingRef.current = false;
+    }
   }
 
   function navigate(nextView: View) {
@@ -482,6 +646,17 @@ export default function ProductApp() {
               {accountMenuOpen && (
                 <div className="sf-account-menu" role="menu">
                   <p>{auth.user.email || auth.user.address}</p>
+                  {auth.user.auth_type === "guest" && (
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        openAuth("login");
+                      }}
+                    >
+                      <UserRound size={13} /> 登录 / 注册
+                    </button>
+                  )}
                   <button
                     role="menuitem"
                     onClick={() => {
@@ -648,7 +823,7 @@ export default function ProductApp() {
                   {groupsState === "loading" && <p className="sf-thread-hint">正在加载会话…</p>}
                   {groupsState === "error" && (
                     <p className="sf-thread-hint">
-                      会话加载失败（后端未连接）·{" "}
+                      会话加载失败 ·{" "}
                       <button type="button" className="sf-link-btn" onClick={() => void reloadGroups()}>
                         重试
                       </button>
@@ -682,7 +857,7 @@ export default function ProductApp() {
                 <p>项目与 Agent</p>
                 <div className="sf-project-tree">
                   {projectsTree.length === 0 && agentsList.length === 0 && (
-                    <p className="sf-thread-hint">暂无项目与 Agent（后端未连接或尚未创建）</p>
+                    <p className="sf-thread-hint">暂无项目与 Agent（尚未创建）</p>
                   )}
                   {projectsTree.map((project) => {
                     const expanded = !!expandedProjects[project.project_id];
@@ -749,12 +924,47 @@ export default function ProductApp() {
                 </div>
               </aside>
             )}
-            <section className="sf-chat">
+            <section
+              className="sf-chat"
+              onDragEnter={onChatDragEnter}
+              onDragOver={onChatDragOver}
+              onDragLeave={onChatDragLeave}
+              onDrop={onChatDrop}
+            >
               <div className="sf-chat-scroll sf-thread-enter" key={activeGroupId ?? "none"}>
                 <ChatThread chat={chat} onQuick={sendText} onLogin={() => openAuth("login")} />
               </div>
 
               <form className="sf-composer" onSubmit={submitMessage}>
+                {atts.length > 0 && (
+                  <div className="sf-composer-atts">
+                    {atts.map((a) => (
+                      <div key={a.id} className={`sf-att-chip ${a.status}`}>
+                        {a.data?.is_image ? (
+                          <img src={chatAssetUrl(a.data.url)} alt="" />
+                        ) : a.status === "uploading" && a.isImage && a.previewUrl ? (
+                          <img src={a.previewUrl} alt="" />
+                        ) : (
+                          <FileText size={13} />
+                        )}
+                        <span title={a.name}>{a.name}</span>
+                        {a.status === "uploading" && <em className="sf-att-up">上传中…</em>}
+                        {a.status === "error" && (
+                          <em className="sf-att-err" title={a.error}>
+                            {a.error || "失败"}
+                          </em>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeChatAtt(a.id)}
+                          aria-label={`移除附件 ${a.name}`}
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   rows={1}
                   value={message}
@@ -773,9 +983,24 @@ export default function ProductApp() {
                 />
                 <div>
                   <span>
-                    <button type="button" aria-label="添加附件">
+                    <button
+                      type="button"
+                      aria-label="添加附件"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
                       <Paperclip size={16} />
                     </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      hidden
+                      onChange={(event) => {
+                        const picked = Array.from(event.currentTarget.files ?? []);
+                        if (picked.length > 0) addChatFiles(picked);
+                        event.currentTarget.value = ""; // 允许重复选同一文件
+                      }}
+                    />
                     <button type="button">
                       <Sparkles size={15} /> Skills
                     </button>
@@ -785,7 +1010,10 @@ export default function ProductApp() {
                     <button
                       className="sf-send"
                       type="submit"
-                      disabled={!message.trim()}
+                      disabled={
+                        (!message.trim() && !atts.some((a) => a.status === "done")) ||
+                        atts.some((a) => a.status === "uploading")
+                      }
                       aria-label="发送"
                     >
                       <Send size={15} />
@@ -793,6 +1021,14 @@ export default function ProductApp() {
                   </span>
                 </div>
               </form>
+
+              {dragOver && (
+                <div className="sf-drop-overlay" aria-hidden="true">
+                  <Paperclip size={22} />
+                  <strong>松开以上传</strong>
+                  <small>单个文件不超过 8MB</small>
+                </div>
+              )}
             </section>
 
             {detailOpen && (
@@ -801,6 +1037,7 @@ export default function ProductApp() {
                 groupName={activeTitle}
                 chat={chat}
                 agentsList={agentsList}
+                agentsState={agentsState}
                 onClose={() => setDetailOpen(false)}
               />
             )}
@@ -1057,12 +1294,14 @@ function RunPanel({
   groupName,
   chat,
   agentsList,
+  agentsState,
   onClose,
 }: {
   groupId: string | null;
   groupName: string;
   chat: GroupChat;
   agentsList: AgentRecord[];
+  agentsState: SfLoadState;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"flow" | "team" | "approval" | "artifacts">("flow");
@@ -1346,7 +1585,7 @@ function RunPanel({
                 initials: a.initials,
                 color: a.color,
                 status: a.status,
-                live: "演示数据 · 后端未连接",
+                live: "暂无最近活动",
               }))
           ).map((row) => (
             <div key={row.key}>
@@ -1370,7 +1609,7 @@ function RunPanel({
               )}
             </div>
           ))}
-          {agentsList.length === 0 && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
+          <SfLoadTag state={agentsState} okText="已连接后端" />
         </div>
       )}
 
@@ -1655,7 +1894,7 @@ function ChatThread({
 
 // ═══ 团队编排（对齐 ShadowFlow 后端：/api/teams、/api/teams/:id/dag、
 //     /api/teams/:id/policy、/api/groups/:id/approvals/*、/api/approvals/*）═
-// 后端可达 → 拉真实编队；不可达（Figma Make 静态预览）→ 回落演示数据。
+// 后端可达 → 拉真实编队；不可达（静态预览）→ 回落占位数据。
 
 type PolicyCellState = "permit" | "warn" | "deny";
 type PolicyMatrix = Record<string, Record<string, PolicyCellState>>;
@@ -2157,6 +2396,7 @@ function SfApprovalsPanel({
 function TeamOpsSection() {
   const [team, setTeam] = useState<SfTeamDag>(DEMO_TEAM);
   const [live, setLive] = useState(false);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
   const [matrix, setMatrix] = useState<PolicyMatrix>(DEMO_TEAM.policy ?? {});
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "ok" | "err">("idle");
@@ -2183,6 +2423,7 @@ function TeamOpsSection() {
           })),
         });
         setLive(true);
+        setLoadState("ready");
         try {
           const pol = await sfFetch<PolicyMatrix>(`/api/teams/${tid}/policy`);
           if (!dead) setMatrix(pol ?? {});
@@ -2199,7 +2440,8 @@ function TeamOpsSection() {
           /* 审批接口不可达 —— 空态 */
         }
       } catch {
-        /* 后端不可达 —— 保留演示数据 */
+        /* 后端不可达 —— 保留占位编队 */
+        setLoadState("error");
       }
     })();
     return () => {
@@ -2263,7 +2505,7 @@ function TeamOpsSection() {
         <SfApprovalsPanel approvals={approvals} onDecide={(id, d) => void decide(id, d)} />
       </div>
       <span className={`sf-live-tag ${live ? "on" : ""}`} data-testid="sf-teamops-source">
-        {live ? "LIVE · 已连接后端" : "演示数据 · 未连接后端"}
+        {loadState === "loading" ? "加载中…" : live ? "LIVE · 已连接后端" : "数据加载失败 · 已显示默认编队"}
       </span>
     </div>
   );
@@ -2427,11 +2669,19 @@ function PackCreateModal({
 
 function KnowledgeView() {
   const [packs, setPacks] = useState<SfPackCard[] | null>(null);
+  const [packsState, setPacksState] = useState<SfLoadState>("loading");
   const [createOpen, setCreateOpen] = useState(false);
   const reload = () => {
+    setPacksState("loading");
     sfFetch<{ packs?: SfPackCard[] }>("/api/memory-bank/packs")
-      .then((d) => setPacks(Array.isArray(d?.packs) ? d.packs : []))
-      .catch(() => setPacks(null));
+      .then((d) => {
+        setPacks(Array.isArray(d?.packs) ? d.packs : []);
+        setPacksState("ready");
+      })
+      .catch(() => {
+        setPacks(null);
+        setPacksState("error");
+      });
   };
   useEffect(() => {
     reload();
@@ -2517,7 +2767,7 @@ function KnowledgeView() {
           ))}
         </svg>
       </div>
-      {packs === null && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
+      <SfLoadTag state={packsState} />
       <div className="sf-knowledge-layout">
         {cards.map(([tag, title, desc, count], i) => (
           <div key={title} className={`sf-knowledge-card${i === 0 ? " featured" : ""}`}>
@@ -2548,7 +2798,7 @@ function DashboardView() {
   const [metric, setMetric] = useState<"tokens" | "calls" | "cost">("tokens");
   const [refreshing, setRefreshing] = useState(false);
   const [live, setLive] = useState(false);
-  // 对齐后端 /api/dashboard/{overview,timeseries,breakdown}；不可达回落演示数据
+  // 对齐后端 /api/dashboard/{overview,timeseries,breakdown}；不可达回落占位数据
   const [ov, setOv] = useState<SfDashOverview | null>(null);
   const [series, setSeries] = useState<number[] | null>(null);
   const [breakdown, setBreakdown] = useState<SfDashBreakdownItem[] | null>(null);
@@ -2918,10 +3168,18 @@ function ProjectsView() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [liveProjects, setLiveProjects] = useState<SfProject[] | null>(null);
+  const [projectsState, setProjectsState] = useState<SfLoadState>("loading");
   const loadProjects = useCallback(() => {
+    setProjectsState("loading");
     sfFetch<SfProject[]>("/api/projects?withSessions=1")
-      .then((list) => setLiveProjects(Array.isArray(list) ? list : []))
-      .catch(() => setLiveProjects(null));
+      .then((list) => {
+        setLiveProjects(Array.isArray(list) ? list : []);
+        setProjectsState("ready");
+      })
+      .catch(() => {
+        setLiveProjects(null);
+        setProjectsState("error");
+      });
   }, []);
   useEffect(() => {
     loadProjects();
@@ -2972,7 +3230,7 @@ function ProjectsView() {
           <Plus size={15} /> 新建项目
         </button>
       </div>
-      {liveProjects === null && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
+      <SfLoadTag state={projectsState} />
       {showCreate && (
         <form className="sf-inline-create" onSubmit={handleCreate}>
           <Folder size={17} />
@@ -3044,11 +3302,15 @@ function SchedulesView() {
     { id: "demo-3", name: "检查品牌舆情风险", agent: "合规审核员", cron: "每 6 小时", next: "今天 16:00", enabled: false },
   ];
   const [rows, setRows] = useState(demoRows);
-  const [live, setLive] = useState(false);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
+  const live = loadState === "ready";
   useEffect(() => {
     sfFetch<SfScheduleRow[]>("/api/schedules")
       .then((list) => {
-        if (!Array.isArray(list)) return;
+        if (!Array.isArray(list)) {
+          setLoadState("error");
+          return;
+        }
         setRows(
           list.map((r) => ({
             id: r.schedule_id,
@@ -3059,9 +3321,9 @@ function SchedulesView() {
             enabled: !!r.enabled,
           })),
         );
-        setLive(true);
+        setLoadState("ready");
       })
-      .catch(() => setLive(false));
+      .catch(() => setLoadState("error"));
   }, []);
   function toggle(index: number) {
     const row = rows[index];
@@ -3086,7 +3348,7 @@ function SchedulesView() {
           <Plus size={15} /> 创建定时任务
         </button>
       </div>
-      {!live && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
+      <SfLoadTag state={loadState} />
       <div className="sf-schedule-list">
         {rows.map((schedule, index) => (
           <article key={schedule.id} className={schedule.enabled ? "" : "disabled"}>
@@ -3171,7 +3433,7 @@ const DEMO_BYOK: ByokStoreData = {
 
 function ModelKeysSection() {
   const [store, setStore] = useState<ByokStoreData>(DEMO_BYOK);
-  const [live, setLive] = useState(false);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
   const [selected, setSelected] = useState("mimo");
   const [keyDraft, setKeyDraft] = useState("");
   const [baseDraft, setBaseDraft] = useState("");
@@ -3188,9 +3450,9 @@ function ModelKeysSection() {
           defaultModel: data.defaultModel ?? null,
           routingPriority: data.routingPriority ?? "fallback",
         });
-        setLive(true);
+        setLoadState("ready");
       })
-      .catch(() => setLive(false));
+      .catch(() => setLoadState("error"));
   }, []);
 
   const provider = store.providers[selected] ?? null;
@@ -3239,7 +3501,7 @@ function ModelKeysSection() {
       setKeyDraft("");
       setNotice({ tone: "ok", text: `已保存 ${meta.name} 配置` });
     } catch {
-      setNotice({ tone: "err", text: live ? "保存失败，请检查后端连接" : "后端未连接，改动仅保留在演示态" });
+      setNotice({ tone: "err", text: "保存失败，请稍后重试" });
     }
     setBusy(false);
   }
@@ -3294,7 +3556,7 @@ function ModelKeysSection() {
       });
       setNotice({ tone: "ok", text: `已删除 ${meta.name} 配置` });
     } catch {
-      setNotice({ tone: "err", text: live ? "删除失败" : "后端未连接，无法删除" });
+      setNotice({ tone: "err", text: "删除失败，请稍后重试" });
     }
     setBusy(false);
   }
@@ -3383,7 +3645,7 @@ function ModelKeysSection() {
           </button>
         </div>
       </div>
-      {!live && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
+      <SfLoadTag state={loadState} />
       <div className="sf-byok-layout">
         <aside className="sf-byok-rail">
           {BYOK_ORDER.map((pid) => {
@@ -3521,18 +3783,21 @@ function ModelKeysSection() {
 function SkillsSettingsList() {
   type Row = { skill_id: string; name: string; description?: string; enabled?: boolean; source?: string };
   const [items, setItems] = useState<Row[] | null>(null);
-  const [live, setLive] = useState(true);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
   useEffect(() => {
     sfFetch<Row[]>("/api/skills")
-      .then((list) => setItems(Array.isArray(list) ? list : []))
+      .then((list) => {
+        setItems(Array.isArray(list) ? list : []);
+        setLoadState("ready");
+      })
       .catch(() => {
-        setLive(false);
-        setItems([]);
+        setItems(null);
+        setLoadState("error");
       });
   }, []);
   return (
     <div className="sf-settings-list">
-      {!live && <p className="sf-live-tag">后端未连接 · 无法加载技能列表</p>}
+      <SfLoadTag state={loadState} />
       {(items ?? []).map((row) => (
         <article key={row.skill_id}>
           <strong>{row.name || row.skill_id}</strong>
@@ -3551,18 +3816,21 @@ function SkillsSettingsList() {
 function CliProvidersSection() {
   type Row = { id: string; name?: string; version?: string | null; installed?: boolean };
   const [items, setItems] = useState<Row[] | null>(null);
-  const [live, setLive] = useState(true);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
   useEffect(() => {
     sfFetch<{ agents?: Row[] }>("/api/settings/agents/detect")
-      .then((j) => setItems((j.agents ?? []).filter((a) => a.installed !== false)))
+      .then((j) => {
+        setItems((j.agents ?? []).filter((a) => a.installed !== false));
+        setLoadState("ready");
+      })
       .catch(() => {
-        setLive(false);
-        setItems([]);
+        setItems(null);
+        setLoadState("error");
       });
   }, []);
   return (
     <div className="sf-settings-list">
-      {!live && <p className="sf-live-tag">后端未连接 · 无法探测本地执行器</p>}
+      <SfLoadTag state={loadState} />
       {(items ?? []).map((row) => (
         <article key={row.id}>
           <strong>{row.name || row.id}</strong>
@@ -3585,21 +3853,22 @@ function ConnectorsSection({ mcp }: { mcp?: boolean }) {
     policy?: { enabled?: boolean; approval_mode?: string };
   };
   const [items, setItems] = useState<Row[] | null>(null);
-  const [live, setLive] = useState(true);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
   useEffect(() => {
     sfFetch<{ items?: Row[] }>("/api/connectors")
       .then((j) => {
         const list = j.items ?? [];
         setItems(mcp ? list.filter((c) => c.transport === "stdio" || c.transport === "http") : list);
+        setLoadState("ready");
       })
       .catch(() => {
-        setLive(false);
-        setItems([]);
+        setItems(null);
+        setLoadState("error");
       });
   }, [mcp]);
   return (
     <div className="sf-settings-list">
-      {!live && <p className="sf-live-tag">后端未连接 · 无法加载连接器</p>}
+      <SfLoadTag state={loadState} />
       {(items ?? []).map((row) => (
         <article key={row.id}>
           <strong>{row.name || row.id}</strong>
@@ -3619,14 +3888,17 @@ function ConnectorsSection({ mcp }: { mcp?: boolean }) {
 function MemoryEntriesSection() {
   type Row = { id: string; scope?: string; title?: string; content?: string; created_at?: string };
   const [items, setItems] = useState<Row[] | null>(null);
-  const [live, setLive] = useState(true);
+  const [loadState, setLoadState] = useState<SfLoadState>("loading");
   const [enabled, setEnabled] = useState(true);
   useEffect(() => {
     sfFetch<Row[]>("/api/memory-entries")
-      .then((list) => setItems(Array.isArray(list) ? list : []))
+      .then((list) => {
+        setItems(Array.isArray(list) ? list : []);
+        setLoadState("ready");
+      })
       .catch(() => {
-        setLive(false);
-        setItems([]);
+        setItems(null);
+        setLoadState("error");
       });
     sfFetch<{ enabled?: boolean }>("/api/memory-entries/settings")
       .then((j) => setEnabled(j.enabled !== false))
@@ -3657,7 +3929,7 @@ function MemoryEntriesSection() {
           <i />
         </button>
       </div>
-      {!live && <p className="sf-live-tag">后端未连接 · 无法加载记忆条目</p>}
+      <SfLoadTag state={loadState} />
       {(items ?? []).slice(0, 12).map((row) => (
         <article key={row.id}>
           <strong>{row.title || row.id.slice(0, 8)}</strong>

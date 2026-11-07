@@ -20,23 +20,29 @@
 import path from 'path';
 import fs from 'fs';
 
-// server/ is `<root>/server`; repo root is exactly one level up regardless of
-// where the process was started from (server/ vs repo root).
-const ROOT_ENV_PATH = path.resolve(__dirname, '..', '..', '.env');
+// 候选位置（依次尝试，先命中先加载）：
+//   1. `<root>/backend/.env` —— __dirname 为 backend/node/{src,dist} 时的上两级
+//   2. `<root>/.env` —— README 口径的仓库根 .env（dev.mjs 以仓库根为 cwd 启动）
+const ENV_CANDIDATES = [
+  path.resolve(__dirname, '..', '..', '.env'),
+  path.resolve(__dirname, '..', '..', '..', '.env'),
+];
 
-try {
-  if (fs.existsSync(ROOT_ENV_PATH)) {
-    process.loadEnvFile(ROOT_ENV_PATH);
+for (const ROOT_ENV_PATH of ENV_CANDIDATES) {
+  try {
+    if (fs.existsSync(ROOT_ENV_PATH)) {
+      process.loadEnvFile(ROOT_ENV_PATH);
+      // eslint-disable-next-line no-console
+      console.log(`[env] loaded ${ROOT_ENV_PATH}`);
+    }
+  } catch (err) {
+    // Malformed .env must not take the whole server down — warn and continue
+    // with whatever is already in process.env.
     // eslint-disable-next-line no-console
-    console.log(`[env] loaded ${ROOT_ENV_PATH}`);
+    console.warn(
+      `[env] failed to load ${ROOT_ENV_PATH}: ${(err as Error).message}`,
+    );
   }
-} catch (err) {
-  // Malformed .env must not take the whole server down — warn and continue
-  // with whatever is already in process.env.
-  // eslint-disable-next-line no-console
-  console.warn(
-    `[env] failed to load ${ROOT_ENV_PATH}: ${(err as Error).message}`,
-  );
 }
 
 // Referenced so tsc doesn't prune the import in some bundler configurations.

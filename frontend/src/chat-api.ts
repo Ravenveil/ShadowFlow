@@ -230,6 +230,8 @@ export interface MessageItem {
   reactions?: unknown[];
   pinned?: boolean;
   agent_id?: string | null;
+  /** 用户消息附件（2026-11-07 对话框拖拽传图）。 */
+  attachments?: UserAttachment[];
 }
 
 export interface GroupRecord {
@@ -483,11 +485,53 @@ export async function getTimeline(groupId: string): Promise<TimelineResponse> {
 export async function postMessage(
   groupId: string,
   content: string,
+  attachments?: UserAttachment[],
 ): Promise<MessageItem> {
   return apiFetch<MessageItem>(`/api/groups/${encodeURIComponent(groupId)}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content, sender_kind: "user" }),
+    body: JSON.stringify({
+      content,
+      sender_kind: "user",
+      // 附件仅在非空时携带（2026-11-07 对话框拖拽传图）
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    }),
   });
+}
+
+// ── 聊天附件上传（2026-11-07 对话框拖拽传图）────────────────────────────────
+
+/** 后端 /api/fs/chat-upload 的单文件上限（与后端守卫一致）。 */
+export const CHAT_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+
+/** 附件直链补全：url 为相对路径（/projects/_uploads/…），拼 API base。 */
+export function chatAssetUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${SF_API_BASE}${url}`;
+}
+
+/**
+ * 上传单个聊天附件：POST /api/fs/chat-upload（multipart 字段 file）。
+ * 返回 UserAttachment（is_image 由文件类型推断，后端响应不含该字段）。
+ */
+export async function uploadChatAttachment(file: File): Promise<UserAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+  const json = await apiFetch<{ data?: { path?: string; name?: string; size?: number; url?: string } }>(
+    "/api/fs/chat-upload",
+    { method: "POST", body: form },
+  );
+  const d = json?.data;
+  if (!d || typeof d.path !== "string" || typeof d.url !== "string") {
+    throw new ApiError(500, "UPLOAD_BAD_RESPONSE", "上传响应缺少 path/url");
+  }
+  return {
+    // 四字段（name/path/url/is_image）齐全：后端 coerceAttachments 缺 name/path/url 会丢弃该条，name 兜底非空
+    name: (typeof d.name === "string" && d.name ? d.name : file.name) || "未命名文件",
+    path: d.path,
+    url: d.url,
+    is_image: file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name),
+    size: typeof d.size === "number" ? d.size : file.size,
+  };
 }
 
 export async function stopGroup(groupId: string): Promise<{ group_id: string; stopped: boolean }> {
@@ -579,7 +623,15 @@ export function chatItemToTimeline(item: MessageItem, fallbackIndex = 0): Timeli
   const content = typeof item.content === "string" ? item.content : "";
   const kind = item.sender_kind ?? "user";
   if (kind === "user") {
-    return { id, kind: "user_turn", turn_id: id, ts, text: content };
+    return {
+      id,
+      kind: "user_turn",
+      turn_id: id,
+      ts,
+      text: content,
+      // 附件 chips（2026-11-07 对话框拖拽传图）：历史刷新不丢
+      ...(item.attachments && item.attachments.length > 0 ? { attachments: item.attachments } : {}),
+    };
   }
   if (kind === "agent") {
     return {

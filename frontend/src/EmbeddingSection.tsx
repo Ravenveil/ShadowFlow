@@ -155,7 +155,7 @@ export default function EmbeddingSection() {
 
   return (
     <div className="sf-embed">
-      {!live && <p className="sf-live-tag">后端未连接 · 无法读写向量模型配置</p>}
+      {!live && <p className="sf-live-tag">配置加载失败 · 请刷新后重试</p>}
       <p className="sf-embed-intro">
         知识库（记忆库）用这里配置的 embedding 模型向量化文档，检索升级为 BM25 + 向量混合（hybrid）。
         未配置或关闭时自动退回关键词检索。保存即时生效，无需重启。

@@ -26,6 +26,10 @@ let profit: typeof import('../storage/craft-profit');
 let settings: typeof import('../storage/settings');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let sqlite: typeof import('../storage/sqlite');
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+let social: typeof import('../storage/social-publish');
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+let opsShip: typeof import('../storage/ops-shipping');
 
 beforeAll(async () => {
   origCwd = process.cwd();
@@ -36,8 +40,12 @@ beforeAll(async () => {
   profit = await import('../storage/craft-profit');
   intake = await import('../storage/craft-intake');
   settings = await import('../storage/settings');
+  social = await import('../storage/social-publish');
+  opsShip = await import('../storage/ops-shipping');
   sqlite.getDb();
   profit.listProducts(); // 触发 cp_* 懒建表
+  social.listAccounts(); // 触发 sp_* 懒建表
+  opsShip.listShipments(); // 触发 ops_* 懒建表
 });
 
 afterAll(() => {
@@ -47,7 +55,11 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  sqlite.getDb().exec('DELETE FROM cp_agent_events; DELETE FROM cp_sales; DELETE FROM cp_products;');
+  sqlite.getDb().exec(
+    'DELETE FROM cp_agent_events; DELETE FROM cp_sales; DELETE FROM cp_products;' +
+      'DELETE FROM sp_publish_log; DELETE FROM sp_posts; DELETE FROM sp_accounts;' +
+      'DELETE FROM ops_ship_events; DELETE FROM ops_shipments;',
+  );
   settings.deleteSetting(intake.CRAFT_TEAM_KEY);
   intake._resetCraftPackCache();
 });
@@ -78,15 +90,15 @@ const TRANSCRIPT = `收到你的产品资料了，先登记上架。
 请看盈利汇报：收入 136 元，净利 70 元。`;
 
 describe('applyCraftMarkers — 标记落库', () => {
-  it('非代卖群（scoped=false）no-op：原文原样、零副作用', () => {
-    const r = intake.applyCraftMarkers('[order] {"product":"苗绣杯垫","qty":2}', { scoped: false });
+  it('非代卖群（scoped=false）no-op：原文原样、零副作用', async () => {
+    const r = await intake.applyCraftMarkers('[order] {"product":"苗绣杯垫","qty":2}', { scoped: false });
     expect(r.applied).toEqual([]);
     expect(r.cleaned).toContain('[order]');
     expect(profit.listSales()).toHaveLength(0);
   });
 
-  it('全流程 transcript：上架/销售/运营动态/盈利全落库，文本剥标记', () => {
-    const r = intake.applyCraftMarkers(TRANSCRIPT, { scoped: true });
+  it('全流程 transcript：上架/销售/运营动态/盈利全落库，文本剥标记', async () => {
+    const r = await intake.applyCraftMarkers(TRANSCRIPT, { scoped: true });
     // 7 个标记全部识别（2 上架 + 发帖 + 链接 + 出单 + 寄出 + 汇报）
     expect(r.applied.map((a) => a.tag)).toEqual([
       'intake', 'intake', 'post', 'link', 'order', 'ship', 'report',
@@ -107,10 +119,16 @@ describe('applyCraftMarkers — 标记落库', () => {
       profit_per_unit_cents: 3000,
     });
 
-    // 销售按快照记账（2 件 × 每件盈利 3000）
+    // 销售按快照记账（2 件 × 每件盈利 3000）；[ship] 后状态已发货、回填运单号
     const sales = profit.listSales();
     expect(sales).toHaveLength(1);
-    expect(sales[0]).toMatchObject({ product_name: '苗绣杯垫', qty: 2, profit_cents: 6000 });
+    expect(sales[0]).toMatchObject({
+      product_name: '苗绣杯垫',
+      qty: 2,
+      profit_cents: 6000,
+      status: 'shipped',
+      tracking: 'SF001',
+    });
 
     // 运营动态：营销 ×2（post+link）、订单 ×1、快递 ×1
     const events = profit.listAgentEvents(10);
@@ -121,14 +139,25 @@ describe('applyCraftMarkers — 标记落库', () => {
     expect(events.some((e) => e.text.includes('小红书'))).toBe(true);
     expect(events.some((e) => e.text.includes('SF001'))).toBe(true);
 
+    // 社媒发布域：2 帖（发帖 + 链接帖）均已 mock 发布
+    const posts = social.listPosts();
+    expect(posts).toHaveLength(2);
+    expect(posts.every((p) => p.status === 'published')).toBe(true);
+
+    // 快递域：1 张运单（顺丰 mock 交运），关联到销售订单
+    const ships = opsShip.listShipments();
+    expect(ships).toHaveLength(1);
+    expect(ships[0]).toMatchObject({ carrier: 'sf', order_id: sales[0].id, status: 'shipped' });
+    expect(ships[0].tracking_no).toBeTruthy();
+
     // 盈利口径可查（收入 = 136 元）
     const ov = profit.overview(30);
     expect(ov.revenue_cents).toBe(13600);
     expect(ov.profit_cents).toBe(6000);
   });
 
-  it('未上架商品出单 → 可见失败（ok=false 带原因），不抛不落销售', () => {
-    const r = intake.applyCraftMarkers('[order] {"product":"不存在的","qty":1}', { scoped: true });
+  it('未上架商品出单 → 可见失败（ok=false 带原因），不抛不落销售', async () => {
+    const r = await intake.applyCraftMarkers('[order] {"product":"不存在的","qty":1}', { scoped: true });
     expect(r.applied[0]).toMatchObject({ tag: 'order', ok: false });
     expect(r.applied[0].error).toMatch(/还没上架/);
     expect(profit.listSales()).toHaveLength(0);
@@ -160,8 +189,8 @@ describe('isCraftGroup — 代卖群作用域', () => {
 });
 
 describe('applyCraftMarkers — 流程动作透传（build-team/dispatch）', () => {
-  it('[build-team]/[dispatch] 剥标记并透传 actions（标记须行首）', () => {
-    const r = intake.applyCraftMarkers(
+  it('[build-team]/[dispatch] 剥标记并透传 actions（标记须行首）', async () => {
+    const r = await intake.applyCraftMarkers(
       '[build-team] {}\n好的\n[dispatch] {"to":"商品文案师","text":"写详情页"}\n已派出',
       { scoped: true },
     );
@@ -174,16 +203,16 @@ describe('applyCraftMarkers — 流程动作透传（build-team/dispatch）', ()
     expect(r.applied.every((a) => a.ok)).toBe(true);
   });
 
-  it('dispatch 缺 to/text → ok=false 可见失败，动作不透传', () => {
-    const r = intake.applyCraftMarkers('[dispatch] {"to":"商品文案师"}', { scoped: true });
+  it('dispatch 缺 to/text → ok=false 可见失败，动作不透传', async () => {
+    const r = await intake.applyCraftMarkers('[dispatch] {"to":"商品文案师"}', { scoped: true });
     expect(r.applied[0]).toMatchObject({ tag: 'dispatch', ok: false });
     expect(r.applied[0].error).toMatch(/缺 to|缺 text|缺少/);
     expect(r.actions).toEqual([]);
     expect(r.cleaned).toBe('');
   });
 
-  it('既有业务动作（intake 等）照旧透传 actions（顺序保留）', () => {
-    const r = intake.applyCraftMarkers('[intake] {"name":"杯垫","price":28}', { scoped: true });
+  it('既有业务动作（intake 等）照旧透传 actions（顺序保留）', async () => {
+    const r = await intake.applyCraftMarkers('[intake] {"name":"杯垫","price":28}', { scoped: true });
     expect(r.actions).toEqual([expect.objectContaining({ kind: 'intake', name: '杯垫', price_cents: 2800 })]);
   });
 });

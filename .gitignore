@@ -19,3 +19,8 @@ backend/node/.shadowflow/
 !.env.example
 *.log
 .DS_Store
+
+# E2E 演示运行时产物（会话 token、测试素材），不入库
+.sf-token
+.e2e-fixtures/
+.workbuddy/memory/

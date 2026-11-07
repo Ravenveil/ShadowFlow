@@ -16,13 +16,26 @@
  * 全程 fail-soft：记忆库不可达只丢同步不阻塞聊天；单条标记落库失败记入
  * applied 结果（可见），不抛。
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   CraftProfitError,
   createProduct,
   createSale,
+  findPendingSale,
   insertAgentEvent,
   listProducts,
+  markSaleShipped,
 } from './craft-profit';
+import {
+  createAccount,
+  createPost,
+  listAccounts,
+  publishPost,
+} from './social-publish';
+import { createShipment, shipShipment } from './ops-shipping';
+import { PLATFORMS } from '../lib/social-platforms';
+import { CARRIERS } from '../lib/shipping';
 import { getSetting } from './settings';
 import { parseCraftMarkers, type CraftAction, type CraftTag } from '../lib/craft-markers';
 import { PYTHON_BACKEND_URL } from '../python-backend';
@@ -96,7 +109,119 @@ function findProduct(name: string): { id: string; name: string } | null {
   return loose ? { id: loose.id, name: loose.name } : null;
 }
 
-function applyOne(action: CraftAction): AppliedAction {
+// ── ①a 子系统同步：社媒发布域（发帖/上链接）+ 快递域（寄出）────────────────
+
+/** 平台自由文本（"小红书"/"xiaohongshu"）→ 平台规格 id；认不出回落小红书。 */
+function normalizePlatform(raw: string): string {
+  const t = raw.trim();
+  const hit = PLATFORMS.find((p) => p.id === t.toLowerCase() || p.name === t);
+  return hit ? hit.id : 'xiaohongshu';
+}
+
+/** 代卖演示账号（每平台一个 mock 账号，幂等复用）。 */
+function ensureSocialAccount(platformId: string): string {
+  const existing = listAccounts().find((a) => a.platform === platformId && a.auth_mode === 'mock');
+  if (existing) return existing.id;
+  const spec = PLATFORMS.find((p) => p.id === platformId);
+  return createAccount({
+    platform: platformId,
+    account_name: `代卖演示·${spec?.name ?? platformId}`,
+    auth_mode: 'mock',
+  }).id;
+}
+
+/** 标题/正文按平台上限截断（createPost 超限会抛）。 */
+function fitPost(platformId: string, title: string, content: string): { title: string; content: string } {
+  const spec = PLATFORMS.find((p) => p.id === platformId);
+  let t = title;
+  let c = content;
+  if (spec) {
+    if (spec.title_max > 0 && t.length > spec.title_max) t = t.slice(0, spec.title_max);
+    if (c.length > spec.content_max) c = c.slice(0, spec.content_max);
+  }
+  return { title: t, content: c };
+}
+
+/**
+ * 帖子落社媒发布域并 mock 发布（fail-soft：失败只降级为「已建未发」，不抛，
+ * 不影响聊天与盈利库主链路）。返回发布状态描述（进运营动态）。
+ */
+async function syncSocialPost(input: {
+  platform: string;
+  title: string;
+  content: string;
+  productId?: string;
+}): Promise<string> {
+  const platformId = normalizePlatform(input.platform);
+  const accountId = ensureSocialAccount(platformId);
+  const fitted = fitPost(platformId, input.title, input.content || input.title);
+  const post = createPost({
+    account_id: accountId,
+    title: fitted.title,
+    content: fitted.content,
+    ...(input.productId ? { product_id: input.productId } : {}),
+  });
+  try {
+    const { receipt } = await publishPost(post.id);
+    const rid = (receipt as { external_id?: string | null }).external_id;
+    return rid ? `社媒已发布（回执 ${rid}）` : '社媒已发布';
+  } catch (e) {
+    return `社媒帖子已建（发布失败：${(e as Error).message}）`;
+  }
+}
+
+/** 运单号前缀 → 承运商 id；认不出回落顺丰。 */
+function carrierFromTracking(tracking: string): string {
+  const t = tracking.trim().toUpperCase();
+  const hit = CARRIERS.find((c) => t.startsWith(c.tracking_prefix));
+  return hit ? hit.id : 'sf';
+}
+
+/** 演示收件信息兜底（标记未带收件信息时用；真实订单由买家下单信息提供）。 */
+const DEMO_RECEIVER = {
+  name: '演示买家',
+  phone: '13800000000',
+  address: '演示收件地址（买家下单时提供）',
+};
+
+/**
+ * 寄出 → 快递域发运记录（mock 承运商取面单号）+ 订单状态「已发货」回填运单。
+ * 返回实发运单号；快递域失败不阻断盈利库记账（fail-soft）。
+ */
+async function syncShip(action: Extract<CraftAction, { kind: 'ship' }>): Promise<string> {
+  const p = findProduct(action.product);
+  const sale = p ? findPendingSale(p.id) : null;
+  let tracking = action.tracking;
+  const carrierId = action.tracking ? carrierFromTracking(action.tracking) : 'sf';
+  try {
+    const shipment = createShipment({
+      ...(sale ? { order_id: sale.id } : {}),
+      carrier: carrierId,
+      receiver_name: action.receiver_name || DEMO_RECEIVER.name,
+      receiver_phone: action.receiver_phone || DEMO_RECEIVER.phone,
+      receiver_address: action.receiver_address || DEMO_RECEIVER.address,
+      weight_grams: 500 * action.qty,
+      remark: `代卖寄出「${action.product}」×${action.qty}`,
+      mode: 'mock',
+    });
+    const { receipt, shipment: shipped } = await shipShipment(shipment.id);
+    const gen =
+      (receipt as { tracking_no?: string | null }).tracking_no ?? shipped.tracking_no ?? '';
+    if (!tracking && gen) tracking = gen;
+  } catch {
+    /* 快递域不可用/重复运单 → 只影响快递域记录，不影响订单状态 */
+  }
+  if (sale) {
+    try {
+      markSaleShipped(sale.id, tracking);
+    } catch {
+      /* 订单已删等 → 快递记录仍在 */
+    }
+  }
+  return tracking;
+}
+
+async function applyOne(action: CraftAction): Promise<AppliedAction> {
   try {
     switch (action.kind) {
       case 'intake': {
@@ -111,12 +236,25 @@ function applyOne(action: CraftAction): AppliedAction {
       case 'post': {
         const detail = `在${action.platform}发帖：${action.title || action.text.slice(0, 40) || '推广内容'}`;
         insertAgentEvent('marketing', detail);
-        return { tag: 'post', ok: true, detail };
+        // 同步社媒发布域（帖子 + 发布回执），失败降级不改营销动态。
+        const socialNote = await syncSocialPost({
+          platform: action.platform,
+          title: action.title || action.text.slice(0, 20) || '好物推荐',
+          content: action.text || action.title,
+        });
+        return { tag: 'post', ok: true, detail: `${detail}（${socialNote}）` };
       }
       case 'link': {
         const detail = `上商品链接${action.product ? `「${action.product}」` : ''} ${action.url}`.trim();
         insertAgentEvent('marketing', detail);
-        return { tag: 'link', ok: true, detail };
+        const p = action.product ? findProduct(action.product) : null;
+        const socialNote = await syncSocialPost({
+          platform: action.platform,
+          title: action.product ? `${action.product} 购买链接` : '商品购买链接',
+          content: `${action.product || '商品'} 购买链接：${action.url}`,
+          ...(p ? { productId: p.id } : {}),
+        });
+        return { tag: 'link', ok: true, detail: `${detail}（${socialNote}）` };
       }
       case 'order': {
         const p = findProduct(action.product);
@@ -127,9 +265,10 @@ function applyOne(action: CraftAction): AppliedAction {
         return { tag: 'order', ok: true, detail };
       }
       case 'ship': {
+        const tracking = await syncShip(action);
         const detail =
           `已联系快递员上门取件，寄出「${action.product}」×${action.qty}` +
-          (action.tracking ? `（运单 ${action.tracking}）` : '');
+          (tracking ? `（运单 ${tracking}）` : '');
         insertAgentEvent('shipping', detail);
         return { tag: 'ship', ok: true, detail };
       }
@@ -154,11 +293,12 @@ function applyOne(action: CraftAction): AppliedAction {
  * 解析并落业务动作；返回剥掉标记后的展示文本与 ok 动作清单
  * （build-team/dispatch 由调用方在挂钩点执行）。
  * scoped=false（非代卖作用域）→ 原文原样返回、零副作用。
+ * 异步：[post]/[link]/[ship] 要同步社媒/快递域（mock 发布、取面单号）。
  */
-export function applyCraftMarkers(
+export async function applyCraftMarkers(
   text: string,
   opts: { scoped: boolean },
-): { applied: AppliedAction[]; cleaned: string; actions: CraftAction[] } {
+): Promise<{ applied: AppliedAction[]; cleaned: string; actions: CraftAction[] }> {
   if (!opts.scoped) return { applied: [], cleaned: text, actions: [] };
   const { markers, cleaned } = parseCraftMarkers(text);
   const applied: AppliedAction[] = [];
@@ -166,7 +306,7 @@ export function applyCraftMarkers(
   for (const m of markers) {
     if (m.ok && m.action) {
       actions.push(m.action);
-      applied.push(applyOne(m.action));
+      applied.push(await applyOne(m.action));
     } else {
       applied.push({ tag: m.tag, ok: false, error: m.error ?? '标记解析失败' });
     }
@@ -248,4 +388,39 @@ export async function ingestProductMaterial(
     }),
   });
   return ok ? packId : null;
+}
+
+/**
+ * 用户随行附件（图片/产品文档）→ 记忆库「手工艺品资料」pack。走多模态记忆库
+ * /files 端点（自带 docx/pdf/xlsx/图片 解析），逐文件 fail-soft。返回 pack id
+ * （全部失败/无附件则 null）。
+ */
+export async function ingestProductAttachments(
+  attachments: Array<{ name?: string; path?: string }> | undefined,
+): Promise<string | null> {
+  const list = (attachments ?? [])
+    .filter((a): a is { name?: string; path: string } => typeof a?.path === 'string' && !!a.path)
+    .slice(0, 9);
+  if (list.length === 0) return null;
+  const packId = await ensureCraftPack();
+  if (!packId) return null;
+  let okAny = false;
+  for (const a of list) {
+    try {
+      const buf = await fs.promises.readFile(a.path);
+      const form = new FormData();
+      form.append('upload', new Blob([buf]), a.name || path.basename(a.path));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), KB_TIMEOUT_MS * 4);
+      const res = await fetch(
+        `${PYTHON_BACKEND_URL}/api/memory-bank/packs/${encodeURIComponent(packId)}/files`,
+        { method: 'POST', body: form, signal: controller.signal },
+      );
+      clearTimeout(timer);
+      if (res.ok) okAny = true;
+    } catch {
+      /* 单文件失败（读不到/记忆库不可达）不阻断聊天主链路 */
+    }
+  }
+  return okAny ? packId : null;
 }

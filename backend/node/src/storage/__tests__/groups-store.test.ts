@@ -371,3 +371,87 @@ describe('user settings (per-user merge)', () => {
     ).toBeNull();
   });
 });
+
+// ── 2026-11-07 拖拽传图 — 群消息随行附件持久化 ────────────────────────────────
+
+const attImg = {
+  name: 'cat.png',
+  path: '/tmp/up/cat.png',
+  url: '/projects/_uploads/aaa/cat.png',
+  is_image: true,
+  size: 1234,
+};
+const attDoc = {
+  name: 'note.txt',
+  path: '/tmp/up/note.txt',
+  url: '/projects/_uploads/bbb/note.txt',
+  is_image: false,
+};
+
+describe('message attachments (2026-11-07 拖拽传图)', () => {
+  it('appendGroupMessage 落库并回读附件；无附件消息不带字段', async () => {
+    const g = store.createGroup({ name: 'g' });
+    const withAtt = store.appendGroupMessage(g.group_id, {
+      content: '看看这张图',
+      sender_kind: 'user',
+      attachments: [attImg, attDoc],
+    });
+    expect(withAtt.attachments).toEqual([attImg, attDoc]);
+    const plain = store.appendGroupMessage(g.group_id, {
+      content: '纯文本',
+      sender_kind: 'user',
+    });
+    expect(plain.attachments).toBeUndefined();
+
+    // 刷新回读（SQLite round-trip）：附件仍在，无附件不带字段。
+    const list = store.listGroupMessages(g.group_id);
+    expect(list[0].attachments).toEqual([attImg, attDoc]);
+    expect(list[1].attachments).toBeUndefined();
+    // getGroup 的 messages 同源可见。
+    expect(store.getGroup(g.group_id)!.messages[0].attachments).toEqual([attImg, attDoc]);
+  });
+
+  it('空数组 / 残缺项不落库（attachments 字段省略）', () => {
+    const g = store.createGroup({ name: 'g' });
+    expect(store.appendGroupMessage(g.group_id, { content: 'a', attachments: [] }).attachments).toBeUndefined();
+    // name/path/url 任一缺失的残缺项被过滤——全部残缺 → 无附件省略。
+    const filtered = store.appendGroupMessage(g.group_id, {
+      content: 'b',
+      attachments: [{ name: '', path: '/x', url: '/y', is_image: false } as never],
+    });
+    expect(filtered.attachments).toBeUndefined();
+  });
+
+  it('importGroupRecord 迁移保留附件', () => {
+    store.importGroupRecord({
+      group_id: 'fixedid000000000000000000000000c',
+      name: '迁移群',
+      messages: [
+        { message_id: 'm1', content: '带附件', timestamp: '2026-01-01T00:01:00Z', attachments: [attImg] },
+        { message_id: 'm2', content: '无附件', timestamp: '2026-01-01T00:02:00Z' },
+      ],
+    });
+    const msgs = store.getGroup('fixedid000000000000000000000000c')!.messages;
+    expect(msgs[0].attachments).toEqual([attImg]);
+    expect(msgs[1].attachments).toBeUndefined();
+  });
+
+  it("groups-backend node 模式 appendMessage 透传附件", async () => {
+    process.env.SF_GROUPS_BACKEND = 'node';
+    try {
+      const { getGroupsBackend } = await import('../groups-backend');
+      const g = store.createGroup({ name: 'g' });
+      const created = (await getGroupsBackend().appendMessage(g.group_id, {
+        content: '带附件',
+        sender_name: 'user',
+        sender_kind: 'user',
+        attachments: [attImg],
+      })) as { attachments?: unknown };
+      expect(created.attachments).toEqual([attImg]);
+      const back = await getGroupsBackend().getGroup(g.group_id);
+      expect(back!.messages![0].attachments).toEqual([attImg]);
+    } finally {
+      delete process.env.SF_GROUPS_BACKEND;
+    }
+  });
+});

@@ -21,6 +21,7 @@
 
 import { randomUUID } from 'crypto';
 import { getDb } from './sqlite';
+import type { UserAttachment } from '../lib/contracts';
 
 // ── id / 时间 helpers ────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ export interface MessageItem {
   reply_to: string | null;
   reactions: Record<string, string[]>; // emoji → [user_id]
   pinned: boolean;
+  /** 2026-11-07 拖拽传图 — user 消息随行附件（无附件时省略，对齐 Python record）。 */
+  attachments?: UserAttachment[];
 }
 
 /** 群/DM 会话记录（对齐 Python group record JSON 形状）。 */
@@ -119,6 +122,8 @@ export interface AppendMessageInput {
   sender_kind?: SenderKind;
   content: string;
   reply_to?: string | null;
+  /** 2026-11-07 拖拽传图 — 随行附件（JSON 落 attachments 列；空/缺省不落）。 */
+  attachments?: UserAttachment[];
 }
 
 /** per-user-per-group 偏好（对齐 Python UserGroupSetting 默认值）。 */
@@ -172,6 +177,7 @@ interface MessageRow {
   reply_to: string | null;
   reactions: string; // JSON
   pinned: number; // 0/1
+  attachments: string | null; // JSON（2026-11-07 拖拽传图；旧行 NULL）
 }
 
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
@@ -184,6 +190,8 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
 }
 
 function toMessageItem(row: MessageRow): MessageItem {
+  // 2026-11-07 拖拽传图 — 附件 JSON 解析；空数组/坏 JSON 归一为「无附件省略」。
+  const attachments = parseJson<UserAttachment[]>(row.attachments, []);
   return {
     message_id: row.message_id,
     sender_name: row.sender_name,
@@ -193,6 +201,7 @@ function toMessageItem(row: MessageRow): MessageItem {
     reply_to: row.reply_to ?? null,
     reactions: parseJson<Record<string, string[]>>(row.reactions, {}),
     pinned: !!row.pinned,
+    ...(attachments.length > 0 ? { attachments } : {}),
   };
 }
 
@@ -310,6 +319,8 @@ export function importGroupRecord(rec: {
     reply_to?: string | null;
     reactions?: Record<string, string[]> | null;
     pinned?: boolean;
+    /** 2026-11-07 拖拽传图 — 迁移时保留随行附件。 */
+    attachments?: UserAttachment[] | null;
   }>;
 }): void {
   const db = getDb();
@@ -342,8 +353,8 @@ export function importGroupRecord(rec: {
     db.prepare(`DELETE FROM group_messages WHERE group_id = ?`).run(rec.group_id);
     const insMsg = db.prepare(
       `INSERT INTO group_messages
-        (message_id, group_id, sender_name, sender_kind, content, timestamp, reply_to, reactions, pinned)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (message_id, group_id, sender_name, sender_kind, content, timestamp, reply_to, reactions, pinned, attachments)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let idx = 0;
     for (const m of rec.messages ?? []) {
@@ -357,6 +368,7 @@ export function importGroupRecord(rec: {
         m.reply_to ?? null,
         JSON.stringify(m.reactions ?? {}),
         m.pinned ? 1 : 0,
+        m.attachments && m.attachments.length > 0 ? JSON.stringify(m.attachments) : null,
       );
     }
   });
@@ -471,6 +483,8 @@ export function appendGroupMessage(
   const db = getDb();
   const message_id = hexId();
   const timestamp = nowIso();
+  // 2026-11-07 拖拽传图 — 非空附件随消息落库（JSON 列），空/缺省不落。
+  const attachments = (input.attachments ?? []).filter((a) => a && a.name && a.path && a.url);
   const msg: MessageItem = {
     message_id,
     sender_name: input.sender_name ?? 'user',
@@ -480,6 +494,7 @@ export function appendGroupMessage(
     reply_to: input.reply_to ?? null,
     reactions: {},
     pinned: false,
+    ...(attachments.length > 0 ? { attachments } : {}),
   };
 
   const tx = db.transaction(() => {
@@ -492,8 +507,8 @@ export function appendGroupMessage(
     db.prepare(
       `INSERT INTO group_messages
         (message_id, group_id, sender_name, sender_kind, content, timestamp,
-         reply_to, reactions, pinned)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         reply_to, reactions, pinned, attachments)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       msg.message_id,
       groupId,
@@ -504,6 +519,7 @@ export function appendGroupMessage(
       msg.reply_to,
       JSON.stringify(msg.reactions),
       0,
+      attachments.length > 0 ? JSON.stringify(attachments) : null,
     );
     db.prepare(`UPDATE groups SET updated_at = ? WHERE group_id = ?`).run(
       timestamp,

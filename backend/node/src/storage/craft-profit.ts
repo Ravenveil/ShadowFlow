@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS cp_sales (
   price_cents INTEGER NOT NULL,
   cost_cents INTEGER NOT NULL DEFAULT 0,
   shipping_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'shipped',
+  tracking TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cp_sales_created ON cp_sales(created_at);
@@ -60,10 +62,21 @@ function migrate(conn: Database.Database): void {
   for (const table of ['cp_products', 'cp_sales']) {
     const cols = conn.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     const names = new Set(cols.map((c) => c.name));
-    if (names.has('cost_cents')) continue;
-    conn.exec(`ALTER TABLE ${table} ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0`);
-    if (names.has('artisan_cents')) {
-      conn.exec(`UPDATE ${table} SET cost_cents = artisan_cents`);
+    if (!names.has('cost_cents')) {
+      conn.exec(`ALTER TABLE ${table} ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0`);
+      if (names.has('artisan_cents')) {
+        conn.exec(`UPDATE ${table} SET cost_cents = artisan_cents`);
+      }
+    }
+    if (table === 'cp_sales') {
+      // 订单状态跟踪（2026-11-08）：老库补 status/tracking；历史行视为已发货
+      //（当时只有「记账即寄出」口径），新口径 [order] 待发货 → [ship] 已发货。
+      if (!names.has('status')) {
+        conn.exec(`ALTER TABLE cp_sales ADD COLUMN status TEXT NOT NULL DEFAULT 'shipped'`);
+      }
+      if (!names.has('tracking')) {
+        conn.exec(`ALTER TABLE cp_sales ADD COLUMN tracking TEXT NOT NULL DEFAULT ''`);
+      }
     }
   }
 }
@@ -137,6 +150,10 @@ export interface CraftSale {
   cost_cents: number;
   shipping_cents: number;
   profit_cents: number;
+  /** 订单状态跟踪：pending 待发货 → shipped 已发货（历史行缺省 shipped）。 */
+  status: string;
+  /** 运单号（[ship] 登记后回填）。 */
+  tracking: string;
   created_at: number;
 }
 
@@ -183,13 +200,19 @@ export function listProducts(): CraftProduct[] {
 
 // ── 销售（记一笔）────────────────────────────────────────────────────────────
 
-export function createSale(input: { product_id?: unknown; qty?: unknown }): CraftSale {
+export function createSale(input: {
+  product_id?: unknown;
+  qty?: unknown;
+  /** 缺省 'pending'（待发货）；出单即寄出的场景传 'shipped'。 */
+  status?: unknown;
+}): CraftSale {
   const productId = text(input.product_id, 128, 'product_id', true);
   const product = db().prepare(`SELECT * FROM cp_products WHERE id = ?`).get(productId) as
     | Omit<CraftProduct, 'profit_per_unit_cents'>
     | undefined;
   if (!product) throw new CraftProfitError('product not found', 404);
   const n = qty(input.qty);
+  const status = input.status === 'shipped' ? 'shipped' : 'pending';
 
   const row = {
     id: randomUUID(),
@@ -199,16 +222,66 @@ export function createSale(input: { product_id?: unknown; qty?: unknown }): Craf
     price_cents: product.price_cents,
     cost_cents: product.cost_cents,
     shipping_cents: product.shipping_cents,
+    status,
+    tracking: '',
     created_at: Date.now(),
   };
   db()
     .prepare(
       `INSERT INTO cp_sales
-         (id, product_id, qty, price_cents, cost_cents, shipping_cents, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (id, product_id, qty, price_cents, cost_cents, shipping_cents, status, tracking, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(row.id, row.product_id, row.qty, row.price_cents, row.cost_cents, row.shipping_cents, row.created_at);
+    .run(
+      row.id,
+      row.product_id,
+      row.qty,
+      row.price_cents,
+      row.cost_cents,
+      row.shipping_cents,
+      row.status,
+      row.tracking,
+      row.created_at,
+    );
   return { ...row, profit_cents: profitPerUnit(row) * n };
+}
+
+/**
+ * 订单状态跟踪：把销售标记为已发货并回填运单号（幂等覆盖 tracking）。
+ * 找不到销售抛 404（调用方（标记落库）会记失败动态，不静默）。
+ */
+export function markSaleShipped(saleId: string, tracking = ''): CraftSale {
+  const conn = db();
+  const row = conn
+    .prepare(
+      `SELECT s.*, COALESCE(p.name, '(商品已删除)') AS product_name
+         FROM cp_sales s
+         LEFT JOIN cp_products p ON p.id = s.product_id
+        WHERE s.id = ?`,
+    )
+    .get(saleId) as Omit<CraftSale, 'profit_cents'> | undefined;
+  if (!row) throw new CraftProfitError('sale not found', 404);
+  const t = text(tracking, 100, 'tracking');
+  conn.prepare(`UPDATE cp_sales SET status = 'shipped', tracking = ? WHERE id = ?`).run(t, saleId);
+  return { ...row, tracking: t, status: 'shipped', profit_cents: profitPerUnit(row) * row.qty };
+}
+
+/**
+ * 找该商品最近一笔待发货销售（[ship] 落库时配对订单用）。
+ * 无待发货返回 null（调用方兜底：没有可配对订单时只记发货动态）。
+ */
+export function findPendingSale(productId: string): CraftSale | null {
+  const row = db()
+    .prepare(
+      `SELECT s.*, COALESCE(p.name, '(商品已删除)') AS product_name
+         FROM cp_sales s
+         LEFT JOIN cp_products p ON p.id = s.product_id
+        WHERE s.product_id = ? AND s.status = 'pending'
+        ORDER BY s.created_at ASC
+        LIMIT 1`,
+    )
+    .get(productId) as Omit<CraftSale, 'profit_cents'> | undefined;
+  return row ? { ...row, profit_cents: profitPerUnit(row) * row.qty } : null;
 }
 
 // ── 运营动态（智能体活动流水）────────────────────────────────────────────────

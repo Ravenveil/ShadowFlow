@@ -24,6 +24,8 @@ import {
   loadTeam,
   clearTeamCache,
   validateDag,
+  ROOT_TEAMS_DIR,
+  LOCAL_TEAMS_DIR,
   type DagLayout,
 } from '../../lib/team-yaml';
 import { listAgents as listYamlAgents } from '../../lib/agent-yaml';
@@ -40,12 +42,8 @@ const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
 const PYTHON_BASE = process.env.PYTHON_BACKEND_URL ?? 'http://localhost:8000';
 
-// Mirror of the path resolution in team-yaml.ts. Kept local because the
-// writer needs the same precedence (root wins over local) when picking
-// where to overwrite.
-const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'teams');
-const LOCAL_TEAMS_DIR = path.join(process.cwd(), '.shadowflow', 'teams');
-
+// 路径解析与 team-yaml.ts 共用同一对常量（root 优先、server-local 兜底），
+// writer 覆写时沿用相同优先级。历史本地镜像硬编码 `cwd/../../..` 已废除。
 function resolveTeamFile(teamId: string): string | null {
   if (!VALID_ID_RE.test(teamId)) return null;
   for (const dir of [ROOT_TEAMS_DIR, LOCAL_TEAMS_DIR]) {

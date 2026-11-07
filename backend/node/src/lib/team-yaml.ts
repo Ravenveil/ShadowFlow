@@ -23,9 +23,13 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
 import { loadAgent } from './agent-yaml';
+import { shadowflowDir } from './paths';
 import type { SkillAgentDef, TeamDef } from './skill-types';
 
-export const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'teams');
+// 路径解析统一走 paths.ts。历史硬编码 `cwd/../../..` 只对某一种启动深度成立，
+// 从 backend/node（dev.mjs spawn 方式）启动时会跳出仓库根，team yaml 永远加载
+// 不到 → /api/teams/:id/dag 恒 404 TEAM_NOT_FOUND。
+export const ROOT_TEAMS_DIR = shadowflowDir('teams');
 export const LOCAL_TEAMS_DIR = path.join(process.cwd(), '.shadowflow', 'teams');
 
 export const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;

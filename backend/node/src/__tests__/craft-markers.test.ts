@@ -53,7 +53,15 @@ describe('parseCraftMarkers — 标记识别与剥除', () => {
     const r = parseCraftMarkers(
       '[ship] {"product":"竹编灯","tracking":"SF001"}\n[order] {"product":"竹编灯","qty":0}',
     );
-    expect(r.actions[0]).toEqual({ kind: 'ship', product: '竹编灯', qty: 1, tracking: 'SF001' });
+    expect(r.actions[0]).toEqual({
+      kind: 'ship',
+      product: '竹编灯',
+      qty: 1,
+      tracking: 'SF001',
+      receiver_name: '',
+      receiver_phone: '',
+      receiver_address: '',
+    });
     expect(r.markers[1]).toMatchObject({ tag: 'order', ok: false });
     expect(r.markers[1].error).toMatch(/qty/);
     expect(r.cleaned).toBe('');

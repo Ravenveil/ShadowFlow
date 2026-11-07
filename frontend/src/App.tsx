@@ -1297,6 +1297,7 @@ function SampleDemo() {
 
 export default function App() {
   const [productMode, setProductMode] = useState(window.location.pathname.startsWith("/app") || window.location.hash === "#/app");
+  const auth = useAuthState();
   useEffect(() => {
     const sync = () => setProductMode(window.location.pathname.startsWith("/app") || window.location.hash === "#/app");
     window.addEventListener("hashchange", sync);
@@ -1306,6 +1307,17 @@ export default function App() {
       window.removeEventListener("popstate", sync);
     };
   }, []);
-  if (productMode) return <ProductApp />;
+  // 工作台渲染需等 auth.ready（refreshAuth 已自动签发游客会话）：
+  // 确保数据面请求都带上 Bearer，避免首屏 401 被误判为「数据加载失败」回落占位数据。
+  if (productMode) {
+    if (!auth.ready) {
+      return (
+        <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#8b93a7", fontSize: 14 }}>
+          正在连接工作台…
+        </div>
+      );
+    }
+    return <ProductApp />;
+  }
   return <LandingApp />;
 }

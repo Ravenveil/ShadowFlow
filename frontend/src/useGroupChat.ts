@@ -24,6 +24,7 @@ import {
   type RunRef,
   type SseMessage,
   type TimelineMessage,
+  type UserAttachment,
 } from "./chat-api";
 import { applyPatchToList, isTerminalRunStatus, upsertMessage } from "./message-patches";
 
@@ -41,7 +42,12 @@ export interface GroupChatSnapshot {
 }
 
 export interface GroupChatControls {
-  send: (text: string) => Promise<void>;
+  /**
+   * text 可为空串（仅发附件，2026-11-07 对话框拖拽传图）；attachments 为已上传成功的附件。
+   * gidOverride：跨群补发（2026-11-08 主理人裁决「建群后自动补发」）——目标群为
+   * 尚未激活的新群时跳过乐观气泡，直接 postMessage，消息随新会话服务端回读出现。
+   */
+  send: (text: string, attachments?: UserAttachment[], gidOverride?: string) => Promise<void>;
   stop: () => Promise<void>;
   rerun: () => Promise<void>;
   reload: () => void;
@@ -316,32 +322,49 @@ export function useGroupChat(groupId: string | null): GroupChat {
 
   // ── 操作 ────────────────────────────────────────────────────────────────
   const send = useCallback(
-    async (text: string) => {
-      const gid = groupIdRef.current;
+    async (text: string, attachments?: UserAttachment[], gidOverride?: string) => {
+      // 目标群统一取 gid（2026-11-08 裁决）：gidOverride 优先，否则当前激活群
+      const gid = gidOverride ?? groupIdRef.current;
       const content = text.trim();
-      if (!gid || !content) return;
+      // 文本与附件至少给一个（2026-11-07 对话框拖拽传图：支持仅附件发送）
+      if (!gid || (!content && !(attachments && attachments.length > 0))) return;
+      const atts = attachments && attachments.length > 0 ? attachments : undefined;
+      // 跨群补发：目标群尚未激活 → 跳过乐观气泡/等待态（群切换 effect 会重置列表并拉
+      // timeline，消息随服务端回读出现，避免闪烁），直接 postMessage
+      const crossGroup = gidOverride != null && gidOverride !== groupIdRef.current;
       const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const optimistic: TimelineMessage = {
-        id: tempId,
-        kind: "user_turn",
-        turn_id: tempId,
-        ts: Date.now(),
-        text: content,
-      };
-      setSnapshot((cur) => ({
-        ...cur,
-        messages: upsertMessage(cur.messages, optimistic),
-        awaitingReply: true,
-        error: null,
-      }));
-      if (awaitingTimerRef.current) clearTimeout(awaitingTimerRef.current);
-      awaitingTimerRef.current = setTimeout(() => {
-        setSnapshot((cur) => ({ ...cur, awaitingReply: false }));
-      }, AWAITING_TIMEOUT_MS);
+      if (!crossGroup) {
+        const optimistic: TimelineMessage = {
+          id: tempId,
+          kind: "user_turn",
+          turn_id: tempId,
+          ts: Date.now(),
+          text: content,
+          ...(atts ? { attachments: atts } : {}),
+        };
+        setSnapshot((cur) => ({
+          ...cur,
+          messages: upsertMessage(cur.messages, optimistic),
+          awaitingReply: true,
+          error: null,
+        }));
+        if (awaitingTimerRef.current) clearTimeout(awaitingTimerRef.current);
+        awaitingTimerRef.current = setTimeout(() => {
+          setSnapshot((cur) => ({ ...cur, awaitingReply: false }));
+        }, AWAITING_TIMEOUT_MS);
+      }
       try {
-        const item = await postMessage(gid, content);
-        if (groupIdRef.current !== gid) return;
+        const item = await postMessage(gid, content, atts);
         const real = chatItemToTimeline(item);
+        // 旧后端未回传 attachments 时保留乐观 chips，避免消息确认后闪烁丢失
+        if (!real.attachments?.length && atts) real.attachments = atts;
+        if (crossGroup) {
+          // 服务端确认后合入当前列表（群切换通常此时已完成；upsert 按 id 去重，
+          // 即使 timeline 重拉先到也不会产生重复）
+          setSnapshot((cur) => ({ ...cur, messages: upsertMessage(cur.messages, real) }));
+          return;
+        }
+        if (groupIdRef.current !== gid) return;
         setSnapshot((cur) => ({
           ...cur,
           messages: upsertMessage(
@@ -350,12 +373,18 @@ export function useGroupChat(groupId: string | null): GroupChat {
           ),
         }));
       } catch (err) {
+        const message = err instanceof Error ? err.message : "发送失败";
+        if (crossGroup) {
+          // 补发失败：错误提示挂到当前（可能已切换的）会话上
+          setSnapshot((cur) => ({ ...cur, awaitingReply: false, error: message }));
+          return;
+        }
         if (groupIdRef.current !== gid) return;
         setSnapshot((cur) => ({
           ...cur,
           messages: cur.messages.filter((m) => m.id !== tempId),
           awaitingReply: false,
-          error: err instanceof Error ? err.message : "发送失败",
+          error: message,
         }));
       }
     },

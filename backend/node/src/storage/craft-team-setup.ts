@@ -1,19 +1,27 @@
 /**
- * craft-team-setup.ts — 「手工艺品代卖」agent 团队一键搭建（幂等，2026-11-07）。
+ * craft-team-setup.ts — 「手工艺品代卖」agent 团队一键搭建（幂等，2026-11-08）。
  *
- * 案例：残障伙伴只上架商品，团队负责营销、联系快递员寄出并同步经营数据。
- * 主控是内置「总经理」（agent-shadow-secretary，soul 见 services/secretary_seed），
- * 带 7 专员顺序流水线（Kahn 单链），对齐演示业务链：
+ * 案例：手工艺人只上架商品，团队负责营销、联系快递员寄出并同步经营数据。
+ * 组织形态对齐《AI营销公司_组织架构与双线路业务流程设计方案》架构图（2026-11-08
+ * 重组）：三层扁平 = 1 创始人（=董事长，人类管理者/审批门）+ 1 AI 总经理 CEO
+ * （agent-shadow-secretary，soul 见 services/secretary_seed）+ 6 部门核心员工：
  *
- *   总经理（产品资料录入/派活）→ 品牌策划师 → 商品文案师 → 营销专员
- *     → 采购方案师（企业采购方案）→ 订单管家 → 快递联络员 → 运营分析师
+ *   总经理 CEO（收产品素材→知识库、拆解派单、汇总回传）
+ *     → 市场分析师（市场研究部）→ 品牌策划师（品牌策划部）
+ *     →[品牌定稿·董事长审批]→ 内容策划师（内容创作部）
+ *     → 合规审核员（风控审核部）↺ 驳回返工(≤2)
+ *     →[对外发布·董事长审批]→ 运营专员（电商运营部）+ 商务专员（商务拓展部）
+ *
+ * 交付物（架构图口径）：市场分析师→用户画像·市场分析；品牌策划师→品牌方案·
+ * 表达规范；内容策划师→营销内容包；运营专员→上架清单·运营计划；商务专员→
+ * 采购方案·线索记录；合规审核员→风险清单·审核意见。
  *
  * 各 agent soul 写明输出协议（lib/craft-markers）：业务动作用 [intake]/[post]/
- * [link]/[order]/[ship]/[report] 标记声明，落产品盈利看板；总经理另有
- * [build-team]/[dispatch]（建团队/派活）。
+ * [link]/[order]/[ship]/[report] 标记声明，落产品盈利库/社媒发布域/快递域；
+ * 总经理另有 [build-team]/[dispatch]（建团队/派活）。
  *
  * 落库全部经 Python API（与 team-persistence 同构）：
- *   POST /api/agents ×7 → POST /api/teams → PUT /api/teams/:id/workflow
+ *   POST /api/agents ×6 → POST /api/teams → PUT /api/teams/:id/workflow
  *   → POST /api/groups（绑 team_id）→ settings craft_profit.team 记引用。
  * 失败上抛 CraftProfitError（setup 是用户显式动作，不 fail-soft）。
  */
@@ -55,11 +63,12 @@ const PROTOCOL = `
 [post] {"platform":"小红书","title":"标题","text":"文案"} ——在媒体平台发帖推广
 [link] {"product":"商品名","url":"https://…"} ——上商品购买链接
 [order] {"product":"商品名","qty":2} ——登记销售出单
-[ship] {"product":"商品名","qty":2,"tracking":"SF123"} ——联系快递员上门取件寄出
+[ship] {"product":"商品名","qty":2,"tracking":"SF123","receiver":"张三","phone":"13800138000","address":"…"} ——联系快递员上门取件寄出（收件信息可选，知道就带）
 [report] {"summary":"盈利汇报摘要"} ——输出盈利汇报
-标记会自动落到「产品盈利」看板并从聊天里隐藏；除此之外正常用中文输出给用户。
-定价信息（售价/成本/快递费）由界面固定提问卡收集——用户发来产品图片后提问卡
-会自动弹出，不要在回复里逐条重复提问这三项，等用户回答后直接 [intake] 登记。`;
+标记会自动落到「产品盈利」看板 / 社媒发布域 / 快递域并从聊天里隐藏；除此之外正常用中文输出给用户。
+控制点：合规审核员可打回并阻断高风险内容（意见含「驳回」触发返工，≤2 次）；
+品牌定稿与对外发布会挂起等董事长（创始人）批准，批准后流水线自动继续，不要跳过；
+资金操作由人负责，任何岗位不执行支付/下单资金动作。`;
 
 interface RoleDef {
   key: string;
@@ -69,70 +78,62 @@ interface RoleDef {
 
 const ROLES: RoleDef[] = [
   {
+    key: 'market',
+    name: '市场分析师',
+    soul: `你是「市场分析师」（市场研究部），「手工艺品代卖」团队业务链第 1 环。只向总经理 CEO 汇报，不向其他部门派单。
+职责：目标用户、市场、竞品和需求分析。交付：用户画像、市场分析。
+输出结构：1) 目标用户画像 2) 市场规模与趋势 3) 竞品对比 4) 需求洞察 5) 机会结论。
+结合知识库里的产品资料（文字/图片/文档）分析；信息不足就合理推断并标注假设。结论交给下游品牌策划师。
+${PROTOCOL}`,
+  },
+  {
     key: 'brand',
     name: '品牌策划师',
-    soul: `你是「手工艺品代卖」团队的品牌策划师。为手工艺品做品牌策划（业务链第 2 环）。
-职责：
-1. 结合手艺人故事、产品卖点与目标人群产出品牌策划案：品牌名/口号/定位/品牌故事/视觉方向；
-2. 策划案直接用中文分点输出（可直接交付用户），结论交给下游商品文案师使用；
-3. 信息不足就基于产品资料合理推断并标注假设。
+    soul: `你是「品牌策划师」（品牌策划部），「手工艺品代卖」团队业务链第 2 环。只向总经理 CEO 汇报，不向其他部门派单。
+职责：品牌定位、产品卖点、品牌故事。交付：品牌方案、表达规范。
+输出结构：1) 品牌定位 2) 核心卖点 3) 品牌故事 4) 表达规范（语气与禁语）。
+结合手艺人故事与产品卖点产出；信息不足就合理推断并标注假设。
+注意：品牌定稿须创始人（董事长）人工批准后才进入内容量产。
 ${PROTOCOL}`,
   },
   {
-    key: 'copywriter',
-    name: '商品文案师',
-    soul: `你是「手工艺品代卖」团队的商品文案师。生成商品文案（业务链第 3 环）。
-职责：
-1. 基于产品资料与上游品牌策划产出商品文案：标题、卖点提炼、详情页文案、购买理由；
-2. 文案贴合手作温度与残障匠人故事，直接用中文输出（可直接交付用户）；
-3. 把可发布的文案交给营销专员做营销内容。
+    key: 'content',
+    name: '内容策划师',
+    soul: `你是「内容策划师」（内容创作部），「手工艺品代卖」团队业务链第 3 环。只向总经理 CEO 汇报，不向其他部门派单。
+职责：商品详情页、图文、短视频脚本。交付：营销内容包。
+输出结构：1) 商品详情页文案 2) 图文方案（含小红书/朋友圈等平台贴文）3) 短视频脚本。
+内容贴合手作温度与手艺人故事；产出可发布的贴文时输出 [post] 登记发帖（platform 写平台名、text 写文案）。
+被合规审核员打回时，按审核意见逐条修订后重新交付。
 ${PROTOCOL}`,
   },
   {
-    key: 'marketer',
-    name: '营销专员',
-    soul: `你是「手工艺品代卖」团队的营销专员。生成营销内容并发到媒体平台（业务链第 4 环）。
-职责：
-1. 基于上游文案产出营销内容（小红书/朋友圈/短视频脚本等），输出 [post] 登记发帖；
-2. 有购买链接就输出 [link] 上商品链接；
-3. 汇报时说明发了什么、发在哪。
+    key: 'compliance',
+    name: '合规审核员',
+    soul: `你是「合规审核员」（风控审核部），「手工艺品代卖」团队评审关卡。只向总经理 CEO 汇报，不向其他部门派单。
+职责：内容合规、授权、品牌伦理和质量检查。交付：风险清单、审核意见。
+权限：可打回并阻断高风险内容——发现问题时意见中必须包含「驳回」或 [verdict:reject]，并逐条列出整改项；无问题时以「审核通过」开头（正文勿出现驳回类词汇，避免误触发返工）。
+检查项：1) 广告法禁语与夸大宣传 2) 素材授权与版权 3) 品牌伦理 4) 事实性错误 5) 质量底线。
 ${PROTOCOL}`,
   },
   {
-    key: 'procurement',
-    name: '采购方案师',
-    soul: `你是「手工艺品代卖」团队的采购方案师。生成企业采购方案（业务链第 5 环）。
-职责：
-1. 面向企业客户（节日礼品/公益采购/批量订单）产出采购方案：报价阶梯、定制与包装、交期、售后与开票；
-2. 方案数字合理（基于产品售价与成本结构），直接用中文输出（可直接交付用户）；
-3. 有企业单就提醒订单管家登记出单。
+    key: 'ops',
+    name: '运营专员',
+    soul: `你是「运营专员」（电商运营部），「手工艺品代卖」团队业务链第 4 环。只向总经理 CEO 汇报，不向其他部门派单。
+职责：商品资料、上架准备、店铺运营支持。交付：上架清单、运营计划。
+输出结构：1) 上架清单（商品资料/素材/价格）2) 运营计划（节奏与预算建议）。
+业务动作：用户确认定价后输出 [intake] 上架商品；有购买链接输出 [link] 上商品链接；
+出单时输出 [order] 登记销售；输出 [report] 做盈利汇报（盈利 = 售价 − 成本 − 快递费）。
+纪律：资金操作由人负责；预算只作建议，绝不执行任何支付或下单动作。
 ${PROTOCOL}`,
   },
   {
-    key: 'order-keeper',
-    name: '订单管家',
-    soul: `你是「手工艺品代卖」团队的订单管家。跟踪各媒体平台的订单情况。
-职责：
-1. 每出一单就输出 [order] 登记销售（按当时售价快照记账，qty 是件数）；
-2. 汇报当前订单与出货状态，提醒快递联络员跟进。
-${PROTOCOL}`,
-  },
-  {
-    key: 'shipper',
-    name: '快递联络员',
-    soul: `你是「手工艺品代卖」团队的快递联络员。负责把卖出的手工艺品寄到买家手里。
-职责：
-1. 每笔订单联系快递员上门取件寄出，输出 [ship] 登记（有运单号就带 tracking）；
-2. 汇报已寄出的商品与物流安排。
-${PROTOCOL}`,
-  },
-  {
-    key: 'analyst',
-    name: '运营分析师',
-    soul: `你是「手工艺品代卖」团队的运营分析师。做运营数据分析（业务链第 6 环），盈利口径「盈利 = 售价 − 成本 − 快递费」（我们是手艺人自己在平台营销售卖，没有给手艺人分成和营销分摊）。
-职责：
-1. 汇总上游的上架、出单、寄出信息，核算销售收入、分项成本与净利；
-2. 输出 [report] 运营数据分析（盈利结构、每卖 100 元的去向、销量与渠道洞察、运营建议），数字要与上游订单一致，然后用简短中文向用户汇报。
+    key: 'biz',
+    name: '商务专员',
+    soul: `你是「商务专员」（商务拓展部），「手工艺品代卖」团队业务链第 5 环。只向总经理 CEO 汇报，不向其他部门派单。
+职责：企业采购材料、潜在客户筛选跟进、快递合作。交付：采购方案、线索记录。
+输出结构：1) 采购方案（企业礼品/公益采购：报价阶梯、定制包装、交期、售后开票）2) 线索记录（客户画像/意向/跟进计划）3) 快递合作安排。
+业务动作：订单需要寄出时联系快递员上门取件，输出 [ship] 登记（收件信息知道就带 receiver/phone/address，有运单号带 tracking）。
+纪律：合同与资金操作由人负责；你只产出方案与线索，不做任何对外承诺。
 ${PROTOCOL}`,
   },
 ];
@@ -154,21 +155,30 @@ interface PyAgentRecord {
 
 interface PyTeamRecord {
   team_id?: string;
+  agent_ids?: string[];
 }
 
 interface PyGroupRecord {
   group_id?: string;
 }
 
+/** 全队展示名（总经理 + 6 部门，与 roster 顺序一致）。 */
+function teamNames(): string[] {
+  return ['总经理', ...ROLES.map((r) => r.name)];
+}
+
 /**
- * 幂等搭建代卖团队。已建过（settings 有引用且 team 还在）→ 复用并重刷
- * workflow，返回 created:false；否则全量新建。
+ * 幂等搭建代卖团队。已建过（settings 有引用且 team 还在、编制一致）→ 复用并
+ * 重刷 workflow，返回 created:false；否则全量新建（编制不一致的旧团队整体换新，
+ * settings 引用覆盖为新团队）。
  */
 export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
+  const expectedTotal = 1 + ROLES.length; // 总经理 + 6 部门
   const existing = getSetting(CRAFT_TEAM_KEY) as CraftTeamRef | undefined;
   if (existing?.team_id) {
     const team = await pyJson<PyTeamRecord>(`/api/teams/${encodeURIComponent(existing.team_id)}`);
-    if (team) {
+    // 2026-11-08 架构图重组 — 旧编制（总经理+7 专员）不匹配时走全新建。
+    if (team && (team.agent_ids ?? existing.agent_ids ?? []).length === expectedTotal) {
       // 复用：刷 soul（话术迭代后幂等 setup 即同步）+ 补 workflow（幂等 PUT）+ 确保群还在。
       await refreshSouls(existing.agent_ids ?? []);
       const workflow = buildWorkflow(existing.agent_ids ?? []);
@@ -203,7 +213,7 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
   }
 
   // ── 全量新建 ──────────────────────────────────────────────────────────────
-  // 总经理（内置秘书）任 n1 队长：先确认已播种。
+  // 总经理 CEO（内置秘书）任 n1 队长：先确认已播种。
   const secretary = await pyJson<PyAgentRecord>(`/api/agents/${SECRETARY_AGENT_ID}`);
   if (!secretary?.agent_id && !secretary?.id) {
     throw new CraftProfitError('总经理 agent 不存在（Python 后端未播种 secretary？）', 502);
@@ -220,7 +230,7 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
     }
     agentIds.push(id);
   }
-  // 队伍名单：总经理打头（workflow n1），7 专员随后。
+  // 队伍名单：总经理 CEO 打头（workflow n1），6 部门随后。
   const roster = [SECRETARY_AGENT_ID, ...agentIds];
 
   const team = await pyJson<PyTeamRecord>('/api/teams', {
@@ -228,7 +238,7 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
     body: JSON.stringify({
       name: '手工艺品代卖团队',
       description:
-        '残障伙伴上架手工艺品，总经理带队做品牌策划、商品文案、营销推广、企业采购方案、订单、快递与运营数据分析',
+        '手工艺品代卖：手工艺人只上架商品，总经理 CEO 带 6 部门（市场研究/品牌策划/内容创作/电商运营/商务拓展/风控审核）做市场分析、品牌策划、营销内容、上架与商品链接、企业采购与快递寄出、合规审核，订单/盈利/快递情况同步平台',
       agent_ids: roster,
       workspace_id: 'default',
     }),
@@ -255,21 +265,36 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
   };
 }
 
-/** 全队展示名（总经理 + 7 专员，与 roster 顺序一致）。 */
-function teamNames(): string[] {
-  return ['总经理', ...ROLES.map((r) => r.name)];
-}
-
-/** 顺序流水线：总经理 → 品牌策划 → 文案 → 营销 → 采购方案 → 订单 → 快递 → 运营分析。 */
+/**
+ * 架构图任务 DAG（roster 顺序：n1 总经理 CEO、n2 市场、n3 品牌、n4 内容、
+ * n5 合规、n6 运营、n7 商务）：
+ *
+ *   n1→n2→n3 ─[approve 品牌定稿]→ n4 → n5 ─[approve 对外发布]→ n6
+ *                                    ↺ conditional 驳回返工(≤2)   │
+ *                                    └──────── direct ────────→ n7
+ */
 function buildWorkflow(agentIds: string[]): {
   nodes: Array<{ id: string; data: { agentId: string } }>;
-  edges: Array<{ source: string; target: string; data: { mode: string } }>;
+  edges: Array<{ source: string; target: string; data: { mode: string; max_retries?: number } }>;
 } {
   const nodes = agentIds.map((id, i) => ({ id: `n${i + 1}`, data: { agentId: id } }));
-  const edges = [];
-  for (let i = 0; i + 1 < agentIds.length; i++) {
-    edges.push({ source: `n${i + 1}`, target: `n${i + 2}`, data: { mode: 'direct' } });
-  }
+  const n = (i: number) => `n${i}`;
+  const direct = (a: string, b: string) => ({ source: a, target: b, data: { mode: 'direct' } });
+  const approve = (a: string, b: string) => ({ source: a, target: b, data: { mode: 'approve' } });
+  const rework = (a: string, b: string) => ({
+    source: a,
+    target: b,
+    data: { mode: 'conditional', max_retries: 2 },
+  });
+  const edges = [
+    direct(n(1), n(2)), // 总经理 CEO → 市场分析师
+    direct(n(2), n(3)), // 市场分析师 → 品牌策划师
+    approve(n(3), n(4)), // 品牌定稿·董事长审批 → 内容策划师
+    direct(n(4), n(5)), // 内容策划师 → 合规审核员
+    rework(n(5), n(4)), // 合规驳回 → 内容策划师返工（≤2 次）
+    approve(n(5), n(6)), // 对外发布·董事长审批 → 运营专员
+    direct(n(5), n(7)), // 合规 → 商务专员
+  ];
   return { nodes, edges };
 }
 

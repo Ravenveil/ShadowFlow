@@ -136,6 +136,10 @@ export function getDb(): Database.Database {
   );
   CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, timestamp);`);
 
+  // 2026-11-07 拖拽传图 — 群消息随行附件（UserAttachment[] JSON 文本；无附件 NULL）。
+  // 必须在 group_messages 建表 DDL 之后（表由上方 CREATE 产生，不在 001-init.sql）。
+  addColumnIfMissing(db, 'group_messages', 'attachments', 'TEXT');
+
   // 2026-11-07 知识库统一批：本地仓库注册表（knowledge_vaults）随 vaults 全线
   // 下线（本地文件夹语义并入多模态记忆库目录摄入）。不再建新表；旧库残留表无害。
 

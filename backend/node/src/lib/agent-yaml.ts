@@ -17,6 +17,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import { shadowflowDir } from './paths';
 import type {
   SkillAgentDef,
   SkillAnchor,
@@ -26,11 +27,11 @@ import type {
 // so we don't need atomic writes here.
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
-// The Node server runs from `<repo>/server/`, so process.cwd() resolves there.
-// Demo bundles + user-edited agents live at `<repo>/.shadowflow/agents/`,
-// which is `cwd/../.shadowflow/agents/` from the server's perspective. Mirror
-// the dual-dir pattern from skill-loader.ts.
-const ROOT_AGENTS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'agents');
+// Demo bundles + user-edited agents live at `<repo>/.shadowflow/agents/`.
+// ROOT 解析统一走 paths.ts（历史硬编码 `cwd/../../..` 在 dev 启动方式下跳出
+// 仓库根，agent yaml 永远加载不到）；LOCAL 保持 `cwd/.shadowflow/agents/`，
+// 测试 chdir 到空 tmp 目录时指向空目录、走 roster 兜底。
+const ROOT_AGENTS_DIR = shadowflowDir('agents');
 const LOCAL_AGENTS_DIR = path.join(process.cwd(), '.shadowflow', 'agents');
 
 const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;

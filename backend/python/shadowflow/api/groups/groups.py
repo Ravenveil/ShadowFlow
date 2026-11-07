@@ -35,7 +35,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from shadowflow.api.system._limiter import limiter
 from shadowflow.services.secretary_seed import (
     SECRETARY_AGENT_ID,
@@ -200,6 +200,17 @@ class GroupResponse(BaseModel):
     conversation_id: Optional[str] = None
 
 
+class AttachmentItem(BaseModel):
+    # 2026-11-07 · 拖拽传图 — 用户消息随行附件（与 Node lib/contracts.ts
+    # UserAttachment 对齐）。path 供 agent 工具读取；url 是 /projects 静态直链，
+    # 前端 user_turn 用它渲染缩略图/文件 chip。
+    name: str
+    path: str
+    url: str
+    is_image: bool = False
+    size: Optional[int] = None
+
+
 class MessageItem(BaseModel):
     sender_name: str
     sender_kind: str = "user"
@@ -220,10 +231,12 @@ class MessageItem(BaseModel):
     # 老消息没有这两个字段时 Pydantic 用默认值，向后兼容。
     reactions: Optional[Dict[str, List[str]]] = None
     pinned: bool = False
+    # 2026-11-07 · 拖拽传图 — user 消息随行附件（无附件 None，旧记录兼容）。
+    attachments: Optional[List[AttachmentItem]] = None
 
 
 class PostMessageRequest(BaseModel):
-    content: str = Field(..., min_length=1, max_length=8000)
+    content: str = Field(..., max_length=8000)
     sender_name: str = "user"
     sender_kind: str = "user"
     # Stream G — optional thread anchor. When provided, this message is a reply
@@ -231,6 +244,16 @@ class PostMessageRequest(BaseModel):
     reply_to: Optional[str] = None
     # 2026-06-23 · U0 绑角色 — agent 回话时 Node 网关透传发送者 agent_id（见 MessageItem）。
     agent_id: Optional[str] = None
+    # 2026-11-07 · 拖拽传图 — 随行附件（与 Node UserAttachment 对齐）。
+    attachments: Optional[List[AttachmentItem]] = None
+
+    @model_validator(mode="after")
+    def _content_or_attachments(self) -> "PostMessageRequest":
+        # 2026-11-07 · 拖拽传图 — 「只发附件不打字」：content 可空当且仅当带附件
+        # （与 run-sessions / groups-node 同语义）；两者皆空仍 422。
+        if not self.content and not self.attachments:
+            raise ValueError("content is required when there are no attachments")
+        return self
 
 
 class GroupMessagesResponse(BaseModel):
@@ -564,6 +587,9 @@ async def post_group_message(
         # U0 绑角色 — 持久化发送者 agent_id；随 msg 一并经 SSE publish 推给前端。
         "agent_id": body.agent_id,
     }
+    # 2026-11-07 · 拖拽传图 — 非空附件随消息持久化（无附件不落 key，旧记录形状不变）。
+    if body.attachments:
+        msg["attachments"] = [a.model_dump() for a in body.attachments]
     messages = rec.get("messages", [])
     messages.append(msg)
     rec["messages"] = messages

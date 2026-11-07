@@ -24,6 +24,7 @@
 
 import { PYTHON_BACKEND_URL } from '../python-backend';
 import * as store from './groups-store';
+import type { UserAttachment } from '../lib/contracts';
 
 /** 网关消费的最小群形状（蛇形，与 Python record JSON 对齐）。 */
 export interface BackendGroup {
@@ -38,6 +39,8 @@ export interface BackendGroup {
     reply_to?: string | null;
     /** U0 绑角色（2026-06-23）— agent 消息发送者 agent_id 真源；user/system 为 null。 */
     agent_id?: string | null;
+    /** 2026-11-07 拖拽传图 — user 消息随行附件（无附件省略）。 */
+    attachments?: UserAttachment[] | null;
   }>;
   kind?: string;
   workspace_dir?: string | null;
@@ -51,6 +54,8 @@ export interface AppendMessageBody {
   sender_kind: string;
   /** U0 绑角色 — agent 消息发送者 agent_id（Python 持久化；Node store 暂未落该列，见 nodeBackend）。 */
   agent_id?: string;
+  /** 2026-11-07 拖拽传图 — 随行附件（两种后端都持久化；空/缺省不落）。 */
+  attachments?: UserAttachment[];
 }
 
 export interface AppendMessageOpts {
@@ -122,6 +127,8 @@ const nodeBackend: GroupsBackend = {
       content: body.content,
       sender_name: body.sender_name,
       sender_kind: body.sender_kind as store.SenderKind,
+      // 2026-11-07 拖拽传图 — 附件透传（store 落 attachments JSON 列）。
+      ...(body.attachments && body.attachments.length > 0 ? { attachments: body.attachments } : {}),
     });
   },
 

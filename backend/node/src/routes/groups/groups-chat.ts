@@ -85,7 +85,11 @@ import {
   type WorktreeCommit,
 } from '../../lib/worktree-manager';
 import { inspectGitRun, type GitFileDiff } from '../../lib/git-introspect';
-import type { PlanTaskRow, IntentAssignment } from '../../lib/contracts';
+import type { PlanTaskRow, IntentAssignment, UserAttachment } from '../../lib/contracts';
+// 2026-11-07 拖拽传图 — 群聊附件透传：请求体清洗（与 run-sessions 同一实现）
+// + 派发上下文注入（与 run-sessions goalWithAttachments 同款引用块）。
+import { coerceAttachments } from '../runs/run-sessions/coerce';
+import { goalWithAttachments } from '../../lib/attachment-refs';
 // B2 · 统一消息读路径 — chat MessageItem 适配 + run 事件重放（纯函数）。
 import {
   chatMessagesToTimeline,
@@ -369,6 +373,7 @@ export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
 import { PYTHON_BACKEND_URL } from '../../python-backend';
 import {
   applyCraftMarkers,
+  ingestProductAttachments,
   ingestProductMaterial,
   isCraftGroup,
   readCraftTeamRef,
@@ -405,7 +410,14 @@ async function pyGet<T>(path: string): Promise<T | null> {
  */
 async function pyPostMessage(
   groupId: string,
-  body: { content: string; sender_name: string; sender_kind: string; agent_id?: string },
+  body: {
+    content: string;
+    sender_name: string;
+    sender_kind: string;
+    agent_id?: string;
+    /** 2026-11-07 拖拽传图 — user 消息随行附件（持久化透传；agent/system 无）。 */
+    attachments?: UserAttachment[];
+  },
   opts: { noDispatch?: boolean } = {},
 ): Promise<unknown> {
   const created = await getGroupsBackend().appendMessage(groupId, body, opts);
@@ -1020,6 +1032,8 @@ async function runCraftFlowActions(
  * Never throws to the caller (errors become sender_kind='system' notices).
  * @param latestUserText 最新用户消息原文（mention 解析用；调用方从持久化记录
  *   取，缺省时 runFanout 自行从 group.messages 反查——测试/旧调用方兼容）。
+ * @param attachments 2026-11-07 拖拽传图 — 本条用户消息的随行附件；派发时以
+ *   goalWithAttachments 引用块注入 agent 上下文（绝对路径供 read_file/读图）。
  */
 async function runFanout(
   groupId: string,
@@ -1028,6 +1042,7 @@ async function runFanout(
   headers: Request['headers'],
   latestUserText?: string,
   knowledgePackIds?: string[],
+  attachments?: UserAttachment[],
 ): Promise<void> {
   const apiKey = resolveExecutorKey(executor, headers);
 
@@ -1128,7 +1143,11 @@ async function runFanout(
   const craftScoped = isCraftGroup(group);
   let kbPackIds = knowledgePackIds ?? [];
   if (craftScoped) {
-    const packId = await ingestProductMaterial(userText).catch(() => null);
+    // 文字介绍 → 知识库；随行附件（图片/产品文档）→ 知识库 /files（2026-11-08）。
+    // 两路都跑（附件为空时 ingestProductAttachments 直接 null），取任一成功者。
+    const packIdText = await ingestProductMaterial(userText).catch(() => null);
+    const packIdFiles = await ingestProductAttachments(attachments).catch(() => null);
+    const packId = packIdText ?? packIdFiles;
     if (packId && !kbPackIds.includes(packId)) kbPackIds = [...kbPackIds, packId];
   }
   const kbText = await knowledgeBlock(kbPackIds, userText);
@@ -1340,7 +1359,8 @@ async function runFanout(
               for await (const chunk of callable.turn({
                 // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
                 system: soul + chatLessonsBlock(agentId),
-                prompt: turnPrompt + kbText + upstreamText,
+                // 2026-11-07 拖拽传图 — 附件引用块并入派发上下文（DAG 路径）。
+                prompt: goalWithAttachments(turnPrompt + kbText + upstreamText, attachments),
                 history: turnHistory,
                 signal,
                 model,
@@ -1410,7 +1430,7 @@ async function runFanout(
             // 标记落产品盈利看板并从聊天文本剥掉（非代卖群 no-op）；[build-team]/
             // [dispatch] 流程动作在挂钩点执行（总经理主控）。
             if (errMsg) return { text: stripThinking(buf), error: errMsg };
-            const appliedDag = applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
+            const appliedDag = await applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
             await runCraftFlowActions(group, appliedDag.actions, { executor, model, headers });
             return { text: appliedDag.cleaned, error: undefined };
           },
@@ -1599,7 +1619,8 @@ async function runFanout(
         for await (const chunk of callable.turn({
           // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
           system: soul + chatLessonsBlock(agentId),
-          prompt: turnPrompt + kbText,
+          // 2026-11-07 拖拽传图 — 附件引用块并入派发上下文（串行路径，DAG 同款）。
+          prompt: goalWithAttachments(turnPrompt + kbText, attachments),
           history: turnHistory,
           signal: ctrl.signal,
           model,
@@ -1679,7 +1700,7 @@ async function runFanout(
       // （思考已在过程卡实时流式展示）；全剥空 → 当空回复收口。
       // 2026-11-07 代卖协议标记 — 串行路径同款：落业务动作 + 剥标记，
       // [build-team]/[dispatch] 流程动作在挂钩点执行（总经理主控）。
-      const appliedSerial = applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
+      const appliedSerial = await applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
       await runCraftFlowActions(group, appliedSerial.actions, { executor, model, headers });
       const reply = appliedSerial.cleaned.trim();
       if (!reply) {
@@ -2017,9 +2038,13 @@ router.post('/:id/messages', (req: Request, res: Response) => {
       executor?: string;
       model?: string;
       knowledge_pack_ids?: unknown;
+      attachments?: unknown;
     };
     const senderKind = body.sender_kind ?? 'user';
     const content = typeof body.content === 'string' ? body.content : '';
+    // 2026-11-07 拖拽传图 — 随行附件清洗（coerceAttachments：字段清洗/上限 9，
+    // 与 composer 和 run-sessions 同一实现）；空/缺省不落库不下发。
+    const attachments = coerceAttachments(body.attachments);
 
     try {
       // Persist the incoming message via Python. For user messages set the
@@ -2030,10 +2055,17 @@ router.post('/:id/messages', (req: Request, res: Response) => {
           content,
           sender_name: body.sender_name ?? (senderKind === 'user' ? 'user' : 'agent'),
           sender_kind: senderKind,
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
         },
         { noDispatch: senderKind === 'user' },
       );
-      res.status(201).json(created);
+      // 2026-11-07 拖拽传图 — 201 响应体保证带 attachments（持久层已 echo 时
+      // 覆盖为同一份清洗结果，前端契约不依赖后端模式）。
+      res.status(201).json(
+        attachments && attachments.length > 0 && created && typeof created === 'object'
+          ? { ...(created as Record<string, unknown>), attachments }
+          : created,
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       res.status(502).json({ error: { code: 'PERSIST_FAILED', message: msg } });
@@ -2068,6 +2100,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // 批/拒后还想派新活，这条消息本身就是新一轮）。
     tryResolveApprovalFromText(groupId, content);
     // 对话框知识库（2026-11-06）— 记忆库 pack id 透传给 fan-out（每轮检索注入）。
+    // 2026-11-07 拖拽传图 — 附件透传给 fan-out（goalWithAttachments 注入派发上下文）。
     void runFanout(
       groupId,
       executor,
@@ -2075,6 +2108,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
       req.headers,
       content,
       coercePackIds(body.knowledge_pack_ids),
+      attachments,
     ).catch((e) => {
       // eslint-disable-next-line no-console
       console.warn('[groups-chat] fanout failed:', e);

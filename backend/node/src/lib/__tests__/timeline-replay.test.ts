@@ -324,4 +324,24 @@ describe('chatMessagesToTimeline — group MessageItem adaptation', () => {
     // 老 agent 记录无 agent_id 字段（不写 undefined 键）
     expect('agent_id' in out[2]).toBe(false);
   });
+
+  it('2026-11-07 拖拽传图：user 消息 attachments 透传到 user_turn；无附件省略', () => {
+    const att = {
+      name: 'cat.png',
+      path: '/tmp/up/cat.png',
+      url: '/projects/_uploads/a/cat.png',
+      is_image: true,
+      size: 1234,
+    };
+    const out = chatMessagesToTimeline([
+      { message_id: 'u1', sender_kind: 'user', content: '看图', timestamp: '2026-11-07T08:00:00+00:00', attachments: [att] },
+      { message_id: 'u2', sender_kind: 'user', content: '纯文本', timestamp: '2026-11-07T08:01:00+00:00' },
+      { message_id: 'a1', sender_kind: 'agent', sender_name: 'PM', content: '收到', timestamp: '2026-11-07T08:00:05+00:00', attachments: [att] },
+    ]);
+    expect(out[0]).toMatchObject({ kind: 'user_turn', attachments: [att] });
+    // 无附件 / 空数组 → 字段省略（旧记录兼容）
+    expect('attachments' in out[1]).toBe(false);
+    // agent 消息不透传附件（附件只随 user 消息）
+    expect('attachments' in out[2]).toBe(false);
+  });
 });

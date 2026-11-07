@@ -158,18 +158,31 @@ export async function authLogout(): Promise<void> {
   }
 }
 
-/** 启动时用已有 token 恢复会话；失效则清除。 */
+/** 启动时用已有 token 恢复会话；失效则清除并自动签发游客会话。
+ *
+ * 语义：工作台的数据面接口（/api/projects、/api/conversations 等）需 Bearer 鉴权，
+ * 未登录会返回 401。为避免前端把 401 误判为「数据加载失败」而回落占位数据，
+ * 这里在没有有效会话时自动签发一条游客会话，让工作台始终直连后端真实数据。
+ * 后端不可达时 authGuest 会抛错，静默保持离线兜底（此时各视图显示「数据加载失败」）。
+ */
 export async function refreshAuth(): Promise<void> {
   const token = readToken();
-  if (!token) {
-    setState({ ready: true });
-    return;
+  if (token) {
+    try {
+      const user = await authFetch<AuthUser>("/api/auth/me");
+      setState({ user, token, ready: true });
+      return;
+    } catch {
+      // 旧 token 失效 → 清除，下面重新签发游客会话
+      writeToken(null);
+      setState({ user: null, token: null });
+    }
   }
+  // 无有效会话 → 自动签发游客会话（等价于「游客体验」按钮），直连后端真实数据。
   try {
-    const user = await authFetch<AuthUser>("/api/auth/me");
-    setState({ user, token, ready: true });
+    await authGuest();
   } catch {
-    writeToken(null);
+    // 后端不可达：保持离线兜底（ready 置位，让 UI 继续渲染占位数据）
     setState({ user: null, token: null, ready: true });
   }
 }

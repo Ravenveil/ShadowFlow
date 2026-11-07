@@ -66,7 +66,7 @@ export function runRound(rand: () => number = Math.random): RunRoundResult {
   for (let i = 0; i < orderCount; i++) {
     const p = pick(products);
     const n = 1 + Math.floor(rand() * 3);
-    const sale = createSale({ product_id: p.id, qty: n });
+    const sale = createSale({ product_id: p.id, qty: n, status: 'shipped' });
     units += n;
     events.push(
       insertAgentEvent('order', `「${p.name}」售出 ${n} 件，入账 ¥${((sale.price_cents * n) / 100).toFixed(2)}`),

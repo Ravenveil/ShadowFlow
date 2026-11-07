@@ -34,7 +34,7 @@
  * way as resolveStreamDisposition (run-sessions-stream-disposition.test.ts).
  */
 
-import type { MessagePatch, TimelineMessage, StepRow } from './contracts';
+import type { MessagePatch, TimelineMessage, StepRow, UserAttachment } from './contracts';
 
 /**
  * Apply one MessagePatch to its TimelineMessage. Returns a NEW message object
@@ -199,6 +199,8 @@ export interface ChatMessageItem {
   timestamp?: string;
   /** U0 绑角色（2026-06-23）— agent 发送者 agent_id；透传到 TimelineMessage。 */
   agent_id?: string | null;
+  /** 2026-11-07 拖拽传图 — user 消息随行附件，透传到 user_turn（无附件省略）。 */
+  attachments?: UserAttachment[] | null;
 }
 
 /**
@@ -219,7 +221,15 @@ export function chatMessagesToTimeline(messages: ChatMessageItem[]): TimelineMes
     const kind = m.sender_kind ?? 'user';
     if (kind === 'user') {
       turnId = id; // a user message opens a new turn
-      out.push({ id, kind: 'user_turn', turn_id: turnId, ts, text: content });
+      out.push({
+        id,
+        kind: 'user_turn',
+        turn_id: turnId,
+        ts,
+        text: content,
+        // 2026-11-07 拖拽传图 — 随行附件原样挂到 user_turn（无附件省略，旧记录兼容）。
+        ...(m.attachments && m.attachments.length > 0 ? { attachments: m.attachments } : {}),
+      });
     } else if (kind === 'agent') {
       out.push({
         id,

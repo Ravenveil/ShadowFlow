@@ -8,7 +8,8 @@
  *   [post]   {"platform":"小红书","title":"山里来的温柔","text":"…"}
  *   [link]   {"product":"苗绣杯垫","url":"https://…"}
  *   [order]  {"product":"苗绣杯垫","qty":2}
- *   [ship]   {"product":"苗绣杯垫","qty":2,"tracking":"SF123"}
+ *   [ship]   {"product":"苗绣杯垫","qty":2,"tracking":"SF123","receiver":"张三","phone":"13800138000","address":"…"}
+ *     （receiver/phone/address 收件信息可选，缺省走快递域演示收件信息）
  *   [report] {"summary":"本周净利 ¥320…"}
  *   [build-team] {} ——搭建代卖团队（幂等；总经理专用）
  *   [dispatch] {"to":"营销专员、订单管家","text":"任务说明"} ——派活给团队
@@ -34,9 +35,18 @@ export type CraftAction =
       shipping_cents: number;
     }
   | { kind: 'post'; platform: string; title: string; text: string }
-  | { kind: 'link'; product: string; url: string }
+  | { kind: 'link'; product: string; url: string; platform: string }
   | { kind: 'order'; product: string; qty: number }
-  | { kind: 'ship'; product: string; qty: number; tracking: string }
+  | {
+      kind: 'ship';
+      product: string;
+      qty: number;
+      tracking: string;
+      /** 收件信息（可选；缺省由快递域用演示收件信息兜底）。 */
+      receiver_name: string;
+      receiver_phone: string;
+      receiver_address: string;
+    }
   | { kind: 'report'; summary: string }
   /** 搭建代卖团队（幂等）——执行在 groups-chat 挂钩点（要发 HTTP）。 */
   | { kind: 'build-team' }
@@ -131,7 +141,12 @@ function buildAction(tag: CraftTag, obj: Record<string, unknown>): CraftAction |
       const product = str(obj.product);
       const url = str(obj.url);
       if (!product && !url) return 'link 缺 product/url';
-      return { kind: 'link', product: product.slice(0, 200), url: url.slice(0, 500) };
+      return {
+        kind: 'link',
+        product: product.slice(0, 200),
+        url: url.slice(0, 500),
+        platform: str(obj.platform).slice(0, 60) || '小红书',
+      };
     }
     case 'order': {
       const product = str(obj.product);
@@ -150,6 +165,10 @@ function buildAction(tag: CraftTag, obj: Record<string, unknown>): CraftAction |
         product: product.slice(0, 200),
         qty,
         tracking: str(obj.tracking).slice(0, 100),
+        // 收件信息可选：receiver/receiver_name 二选一，phone/address 同名。
+        receiver_name: str(obj.receiver ?? obj.receiver_name).slice(0, 64),
+        receiver_phone: str(obj.phone ?? obj.receiver_phone).slice(0, 32),
+        receiver_address: str(obj.address ?? obj.receiver_address).slice(0, 512),
       };
     }
     case 'report':

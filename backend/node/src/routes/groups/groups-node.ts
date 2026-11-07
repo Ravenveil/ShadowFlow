@@ -38,6 +38,8 @@
 
 import { Router, type Request, type Response } from 'express';
 import * as store from '../../storage/groups-store';
+// 2026-11-07 拖拽传图 — 附件清洗与网关同一实现（字段清洗/上限 9）。
+import { coerceAttachments } from '../runs/run-sessions/coerce';
 
 const router = Router();
 
@@ -306,7 +308,8 @@ router.get('/:id/messages', (req: Request, res: Response) => {
 // ── POST /api/groups/:id/messages ─────────────────────────────────────────────
 // 兜底纯持久化（正常被 groups-chat 网关先拦截）。对齐 post_group_message 的持久化部分：
 // 追加 user 消息，201 + MessageItem 裸对象。**回复链路不在本端点**（网关负责）。
-// content min_length=1 max_length=8000 → 422。
+// content min_length=1 max_length=8000 → 422（2026-11-07 拖拽传图：带附件时
+// content 可空——「只发附件不打字」与 run-sessions/Python 同语义）。
 
 router.post('/:id/messages', (req: Request, res: Response) => {
   const rec = store.getGroup(req.params.id);
@@ -319,9 +322,12 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     sender_name?: string;
     sender_kind?: string;
     reply_to?: string | null;
+    attachments?: unknown;
   };
   const content = typeof body.content === 'string' ? body.content : '';
-  if (content.length < 1 || content.length > 8000) {
+  const attachments = coerceAttachments(body.attachments);
+  const hasAttachments = !!attachments && attachments.length > 0;
+  if ((content.length < 1 || content.length > 8000) && !hasAttachments) {
     validationError(res, ['body', 'content'], 'content must be 1..8000 chars');
     return;
   }
@@ -330,6 +336,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     sender_name: body.sender_name ?? 'user',
     sender_kind: (body.sender_kind as store.SenderKind) ?? 'user',
     reply_to: body.reply_to ?? null,
+    ...(hasAttachments ? { attachments } : {}),
   });
   res.status(201).json(msg);
 });
