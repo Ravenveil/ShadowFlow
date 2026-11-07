@@ -75,14 +75,18 @@ import {
 } from './loaders/design-systems';
 
 const PORT = Number(process.env.PORT ?? 8002);
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://localhost:3007';
+// 公网部署可配多来源（逗号分隔）：FRONTEND_ORIGIN=https://a.example.com,https://b.example.com
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN ?? 'http://localhost:3007')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const app = express();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 app.use(cors({
-  origin: [FRONTEND_ORIGIN, 'http://localhost:3000', 'http://localhost:5173'],
+  origin: [...FRONTEND_ORIGINS, 'http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
 }));
 
@@ -329,15 +333,21 @@ process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
 // ── Start ───────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const mode = process.env.ANTHROPIC_API_KEY ? 'Claude-powered (server key)' : 'BYOK (user-supplied key)';
   console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║          ShadowFlow API Server — Port ${PORT}          ║
 ╚══════════════════════════════════════════════════════╝
   Mode     : ${mode}
-  CORS     : ${FRONTEND_ORIGIN}
+  CORS     : ${FRONTEND_ORIGINS.join(', ')}
   Health   : http://localhost:${PORT}/health
   Sessions : http://localhost:${PORT}/api/run-sessions
 `);
 });
+
+// 公网/反代部署：Node 默认 keep-alive 5s < 反代空闲超时（通常 60s）会被服务器
+// 提前关连接，浏览器端表现为间歇性请求失败（连接不稳）。显式拉长到 65s，
+// headersTimeout 必须 > keepAliveTimeout。
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 70_000;

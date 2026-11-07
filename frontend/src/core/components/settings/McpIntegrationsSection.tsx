@@ -10,7 +10,9 @@ interface ClientConfig {
   note?: string;
 }
 
-const SF_URL = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../../api/_base';
+
+const SF_URL = getApiBase();
 
 const CLIENTS: ClientConfig[] = [
   {
