@@ -55,6 +55,37 @@ describe('resolveCallable — happy path (5 schemes)', () => {
   });
 });
 
+// 2026-11-07 Day1 打通修复 — BYOK 自定义 API 地址透传回归。
+// 背景：此前 resolveCallable('byok:<provider>') 只传 key 不传 baseUrl，
+// OpenAiCompatApiClient 回退到内置默认地址（如 https://api.openai.com/v1），
+// 自定义网关/本地端点场景请求打偏后表现为 SDK "Request timed out."。
+describe('resolveCallable — BYOK baseUrl passthrough (2026-11-07 fix)', () => {
+  const asApiClient = (c: unknown) =>
+    (
+      c as {
+        getApiClient: () => {
+          opts: { baseURL?: string; providerId?: string };
+        };
+      }
+    ).getApiClient();
+
+  it('byok:openai forwards opts.baseUrl into the OpenAI-compat client', () => {
+    const c = resolveCallable('byok:openai', {
+      apiKey: 'sk-test',
+      baseUrl: 'http://127.0.0.1:9999/v1',
+    });
+    const client = asApiClient(c);
+    expect(client.opts.providerId).toBe('openai');
+    expect(client.opts.baseURL).toBe('http://127.0.0.1:9999/v1');
+  });
+
+  it('byok:deepseek without baseUrl keeps the built-in default (no override)', () => {
+    const c = resolveCallable('byok:deepseek', { apiKey: 'sk-test' });
+    const client = asApiClient(c);
+    expect(client.opts.baseURL).toBeUndefined();
+  });
+});
+
 describe('resolveCallable — call-phase errors (CL3/E3)', () => {
   it('empty string → LlmCallError(provider-error)', () => {
     expect(() => resolveCallable('')).toThrow(LlmCallError);
