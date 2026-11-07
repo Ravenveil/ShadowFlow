@@ -58,21 +58,13 @@ import { PermissionPolicyV2 } from '../lib/permission-policy-v2';
 import { ToolRegistry } from '../lib/tool-spec';
 import { toolApprovals } from '../lib/tool-approval';
 import { promptDefaultsForTools } from '../lib/tools/builtin';
-// 经验记忆召回（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）— 失败静默
-import { contextBlock } from '../storage/memory-lessons';
-import { getSetting } from '../storage/settings';
+// 经验记忆召回（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）— 失败静默。
+// 2026-11-07 — 开关/条数/格式统一走 storage/memory-lessons.promptBlock。
+import { promptBlock } from '../storage/memory-lessons';
 
 /** 拼该 agent 域的经验记忆块。空（无记忆/开关关）返回 ''。绝不抛错。 */
 function lessonsBlockFor(agentId: string): string {
-  try {
-    if (getSetting('memory.autoLearn') === false) return '';
-    const topK = getSetting('memory.recallTopK');
-    const k = typeof topK === 'number' && topK > 0 ? Math.min(Math.round(topK), 12) : 4;
-    const block = contextBlock(agentId, '', k);
-    return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
-  } catch {
-    return '';
-  }
+  return promptBlock(agentId, '');
 }
 
 // ─── Workspace I/O ───────────────────────────────────────────────────────────

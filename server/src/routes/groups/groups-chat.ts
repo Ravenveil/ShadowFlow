@@ -35,6 +35,7 @@ import { resolveCallable } from '../../transport/dispatcher';
 import { resolveProviderKey } from '../../transport/byokKey';
 import { isProviderId } from '../../transport/api-clients';
 import type { ConversationMessage } from '../../lib/conversation-types';
+import { buildTurnThread } from '../../lib/turn-thread';
 import { loadTeamForRun } from '../../lib/team-source';
 import { runTeamDagFanout, type RunTeamDagDeps, type HopRecorder } from '../../lib/chat-dag/run-team-dag';
 import { computeDagLayers } from '../../lib/chat-dag/dag-layers';
@@ -45,7 +46,6 @@ import { parseMentions, restrictTeamToMentions, type MentionCandidate } from '..
 // 2026-11-05 交接记录 — OpenBot hop/work_items 设计移植：DAG 边 A→B 全生命周期
 // 落库 + 回合结束紧凑交接摘要（零 LLM）+ GET /:id/hops 查询。
 import {
-  listHopsByTurn,
   listRecentHops,
   nextTurnSeq,
   openHop,
@@ -53,8 +53,17 @@ import {
   startHop,
   summarizeHops,
 } from '../../storage/agent-hops';
+// 2026-11-07 回合交接锚 — 无 hop 落库的回合（无边团队）turn 号不被 agent_hops
+// 记账，交接包 shift_id 也参与编号预留（见 nextChatTurnSeq）。
+import { maxShiftTurnAnchor } from '../../storage/memory-handoff';
+// 2026-11-07 — hop 播报收口（running「交接中」中间态 + 帧先于补丁 + 按 hopId 索引）。
+import { createHopBroadcaster } from '../../lib/chat-dag/hop-broadcast';
 // Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
-import { planWithLlm, type ParsedTask } from '../../lib/orchestrator-parse';
+import { planWithLlm, decomposeWithLlm, type ParsedTask } from '../../lib/orchestrator-parse';
+// 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
+import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
+import { promptBlock } from '../../storage/memory-lessons';
+
 import {
   allHandsPlan,
   casualPlan,
@@ -66,8 +75,6 @@ import {
   type ChatPlan,
   type StrategyAgent,
 } from '../../lib/chat-strategy';
-// 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
-import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
 import {
   commitWorktree,
   integrateAll,
@@ -122,21 +129,30 @@ export function clearPendingApprovals(): void {
   pendingApprovals.clear();
 }
 
-/** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
-function tryResolveApprovalFromText(groupId: string, text: string): boolean {
+/**
+ * 纯函数：解析会话短文本里的审批决定（OpenBot 审批纪律决定路径②）。
+ * 导出供回归测试直打真实实现——此前测试用同正则副本复测，双实现会漂移。
+ */
+export function parseApprovalDecision(text: string): 'approved' | 'rejected' | null {
   const trimmed = text.trim().toLowerCase();
-  const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
-  if (entries.length === 0) return false;
   // 决定消息必须短——「批准」「拒绝」是决定，「继续写代码」这种长句是新一轮
   // 派活，不吞（前缀「继续」会误伤，长度闸门兜住）。中文 ≤6 字；拉丁词按
   // 字符计 ≤10（"approve"/"rejected" 全词各 7-8 字符）。
   const latinChars = (trimmed.match(/[a-z]/g) ?? []).length;
   const lenLimit = latinChars > 0 ? 10 : 6;
-  if (trimmed.length > lenLimit) return false;
+  if (trimmed.length > lenLimit) return null;
   const isApprove = /^(批准|同意|approve|ok|好|通过|allowed|yes)/.test(trimmed);
   const isReject = /^(拒绝|不同意|reject|否|不行|停|驳回|no|deny)/.test(trimmed);
-  if (!isApprove && !isReject) return false;
-  const verdict: 'approved' | 'rejected' = isApprove ? 'approved' : 'rejected';
+  if (!isApprove && !isReject) return null;
+  return isApprove ? 'approved' : 'rejected';
+}
+
+/** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
+export function tryResolveApprovalFromText(groupId: string, text: string): boolean {
+  const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
+  if (entries.length === 0) return false;
+  const verdict = parseApprovalDecision(text);
+  if (!verdict) return false;
   for (const [key, resolve] of entries) {
     pendingApprovals.delete(key);
     try {
@@ -146,6 +162,25 @@ function tryResolveApprovalFromText(groupId: string, text: string): boolean {
     }
   }
   return true;
+}
+
+// ── 2026-11-07 记忆闭环 — 聊天 agent 提示词注入经验记忆（recall）──────────────
+// 走查发现：memory_lessons 写入侧（chat 回合失败/中断 → recordRunLesson，域
+// 'chat-gateway'）早已接通，但聊天两条派发路径的 system 只有 soul，沉淀的经验
+// 永远读不回来（recallTopK 在聊天面从未生效）。这里补上召回闭环。
+
+/** 聊天回合沉淀的固定域（run-sessions registerGatewayRun 的 skill_name 同值）。 */
+export const CHAT_LESSON_SCOPE = 'chat-gateway';
+
+/**
+ * 聊天轮经验块（挂 system，soul 之后）。召回域合并去重：
+ *   - agent 专属（手记/按 bot 沉淀，scope_key=agentId）
+ *   - CHAT_LESSON_SCOPE（聊天回合失败/中断自动沉淀）
+ *   - 通用（域空，天然双域命中，按 id 去重）
+ * 开关 memory.autoLearn（关=不召回）、条数 memory.recallTopK；空块返回 ''。
+ */
+export function chatLessonsBlock(agentId: string): string {
+  return promptBlock([agentId, CHAT_LESSON_SCOPE], '');
 }
 
 // ── 2026-11-05 GrokBot「记忆交接」— 会话回合跑完自动沉淀交接包 ─────────────────
@@ -166,11 +201,27 @@ export function buildRoundHandoffPayload(
   },
 ): { shift_id: string; from_agent: string; to_agent: string; scope_key: string; task_type: string; summary: string } | null {
   if (input.autoLearnOff) return null;
-  const speakers = input.speakers.filter((s) => s.id && s.excerpt);
-  // 双方角色齐备才沉淀（单 agent 无交接语义；createHandoff 禁自环）。
+  // 按 agent 去重：同一 agent 多次发言（重试/返工/回炉）只计一次，产出取最新
+  // 一条，顺序按首次发言（执行序）。不自环：from=最后发言、to=首位——同一
+  // agent 首末都是它（A,B,A）时 to 顺延到下一位不同 agent（createHandoff 禁
+  // 自环，撞上会把整包静默丢掉）。
+  const byId = new Map<string, { id: string; name: string; excerpt: string; first: number; last: number }>();
+  input.speakers.forEach((s, i) => {
+    if (!s.id || !s.excerpt) return;
+    const prev = byId.get(s.id);
+    if (prev) {
+      prev.name = s.name;
+      prev.excerpt = s.excerpt;
+      prev.last = i;
+    } else {
+      byId.set(s.id, { id: s.id, name: s.name, excerpt: s.excerpt, first: i, last: i });
+    }
+  });
+  const speakers = [...byId.values()].sort((a, b) => a.first - b.first);
+  // 双方角色齐备才沉淀（单 agent 无交接语义）。
   if (speakers.length < 2) return null;
-  const from = speakers[speakers.length - 1]!;
-  const to = speakers[0]!;
+  const from = speakers.reduce((a, b) => (b.last > a.last ? b : a));
+  const to = speakers.find((s) => s.id !== from.id)!;
   const summary = [
     input.goal ? `任务：${input.goal.slice(0, 100)}` : '',
     ...speakers.map((s) => `${s.name}：${s.excerpt.slice(0, 120)}`),
@@ -179,7 +230,8 @@ export function buildRoundHandoffPayload(
     .join('；')
     .slice(0, 600);
   return {
-    // shift_id 幂等锚：同群同回合重复触发不重复建包。
+    // shift_id 幂等锚：一回合一锚（nextChatTurnSeq 防撞号），同回合重复触发
+    // 不重复建包（sinkRoundHandoff 落库前按 shift_id 查重）。
     shift_id: `chat:${input.groupId}:${input.turnSeq}`,
     from_agent: from.id,
     to_agent: to.id,
@@ -189,25 +241,54 @@ export function buildRoundHandoffPayload(
   };
 }
 
-/** 薄壳：组 payload → createHandoff 落库。任何失败静默（additive 增强）。 */
+/** 薄壳：组 payload → createHandoff 落库。任何失败静默（additive 增强）。返回 Promise 供测试 await。 */
 export function sinkRoundHandoff(input: {
   groupId: string;
   turnSeq: number;
   goal: string;
   speakers: Array<{ id: string; name: string; excerpt: string }>;
-}): void {
-  void (async () => {
+}): Promise<void> {
+  return (async () => {
     // 动态 import（防循环依赖；主链路零感知）。
     const { getSetting } = await import('../../storage/settings');
-    const { createHandoff } = await import('../../storage/memory-handoff');
+    const { createHandoff, findHandoffByShift } = await import('../../storage/memory-handoff');
     const payload = buildRoundHandoffPayload({
       ...input,
       autoLearnOff: getSetting('memory.autoLearn') === false,
     });
     if (!payload) return;
+    // shift_id 幂等锚：同回合已有交接包（无论 from/to）→ 不重复建包。
+    if (findHandoffByShift(payload.shift_id)) return;
     createHandoff(payload);
   })().catch(() => {
     /* 沉淀失败不影响聊天主链路（SQLite 不可用等） */
+  });
+}
+
+/**
+ * 测试可见：本回合的交接锚编号 = max(hop turn_seq, 已用交接锚) + 1。
+ * 无 hop 落库的回合（无边团队/记录失败降级）turn 号不被 agent_hops 预留，
+ * 靠已用交接锚防撞号——撞号会让后一轮的交接包被幂等查重误跳过。
+ */
+export function nextChatTurnSeq(groupId: string): number {
+  return Math.max(nextTurnSeq(groupId), maxShiftTurnAnchor(`chat:${groupId}:`) + 1);
+}
+
+/**
+ * 注册一次节点审批挂起，返回等决定的 Promise（决定路径①②③的单一注册真源）。
+ * deps.approval.request 接线与回归测试共用。外部取消（用户插话换轮/停止生成）
+ * 由 swapDagRun 拒收场；这里另挂 30 分钟兜底超时（与 run 超时同量级，避免永久
+ * pending 占内存）——超时视作拒绝，审批 promise 永不悬挂。
+ */
+export function registerPendingApproval(groupId: string, nodeId: string): Promise<'approved' | 'rejected'> {
+  return new Promise<'approved' | 'rejected'>((resolve) => {
+    const key = `${groupId}:${nodeId}`;
+    pendingApprovals.set(key, resolve);
+    setTimeout(() => {
+      if (pendingApprovals.delete(key)) {
+        try { resolve('rejected'); } catch { /* settled */ }
+      }
+    }, 30 * 60_000).unref?.();
   });
 }
 
@@ -390,6 +471,87 @@ export function stripThinking(s: string): string {
   return s
     .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*?<\/sf[:-]thinking>/g, '')
     .replace(/<sf[:-]thinking(?:\s[^>]*)?>[\s\S]*$/g, '');
+}
+
+// ── 2026-11-07 流式标签剥离 ──────────────────────────────────────────────
+/** 完整标签名（开/闭 × 冒号/连字符），与 stripThinking 双分隔符规则一致。 */
+const THINK_TAG_NAMES = ['sf:thinking', 'sf-thinking', '/sf:thinking', '/sf-thinking'];
+/** 完整开/闭标签（属性可选）——整体即「定界符」，从流里消失。 */
+const THINK_TAG_DELIM_RE = /<\/?sf[:-]thinking(?:\s[^>]*)?>/g;
+
+/**
+ * 尾部疑似「被切断的标签开头」→ 返回该后缀起点（最长存活后缀），否则 -1。
+ *
+ * 存活判定（core = 最后候选 `<` 之后的文本）：
+ *   - 裸 `<` / `</` 等名字尚未跑偏的前缀 → 存活（等后续 chunk 补全）；
+ *   - 名字段被空白提前终结（`<sf:thi x`）→ 名字必须**完整等于**标签名且
+ *     属性段未出现 `>` 才存活，否则字面文本；
+ *   - 无空白的名字段是完整标签名的前缀即存活；含 `>` 自然出局。
+ * 取**最早**存活的 `<`（最长后缀）——`<sf:thinking x=<sf:thi` 这类属性段里
+ * 带 `<` 的形态要整体 hold，不能只 hold 尾巴。
+ */
+function partialTagStart(rest: string): number {
+  for (let i = rest.indexOf('<'); i >= 0; i = rest.indexOf('<', i + 1)) {
+    const core = rest.slice(i + 1);
+    if (!core) return i; // 裸 '<' 结尾 — 可能是标签第一字节
+    if (/\s/.test(core[0])) continue; // `< x` 不可能是标签
+    const ws = core.search(/\s/);
+    const name = ws < 0 ? core : core.slice(0, ws);
+    const alive = ws < 0
+      ? THINK_TAG_NAMES.some((n) => n.startsWith(name))
+      : THINK_TAG_NAMES.includes(name) && !core.slice(ws).includes('>');
+    if (alive) return i;
+  }
+  return -1;
+}
+
+/**
+ * 逐 chunk 流式剥 `<sf[:-]thinking>` **定界符**（思考内容保留）——B3 过程卡
+ * 把 text-delta 逐片点亮进卡体，模型（zhipu reasoning 包装 / 模型模仿 sf:
+ * 协议）会在正文流里写思考标签，原样 append 会让流式卡体「原始标签与正文
+ * 混排」（2026-11-07 截图反馈）。
+ *
+ * 与 stripThinking 的分工：
+ *   - stripThinking：**整段**替换，落库前剥最终回复（思考内容整段丢弃，
+ *     气泡只留正文）；
+ *   - 本状态机：**逐 chunk**，只剥定界符、思考内容保留在卡体——与结构化
+ *     thinking-delta 通道（纯思考文本点亮同一张卡）对齐，过程细节不丢。
+ *
+ * 跨 chunk 边界：标签会被切断在任意字节（`<sf:thin` | `king>…`），疑似
+ * 标签前缀 hold 住等后续 chunk 补全再判，绝不闪现半截标签；流结束时
+ * flush() 丢弃仍未补全的残段（未完成的开标签不该以碎片形态进卡体）。
+ */
+export function createThinkingTagStream(): {
+  push(piece: string): string;
+  flush(): void;
+} {
+  let pending = '';
+  return {
+    push(piece: string): string {
+      const s = pending + piece;
+      pending = '';
+      let out = '';
+      let last = 0;
+      THINK_TAG_DELIM_RE.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = THINK_TAG_DELIM_RE.exec(s)) !== null) {
+        out += s.slice(last, m.index);
+        last = m.index + m[0].length;
+      }
+      const rest = s.slice(last);
+      const hold = partialTagStart(rest);
+      if (hold >= 0) {
+        out += rest.slice(0, hold);
+        pending = rest.slice(hold);
+      } else {
+        out += rest;
+      }
+      return out;
+    },
+    flush(): void {
+      pending = '';
+    },
+  };
 }
 
 /**
@@ -623,13 +785,16 @@ export function emitIntentCard(gw: GwLike, input: IntentCardInput): void {
   }
 }
 
-/** commit_record 卡 — agent 提交 / 编排者合并提交共用。 */
-function emitCommitCard(gw: GwLike, c: {
+/** commit_record 卡 — agent 提交 / 编排者合并提交共用。
+ *  2026-11-07 检查器产出归属 — who 可选：agent 自己的提交带 agent_id/agent_name
+ *  （检查器按 agent 筛产出）；编排者合并提交不传 = 无归属（不进单 agent 流）。 */
+export function emitCommitCard(gw: ToolGw, c: {
   repo: string; sha: string; short_sha: string; message: string; author: string;
   date?: string; files_changed: number; insertions: number; deletions: number;
   files?: WorktreeCommit['files'];
-}): void {
+}, who?: ToolOwner): void {
   if (!gw || !c.sha) return;
+  const attribution = who ? { agent_id: who.agentId, agent_name: who.agentName } : {};
   gw.emitMessage({
     id: gw.nextId(),
     kind: 'commit_record',
@@ -645,12 +810,15 @@ function emitCommitCard(gw: GwLike, c: {
     deletions: c.deletions,
     ...(c.date ? { date: c.date } : {}),
     ...(c.files && c.files.length > 0 ? { files: c.files } : {}),
+    ...attribution,
   });
 }
 
-/** file_diff 卡（每个变更文件一张，git-introspect 已限量截断）。 */
-function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
+/** file_diff 卡（每个变更文件一张，git-introspect 已限量截断）。
+ *  2026-11-07 — who 同 emitCommitCard（与 commit_record 成对归属）。 */
+export function emitFileDiffCards(gw: ToolGw, diffs: GitFileDiff[], who?: ToolOwner): void {
   if (!gw) return;
+  const attribution = who ? { agent_id: who.agentId, agent_name: who.agentName } : {};
   for (const fd of diffs) {
     gw.emitMessage({
       id: gw.nextId(),
@@ -662,6 +830,7 @@ function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
       removed: fd.removed,
       lines: fd.lines,
       ...(fd.language ? { language: fd.language } : {}),
+      ...attribution,
     });
   }
 }
@@ -670,18 +839,18 @@ function emitFileDiffCards(gw: GwLike, diffs: GitFileDiff[]): void {
 async function commitAndEvidence(
   gw: GwLike,
   wt: PreparedWorktree,
-  agentName: string,
+  who: ToolOwner,
   taskTitle: string,
 ): Promise<void> {
   try {
     const commit = await commitWorktree(
       wt.dir,
-      `[sf] ${agentName}: ${taskTitle.slice(0, 60)}`,
-      agentName,
+      `[sf] ${who.agentName}: ${taskTitle.slice(0, 60)}`,
+      who.agentName,
     );
     if (!commit?.sha) return;
     emitCommitCard(gw, {
-      repo: agentName,
+      repo: who.agentName,
       sha: commit.sha,
       short_sha: commit.short_sha,
       message: commit.message,
@@ -691,9 +860,9 @@ async function commitAndEvidence(
       insertions: commit.insertions,
       deletions: commit.deletions,
       files: commit.files,
-    });
+    }, who);
     const ev = await inspectGitRun(wt.dir, wt.baseSha, undefined);
-    if (ev) emitFileDiffCards(gw, ev.fileDiffs);
+    if (ev) emitFileDiffCards(gw, ev.fileDiffs, who);
   } catch (e) {
     console.warn('[groups-chat] worktree commit/evidence failed (non-fatal):', e);
   }
@@ -946,6 +1115,9 @@ async function runFanout(
                 id: `node:${id}`,
                 title: planTaskByAgent.get(id)?.title ?? rosterName(id),
                 assignee: rosterName(id),
+                // U0 绑角色 — 行归属 agent_id 真源（检查器按行筛「含它的任务行」；
+                // 老数据回落行 id `node:<agentId>` 同样可判归属）。
+                agent_id: id,
                 status: 'pending',
                 batch: li + 1,
               });
@@ -986,15 +1158,15 @@ async function runFanout(
         }
 
         // ── 交接记录（2026-11-05，OpenBot hop 模型）───────────────────────
-        // 本回合一个 turn_seq；SQLite 落库失败时降级为内存 Map（聊天主链路零影响）。
+        // 本回合一个 turn_seq；SQLite 落库失败时降级为无记录路径（聊天主链路零影响）。
         let turnSeq = 0;
         let hopStore: HopRecorder | null = null;
         // 2026-11-05 Task#10 — hop 生命周期实时播报（hop_card 帧 + hop_update patch）：
         // SQLite 侧照旧落库，播报属 best-effort（gw 为 null / emit 抛错都不影响主链路）。
-        // roster 名解析：hopIdFor 只拿 agentId，这里维护 id→name 快照表。
+        // 2026-11-07 播报收口进 chat-dag/hop-broadcast.ts（可直测）：start→running
+        // 「交接中」中间态上屏、帧先于补丁（名字解析期间 patch 入队按序 flush）、
+        // 按 hopId 索引防 conditional rework 同边多 hop 串卡。
         const agentNameById = new Map<string, string>();
-        const hopCardIdByEdge = new Map<string, string>(); // "from→to" → hop_card 帧id
-        const hopOpenedAtByEdge = new Map<string, number>();
         const resolveAgentName = async (agentId: string): Promise<string> => {
           const hit = agentNameById.get(agentId);
           if (hit) return hit;
@@ -1003,84 +1175,23 @@ async function runFanout(
           agentNameById.set(agentId, name);
           return name;
         };
-        /** 把 SQLite hopStore 的三次回调包上播报；emit 失败静默（best-effort）。 */
-        const emitHopFrame = (fn: () => void): void => {
-          try {
-            fn();
-          } catch { /* best-effort */ }
-        };
         try {
-          turnSeq = nextTurnSeq(groupId);
+          turnSeq = nextChatTurnSeq(groupId);
           const dbStore: HopRecorder = {
             open: (edge) => openHop({ group_id: groupId, turn_seq: turnSeq, from_agent: edge.from, to_agent: edge.to }),
             start: (id) => { try { startHop(id); } catch { /* best-effort */ } },
             settle: (id, status, opts) => { try { settleHop(id, status, opts); } catch { /* best-effort */ } },
           };
-          if (gw) {
-            hopStore = {
-              open: (edge) => {
-                const hopId = dbStore.open(edge);
-                // 播报帧异步准备（open 回调本身要求同步返回 hopId，不能 await）。
-                void (async () => {
-                  const [fromName, toName] = await Promise.all([resolveAgentName(edge.from), resolveAgentName(edge.to)]);
-                  const cardId = gw.nextId();
-                  const key = `${edge.from}→${edge.to}`;
-                  hopCardIdByEdge.set(key, cardId);
-                  hopOpenedAtByEdge.set(key, Date.now());
-                  emitHopFrame(() =>
-                    gw.emitMessage({
-                      id: cardId,
-                      kind: 'hop_card',
-                      turn_id: gw.turnId,
-                      ts: Date.now(),
-                      from_agent: edge.from,
-                      to_agent: edge.to,
-                      from_name: fromName,
-                      to_name: toName,
-                      status: 'pending',
-                    }),
-                  );
-                })();
-                return hopId;
-              },
-              start: (id) => {
-                dbStore.start(id);
-                // start 回调只拿 hopId（不拿边），由 SQLite 行反查边 key —— 但为避免
-                // 逐帧查库，这里用「settled 未知的帧保持 pending」策略：播报粒度到
-                // settle 已足够（pending → 终态），start 不单独 patch。
-              },
-              settle: (id, status, opts) => {
-                dbStore.settle(id, status, opts);
-                // settle 同样只拿 hopId —— 边 key 反查走 SQLite 行（listHopsByTurn 本回合），
-                // 但 settle 高频小查询代价可忽略；找不到对应帧则静默（降级安全）。
-                void (async () => {
-                  try {
-                    const hops = listHopsByTurn(groupId, turnSeq);
-                    const hop = hops.find((h) => h.id === id);
-                    if (!hop) return;
-                    const key = `${hop.from_agent}→${hop.to_agent}`;
-                    const cardId = hopCardIdByEdge.get(key);
-                    if (!cardId) return;
-                    const openedAt = hopOpenedAtByEdge.get(key) ?? Date.now();
-                    emitHopFrame(() =>
-                      gw.emitPatch({
-                        id: cardId,
-                        op: 'hop_update',
-                        patch: {
-                          status,
-                          ...(opts?.outputChars !== undefined ? { output_chars: opts.outputChars } : {}),
-                          ...(opts?.detail ? { detail: opts.detail } : {}),
-                          duration_ms: Date.now() - openedAt,
-                        },
-                      }),
-                    );
-                  } catch { /* best-effort */ }
-                })();
-              },
-            };
-          } else {
-            hopStore = dbStore;
-          }
+          const gwRun = gw;
+          hopStore = gwRun
+            ? createHopBroadcaster(dbStore, {
+                nextId: () => gwRun.nextId(),
+                turnId: gwRun.turnId,
+                emitMessage: (m) => gwRun.emitMessage(m),
+                emitPatch: (p) => gwRun.emitPatch(p),
+                resolveName: resolveAgentName,
+              })
+            : dbStore;
         } catch { hopStore = null; }
 
         // 记忆交接沉淀（2026-11-05）— 本轮实际发言 agent 收集器（执行序），
@@ -1103,6 +1214,10 @@ async function runFanout(
             // 自包含指令）；未分配（指派全不在 team 名单的整图回落）→ 用户原文。
             const task = planTaskByAgent.get(agentId);
             const basePrompt = task ? task.prompt : userPrompt;
+            // Whole-thread 回放保真（2026-11-07）— 与串行路径同款 buildTurnThread，
+            // 取代 history0.slice(0,-1) 盲删末位（末位非用户消息时会随机丢段）。
+            // prompt 是派生子任务时，被提升用户轮视为被替换（意图拆解语义不变）。
+            const { history: turnHistory, prompt: turnPrompt } = buildTurnThread(history0, basePrompt);
             // worktree 隔离 — 本轮该 agent 的专属工作目录。
             const wt = wtByAgent.get(agentId);
             // plan_card 任务行 → running。
@@ -1124,12 +1239,15 @@ async function runFanout(
             }
             let buf = '';
             let errMsg = '';
+            // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
+            const thinkStream = createThinkingTagStream();
             try {
               const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
               for await (const chunk of callable.turn({
-                system: soul,
-                prompt: basePrompt + kbText + upstreamText,
-                history: history0.slice(0, -1),
+                // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
+                system: soul + chatLessonsBlock(agentId),
+                prompt: turnPrompt + kbText + upstreamText,
+                history: turnHistory,
                 signal,
                 model,
               })) {
@@ -1138,7 +1256,10 @@ async function runFanout(
                   buf += piece;
                   // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
                   if (gw && thinkingId && piece) {
-                    gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
+                    const shown = thinkStream.push(piece);
+                    if (shown) {
+                      gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+                    }
                   }
                 } else if (chunk.type === 'thinking-delta') {
                   // 2026-11-04 — API 路结构化思考通道：只点亮过程卡，不进 buf。
@@ -1158,6 +1279,8 @@ async function runFanout(
               errMsg = e instanceof Error ? e.message : String(e);
             }
             if (gw && thinkingId) {
+              // 流收口：未补全的疑似标签残段丢弃，不以碎片形态进卡体。
+              thinkStream.flush();
               const elapsed = Date.now() - startedAt;
               gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
               if (errMsg) {
@@ -1186,7 +1309,7 @@ async function runFanout(
             // Polynoia MERGE 前半 — 干完即提交 worktree 产物 + 证据卡
             // （commit_record / file_diff）；无 worktree 或干净树 → 静默跳过。
             if (!errMsg && wt) {
-              await commitAndEvidence(gw, wt, name, task?.title ?? userPrompt);
+              await commitAndEvidence(gw, wt, { agentId: agentId, agentName: name }, task?.title ?? userPrompt);
             }
             // 2026-11-04 思考剥离 — 与串行路径同款：<sf:thinking> 段不进最终回复。
             return { text: stripThinking(buf), error: errMsg || undefined };
@@ -1217,19 +1340,7 @@ async function runFanout(
             ? {
                 approval: {
                   request: ({ nodeId, nodeName }: { nodeId: string; nodeName: string; preview: string; signal: AbortSignal }) =>
-                    new Promise<'approved' | 'rejected'>((resolve) => {
-                      const key = `${groupId}:${nodeId}`;
-                      pendingApprovals.set(key, resolve);
-                      // 外部取消（用户插话换轮/停止生成）→ 视作拒绝收场，不悬挂。
-                      // signal 由执行器传入（runTeamDagFanout 的 opts.signal）。
-                      // 这里借 postMessage 之外的通道不好拿 signal —— 挂 30 分钟
-                      // 兜底超时（与 run 超时同量级，避免永久 pending 占内存）。
-                      setTimeout(() => {
-                        if (pendingApprovals.delete(key)) {
-                          try { resolve('rejected'); } catch { /* settled */ }
-                        }
-                      }, 30 * 60_000).unref?.();
-                    }).then((v) => {
+                    registerPendingApproval(groupId, nodeId).then((v) => {
                       // 决定落一条系统消息（审批留痕；postMessage 失败不回传）。
                       void pyPostMessage(groupId, {
                         content: `[approval] ${nodeName} 的审批结果：${v === 'approved' ? '已批准 ✅' : '已拒绝 ❌'}`,
@@ -1323,6 +1434,11 @@ async function runFanout(
           || latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
           || '';
       if (prompt) serialPrompt = prompt;
+      // Whole-thread 回放保真（2026-11-07）— 提升用户轮 + 折叠相邻同角色，
+      // 取代 history.slice(0,-1) 盲删末位：串行 fan-out 第 2+ 轮末位是上一个
+      // agent 的回复，旧删法把它整条删掉（后发言者看不到先发言者），用户消息
+      // 反而与 prompt 重复。契约/测试见 lib/turn-thread.ts。
+      const { history: turnHistory, prompt: turnPrompt } = buildTurnThread(history, prompt);
 
       const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
       if (!agent) {
@@ -1374,14 +1490,17 @@ async function runFanout(
       const ctrl = swapDagRun(groupId, activeDagRuns);
       let buf = '';
       let errMsg = '';
+      // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
+      const thinkStream = createThinkingTagStream();
       // worktree 隔离 — 该 agent 专属目录（git 仓库 workspace 时）。
       const wt = serialWt.get(agentId);
       try {
         const callable = resolveCallable(executor, { apiKey, model, workspace: wt?.dir ?? workspace });
         for await (const chunk of callable.turn({
-          system: soul,
-          prompt: prompt + kbText,
-          history: history.slice(0, -1), // exclude the just-read latest user (it's the prompt)
+          // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
+          system: soul + chatLessonsBlock(agentId),
+          prompt: turnPrompt + kbText,
+          history: turnHistory,
           signal: ctrl.signal,
           model,
         })) {
@@ -1390,7 +1509,10 @@ async function runFanout(
             buf += piece;
             // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
             if (gw && thinkingId && piece) {
-              gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: piece });
+              const shown = thinkStream.push(piece);
+              if (shown) {
+                gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+              }
             }
           } else if (chunk.type === 'thinking-delta') {
             // 2026-11-04 — API 路结构化思考通道（ApiClientCallable reasoning_content
@@ -1415,6 +1537,8 @@ async function runFanout(
       // streaming（刷新后回放依旧转圈）。中断 = 静默收口：finalize +
       // msg_foot done，但不发错误 raw 卡、不发聊天消息（与停止语义一致）。
       if (gw && thinkingId) {
+        // 流收口：未补全的疑似标签残段丢弃，不以碎片形态进卡体。
+        thinkStream.flush();
         const elapsed = Date.now() - startedAt;
         gw.emitPatch({ id: thinkingId, op: 'thinking_finalize', duration_ms: elapsed });
         if (errMsg && !ctrl.signal.aborted) {
@@ -1479,7 +1603,7 @@ async function runFanout(
       });
       // 串行路径同样「干完即提交」— worktree 产物 + 证据卡。
       if (wt) {
-        await commitAndEvidence(gw, wt, agentName, prompt);
+        await commitAndEvidence(gw, wt, { agentId: agentId, agentName: agentName }, prompt);
       }
     }
     // 仅当注册表里仍是本轮 controller 时才删（避免误删后来者；DAG 路径 finally 同款）。
@@ -1704,15 +1828,19 @@ router.post('/:id/messages', (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05）。
+ * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05，决定路径①）。
  * body: { decision: 'approve' | 'reject' }。
  * 命中挂起 → resolve 执行器 promise（执行器会补系统留痕消息 + plan_card blocked）；
  * 未命中 → 409（已决定/超时/无此挂起）。
+ * 处理器导出供回归测试直打（不起真 Express）。
  */
-router.post('/:id/approvals/:nodeId', (req: Request, res: Response) => {
+export function approvalDecisionHandler(
+  req: { params: { id: string; nodeId: string }; body?: unknown },
+  res: { status(code: number): { json(body: unknown): void }; json(body: unknown): void },
+): void {
   const groupId = req.params.id;
   const nodeId = req.params.nodeId;
-  const decision = (req.body ?? {}).decision;
+  const decision = ((req.body ?? {}) as { decision?: unknown }).decision;
   if (decision !== 'approve' && decision !== 'reject') {
     res.status(400).json({
       error: { code: 'BAD_DECISION', message: "decision must be 'approve' or 'reject'" },
@@ -1732,7 +1860,9 @@ router.post('/:id/approvals/:nodeId', (req: Request, res: Response) => {
     resolve(decision === 'approve' ? 'approved' : 'rejected');
   } catch { /* resolver 已 settle — 幂等 */ }
   res.json({ group_id: groupId, node_id: nodeId, decision });
-});
+}
+
+router.post('/:id/approvals/:nodeId', approvalDecisionHandler);
 
 export { router as groupsChatRouter };
 export default router;

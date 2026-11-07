@@ -71,6 +71,70 @@ describe('parseMentions', () => {
   });
 });
 
+describe('parseMentions — 中文无空格直连与粘连边界（2026-11-07 收口）', () => {
+  it('CJK 任务文本直接相连也命中（verbatim 名原文直配，无空格/标点分隔）', () => {
+    const r = parseMentions('@阿Dev修一下登录bug', roster);
+    expect(r.mentionedIds).toEqual(['dev01']);
+    expect(r.cleanText).toBe('修一下登录bug');
+    // id 直连同理：@dev01修 → dev01（token 路径会把「dev01修」整串当 token 而零命中）
+    const r2 = parseMentions('@dev01修一下', roster);
+    expect(r2.mentionedIds).toEqual(['dev01']);
+    expect(r2.cleanText).toBe('修一下');
+  });
+
+  it('粘连多人「@A@B」双点名（@ 紧贴前一表达式尾构成触发边界）', () => {
+    const r = parseMentions('@阿Dev@小Q 一起看下', roster);
+    expect(r.mentionedIds).toEqual(['dev01', 'qa01']);
+    expect(r.cleanText).toBe('一起看下');
+    const r3 = parseMentions('@阿Dev@小Q@笔杆子 对齐一下', roster);
+    expect(r3.mentionedIds).toEqual(['dev01', 'qa01', 'writer01']);
+    expect(r3.cleanText).toBe('对齐一下');
+  });
+
+  it('粘连里前一个未命中也给后一个当边界（@路人甲@阿Dev）', () => {
+    const r = parseMentions('@路人甲@阿Dev 修下', roster);
+    expect(r.mentionedIds).toEqual(['dev01']);
+    // 未命中的 @路人甲 保留（只删命中 token，语义与旧一致）
+    expect(r.cleanText).toBe('@路人甲 修下');
+  });
+
+  it('「@@」仍然不误命中（@ 本身不是触发边界，只有表达式尾才是）', () => {
+    expect(parseMentions('@@阿Dev 开工', roster).mentionedIds).toEqual([]);
+    expect(parseMentions('看下@@阿Dev', roster).mentionedIds).toEqual([]);
+  });
+
+  it('verbatim 尾随 ASCII 词字符不截断（@dev01x ≠ @dev01，名字没打完）', () => {
+    expect(parseMentions('@dev01x 复现', roster).mentionedIds).toEqual([]);
+    expect(parseMentions('@阿DevX 联调', roster).mentionedIds).toEqual([]);
+  });
+
+  it('最长名优先：短名是长名前缀时取长名，短名单独提及仍可', () => {
+    const two = [
+      { id: 'a1', name: '李' },
+      { id: 'a2', name: '李四' },
+    ];
+    const r = parseMentions('@李四看看', two);
+    expect(r.mentionedIds).toEqual(['a2']);
+    expect(r.cleanText).toBe('看看');
+    expect(parseMentions('@李 看看', two).mentionedIds).toEqual(['a1']);
+  });
+
+  it('verbatim 同名歧义（同名不同 id）落回 token 路径精确匹配取先者', () => {
+    const twin = [
+      { id: 'q1', name: '小Q' },
+      { id: 'q2', name: '小Q' },
+    ];
+    // verbatim 判歧义 → token 路径「精确 name」find 取首个 —— 与旧实现一致（钉死防漂移）
+    expect(parseMentions('@小Q 看看', twin).mentionedIds).toEqual(['q1']);
+  });
+
+  it('CJK 直连与粘连混排 + 尾部标点剥离', () => {
+    const r = parseMentions('@阿Dev，@小Q修bug！@笔杆子写文档', roster);
+    expect(r.mentionedIds).toEqual(['dev01', 'qa01', 'writer01']);
+    expect(r.cleanText).toBe('修bug！写文档');
+  });
+});
+
 describe('restrictTeamToMentions', () => {
   const team: TeamRunShape = {
     members: ['dev01', 'qa01', 'writer01'],

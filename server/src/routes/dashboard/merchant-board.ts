@@ -11,6 +11,10 @@
  *                                               &compare=1 额外返回上一等长区间的环比）
  * GET  /api/merchant/orders/timeseries      → 订单流水分时（零值补齐 + 峰值）
  * GET  /api/merchant/traffic/curve          → 客流曲线（PV/UV/转化/分渠道）
+ * GET  /api/merchant/channels               → 渠道获客经济性（渠道 × 营收/成本/毛利/占比，
+ *                                             合计与 overview 同窗口同口径）
+ * GET  /api/merchant/customers              → 客户贡献与复购（客户 × 钱口径 + 复购拆分，
+ *                                             合计与 overview 同窗口同口径）
  * GET  /api/merchant/ledger                 → 收支流水
  * GET  /api/merchant/orders                 → 订单列表（status 筛 + offset 分页
  *                                             + start/end 区间，返回 total/has_more）
@@ -21,6 +25,8 @@
  * GET  /api/merchant/evidence/orders.csv   → 区间内订单明细 CSV（UTF-8 BOM）
  * GET  /api/merchant/first-order            → 第一单五步链路
  * GET  /api/merchant/products               → 商品列表
+ * GET  /api/merchant/products/economics     → 产品贡献与定价（产品 × 营收/成本/毛利/标价对照，
+ *                                             合计与 overview 同窗口同口径）
  * POST /api/merchant/products               → 建商品（管理）
  * POST /api/merchant/visits                 → 落地页埋点
  * POST /api/merchant/orders                 → 下单
@@ -33,8 +39,10 @@
 import { Router, Request, Response } from 'express';
 import {
   MerchantError,
+  channelEconomics,
   createOrder,
   createProduct,
+  customerEconomics,
   firstOrderChain,
   listLedger,
   listOrders,
@@ -42,6 +50,7 @@ import {
   orderTimeseries,
   overview,
   payOrder,
+  productEconomics,
   recordVisit,
   reconcile,
   refundOrder,
@@ -107,6 +116,35 @@ router.get('/orders/timeseries', (req: Request, res: Response) => {
 router.get('/traffic/curve', (req: Request, res: Response) => {
   try {
     res.json(trafficCurve({ granularity: req.query.granularity, start: req.query.start, end: req.query.end }));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 渠道获客经济性：客流曲线只有 PV/UV/转化，答不了「哪个渠道挣钱」。
+// 口径与 overview 同源，前端用同一组 start/end 拉两边即可当场对账。
+router.get('/channels', (req: Request, res: Response) => {
+  try {
+    res.json(channelEconomics({ start: req.query.start, end: req.query.end }));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 产品贡献与定价：订单列表只答「这一单赚多少」，答不了「这个产品整体挣不挣钱、
+// 定价兑现了多少」。标价对照单均实收，退款吃掉的水分一眼可见。
+router.get('/products/economics', (req: Request, res: Response) => {
+  try {
+    res.json(productEconomics({ start: req.query.start, end: req.query.end }));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// 客户贡献与复购：渠道答「从哪来」、产品答「买什么」，这里答「谁在复购、贡献多少」。
+router.get('/customers', (req: Request, res: Response) => {
+  try {
+    res.json(customerEconomics({ start: req.query.start, end: req.query.end }));
   } catch (err) {
     fail(res, err);
   }
