@@ -347,6 +347,12 @@ export class OpenAiCompatApiClient implements ApiClient {
     tools: ToolSpec[];
     signal: AbortSignal;
   }): AsyncIterable<AssistantEvent> {
+    // 公网稳定性（2026-11-07 排查症状二之①）— 默认总超时防网络抖动无限挂起；
+    // 外部 signal 正常透传，上限 SF_LLM_TIMEOUT_MS 可覆盖（默认 5 分钟）。
+    args.signal = AbortSignal.any([
+      args.signal,
+      AbortSignal.timeout(Number(process.env.SF_LLM_TIMEOUT_MS ?? 300_000)),
+    ]);
     const apiKey = this.opts.apiKey ?? '';
     if (!apiKey && !PROVIDERS_NO_KEY.has(this.opts.providerId)) {
       throw new Error(

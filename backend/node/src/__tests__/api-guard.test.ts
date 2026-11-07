@@ -14,6 +14,7 @@ import merchantBoardRouter from '../routes/dashboard/merchant-board';
 import memoryHandoffRouter from '../routes/memory/memory-handoff';
 
 const ORIGINAL_TOKEN = process.env.SF_API_TOKEN;
+const ORIGINAL_DEMO = process.env.SF_DEMO_PUBLIC;
 
 /** 构造一个「远端」应用：trust proxy + 用 X-Forwarded-For 伪造来源 IP。 */
 function appWithGuard(): express.Express {
@@ -33,11 +34,14 @@ function remote(req: request.Test): request.Test {
 
 beforeEach(() => {
   delete process.env.SF_API_TOKEN;
+  delete process.env.SF_DEMO_PUBLIC;
 });
 
 afterEach(() => {
   if (ORIGINAL_TOKEN === undefined) delete process.env.SF_API_TOKEN;
   else process.env.SF_API_TOKEN = ORIGINAL_TOKEN;
+  if (ORIGINAL_DEMO === undefined) delete process.env.SF_DEMO_PUBLIC;
+  else process.env.SF_DEMO_PUBLIC = ORIGINAL_DEMO;
 });
 
 describe('isLoopbackAddress', () => {
@@ -67,6 +71,32 @@ describe('未配置 SF_API_TOKEN：只放行本机', () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('LOOPBACK_ONLY');
     expect(String(res.body.error.message)).toContain('SF_API_TOKEN');
+  });
+});
+
+describe('SF_DEMO_PUBLIC=1：演示公网部署显式放行', () => {
+  beforeEach(() => {
+    process.env.SF_DEMO_PUBLIC = '1';
+  });
+
+  it('远端无 Bearer 也放行', async () => {
+    const res = await remote(request(appWithGuard()).get('/ping'));
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('演示开关优先于 token 校验（不设头也不 401）', async () => {
+    process.env.SF_API_TOKEN = 'secret-token-123';
+    const res = await remote(request(appWithGuard()).get('/ping'));
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('关掉开关即回到回环限制', async () => {
+    delete process.env.SF_DEMO_PUBLIC;
+    const res = await remote(request(appWithGuard()).get('/ping'));
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('LOOPBACK_ONLY');
   });
 });
 

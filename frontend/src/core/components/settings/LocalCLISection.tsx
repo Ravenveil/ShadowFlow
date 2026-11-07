@@ -5,12 +5,13 @@
  * Layout: full-height panel · toolbar + 4-col installed grid + dashed uninstalled grid
  * Data: GET /api/settings/agents/detect  · PUT /api/settings/agents/selection
  */
+import { getApiBase } from '../../../api/_base';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 // 2026-11-06 美化批：官方品牌 logo（首字母 monogram 太丑，用户反馈）
 import { BrandGlyph } from '../../../common/icons/brandIcons';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+const API_BASE = getApiBase();
 
 // ── Brand registry ────────────────────────────────────────────────────────────
 

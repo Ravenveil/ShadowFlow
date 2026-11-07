@@ -8,6 +8,7 @@
  *
  * Falls back gracefully to localStorage 'sf.mediaKeys' if API is unavailable.
  */
+import { getApiBase } from '../../../api/_base';
 import { useEffect, useState } from 'react';
 import { Icon } from '../../../common/icons/iconRegistry';
 
@@ -48,7 +49,7 @@ const CATEGORY_META = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const API_BASE = getApiBase();
 const LS_KEY = 'sf.mediaKeys';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';

@@ -9,6 +9,7 @@
  *
  * Credentials are shown as *** (never plain-text from backend).
  */
+import { getApiBase } from '../../api/_base';
 import { useEffect, useState } from 'react';
 import { AlertTriangle as TpAlert } from '../../common/icons/iconRegistry';
 import type { McpProvider, RegisterProviderPayload } from '../../common/types/agent-builder';
@@ -17,7 +18,7 @@ import type { McpProvider, RegisterProviderPayload } from '../../common/types/ag
 // API helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const API_BASE_URL = getApiBase();
 
 async function apiFetchProviders(): Promise<McpProvider[]> {
   const res = await fetch(`${API_BASE_URL}/tools/providers`);

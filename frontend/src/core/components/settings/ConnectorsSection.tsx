@@ -8,6 +8,7 @@
  *
  * Falls back gracefully if API is unavailable (stores locally).
  */
+import { getApiBase } from '../../../api/_base';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../../../common/icons/iconRegistry';
 
@@ -29,7 +30,7 @@ function IconShield({ cls }: { cls?: string }) {
   );
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const API_BASE = getApiBase();
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 

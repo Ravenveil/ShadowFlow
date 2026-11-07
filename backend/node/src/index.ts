@@ -76,13 +76,21 @@ import {
 
 const PORT = Number(process.env.PORT ?? 8002);
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://localhost:3007';
+// 公网稳定性（2026-11-07 排查症状一之②）— 额外放行来源：CORS_ORIGINS 逗号
+// 分隔（公网域名 / 预览域名），避免公网部署时浏览器跨域被拒。
+const EXTRA_ORIGINS = (process.env.CORS_ORIGINS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const app = express();
+// 反代（托管平台 / 内网穿透）后拿真实客户端协议与 IP。
+app.set('trust proxy', 1);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 app.use(cors({
-  origin: [FRONTEND_ORIGIN, 'http://localhost:3000', 'http://localhost:5173'],
+  origin: [FRONTEND_ORIGIN, 'http://localhost:3000', 'http://localhost:5173', ...EXTRA_ORIGINS],
   credentials: true,
 }));
 
@@ -242,6 +250,40 @@ app.use('/projects', express.static(projectsRoot, {
 }));
 console.log(`[index] static /projects → ${projectsRoot}`);
 
+// ── 单端口托管前端 SPA（2026-11-07 公网演示）────────────────────────────────
+// 存在 frontend/dist 产物时单端口同服：静态资源直出，其余 GET（非 /api、
+// 非 /projects）回落 index.html 交前端路由；API 未命中仍是 JSON 404。
+// SF_WEB_DIST 可显式覆盖产物目录；候选路径按 cwd 约定自动探测。
+const webDistCandidates = [
+  process.env.SF_WEB_DIST,
+  path.join(process.cwd(), '..', '..', 'frontend', 'dist'),
+  path.join(process.cwd(), '..', 'frontend', 'dist'),
+  path.join(process.cwd(), 'frontend', 'dist'),
+].filter((p): p is string => !!p);
+const webDist = webDistCandidates.find((p) => fs.existsSync(path.join(p, 'index.html')));
+if (webDist) {
+  app.use(express.static(webDist, { index: false, maxAge: '1h' }));
+  app.get(/^\/(?!api\/|projects\/).*/, (_req, res) => {
+    const indexPath = path.join(webDist, 'index.html');
+    if ((process.env.SF_DEMO_PUBLIC ?? '').trim() === '1') {
+      // 演示模式加固（2026-11-08「没连上前端」排查）：
+      // ① 清浏览器 localStorage 残留的后端地址（sf_backend_url / sf_secrets 会把
+      //    同源接口劫持到访问者本机 localhost——页面渲染正常但数据全挂，正是
+      //    「都没连上前端」的形态）；
+      // ② 根路径直达演示大屏 /dashboard（query 保留，sharecode 门不受影响）。
+      let html = fs.readFileSync(indexPath, 'utf8');
+      html = html.replace(
+        '</head>',
+        '<script>try{localStorage.removeItem("sf_backend_url");localStorage.removeItem("sf_secrets");localStorage.setItem("sf_secrets_migrated_v1","1")}catch(e){};if(location.pathname==="/"){location.replace("/dashboard"+location.search)}</script></head>',
+      );
+      res.type('html').send(html);
+      return;
+    }
+    res.sendFile(indexPath);
+  });
+  console.log(`[index] static SPA → ${webDist}`);
+}
+
 // 404 catch-all
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -329,7 +371,7 @@ process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
 // ── Start ───────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const mode = process.env.ANTHROPIC_API_KEY ? 'Claude-powered (server key)' : 'BYOK (user-supplied key)';
   console.log(`
 ╔══════════════════════════════════════════════════════╗
@@ -341,3 +383,8 @@ app.listen(PORT, () => {
   Sessions : http://localhost:${PORT}/api/run-sessions
 `);
 });
+// 公网稳定性（2026-11-07 排查症状一首嫌）— Node 默认 keepAliveTimeout=5s 小于
+// 常见反代空闲超时（60s）：空闲连接被反代复用时撞上已被服务端关闭的 socket →
+// 间歇断连。对齐 65s（>60s）；headersTimeout 必须大于 keepAliveTimeout。
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 70_000;
