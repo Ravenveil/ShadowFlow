@@ -22,6 +22,7 @@
  * 不在本阶段:中断恢复/hydrate(B2)、用户插话完整续跑(B3)。
  */
 import type { TeamRunShape } from '../team-source';
+import { getPlan, isPlanGateBlocking, type PlanGateRecord } from '../plan-gate';
 import { computeDagLayers } from './dag-layers';
 import { gate } from './policy-gate';
 import { mapLimit } from './map-limit';
@@ -70,6 +71,11 @@ export interface RunTeamDagDeps {
   };
   /** 可选：节点被审批拒绝后回调（群聊接线用它把 plan_card 任务行标 blocked）。 */
   onNodeBlocked?: (agentId: string) => void;
+  /**
+   * 可选：T05① 计划确认门拦截回调（2026-11-07）。团队存在未确认计划时执行器
+   * 整轮拒绝启动（不跑任何节点），并把待确认计划交给调用方发通知。
+   */
+  onPlanBlocked?: (plan: PlanGateRecord) => void;
 }
 
 export type AgentOutcome = 'ok' | 'error' | 'empty' | 'timeout' | 'aborted' | 'blocked';
@@ -82,6 +88,8 @@ export interface RunTeamDagResult {
   aborted: boolean;
   /** conditional rework 实际触发的返工次数（按节点累计，含每轮回执）。 */
   reworkRuns: number;
+  /** T05① 计划确认门：true = 本轮被未确认计划拦下，未启动任何执行节点。 */
+  planBlocked?: boolean;
 }
 
 export interface RunTeamDagOpts {
@@ -103,6 +111,24 @@ export async function runTeamDagFanout(
   userPrompt: string,
   opts: RunTeamDagOpts = {},
 ): Promise<RunTeamDagResult> {
+  // ── T05① 计划确认门（全局兜底）────────────────────────────────────────
+  // 团队存在未确认计划（pending/rejected）→ 本轮不启动任何执行节点，
+  // 交回调用方发通知（群聊侧另有前置预检，这里是防竞态/防旁路的最后闸门）。
+  if (team.team_id) {
+    const plan = getPlan(team.team_id);
+    if (isPlanGateBlocking(plan)) {
+      deps.onPlanBlocked?.(plan);
+      return {
+        ranLayers: 0,
+        perAgent: {},
+        deniedEdges: 0,
+        warnedEdges: 0,
+        aborted: false,
+        reworkRuns: 0,
+        planBlocked: true,
+      };
+    }
+  }
   const signal = opts.signal ?? new AbortController().signal;
   const maxConcurrency = opts.maxConcurrency ?? 5;
   const nodeTimeoutMs = opts.nodeTimeoutMs ?? 120_000;
