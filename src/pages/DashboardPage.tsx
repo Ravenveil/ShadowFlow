@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../common/i18n';
+import OpsPanel from './OpsPanel';
 import {
   fetchCraftOverview,
   fetchCraftTimeseries,
@@ -784,6 +785,12 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           </span>
         </div>
       </section>
+
+      {/* 代运营看板（main #51）：四步进度 + 一键分发 + 运单履约，数据走 /api/ops
+          （overview 直出）。失败只降级，不拖垮整页。
+          注：商家明细面板（MerchantBoardPanel）按本页重构决策不挂页（2026-11-07
+          重构，代码保留在 MerchantBoardPanel.tsx），故此处只接 OpsPanel。 */}
+      <OpsPanel />
     </div>
   );
 }
