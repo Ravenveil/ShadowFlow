@@ -910,13 +910,32 @@ function NeoSkillUrlChip({
 // ---------------------------------------------------------------------------
 // NeoPlusMenu — 加号两层弹出菜单（2026-11-07 重做：ClawHub 入口移除，形态
 // 对齐 WorkBuddy —— 「技能 / 连接器」入口）。
-//   Layer 1：技能 ›（已装 Skill 选择 + URL 导入）/ 连接器 ›（ACP/MCP 连接器
-//   勾选进本轮会话作用域，OpenBot 式执行前裁定对象）
-//   Layer 2：搜索框 + 列表 + 底部动作（导入 Skill / 管理连接器）
+//   Layer 1：技能 › / 连接器 ›（ACP/MCP 连接器勾选进本轮会话作用域，OpenBot
+//   式执行前裁定对象）
+//   Layer 2·技能：搜索 + 全量技能目录卡片（GET /api/skills —— 内置能力技能 +
+//   用户技能，WorkBuddy 形态 monogram + 名称 + 描述）+ 底部「从本地添加技能 /
+//   管理技能」
+//   Layer 2·连接器：搜索 + 连接器列表 + 底部「管理连接器」
 // 两个面板同处一个 fixed portal 容器（flex 排布），容器 mouseleave 才收起
 // 第二层 —— 光标跨 8px 间隙移动不会闪断。空间不足时第二层翻到左侧。
 // 连接器为多选 toggle（选中留 ✓，可连选多个后点外收起）；Skill 选完即收。
+// 注意：第一层面板类名是 .neo-plus-lead —— 不能叫 .neo-plus-menu，与
+// neo.css 里 NeoRail「+新建」菜单同名类级联冲突（曾致弹层显示不全）。
 // ---------------------------------------------------------------------------
+
+// WorkBuddy 形态 monogram：id 哈希取稳定色；拉丁名取前两字母，CJK 取首字。
+const SKILL_MONO_COLORS = ['#14b8a6', '#8b5cf6', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899'];
+function skillMonoColor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return SKILL_MONO_COLORS[h % SKILL_MONO_COLORS.length];
+}
+function skillMonoText(name: string): string {
+  const s = (name || '?').trim();
+  if (!s) return '?';
+  // 首字符为 ASCII 字母数字 → 取前两字母大写；否则取首字（CJK 等）。
+  return /^[A-Za-z0-9]/.test(s) ? s.slice(0, 2).toUpperCase() : s[0];
+}
 
 export function NeoPlusMenu({
   anchorRef,
@@ -935,7 +954,9 @@ export function NeoPlusMenu({
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [skills, setSkills] = useState<InstalledSkill[] | null>(null);
+  // 技能面板数据源 = 后端全量技能目录（GET /api/skills）：内置能力技能
+  // （server/skills/，含 04f1b663 的 9 个）+ 用户技能，一屏对齐后端。
+  const [skills, setSkills] = useState<SkillInfo[] | null>(null);
   const [connectors, setConnectors] = useState<ConnectorItem[] | null>(null);
   const [skillQuery, setSkillQuery] = useState('');
   const [connQuery, setConnQuery] = useState('');
@@ -945,7 +966,7 @@ export function NeoPlusMenu({
 
   useEffect(() => {
     let alive = true;
-    listInstalledSkills()
+    listSkills()
       .then((items) => { if (alive) setSkills(items); })
       .catch(() => { if (alive) setSkills([]); });
     listConnectors()
@@ -994,9 +1015,17 @@ export function NeoPlusMenu({
   if (!pos) return null;
 
   const q = (s: string) => s.trim().toLowerCase();
-  const filteredSkills = (skills ?? []).filter(
-    (s) => !q(skillQuery) || s.id.toLowerCase().includes(q(skillQuery)) || s.name.toLowerCase().includes(q(skillQuery)),
-  );
+  // 已停用技能不进选取列表（与 @skill picker 语义一致）；搜索命中
+  // id / 名称 / 描述。
+  const filteredSkills = (skills ?? [])
+    .filter((s) => s.enabled !== false)
+    .filter(
+      (s) =>
+        !q(skillQuery) ||
+        s.skill_id.toLowerCase().includes(q(skillQuery)) ||
+        s.name.toLowerCase().includes(q(skillQuery)) ||
+        (s.description ?? '').toLowerCase().includes(q(skillQuery)),
+    );
   const filteredConnectors = (connectors ?? []).filter(
     (c) =>
       !q(connQuery) ||
@@ -1010,7 +1039,7 @@ export function NeoPlusMenu({
       ref={rootRef}
       className="neo-plus-root"
       data-plus-menu
-      data-testid="neo-plus-menu"
+      data-testid="neo-plus-popup"
       style={{
         left: pos.left,
         bottom: pos.bottom,
@@ -1020,7 +1049,7 @@ export function NeoPlusMenu({
       onClick={(e) => e.stopPropagation()}
     >
       {/* ── Layer 1：竖排入口行（hover 带 › 的行弹出第二层）────────────────── */}
-      <div className="neo-plus-menu">
+      <div className="neo-plus-lead">
         <button
           type="button"
           className={`neo-plus-item${sub === 'skill' ? ' on' : ''}`}
@@ -1150,24 +1179,40 @@ export function NeoPlusMenu({
             )}
             {skills !== null && filteredSkills.length === 0 && (
               <div className="neo-plus-note">
-                {t('neo.composer.plusSkillNone', { defaultValue: '还没有已装的 Skill' })}
+                {t('neo.composer.plusSkillNone', { defaultValue: '没有可用的技能' })}
               </div>
             )}
             {filteredSkills.map((s) => (
               <button
-                key={s.id}
+                key={s.skill_id}
                 type="button"
                 className="neo-plus-item"
-                data-testid={`neo-plus-skill-${s.id}`}
-                title={s.name}
-                onClick={() => { onPickSkill(s); onClose(); }}
+                data-testid={`neo-plus-skill-${s.skill_id}`}
+                title={s.description || s.name}
+                onClick={() => {
+                  // 目录 Skill（内置/用户）映射成 InstalledSkill 形状，与
+                  // SkillPicker 的显式选取走同一条 pendingSkill 代码路径。
+                  onPickSkill({
+                    id: s.skill_id,
+                    name: s.name,
+                    source: s.source ?? 'builtin',
+                    source_hash: '',
+                    installed_at: '',
+                    counts: {},
+                  });
+                  onClose();
+                }}
               >
-                <span className="neo-plus-item-icon" aria-hidden>
-                  <BookOpen size={13} strokeWidth={2} />
+                <span
+                  className="neo-plus-item-mono"
+                  style={{ background: skillMonoColor(s.skill_id) }}
+                  aria-hidden
+                >
+                  {skillMonoText(s.name)}
                 </span>
                 <span className="neo-plus-item-main">
                   <span className="neo-plus-item-name">{s.name}</span>
-                  <span className="neo-plus-item-desc">{s.source}</span>
+                  <span className="neo-plus-item-desc">{s.description ?? s.skill_id}</span>
                 </span>
               </button>
             ))}
@@ -1176,12 +1221,23 @@ export function NeoPlusMenu({
             <button
               type="button"
               className="neo-plus-item neo-plus-item--more"
-              data-testid="neo-plus-import-skill"
+              data-testid="neo-plus-skill-add-local"
               onClick={() => { onClose(); onOpenSkillPicker(); }}
             >
-              <span className="neo-plus-item-icon"><Link2 size={13} strokeWidth={2} aria-hidden /></span>
+              <span className="neo-plus-item-icon"><FolderOpen size={13} strokeWidth={2} aria-hidden /></span>
               <span className="neo-plus-item-name">
-                {t('neo.composer.plusImportSkill', { defaultValue: '导入 Skill（URL / 已装列表）' })}
+                {t('neo.composer.plusSkillAddLocal', { defaultValue: '从本地添加技能' })}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="neo-plus-item neo-plus-item--more"
+              data-testid="neo-plus-skill-manage"
+              onClick={() => { onClose(); navigate('/settings#skills-catalog'); }}
+            >
+              <span className="neo-plus-item-icon"><ExternalLink size={13} strokeWidth={2} aria-hidden /></span>
+              <span className="neo-plus-item-name">
+                {t('neo.composer.plusSkillManage', { defaultValue: '管理技能' })}
               </span>
             </button>
           </div>
@@ -1466,14 +1522,15 @@ export function NeoComposer({
     return () => clearTimeout(id);
   }, [toast]);
 
-  // 首次打开菜单时懒拉已装 skill；`/` 模式另拉 catalog（含子命令描述）。
+  // 首次打开菜单时懒拉已装 skill；catalog（全量目录，含子命令描述 + @token
+  // 解析池）同样在菜单打开时拉取（`/` 描述与 @<skill-id> 解析共用）。
   useEffect(() => {
     if (commandMenu && installedSkills === null) {
       listInstalledSkills()
         .then((items) => setInstalledSkills(items))
         .catch(() => setInstalledSkills([]));
     }
-    if (commandMenu && commandMenu.mode === '/' && catalogSkills === null) {
+    if (commandMenu && catalogSkills === null) {
       listSkills()
         .then((items) => setCatalogSkills(items))
         .catch(() => setCatalogSkills([]));
@@ -1612,16 +1669,20 @@ export function NeoComposer({
     // 从文本里的 `@<skill-id>` 自动解析（与服务端路由逐字节一致，防
     // `user@gmail.com` 误判为 `@gmail`）。
     let resolvedSkillName = pendingSkill?.skill_id;
-    if (!resolvedSkillName && installedSkills && installedSkills.length > 0) {
+    if (!resolvedSkillName) {
+      // 解析池 = 已装 Skill + 后端全量目录（内置能力技能也可用 @<skill-id> 触发）。
+      const pool = [
+        ...(installedSkills ?? []).map((s) => s.id),
+        ...(catalogSkills ?? []).map((s) => s.skill_id),
+      ];
       const { skill_id: parsedId } = parseSkillToken(text);
-      if (parsedId) {
-        const exact = installedSkills.find((s) => s.id === parsedId);
-        const hit = exact ?? installedSkills.find(
-          (s) => s.id.toLowerCase() === parsedId.toLowerCase(),
-        );
+      if (parsedId && pool.length > 0) {
+        const hit =
+          pool.find((id) => id === parsedId) ??
+          pool.find((id) => id.toLowerCase() === parsedId.toLowerCase());
         if (hit) {
-          resolvedSkillName = hit.id;
-          console.log(`[NeoComposer] auto-resolved skill_name from goal token: @${hit.id}`);
+          resolvedSkillName = hit;
+          console.log(`[NeoComposer] auto-resolved skill_name from goal token: @${hit}`);
         }
       }
     }
@@ -2289,8 +2350,9 @@ export function NeoComposer({
             })}
           />
 
-          {/* 语音输入（2026-11-07）：麦克风 chip；录音中同位变红点计时 +
-              完成/取消；转写中 glyph 变 spinner。不支持录音的环境不渲染。 */}
+          {/* 语音输入（2026-11-07）：麦克风 chip；取麦授权中（starting）glyph
+              转 spinner 提示；录音中同位变红点计时 + 完成/取消；转写中 glyph
+              变 spinner。不支持录音的环境不渲染。 */}
           {recorder.supported &&
             (recorder.status === 'recording' ? (
               <div className="neo-cp-rec" data-testid="voice-rec-bar">
@@ -2324,21 +2386,23 @@ export function NeoComposer({
             ) : (
               <NeoChipBtn
                 glyph={
-                  voiceTranscribing ? (
+                  voiceTranscribing || recorder.status === 'starting' ? (
                     <Loader2 size={16} className="neo-cp-spin" />
                   ) : (
                     <Mic size={16} strokeWidth={1.75} />
                   )
                 }
                 onClick={() => {
-                  if (voiceTranscribing) return;
+                  if (voiceTranscribing || recorder.status === 'starting') return;
                   void recorder.start();
                 }}
                 testId="start-chip-voice"
                 title={
-                  voiceTranscribing
-                    ? t('neo.composer.voiceTranscribing', { defaultValue: '正在转写语音…' })
-                    : t('neo.composer.voiceStart', { defaultValue: '语音输入' })
+                  recorder.status === 'starting'
+                    ? t('neo.composer.voiceStarting', { defaultValue: '正在请求麦克风权限…' })
+                    : voiceTranscribing
+                      ? t('neo.composer.voiceTranscribing', { defaultValue: '正在转写语音…' })
+                      : t('neo.composer.voiceStart', { defaultValue: '语音输入' })
                 }
               />
             ))}

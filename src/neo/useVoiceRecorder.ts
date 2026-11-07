@@ -1,10 +1,12 @@
 /**
- * useVoiceRecorder — 麦克风录音 hook（2026-11-07，语音输入）。
+ * useVoiceRecorder — 麦克风录音 hook（2026-11-07，语音输入；同日 UI 改版
+ * 增 starting 态）。
  *
  * getUserMedia + MediaRecorder 的最小封装：
- *   start()   — 取麦克风并开录（失败抛 onError，如权限被拒 NotAllowedError）
+ *   start()   — 取麦克风并开录（取麦中 status='starting'，浏览器授权弹窗
+ *               期间 UI 可先行出提示；失败走 onError，如 NotAllowedError）
  *   stop()    — 停录，录到的 Blob 经 onDone 回调交还（ondataavailable 聚合）
- *   cancel()  — 停录并丢弃录音
+ *   cancel()  — 停录并丢弃录音（starting 阶段取消则丢弃迟到的授权结果）
  * status/seconds 受控返回，供 composer 切「录音中」态 + 计时显示。
  *
  * 兼容性：按 audio/webm;codecs=opus → audio/webm → audio/mp4 → ogg 依次探测
@@ -14,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type VoiceRecorderStatus = 'idle' | 'recording';
+export type VoiceRecorderStatus = 'idle' | 'starting' | 'recording';
 
 export interface UseVoiceRecorderOptions {
   /** 停录后回调（cancel 不触发）。 */
@@ -69,6 +71,11 @@ export function useVoiceRecorder({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
   const unmountedRef = useRef(false);
+  // 起麦轮次令牌：cancel/卸载/重新 start 都会作废旧轮，旧轮迟到的
+  // 授权结果一律丢弃（停轨不进 recording）。
+  const startGenRef = useRef(0);
+  // 取麦中（getUserMedia 未返回）防重复 start——否则二次取麦会泄漏录音流。
+  const startingRef = useRef(false);
   const optsRef = useRef({ onDone, onError });
   optsRef.current = { onDone, onError };
 
@@ -92,19 +99,29 @@ export function useVoiceRecorder({
     return () => {
       unmountedRef.current = true;
       cancelledRef.current = true;
+      startGenRef.current += 1;
       if (timerRef.current !== null) clearInterval(timerRef.current);
       streamRef.current?.getTracks().forEach((tr) => tr.stop());
     };
   }, []);
 
   const start = useCallback(async (): Promise<void> => {
-    if (recRef.current) return;
+    if (startingRef.current || recRef.current) return;
     if (!hasGetUserMedia() || typeof MediaRecorder === 'undefined') {
       optsRef.current.onError?.(new Error('当前环境不支持麦克风录音'));
       return;
     }
+    const gen = ++startGenRef.current;
+    startingRef.current = true;
+    setStatus('starting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // starting 阶段被 cancel/卸载/重新 start：丢弃迟到的授权结果（停轨不进录）。
+      if (gen !== startGenRef.current) {
+        stream.getTracks().forEach((tr) => tr.stop());
+        return;
+      }
+      startingRef.current = false;
       streamRef.current = stream;
       cancelledRef.current = false;
       chunksRef.current = [];
@@ -131,6 +148,9 @@ export function useVoiceRecorder({
       setStatus('recording');
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch (e) {
+      // 起麦失败（含被拒）：只有当前轮才回调 onError——迟到的失败随取消一起丢弃。
+      if (gen !== startGenRef.current) return;
+      startingRef.current = false;
       cleanup();
       optsRef.current.onError?.(e instanceof Error ? e : new Error(String(e)));
     }
@@ -144,6 +164,9 @@ export function useVoiceRecorder({
 
   const cancel = useCallback((): void => {
     cancelledRef.current = true;
+    // 作废起麦轮次：starting 阶段取消 → 迟到的授权结果丢弃，不进录。
+    startGenRef.current += 1;
+    startingRef.current = false;
     const rec = recRef.current;
     if (rec && rec.state !== 'inactive') rec.stop();
     else cleanup();

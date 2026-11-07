@@ -3,7 +3,8 @@
  *
  * jsdom 没有 MediaRecorder / mediaDevices，用假实现 stub 全局后测核心契约：
  * start 开录计时 / stop 交还 Blob / cancel 丢弃 / 权限被拒走 onError /
- * 不支持录音的环境 supported=false。
+ * 不支持录音的环境 supported=false；starting 态（2026-11-07 UI 改版）：
+ * 取麦未返回时的暴露、防重复取麦、迟到授权结果丢弃。
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -38,19 +39,32 @@ function fakeStream() {
   return { getTracks: () => [{ stop }] };
 }
 
-function stubMediaApis(opts?: { reject?: Error }): void {
-  const getUserMedia = vi.fn(
-    opts?.reject
-      ? async () => {
-          throw opts.reject;
-        }
-      : async () => fakeStream(),
-  );
+/** 可手动 resolve 的 getUserMedia 假实现（测 starting 态时序）。 */
+function deferredGum() {
+  const stop = vi.fn();
+  const stream = { getTracks: () => [{ stop }] };
+  let resolveFn!: (v: unknown) => void;
+  const promise = new Promise<unknown>((r) => {
+    resolveFn = r;
+  });
+  return { promise, resolve: () => resolveFn(stream), stop };
+}
+
+function stubMediaApis(opts?: {
+  reject?: Error;
+  gum?: () => Promise<unknown>;
+}): ReturnType<typeof vi.fn> {
+  const fallback = async (): Promise<unknown> => {
+    if (opts?.reject) throw opts.reject;
+    return fakeStream();
+  };
+  const getUserMedia = vi.fn(opts?.gum ?? fallback);
   Object.defineProperty(navigator, 'mediaDevices', {
     value: { getUserMedia },
     configurable: true,
   });
   vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+  return getUserMedia;
 }
 
 beforeEach(() => {
@@ -138,5 +152,107 @@ describe('useVoiceRecorder', () => {
     });
     expect(onError).toHaveBeenCalledTimes(1);
     expect(result.current.status).toBe('idle');
+  });
+
+  it('starting 态：getUserMedia 未返回时 status=starting，授权后转 recording', async () => {
+    const gum = deferredGum();
+    stubMediaApis({ gum: () => gum.promise });
+    const { result } = renderHook(() => useVoiceRecorder({ onDone: vi.fn() }));
+
+    act(() => {
+      void result.current.start();
+    });
+    expect(result.current.status).toBe('starting');
+
+    await act(async () => {
+      gum.resolve();
+    });
+    expect(result.current.status).toBe('recording');
+  });
+
+  it('取麦中重复 start → 只取麦一次（不泄漏第二条录音流）', async () => {
+    const gum = deferredGum();
+    const getUserMedia = stubMediaApis({ gum: () => gum.promise });
+    const { result } = renderHook(() => useVoiceRecorder({ onDone: vi.fn() }));
+
+    act(() => {
+      void result.current.start();
+    });
+    act(() => {
+      void result.current.start();
+    });
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      gum.resolve();
+    });
+    expect(result.current.status).toBe('recording');
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
+  });
+
+  it('starting 阶段 cancel → 迟到的授权结果丢弃（停轨、不进 recording）', async () => {
+    const gum = deferredGum();
+    stubMediaApis({ gum: () => gum.promise });
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useVoiceRecorder({ onDone }));
+
+    act(() => {
+      void result.current.start();
+    });
+    expect(result.current.status).toBe('starting');
+    act(() => {
+      result.current.cancel();
+    });
+    expect(result.current.status).toBe('idle');
+
+    await act(async () => {
+      gum.resolve();
+    });
+    expect(gum.stop).toHaveBeenCalled();
+    expect(FakeMediaRecorder.instances).toHaveLength(0);
+    expect(result.current.status).toBe('idle');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('starting 阶段 cancel 后立即重开 → 新轮次正常开录，旧轮授权仍丢弃', async () => {
+    const gum1 = deferredGum();
+    const gum2 = deferredGum();
+    const getUserMedia = vi
+      .fn()
+      .mockImplementationOnce(() => gum1.promise)
+      .mockImplementationOnce(() => gum2.promise);
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia },
+      configurable: true,
+    });
+    vi.stubGlobal('MediaRecorder', FakeMediaRecorder);
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useVoiceRecorder({ onDone }));
+
+    act(() => {
+      void result.current.start();
+    });
+    act(() => {
+      result.current.cancel();
+    });
+    act(() => {
+      void result.current.start();
+    });
+    expect(result.current.status).toBe('starting');
+
+    // 旧轮（已取消）迟到授权：丢弃，不进录。
+    await act(async () => {
+      gum1.resolve();
+    });
+    expect(gum1.stop).toHaveBeenCalled();
+    expect(FakeMediaRecorder.instances).toHaveLength(0);
+    expect(result.current.status).toBe('starting');
+
+    // 新轮授权：正常开录。
+    await act(async () => {
+      gum2.resolve();
+    });
+    expect(result.current.status).toBe('recording');
+    expect(FakeMediaRecorder.instances).toHaveLength(1);
   });
 });
