@@ -23,7 +23,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "backend" / "python"))
 
 from shadowflow.runtime.contracts import (  # noqa: E402
     ArtifactRef,

@@ -37,7 +37,7 @@ services:
 
   shadowflow-node:
     build:
-      context: ../server
+      context: ../backend/node
       dockerfile: Dockerfile
     image: shadowflow/node:dev
     container_name: shadowflow-node
@@ -51,7 +51,7 @@ services:
       shadowflow-api:
         condition: service_healthy
     volumes:
-      - ../server:/app
+      - ../backend/node:/app
       - /app/node_modules            # prevent host node_modules from clobbering image-installed deps
       - shadowflow_node_data:/app/.shadowflow  # persist SQLite + projects/
     networks:

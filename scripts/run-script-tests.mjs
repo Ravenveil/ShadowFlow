@@ -23,7 +23,7 @@ import { join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const REPO_ROOT = resolve(import.meta.dirname, '..');
-const SERVER_SRC = join(REPO_ROOT, 'server', 'src');
+const SERVER_SRC = join(REPO_ROOT, 'backend', 'node', 'src');
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(name);
@@ -35,7 +35,7 @@ const value = (name, dflt) => {
 const ONLY = value('--only', '');
 const JOBS = Math.max(1, Number(value('--jobs', '4')) || 4);
 
-/** 递归收集 server/src 下所有 *.test.ts。 */
+/** 递归收集 backend/node/src 下所有 *.test.ts。 */
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, entry.name);
@@ -76,14 +76,14 @@ if (all.length === 0) {
 
 /**
  * 跑一个脚本，返回 { file, ok, code, ms, tail }。
- * 2026-11-07：优先直接 `node server/node_modules/tsx/dist/cli.mjs <file>`（tsx
- * 是 server 的 devDependency，`cd server && npm ci` 后必在，免 npx 拉 registry、
+ * 2026-11-07：优先直接 `node backend/node/node_modules/tsx/dist/cli.mjs <file>`（tsx
+ * 是 backend/node 的 devDependency，`cd backend/node && npm ci` 后必在，免 npx 拉 registry、
  * 离线可跑）。不走 .bin/tsx.cmd shim——Windows 下 spawn(shell:true) 不给带空格
  * 路径加引号（"Terry Sun" 会被 cmd 截断成 `C:\Users\Terry`）。找不到本地 tsx
  * 再退回 `npx --yes tsx`（历史行为）。
  */
 const NPX = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const LOCAL_TSX_CLI = join(REPO_ROOT, 'server', 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const LOCAL_TSX_CLI = join(REPO_ROOT, 'backend', 'node', 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const USE_LOCAL_TSX = existsSync(LOCAL_TSX_CLI);
 
 function runOne(file) {

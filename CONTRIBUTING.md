@@ -168,7 +168,7 @@ ruff check shadowflow/ && mypy shadowflow/   # mypy 为 advisory
 |---|---|
 | lint (eslint) | 前端 ESLint，零警告策略 |
 | typecheck (server) | server 的 tsc --noEmit |
-| test (backend) | vitest server project |
+| test (backend) | vitest (backend/node src/__tests__) |
 | test (frontend) | vitest web project |
 | e2e (frontend smoke) | Playwright 冒烟 |
 | build-docker | 构建验证 docker/ 下两个镜像（不推送） |
@@ -198,7 +198,7 @@ ruff check shadowflow/ && mypy shadowflow/   # mypy 为 advisory
 ## 领域速查（改前先看）
 
 - **Neo 前端接线**：见上文「新增一个 Neo 导航页」四步。
-- **群聊 DAG**：`server/src/lib/chat-dag/mentions.ts`（@ 提及 = 定向派活，跳过 LLM 意图拆解；中文标点算 token 终结符）。
+- **群聊 DAG**：`backend/node/src/lib/chat-dag/mentions.ts`（@ 提及 = 定向派活，跳过 LLM 意图拆解；中文标点算 token 终结符）。
 - **hop 交接卡片**：`hopStore` 包装 SQLite 真源，播报 best-effort，绝不阻塞落库主链路。
 - **审批边**：EdgeKind `'approve'` 是执行语义，别在读路径把它折叠成 sequential。
 - **记忆三区并存**：memory_lessons（自动沉淀）+ memory_handoffs（交接写回）+ River Memory（手动）；设置页四分区入口。

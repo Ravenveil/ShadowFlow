@@ -1,0 +1,1311 @@
+/* ===== NeoTimeline（neo-tl-*） ===== */
+/* Neo 消息流渲染层样式。视觉基准 .tmp/clawsgo-clone/running.html + done.html：
+   op 行 = 图标 15px fg-2 + 标题 12.5px fg-1 + chev fg-4 + 耗时 11px fg-4
+   tabular-nums（running 行标题灰化）；用户气泡 = 右对齐灰底 14px 圆角；
+   富卡 = hairline 边 + 14px 圆角白卡。颜色只用 var(--t-*) / color-mix。 */
+
+.neo-tl {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.neo-tl-item { min-width: 0; }
+
+/* 新到消息入场（首屏历史不播，data-new 由 NeoTimeline 标注） */
+.neo-tl-item[data-new] {
+  animation: neo-tl-enter 220ms var(--ease-out) both;
+}
+@keyframes neo-tl-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── 用户气泡（running.html .msg-user：8px 0 22px auto / 88% / 灰底 / r14） ── */
+.neo-tl-user {
+  margin: 8px 0 22px auto;
+  max-width: 88%;
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--t-user-bubble, var(--t-panel-3));
+  color: var(--t-user-bubble-ink, var(--t-fg));
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* @ 提及 token 高亮（2026-11-05，OpenBot 定向派活配套）：品牌色小胶囊，
+   跟随明暗主题令牌；无 JS 状态，纯渲染。 */
+.neo-tl-mention {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--t-accent-tint, color-mix(in srgb, var(--t-accent, #6366f1) 16%, transparent));
+  color: var(--t-accent, #6366f1);
+  font-weight: 600;
+}
+
+/* ── 附件 chip（@image#1:name 宿主徽章 → 图片/文件 chip，2026-11-07） ─────── */
+.neo-tl-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  margin: 0 2px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--t-fg, #333) 14%, transparent);
+  background: color-mix(in srgb, var(--t-fg, #333) 5%, transparent);
+  color: var(--t-fg-3, #666);
+  font-size: 11.5px;
+  line-height: 1.7;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* ── 用户消息随行附件（2026-11-07 拖拽传图）：右对齐 wrap = 气泡 + 附件行；
+   图片缩略图点击新窗看原图。无附件时不出 wrap（DOM 零变化）。 ───────────── */
+.neo-tl-user-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 8px 0 22px;
+}
+.neo-tl-user-wrap .neo-tl-user {
+  margin: 0;
+}
+.neo-tl-user-atts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  max-width: 88%;
+}
+.neo-tl-user-thumb {
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--t-fg, #333) 12%, transparent);
+  background: var(--t-panel-3);
+  line-height: 0;
+}
+.neo-tl-user-thumb img {
+  display: block;
+  max-width: 220px;
+  max-height: 170px;
+  object-fit: contain;
+}
+
+/* ── op 行（running.html .op：gap 9px / padding 7px 8px / r10 / 12.5px） ──── */
+.neo-tl-op {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--t-fg);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out);
+}
+button.neo-tl-op:hover { background: var(--t-panel-2); }
+.neo-tl-op-static { cursor: default; }
+.neo-tl-op-static:hover { background: none; }
+
+.neo-tl-op-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--t-fg-2);
+}
+.neo-tl-op-icon[data-status="running"] { color: var(--t-fg-4); }
+.neo-tl-op-icon[data-status="done"] { color: var(--t-ok, #30c093); }
+.neo-tl-op-icon[data-status="failed"] { color: var(--t-err, #ef4444); }
+
+.neo-tl-op-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* running 行标题/图标灰化（clawsgo「正在搜索…」形态） */
+.neo-tl-op[data-status="running"] .neo-tl-op-title { color: var(--t-fg-4); }
+.neo-tl-op[data-status="running"] .neo-tl-op-icon { color: var(--t-fg-4); }
+/* running 行整行灰化补齐（running.html .op.running{background:transparent}）：
+   图标 spinner 顶点恢复灰、hover 不再出底色。 */
+.neo-tl-op[data-status="running"] .neo-tl-spinner {
+  border-color: color-mix(in srgb, var(--t-fg-4) 25%, transparent);
+  border-top-color: var(--t-fg-4);
+}
+button.neo-tl-op[data-status="running"]:hover { background: none; }
+
+.neo-tl-op-args {
+  margin-left: 6px;
+  color: var(--t-fg-4);
+}
+
+.neo-tl-op-chev {
+  flex-shrink: 0;
+  color: var(--t-fg-4);
+  transition: transform var(--dur-1) var(--ease-out);
+}
+.neo-tl-op-chev[data-open] { transform: rotate(90deg); }
+
+.neo-tl-op-time {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+/* chev 之后跟耗时 → 耗时不再 auto 推右（running.html .op-chev + .op-time） */
+.neo-tl-op-chev + .neo-tl-op-time { margin-left: 0; }
+
+.neo-tl-op-tokens {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--t-fg-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.neo-tl-op-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--t-fg-3);
+  text-decoration: none;
+}
+.neo-tl-op-link:hover { text-decoration: underline; }
+
+/* 转圈 / 状态符号 */
+.neo-tl-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.75px solid color-mix(in srgb, var(--t-fg) 15%, transparent);
+  border-top-color: var(--t-accent);
+  animation: neo-tl-rot 0.9s linear infinite;
+}
+.neo-tl-spinner-sm { width: 11px; height: 11px; border-width: 1.5px; }
+@keyframes neo-tl-rot { to { transform: rotate(360deg); } }
+.neo-tl-spin { flex-shrink: 0; color: var(--t-fg-4); animation: neo-tl-rot 0.9s linear infinite; }
+.neo-tl-ok { flex-shrink: 0; color: var(--t-ok, #30c093); }
+.neo-tl-err { flex-shrink: 0; color: var(--t-err, #ef4444); }
+.neo-tl-dim { flex-shrink: 0; color: var(--t-fg-4); }
+
+/* ── 深度思考体（done.html .think：缩进灰字段落 12px/1.7 fg-3） ───────────── */
+.neo-tl-think-body {
+  margin: 1px 10px 4px 32px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--t-fg-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-tl-think-body p + p { margin-top: 10px; }
+
+/* ── 折叠过渡容器（grid 0fr↔1fr，内容常驻 DOM） ─────────────────────────── */
+.neo-tl-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-2) var(--ease-in-out);
+}
+.neo-tl-collapse-open { grid-template-rows: 1fr; }
+.neo-tl-collapse-inner { overflow: hidden; min-height: 0; }
+
+/* ── assistant_meta 单行 ─────────────────────────────────────────────────── */
+.neo-tl-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 2px;
+  font-size: 11.5px;
+  color: var(--t-fg-4);
+}
+.neo-tl-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--t-border);
+  border-radius: 999px;
+  font-weight: 500;
+  color: var(--t-fg-2);
+  background: var(--t-panel);
+}
+.neo-tl-meta-sep { color: var(--t-fg-5); }
+.neo-tl-meta-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--t-fg-5);
+  flex-shrink: 0;
+}
+.neo-tl-meta-who { font-weight: 500; color: var(--t-fg-3); }
+
+/* ── assistant_text 栈 ───────────────────────────────────────────────────── */
+.neo-tl-assistant {
+  position: relative;
+  max-width: 92%;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.neo-tl-sender {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--t-fg-4);
+  margin-bottom: 2px;
+  user-select: none;
+}
+.neo-tl-text {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--t-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-tl-path {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  color: var(--t-fg-2);
+  background: var(--t-panel-2);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.neo-tl-diffmark {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  color: var(--t-fg-3);
+}
+/* 文本子行行内 markdown（2026-08-15）：段落块 + 项目符号行 + bold/code。 */
+.neo-tl-text-para {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-tl-text strong { font-weight: 600; color: var(--t-fg); }
+.neo-tl-inline-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.92em;
+  color: var(--t-fg-2);
+  background: var(--t-panel-2);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+/* 项目符号行：done.html .md .li（13px / lh1.8 / 左缩进 16px / • 在 2px 处 fg-3） */
+.neo-tl-bullet {
+  display: block;
+  position: relative;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--t-fg);
+}
+.neo-tl-bullet-dot {
+  position: absolute;
+  left: 2px;
+  color: var(--t-fg-3);
+}
+.neo-tl-bullet-body {
+  display: block;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* pipe 表格（GFM，2026-11-07）：此前漏成带竖线纯文本；hairline 行线同 .neo-md-table 口径。
+   类名 neo-tl-md-table*——富卡 table_panel 已占用 .neo-tl-table（见下方 table_panel 区）。 */
+.neo-tl-md-table-wrap {
+  margin: 4px 0 6px;
+  overflow-x: auto;
+}
+.neo-tl-md-table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--t-fg-2);
+}
+.neo-tl-md-table th,
+.neo-tl-md-table td {
+  padding: 3px 12px 3px 8px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-tl-md-table th {
+  font-weight: 600;
+  color: var(--t-fg);
+  border-bottom: 1px solid var(--t-border-2);
+}
+.neo-tl-md-table strong { font-weight: 600; color: var(--t-fg); }
+.neo-tl-caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--t-accent);
+  animation: neo-tl-blink 0.9s steps(2) infinite;
+}
+@keyframes neo-tl-blink { 50% { opacity: 0; } }
+
+/* 行内 chip（bash / 代码块）：chip 头 + 可选展开体，零气泡扁平行 */
+.neo-tl-chip {
+  margin: 2px 0;
+}
+.neo-tl-chip-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--t-fg-2);
+}
+.neo-tl-chip-lead {
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-4);
+}
+.neo-tl-chip-kind {
+  font-weight: 600;
+  color: var(--t-fg-3);
+}
+.neo-tl-chip-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg);
+}
+.neo-tl-chip-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--t-ok, #30c093);
+  background: color-mix(in oklab, var(--t-ok, #30c093) 12%, transparent);
+}
+.neo-tl-chip-badge[data-tone="info"] {
+  color: var(--t-fg-3);
+  background: var(--t-panel-2);
+}
+.neo-tl-chip-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--t-fg-4);
+  cursor: pointer;
+}
+.neo-tl-chip-toggle:hover { background: var(--t-panel-2); color: var(--t-fg-2); }
+.neo-tl-chip-body {
+  margin: 2px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-fg-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+/* 小节头（section_header / markdown ## 行） */
+.neo-tl-section {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 5px 4px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg-2);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.neo-tl-section:hover { background: var(--t-panel-2); }
+.neo-tl-section-meta {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行内编辑（hover 铅笔 + textarea）。hover 操作组（复制 + 编辑）绝对定位于右上，
+   容器统一控透明度；按钮本体只保留盒样式。 */
+.neo-tl-actions {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  display: inline-flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.neo-tl-assistant:hover .neo-tl-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.neo-tl-edit-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-panel);
+  color: var(--t-fg-4);
+  cursor: pointer;
+}
+.neo-tl-edit-trigger:hover { color: var(--t-fg-2); background: var(--t-panel-2); }
+
+/* 黑色 tooltip（clawsgo b_005/b_006 帧）：data-tip 属性 + ::after 纯 CSS，
+   黑底 #171717 白字 11px、radius 6、padding 4/8 小胶囊，无 JS 定位。 */
+.neo-tl-tip { position: relative; }
+.neo-tl-tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #171717;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-1) var(--ease-out);
+  z-index: 20;
+}
+.neo-tl-tip:hover::after { opacity: 1; }
+.neo-tl-edit-area {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border-2);
+  border-radius: 10px;
+  background: var(--t-panel);
+  color: var(--t-fg);
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+.neo-tl-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.neo-tl-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.neo-tl-edit-btn:hover:not(:disabled) { background: var(--t-panel-2); }
+.neo-tl-edit-btn:disabled { opacity: 0.5; cursor: default; }
+.neo-tl-edit-btn-primary {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-accent-ink, #fff);
+}
+
+/* ── raw 折叠块 ──────────────────────────────────────────────────────────── */
+.neo-tl-raw {
+  margin: 4px 0;
+  border: 1px solid var(--t-border);
+  border-radius: 8px;
+  background: var(--t-panel-2);
+  overflow: hidden;
+}
+.neo-tl-raw-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--t-fg-4);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+}
+.neo-tl-raw-label { font-weight: 500; }
+.neo-tl-raw-source {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--t-border);
+  color: var(--t-fg-4);
+}
+.neo-tl-raw-count { margin-left: auto; opacity: 0.6; }
+.neo-tl-raw-body {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--t-border);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* ── rationale ───────────────────────────────────────────────────────────── */
+.neo-tl-rationale {
+  margin: 4px 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--t-accent-tint, var(--t-panel-3));
+}
+.neo-tl-rationale-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--t-fg-4);
+  margin-bottom: 3px;
+}
+.neo-tl-rationale-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--t-fg-2);
+}
+
+/* ── tool_echo 续行 ──────────────────────────────────────────────────────── */
+.neo-tl-echo {
+  display: flex;
+  gap: 7px;
+  padding: 2px 8px 2px 24px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-fg-3);
+}
+.neo-tl-echo-glyph { color: var(--t-fg-5); flex-shrink: 0; }
+.neo-tl-echo-body {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.neo-tl-echo-add { color: var(--t-ok, #30c093); }
+.neo-tl-echo-del { color: var(--t-err, #ef4444); }
+.neo-tl-echo-file { font-family: var(--font-mono, monospace); color: var(--t-fg-2); }
+.neo-tl-echo-num { font-variant-numeric: tabular-nums; color: var(--t-fg-2); }
+
+/* ── step_panel ──────────────────────────────────────────────────────────── */
+.neo-tl-panel {
+  margin: 4px 0;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  overflow: hidden;
+}
+.neo-tl-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg);
+  text-align: left;
+  cursor: pointer;
+}
+.neo-tl-panel-head:hover { background: var(--t-panel-2); }
+.neo-tl-panel-head .neo-tl-op-chev[data-open] { transform: none; }
+.neo-tl-panel-head .neo-tl-op-chev { transform: rotate(-45deg); }
+.neo-tl-panel-ct {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+.neo-tl-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 8px 8px;
+}
+.neo-tl-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  color: var(--t-fg);
+}
+.neo-tl-step-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10px;
+  color: var(--t-fg-4);
+  border: 1px solid var(--t-border);
+}
+.neo-tl-step-icon-done {
+  color: var(--t-ok, #30c093);
+  border-color: color-mix(in oklab, var(--t-ok, #30c093) 45%, transparent);
+}
+.neo-tl-step-icon-run { border-color: var(--t-border-2); }
+.neo-tl-step-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neo-tl-step[data-status="running"] .neo-tl-step-name { color: var(--t-fg-4); }
+.neo-tl-step-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+/* 单步重跑（2026-08-23 救场）：done 步骤行尾 ghost 小按钮 + 失败红字 */
+.neo-tl-step-retry {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--t-border);
+  background: transparent;
+  color: var(--t-fg-3);
+  font-family: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.neo-tl-step-retry:hover:not(:disabled) {
+  color: var(--t-fg-2);
+  border-color: var(--t-border-2);
+}
+.neo-tl-step-retry:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.neo-tl-step-retry-fail {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--t-err, #ef4444);
+}
+.neo-tl-substeps {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: 22px;
+}
+.neo-tl-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--t-fg-3);
+}
+.neo-tl-sub-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--t-fg-5);
+  flex-shrink: 0;
+}
+.neo-tl-sub-dot[data-status="done"] { background: var(--t-ok, #30c093); }
+.neo-tl-sub-dot[data-status="running"] { background: var(--t-accent); }
+.neo-tl-sub-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neo-tl-sub-name[data-status="done"] { color: var(--t-fg-4); }
+.neo-tl-sub-name[data-status="running"] { color: var(--t-fg-2); }
+.neo-tl-sub-time { flex-shrink: 0; font-size: 11px; color: var(--t-fg-5); font-variant-numeric: tabular-nums; }
+
+/* ── diff（diff_panel / file_diff） ──────────────────────────────────────── */
+.neo-tl-diff {
+  margin: 4px 0;
+  border: 1px solid var(--t-border);
+  border-radius: 12px;
+  background: var(--t-panel);
+  overflow: hidden;
+}
+.neo-tl-diff-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--t-border);
+  font-size: 12px;
+}
+.neo-tl-diff-file {
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-tl-diff-lang {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--t-fg-3);
+  background: var(--t-panel-2);
+}
+.neo-tl-diff-stats { flex-shrink: 0; margin-left: auto; font-variant-numeric: tabular-nums; }
+.neo-tl-diff-add { color: var(--t-ok, #30c093); }
+.neo-tl-diff-del { color: var(--t-err, #ef4444); }
+.neo-tl-diff-body {
+  padding: 4px 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.neo-tl-diff-line { display: flex; gap: 8px; padding: 0 12px; white-space: pre; }
+.neo-tl-diff-line-add { background: color-mix(in oklab, var(--t-ok, #30c093) 8%, transparent); }
+.neo-tl-diff-line-del { background: color-mix(in oklab, var(--t-err, #ef4444) 7%, transparent); }
+.neo-tl-diff-gut {
+  flex-shrink: 0;
+  width: 28px;
+  text-align: right;
+  color: var(--t-fg-5);
+  user-select: none;
+}
+.neo-tl-diff-gut-mark { flex-shrink: 0; width: 10px; color: var(--t-fg-5); user-select: none; }
+.neo-tl-diff-gut-add { color: var(--t-ok, #30c093); }
+.neo-tl-diff-gut-del { color: var(--t-err, #ef4444); }
+.neo-tl-diff-code { color: var(--t-fg-2); }
+.neo-tl-diff-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 12px 8px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--t-fg-3);
+  cursor: pointer;
+}
+.neo-tl-diff-toggle:hover { background: var(--t-panel-2); color: var(--t-fg); }
+
+/* ── msg_foot（每 turn 汇总行） ──────────────────────────────────────────── */
+.neo-tl-foot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--t-border);
+  font-size: 11.5px;
+  color: var(--t-fg-4);
+}
+.neo-tl-foot-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--t-ok, #30c093);
+}
+.neo-tl-foot-dot[data-status="running"] {
+  background: var(--t-accent);
+  animation: neo-tl-pulse 1.4s ease-in-out infinite;
+}
+@keyframes neo-tl-pulse { 50% { opacity: 0.35; } }
+.neo-tl-foot-label { font-weight: 500; color: var(--t-fg-3); }
+.neo-tl-foot-sep { color: var(--t-fg-5); }
+.neo-tl-foot-num { font-variant-numeric: tabular-nums; }
+.neo-tl-foot-num b { font-weight: 600; color: var(--t-fg-2); }
+
+/* ── 富卡通用（plan / commit / table / artifact / verdict 白卡体系） ──────── */
+.neo-tl-card {
+  margin: 6px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+}
+.neo-tl-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-tl-card-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-tl-card-count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+.neo-tl-card-goal {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-fg-3);
+}
+
+/* plan_card 任务行 */
+.neo-tl-plan-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 8px;
+}
+.neo-tl-plan-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--t-fg);
+}
+.neo-tl-plan-task[data-status="pending"] { color: var(--t-fg-4); }
+.neo-tl-plan-task-icon { flex-shrink: 0; display: inline-flex; }
+.neo-tl-plan-task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-tl-plan-task-assignee {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--t-fg-3);
+  background: var(--t-panel-2);
+}
+.neo-tl-plan-task-elapsed,
+.neo-tl-plan-task-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* hop_card — 群聊 DAG 交接边实时播报（2026-11-05 Task#10）。
+   轻量单行：状态图标 + from → to + 状态词 + 耗时/字数 + detail。
+   非终态（pending/running）fg-4 弱化；终态成功 ok 色、失败 err 色。 */
+.neo-tl-hop {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--t-fg-2);
+}
+.neo-tl-hop[data-status='pending'] { color: var(--t-fg-4); }
+/* 「交接中」中间态（2026-11-07，start→running 上屏）：整体仍弱化，状态词点 accent 表活。 */
+.neo-tl-hop[data-status='running'] { color: var(--t-fg-3); }
+.neo-tl-hop[data-status='running'] .neo-tl-hop-status { color: var(--t-accent); }
+.neo-tl-hop[data-status='done'] .neo-tl-hop-status { color: var(--t-ok, #10B981); }
+.neo-tl-hop[data-status='failed'],
+.neo-tl-hop[data-status='timeout'],
+.neo-tl-hop[data-status='empty'],
+.neo-tl-hop[data-status='denied'],
+.neo-tl-hop[data-status='aborted'] { color: var(--t-fg-3); }
+.neo-tl-hop[data-status='failed'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='timeout'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='empty'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='denied'] .neo-tl-hop-status,
+.neo-tl-hop[data-status='aborted'] .neo-tl-hop-status { color: var(--t-err, #EF4444); }
+.neo-tl-hop-icon { flex-shrink: 0; display: inline-flex; }
+.neo-tl-hop-from,
+.neo-tl-hop-to { flex-shrink: 0; font-weight: 500; }
+.neo-tl-hop-arrow { flex-shrink: 0; color: var(--t-fg-4); }
+.neo-tl-hop-status { flex-shrink: 0; font-size: 11px; }
+.neo-tl-hop-elapsed,
+.neo-tl-hop-chars {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--t-fg-4);
+  font-variant-numeric: tabular-nums;
+}
+.neo-tl-hop-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+
+/* commit_record */
+.neo-tl-commit-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+}
+.neo-tl-commit-sha {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  background: var(--t-panel-2);
+}
+.neo-tl-commit-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-fg);
+}
+.neo-tl-commit-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+.neo-tl-commit-meta .neo-tl-diff-stats { margin-left: 0; }
+.neo-tl-commit-toggle {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: none;
+  padding: 2px;
+  border-radius: 6px;
+  color: var(--t-fg-4);
+  cursor: pointer;
+}
+.neo-tl-commit-toggle:hover { background: var(--t-panel-2); color: var(--t-fg-2); }
+.neo-tl-commit-files {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--t-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.neo-tl-commit-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.neo-tl-commit-file-status {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--t-fg-3);
+}
+.neo-tl-commit-file-status[data-status="A"] { color: var(--t-ok, #30c093); }
+.neo-tl-commit-file-status[data-status="D"] { color: var(--t-err, #ef4444); }
+.neo-tl-commit-file-path {
+  font-family: var(--font-mono, monospace);
+  color: var(--t-fg-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* table_panel */
+.neo-tl-table { padding: 8px 0 4px; }
+.neo-tl-table-caption {
+  padding: 0 14px 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+.neo-tl-table-scroll { overflow-x: auto; padding: 0 14px; }
+.neo-tl-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.neo-tl-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--t-fg-4);
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--t-border);
+  white-space: nowrap;
+}
+.neo-tl-table td {
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid var(--t-border);
+  color: var(--t-fg-2);
+}
+.neo-tl-table tr:last-child td { border-bottom: none; }
+.neo-tl-table-num { text-align: right; font-variant-numeric: tabular-nums; }
+.neo-tl-table-first { color: var(--t-fg); }
+
+/* image_panel */
+.neo-tl-image { margin: 6px 0; }
+.neo-tl-image img {
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--t-border);
+}
+.neo-tl-image-caption {
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--t-fg-4);
+}
+
+/* web_preview */
+.neo-tl-web {
+  margin: 6px 0;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+  overflow: hidden;
+}
+.neo-tl-web-chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-tl-web-dots { display: inline-flex; gap: 4px; }
+.neo-tl-web-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--t-border-2);
+}
+.neo-tl-web-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--t-fg-4);
+}
+.neo-tl-web-open {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--t-fg-3);
+  text-decoration: none;
+}
+.neo-tl-web-open:hover { text-decoration: underline; }
+.neo-tl-web-frame {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border: none;
+  background: #fff;
+}
+
+/* artifact_card */
+.neo-tl-artifact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.neo-tl-artifact-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--t-border);
+  border-radius: 9px;
+  color: var(--t-fg-3);
+}
+.neo-tl-artifact-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.neo-tl-artifact-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--t-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-tl-artifact-note {
+  font-size: 11px;
+  color: var(--t-fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-tl-artifact-type {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--t-fg-3);
+  background: var(--t-panel-2);
+}
+.neo-tl-artifact-open {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--t-fg-2);
+  text-decoration: none;
+}
+.neo-tl-artifact-open:hover { text-decoration: underline; }
+
+/* verdict_card（verifier 评审：得分双态 + 比例条） */
+.neo-tl-verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.neo-tl-verdict-icon { flex-shrink: 0; color: var(--t-fg-3); }
+.neo-tl-verdict[data-good] .neo-tl-verdict-icon { color: var(--t-ok, #30c093); }
+.neo-tl-verdict:not([data-good]) .neo-tl-verdict-icon { color: var(--t-err, #ef4444); }
+.neo-tl-verdict-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.neo-tl-verdict-score {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--t-fg);
+  font-variant-numeric: tabular-nums;
+}
+.neo-tl-verdict-max {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--t-fg-4);
+}
+.neo-tl-verdict-bar {
+  flex-shrink: 0;
+  width: 72px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--t-panel-3);
+  overflow: hidden;
+  display: inline-flex;
+}
+.neo-tl-verdict-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--t-err, #ef4444);
+}
+.neo-tl-verdict[data-good] .neo-tl-verdict-bar i { background: var(--t-ok, #30c093); }
+.neo-tl-verdict-summary {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--t-fg-3);
+}
+.neo-tl-verdict-metrics { margin-top: 6px; }
+.neo-tl-verdict-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 3px 6px;
+  margin-left: -6px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--t-fg-3);
+  cursor: pointer;
+}
+.neo-tl-verdict-toggle:hover { background: var(--t-panel-2); color: var(--t-fg); }
+.neo-tl-verdict-metric-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+.neo-tl-verdict-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.neo-tl-verdict-metric-label { color: var(--t-fg-3); flex-shrink: 0; }
+.neo-tl-verdict-metric-value { color: var(--t-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.neo-tl-verdict-metric-detail { color: var(--t-fg-4); font-size: 11px; }
+.neo-tl-verdict-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+.neo-tl-verdict-note {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--t-fg-4);
+}

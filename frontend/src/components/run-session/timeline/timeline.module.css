@@ -1,0 +1,1717 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * Timeline · S6.10-B
+ * Visual contract: docs/design/platform-v5/run-session-v8.html (lines
+ * 119-200, 1300-1499 for .tl-* / .diff-* / .statusline / .msg-foot).
+ *
+ * All colors via existing design tokens declared in src/index.css
+ * (--bg, --fg-1..5, --accent, --accent-bright, --accent-tint, --accent-ink,
+ *  --border, --border-strong, --border-subtle, --status-ok, --status-run,
+ *  --status-err, --status-ok-tint, --status-run-tint, --bg-elev-1, --font-mono).
+ * Same tokens are re-bound under the light skin (src/index.css line ~327+) so
+ * this stylesheet works for both themes without duplication.
+ *
+ * Three local @keyframes — slide-in / fade-in for new-message entry, pulse
+ * for streaming indicators. Spin/cur/breath are reused from global sf-*.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/* container ── scrolls the whole stream */
+.container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 16px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.container::-webkit-scrollbar { width: 3px; }
+.container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+/* item wrapper ── separates each timeline message.
+ * F6 批4（2026-06-12）：入场动画从基类挪到 .itemEnter——只有挂载后才到达的
+ * 新消息才播放（Timeline.tsx 在首帧记录已有 id 集合）；历史回放/刷新重放
+ * 整条流首屏直出，不再齐刷刷抖一遍。CSS animation 一次性入场，流式 patch
+ * 只改 props 不重挂 DOM，不会重播。 */
+.item {
+  padding: 11px 0;
+  position: relative;
+}
+.item + .item { border-top: 1px solid var(--border-subtle); }
+.itemEnter {
+  animation: tl-slide-in var(--dur-1) var(--ease-out) both;
+}
+
+@keyframes tl-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes tl-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes tl-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+
+/* ── user · ❯ prefix ───────────────────────────────────────── */
+.user {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.userCaret {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  flex-shrink: 0;
+  user-select: none;
+}
+.userText { padding-top: 1px; }
+.userText b { color: var(--accent-bright); font-weight: 500; }
+
+/* ── user · 随行附件（2026-11-07 拖拽传图）────────────────────────────────
+   flex-basis:100% 独占一行，挂在文本行下方；chatVariant（右气泡）下取消
+   caret 对齐缩进。图片缩略图点击新窗看原图。 */
+.userAtts {
+  flex-basis: 100%;
+  margin-left: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 2px;
+}
+.chatVariant .userAtts { margin-left: 0; }
+.userAttThumb {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elev-1);
+  line-height: 0;
+}
+.userAttThumb img {
+  display: block;
+  max-width: 240px;
+  max-height: 180px;
+  object-fit: contain;
+}
+.userAttFile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 5px 10px;
+  max-width: 320px;
+}
+.userAttFile svg { flex-shrink: 0; color: var(--fg-3); }
+
+/* ── chat 变体（个人/群聊）：user 右气泡、无分隔线 ───────────────────────
+   2026-06-13；纯作用域覆盖，run-session(无 .chatVariant)不受影响。
+   过程卡/工具卡/assistant 文本保持原渲染，只动 user_turn 与分隔线。 */
+.chatVariant .item { padding: 7px 0; }
+.chatVariant .item + .item { border-top: none; }
+.chatVariant .user {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+.chatVariant .userCaret { display: none; }
+.chatVariant .userText {
+  max-width: 76%;
+  padding: 8px 13px;
+  border-radius: 14px 14px 4px 14px;
+  /* 气泡色走 --t-user-bubble* 变量：Neo 作用域覆盖为灰气泡（clawsgo/WorkBuddy
+     形态），其他页面回落 accent 品牌气泡，互不影响。 */
+  background: var(--t-user-bubble, var(--t-accent, var(--accent)));
+  color: var(--t-user-bubble-ink, var(--t-accent-ink, #fff));
+  font-weight: 500;
+}
+.chatVariant .userText b { color: inherit; }
+
+/* ── thinking · pre-answer cloud ───────────────────────────── */
+.thinking { display: flex; flex-direction: column; gap: 9px; }
+.thinkingHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+.thinkingGlyph {
+  width: 15px;
+  height: 15px;
+  color: var(--accent-bright);
+  flex-shrink: 0;
+  animation: sf-pulse 2.4s ease-in-out infinite;
+}
+.thinkingLab {
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  letter-spacing: -.005em;
+  font-size: 11.5px;
+}
+.thinkingLab b {
+  color: var(--fg-1);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 0 1px;
+}
+.thinkingNum { color: var(--fg-4); font-size: 10.5px; }
+.thinkingNum b { color: var(--fg-2); font-weight: 600; }
+.thinkingSep { color: var(--fg-5); }
+.thinkingChev {
+  color: var(--fg-4);
+  font-size: 9px;
+  margin-left: auto;
+  transition: transform .15s;
+  font-family: var(--font-mono);
+}
+.thinkingChevOpen { transform: rotate(90deg); }
+.thinkingBody {
+  padding: 4px 0 0 21px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--fg-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: tl-fade-in 160ms ease-out;
+}
+.thinkingBody p { margin: 0; }
+
+/* streaming loader · only while status='streaming' */
+.thinkingLoader {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: sf-spin .7s linear infinite;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ── assistant meta · model pill + identity ────────────────── */
+.meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  letter-spacing: .01em;
+  flex-wrap: wrap;
+}
+.metaWho {
+  color: var(--fg-2);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: -.005em;
+}
+.metaDot {
+  width: 2.5px;
+  height: 2.5px;
+  background: var(--fg-5);
+  border-radius: 50%;
+  display: inline-block;
+}
+.modelPill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  line-height: 1;
+}
+.modelBrand {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--fg-1);
+  font-weight: 600;
+  letter-spacing: -.005em;
+}
+.modelSep {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+.modelVer {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-3);
+}
+
+/* ── assistant_text · 流式自由文本气泡 ─────────────────────── */
+.text {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.text code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.text pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+.text pre code { padding: 0; background: transparent; }
+/* GFM pipe 表格（2026-11-07）：table 行型渲染，此前漏成带竖线纯文本。
+   类名 mdTable*——富卡 table_panel 已占用 .table（见下方 tablePanel 区）。 */
+.mdTableWrap {
+  margin: 4px 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.mdTable {
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+}
+.mdTable th,
+.mdTable td {
+  padding: 3px 12px 3px 8px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mdTable th {
+  font-weight: 600;
+  border-bottom-width: 2px;
+}
+.textCaret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  background: var(--accent-bright);
+  margin-left: 2px;
+  vertical-align: -2px;
+  animation: tl-pulse 1.05s ease-in-out infinite;
+  border-radius: 1px;
+}
+
+/* ── rationale · accent recess ─────────────────────────────── */
+.reason {
+  border-radius: 10px;
+  padding: 10px 14px 11px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  border: 1px solid var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  background: color-mix(in oklch, var(--accent) 10%, transparent);
+  margin-bottom: 4px;
+}
+.reasonPre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-bright);
+  font-weight: 600;
+  letter-spacing: .04em;
+  display: block;
+  margin-bottom: 3px;
+}
+.reasonList {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  line-height: 1.7;
+}
+.reasonList li { margin-bottom: 2px; }
+.reasonList li::marker { color: var(--accent-bright); }
+
+/* ── tool call chip + echo line ────────────────────────────── */
+.tool {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-3);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.toolLead {
+  color: var(--fg-4);
+  font-size: 11px;
+  user-select: none;
+  align-self: center;        /* SVG 类别图标与基线文字对齐 */
+  flex-shrink: 0;
+}
+.toolName { color: var(--fg-1); font-weight: 600; }
+.toolArgs { color: var(--fg-3); }
+
+/* gap #2 — 耗时 + 结果摘要（如 "3.6s · 3 行"）。 */
+.toolMeta {
+  color: var(--fg-4);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+/* gap #2 — 状态图标：转圈 / 成功 / 失败。 */
+.toolSpin {
+  align-self: center;
+  flex-shrink: 0;
+  color: var(--accent, #1447E6); /* UI5.0 fallback 去紫化 */
+  animation: tl-tool-spin 0.8s linear infinite;
+}
+.toolOk {
+  align-self: center;
+  flex-shrink: 0;
+  color: var(--t-ok, #16a34a);
+}
+.toolErr {
+  align-self: center;
+  flex-shrink: 0;
+  color: var(--t-err, #ef4444);
+}
+@keyframes tl-tool-spin {
+  to { transform: rotate(360deg); }
+}
+
+.toolLink {
+  color: var(--accent-bright);
+  text-decoration: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.toolLink:hover { color: var(--accent); }
+
+.echo {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+  padding: 4px 0 0 14px;
+  line-height: 1.65;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.echoGlyph { color: var(--fg-5); user-select: none; font-size: 11px; }
+.echoBody { flex: 1; color: var(--fg-3); }
+.echoAdd  { color: var(--status-ok); font-weight: 600; }
+.echoDel  { color: var(--status-err); font-weight: 600; }
+.echoFile { color: var(--fg-1); font-weight: 600; }
+.echoNum  { color: var(--fg-2); font-weight: 600; font-family: var(--font-mono); }
+
+/* ── tool-group container ──────────────────────────────────────
+ * Wraps a run of consecutive tool_call + tool_echo rows in one bordered
+ * card (chip on top, echo continuation nested below), à la Claude Code /
+ * OpenDesign. Keeps the flat .tool / .echo aesthetic inside; the frame
+ * just supplies the visual boundary. */
+.toolGroup {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-elev-1);
+  overflow: hidden;
+}
+.toolGroupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  /* button reset — this header is a collapse toggle */
+  appearance: none;
+  border: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  user-select: none;
+}
+.toolGroupHead:hover { background: var(--bg-elev-1); }
+/* Border only when expanded (so a collapsed header has no dangling underline). */
+.toolGroupHeadOpen { border-bottom: 1px solid var(--border-subtle); }
+.toolGroupIcon { color: var(--fg-4); flex: none; }
+.toolGroupLabel { color: var(--fg-3); font-weight: 600; }
+.toolGroupCount { color: var(--accent-bright); font-weight: 600; }
+.toolGroupChevron { margin-left: auto; color: var(--fg-4); flex: none; }
+/* Inside the frame, neutralise the per-row vertical padding the .echo line
+ * normally relies on against a flat stream, and tighten the chip spacing. */
+.toolGroupBody {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── step panel ────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-elev-1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 2px 0 0;
+}
+.panelHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--fg-3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  width: 100%;
+}
+.panelChev {
+  color: var(--fg-4);
+  font-size: 9px;
+  transition: transform .15s;
+}
+.panelChevOpen { transform: rotate(90deg); }
+.panelName { color: var(--fg-2); }
+.panelCt {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--fg-4);
+  margin-left: auto;
+  text-transform: none;
+}
+.panelCt b { color: var(--accent-bright); font-weight: 600; }
+
+.steps { display: flex; flex-direction: column; gap: 0; padding-top: 6px; }
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.stepIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--fg-4);
+}
+.stepIconDone {
+  background: var(--status-ok-tint);
+  border-color: var(--status-ok);
+  color: var(--status-ok);
+}
+.stepIconRun {
+  background: var(--status-run-tint);
+  border-color: var(--status-run);
+  position: relative;
+}
+.stepSpinner {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--status-run);
+  border-top-color: transparent;
+  animation: sf-spin .8s linear infinite;
+  display: block;
+}
+.stepName { color: var(--fg-3); }
+.stepNameRun { color: var(--fg-1); font-weight: 500; }
+.stepTime {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+.stepTimeRun { color: var(--status-run); }
+
+.substeps {
+  padding: 3px 0 3px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  padding: 2px 0;
+}
+.subDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-5);
+  flex-shrink: 0;
+}
+.subDotDone { background: var(--status-ok); }
+.subDotRun {
+  background: var(--status-run);
+  animation: tl-pulse 1.4s ease-in-out infinite;
+}
+.subName { color: var(--fg-3); }
+.subNameRun { color: var(--fg-1); }
+.subNameDone { color: var(--fg-2); }
+.subTime {
+  margin-left: auto;
+  font-size: 9.5px;
+  color: var(--fg-5);
+}
+
+/* ── diff panel ────────────────────────────────────────────── */
+.diff {
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.7;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.diffHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--bg-elev-1);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: .04em;
+}
+.diffFile {
+  color: var(--fg-1);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0;
+}
+.diffStats { margin-left: auto; font-size: 10px; }
+.diffAdd { color: var(--status-ok); }
+.diffDel { color: var(--status-err); }
+.diffBody { padding: 6px 0; }
+.diffLine {
+  display: flex;
+  padding: 0 10px;
+  align-items: baseline;
+  gap: 8px;
+  animation: tl-fade-in 120ms ease-out;
+}
+.diffLineAdd { background: color-mix(in oklch, var(--status-ok) 8%, transparent); }
+.diffLineDel { background: color-mix(in oklch, var(--status-err) 7%, transparent); }
+.diffGut {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-5);
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+  user-select: none;
+}
+.diffMark {
+  width: 10px;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.diffMarkAdd { color: var(--status-ok); }
+.diffMarkDel { color: var(--status-err); }
+.diffCode { color: var(--fg-2); white-space: pre; }
+.diffCaret {
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  background: var(--accent-bright);
+  margin-left: 2px;
+  vertical-align: -2px;
+  animation: tl-pulse 1.05s ease-in-out infinite;
+  border-radius: 1px;
+}
+
+/* ── msg-foot · end-of-turn summary ────────────────────────── */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  padding: 6px 0 0;
+  margin-top: 8px;
+  border-top: 1px dashed var(--border-subtle);
+  letter-spacing: .01em;
+}
+.footStatus {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-ok);
+  flex-shrink: 0;
+}
+/* Running variant — exact port of v8 `.msg-foot .st.run` (line 1335).
+   Promotes dot from 6→7px, swaps to accent-bright with the signature 3px
+   halo and sf-pulse rhythm (matches the status-dot dialect used elsewhere
+   for live indicators). */
+.footStatusRun {
+  width: 7px;
+  height: 7px;
+  background: var(--accent-bright);
+  animation: sf-pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent-bright) 16%, transparent);
+}
+.footLab {
+  color: var(--fg-2);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  letter-spacing: -.005em;
+}
+.footSep { color: var(--fg-5); padding: 0 1px; }
+.footNum { color: var(--fg-3); }
+.footNum b { color: var(--fg-2); font-weight: 600; }
+
+/* ── status line · sticky always-on (rendered outside container) ─── */
+.statusLine {
+  padding: 6px 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-5);
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  background: var(--bg);
+  letter-spacing: .01em;
+}
+/* Status dot — exact port of v8 `.statusline .status-dot` (run-session-v8.html
+   line 1309). 7px disc, accent-bright, sf-pulse animation, plus a 3px halo
+   ring (color-mix at 16% over transparent) that's the signature glow OpenDesign
+   uses for live-state indicators. Replaces the previous Cloud SVG (semantically
+   wrong; cloud = upload/weather, not "agent activity"). */
+.statusGlyph {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  animation: sf-pulse 1.6s ease-in-out infinite;
+  flex-shrink: 0;
+  display: inline-block;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent-bright) 16%, transparent);
+}
+/* Terminal (Done) variant — not in v8 CSS (the design demo only shows live
+   state) but needed because we freeze the ticker on completion (terminal flag).
+   Drop the halo + animation, mute the dot to fg-4 so "Done" reads as a
+   resting state without screaming for attention. */
+.statusGlyphDone {
+  background: var(--fg-4);
+  animation: none;
+  box-shadow: none;
+}
+.statusVerb {
+  color: var(--fg-2);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: -.005em;
+}
+.statusNum { color: var(--fg-3); }
+.statusNum b { color: var(--fg-1); font-weight: 600; }
+.statusSep { color: var(--fg-5); }
+
+/* ── section label · small UPPERCASE rail ───────────────────── */
+.secLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  opacity: .85;
+  margin: 8px 0 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── section header · chevron-folded group label (TRAE row-style) ──
+ *
+ * Generic wrapper for Builder / 思考过程 / 工作·xxx etc. The body is
+ * indented 12px with a 1px vertical guide on the left, per the Round 2
+ * spec "flat row + left vertical guide + 12px padding-left" rule. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sectionHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+  color: var(--fg-1);
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  text-align: left;
+  width: 100%;
+  transition: color .15s ease, background .15s ease;
+}
+.sectionHead:hover { color: var(--accent-bright); }
+.sectionHead:hover .sectionChev { color: var(--accent); }
+.sectionChev {
+  color: var(--fg-4);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  transition: transform .18s cubic-bezier(.4,0,.2,1), color .15s ease;
+  flex-shrink: 0;
+  user-select: none;
+}
+.sectionChevOpen { transform: rotate(90deg); }
+.sectionLabel {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -.005em;
+}
+.sectionMeta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-left: auto;
+}
+.sectionBody {
+  padding-left: 12px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: tl-fade-in 180ms ease-out;
+}
+
+/* ── top status bar (v8 .app-bread + .app-pill + .app-run-meta) ───
+ *
+ * Wall-clock + cost chip that lives in the pane-l-head area above the
+ * scrolling timeline. Mirrors v8 line 1545-1547. Pulse animation on the
+ * status pill dot comes from sf-pulse (global). */
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.topBarPill {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--status-run-tint);
+  border: 1px solid color-mix(in oklch, var(--status-run) 30%, transparent);
+  color: var(--status-run);
+}
+.topBarPill::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-run);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+.topBarPillDone {
+  background: var(--status-ok-tint);
+  border-color: color-mix(in oklch, var(--status-ok) 30%, transparent);
+  color: var(--status-ok);
+}
+.topBarPillDone::before { background: var(--status-ok); animation: none; }
+.topBarPillErr {
+  background: color-mix(in oklch, var(--status-err) 12%, transparent);
+  border-color: color-mix(in oklch, var(--status-err) 30%, transparent);
+  color: var(--status-err);
+}
+.topBarPillErr::before { background: var(--status-err); animation: none; }
+.topBarMeta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color .2s ease;
+}
+.topBarMeta b { color: var(--fg-1); font-weight: 600; }
+.topBarSpacer { flex: 1; }
+.topBarMetaSep { color: var(--fg-5); }
+
+/* ── user message hover retry button (Round 2 P2 / spec section 3.3) ──
+ *
+ * Per the spec: button hidden by default, fades in on .user row hover.
+ * Uses RotateCcw lucide icon to match ErrorBanner resend semantics.
+ *
+ * Placement: an inline flex item with `margin-left:auto` so it sits at
+ * the right edge of the row without overlapping the prompt text. Keeps
+ * the same opacity:0 → 1 hover affordance. `.user` reserves 28px of
+ * right padding so multi-line text never wraps under the button slot. */
+.user { padding-right: 30px; }
+.userRetry {
+  margin-left: auto;
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg-4);
+  padding: 3px 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition: opacity .18s ease, color .18s ease, border-color .18s ease,
+              background .18s ease, transform .18s cubic-bezier(.4,0,.2,1);
+  flex-shrink: 0;
+}
+.user:hover .userRetry,
+.userRetry:focus-visible {
+  opacity: 1;
+}
+.userRetry:hover {
+  color: var(--accent-bright);
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+  background: var(--accent-tint);
+}
+.userRetry:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.userRetrySpin {
+  animation: sf-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* ── v8 extra animations re-anchored locally (copied from
+ *      docs/design/platform-v5/run-session-v8.html lines 84-88). These
+ *      are global sf-* in index.css already, but mirror them here so
+ *      consumers of this module can rely on them even in isolation. ── */
+@keyframes tl-cur {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+@keyframes tl-breath {
+  0%, 100% { opacity: .18; transform: scale(1); }
+  50%      { opacity: .50; transform: scale(1.04); }
+}
+@keyframes tl-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* loading skeleton row using shimmer (used for placeholder rows) */
+.skeleton {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-elev-1) 25%,
+    var(--bg-elev-2) 50%,
+    var(--bg-elev-1) 75%
+  );
+  background-size: 200% 100%;
+  animation: tl-shimmer 1.6s linear infinite;
+}
+
+/* hover-lift for inline chips (tool / file / attachment) — v8 follow-chip
+ * pattern adapted for inline elements. Cheap, only color transition. */
+.tool { transition: color .18s ease; }
+.tool:hover .toolName { color: var(--accent-bright); }
+.tool:hover .toolLead { color: var(--accent); }
+
+/* ── Round 2.5 · markdown-extracted row chips ────────────────────────
+ *
+ * Shared chip base used by BashChip / CodeBlockRow / BashInline. All
+ * chips are flat — radius 6px, 1px border, no large accent background.
+ * Visual ref: TRAE timeline screenshots + OpenDesign chat panel pattern
+ * in docs/round2/round2-spec-2026-05-24.md ("OpenDesign UI 证据"). */
+.textStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bashChip,
+.codeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elev-1);
+  overflow: hidden;
+  transition: border-color .18s ease, background .18s ease;
+  animation: tl-fade-in 140ms ease-out;
+}
+.bashChip:hover,
+.codeBlock:hover {
+  border-color: var(--border);
+}
+.chipHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  background: transparent;
+  min-height: 26px;
+}
+.chipLead {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11.5px;
+  flex-shrink: 0;
+  user-select: none;
+}
+.chipKind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-2);
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: lowercase;
+  padding: 1px 5px;
+  background: var(--bg-elev-2, var(--bg));
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.chipTitle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-1);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chipBadge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: lowercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.chipBadge[data-status="done"] {
+  color: var(--status-ok);
+  background: var(--status-ok-tint);
+}
+.chipBadge[data-status="info"] {
+  color: var(--fg-3);
+  background: var(--bg-elev-2, var(--bg));
+  border: 1px solid var(--border-subtle);
+}
+.chipBadge[data-status="error"] {
+  color: var(--status-err);
+  background: color-mix(in oklch, var(--status-err) 10%, transparent);
+}
+.chipToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+  flex-shrink: 0;
+}
+.chipToggle:hover {
+  color: var(--accent-bright);
+  border-color: color-mix(in oklch, var(--accent) 40%, transparent);
+}
+.chipChev {
+  font-size: 9px;
+  transition: transform .18s cubic-bezier(.4,0,.2,1);
+  font-family: var(--font-mono);
+}
+.chipChevOpen { transform: rotate(90deg); }
+.chipExpanded {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--fg-2);
+  background: var(--bg);
+  border-top: 1px solid var(--border-subtle);
+  padding: 8px 10px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+  animation: tl-fade-in 160ms ease-out;
+}
+
+/* inline highlights inside TextRow — diff markers and file paths get a
+ * subtle mono treatment but stay inline with the surrounding prose */
+.textPath {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-2);
+  background: var(--bg-elev-1);
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+.textDiffMark {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--status-ok);
+  font-weight: 600;
+}
+
+/* ── Round 2.5 · flatten .reason (no big bubble) ─────────────────────
+ *
+ * Auditor flagged DoD-5 PARTIAL because .reason had border-radius:10px
+ * + accent background — looked like a chat bubble. Round 2.5 changes
+ * it to a flat row with a 3px accent gutter on the left, matching the
+ * `.echo` / `.tool` flat aesthetic and the v8 "section + recess" pattern. */
+.reasonFlat {
+  border-radius: 4px;
+  padding: 6px 12px 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+  border: none;
+  background: transparent;
+  border-left: 3px solid var(--accent);
+  margin-bottom: 2px;
+}
+.reasonFlat .reasonPre {
+  color: var(--accent-bright);
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 0;
+  background: transparent;
+}
+.reasonFlat .reasonList {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  line-height: 1.7;
+}
+.reasonFlat .reasonList li { margin-bottom: 2px; }
+.reasonFlat .reasonList li::marker { color: var(--accent-bright); }
+
+/* ── F6 批5 · Trae 式折叠（2026-06-12）────────────────────────────
+ *
+ * grid-template-rows 0fr↔1fr 技法：内容常驻 DOM，折叠/展开走高度过渡
+ * （--dur-2 --ease-in-out），替代 `{open && ...}` 的瞬时显隐。
+ * 用法：
+ *   <div class="collapseWrap [collapseWrapOpen]" aria-hidden={!open}>
+ *     <div class="collapseInner">…内容…</div>
+ *   </div>
+ * 共享方：ThinkingMessage body / RawMessage pre / StepPanel steps。
+ * reduced-motion 由 index.css 末尾全局兜底（transition-duration 1ms）。 */
+.collapseWrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-2) var(--ease-in-out);
+}
+.collapseWrapOpen { grid-template-rows: 1fr; }
+.collapseInner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── F6 批5 · 空 body 终态 thinking 卡（网关过程卡）──────────────
+ * groups-chat 网关发 thinking 卡（label「xxx 正在思考」）但 CLI 回干净
+ * 文本时 body 始终为空，finalize 后原实现 return null → 过程卡凭空消失。
+ * 终态空卡降级为一行安静的 label 行：静态云朵 + label + 时长，不可点击。 */
+.thinkingHeadStatic { cursor: default; }
+.thinkingGlyphQuiet {
+  width: 15px;
+  height: 15px;
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
+
+/* ── Polynoia-parity rich inline cards（2026-08-15）─────────────────
+ * plan_card / commit_record / file_diff / table_panel / image_panel /
+ * web_preview / artifact_card / verdict_card。全部走既有设计 token
+ * （--bg-elev-1 / --border / --fg-* / --status-*），亮肤自动跟随。 */
+
+/* 共享卡片底座 */
+.richCard {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elev-1);
+  overflow: hidden;
+}
+
+/* plan_card ── 编排计划 */
+.planCard { composes: richCard; padding: 10px 12px; }
+.planHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.planTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-1);
+  letter-spacing: .02em;
+}
+.planCount {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+.planGoal {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planTasks {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.planTask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.planTask[data-status='running'] { background: var(--status-run-tint); }
+.planTaskIcon {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--fg-4);
+}
+.planIconDone { color: var(--status-ok); }
+.planIconFailed { color: var(--status-err); }
+.planIconPending { color: var(--fg-5); }
+.planSpin { color: var(--status-run); animation: tl-pulse 1.1s ease-in-out infinite; }
+.planTaskTitle {
+  color: var(--fg-2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planTask[data-status='running'] .planTaskTitle { color: var(--fg-1); font-weight: 500; }
+.planTaskAssignee {
+  font-size: 10.5px;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-radius: 99px;
+  padding: 1px 8px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planTaskElapsed { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-4); }
+.planTaskStatus { font-size: 10.5px; color: var(--fg-5); }
+
+/* commit_record ── 提交记录 */
+.commitCard { composes: richCard; padding: 9px 12px; }
+.commitRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.commitIcon { color: var(--accent); flex-shrink: 0; }
+.commitSha {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-tint);
+  border-radius: 5px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.commitMessage {
+  font-size: 12.5px;
+  color: var(--fg-1);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commitMeta {
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10.5px;
+  color: var(--fg-4);
+  flex-wrap: wrap;
+}
+.commitRepo { color: var(--fg-3); }
+.commitAuthor { color: var(--fg-3); }
+.commitStats { font-family: var(--font-mono); }
+.commitToggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-4);
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+}
+.commitToggle:hover { color: var(--fg-2); }
+.commitFileList {
+  margin-top: 6px;
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.commitFile {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  align-items: center;
+}
+.commitFileStatus {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  width: 14px;
+  text-align: center;
+  border-radius: 3px;
+  color: var(--status-ok);
+  background: var(--status-ok-tint);
+}
+.commitFileStatus[data-status='D'] { color: var(--status-err); background: transparent; }
+.commitFilePath {
+  font-family: var(--font-mono);
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* file_diff ── 真实文件 diff（区别于 YAML diff_panel） */
+.fileDiff { composes: richCard; }
+.fileDiff .diffHead { border-bottom: 1px solid var(--border-subtle); }
+.fileDiffLang {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  color: var(--fg-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.fileDiffToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+  padding: 5px 0;
+  font-size: 10.5px;
+  color: var(--fg-4);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  cursor: pointer;
+}
+.fileDiffToggle:hover { color: var(--accent); }
+
+/* table_panel ── 内联表格 */
+.tablePanel { composes: richCard; padding: 8px 0 2px; }
+.tableCaption {
+  font-size: 11px;
+  color: var(--fg-4);
+  padding: 0 12px 6px;
+}
+.tableScroll { overflow-x: auto; }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--fg-4);
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+.table td {
+  padding: 4px 12px;
+  color: var(--fg-2);
+  border-bottom: 1px solid var(--border-subtle);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table tbody tr:last-child td { border-bottom: none; }
+.tableNum { text-align: right; font-family: var(--font-mono); }
+.tableFirstCol { color: var(--fg-1); font-family: var(--font-mono); font-size: 11px; }
+
+/* image_panel ── 内联图片 */
+.imagePanel {
+  margin: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  max-width: 420px;
+}
+.imageImg {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+}
+.imageCaption {
+  font-size: 10.5px;
+  color: var(--fg-4);
+  padding: 4px 10px;
+  background: var(--bg-elev-1);
+}
+
+/* web_preview ── 沙箱网页预览 */
+.webPreview {
+  composes: richCard;
+  display: flex;
+  flex-direction: column;
+}
+.webChrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elev-1);
+}
+.webDots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.webDots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.webUrl {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  background: var(--bg);
+  border-radius: 5px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.webOpen {
+  font-size: 10.5px;
+  color: var(--accent);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.webOpen:hover { text-decoration: underline; }
+.webFrame {
+  width: 100%;
+  height: 240px;
+  border: none;
+  background: #fff;
+}
+
+/* artifact_card ── 产物引用卡 */
+.artifactCard {
+  composes: richCard;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+.artifactIcon { color: var(--accent); flex-shrink: 0; }
+.artifactBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.artifactName {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--fg-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artifactNote { font-size: 10.5px; color: var(--fg-4); }
+.artifactType {
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--accent-ink, var(--accent));
+  background: var(--accent-tint);
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.artifactOpen {
+  font-size: 10.5px;
+  color: var(--accent);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.artifactOpen:hover { text-decoration: underline; }
+
+/* verdict_card ── 评审结论 */
+.verdictCard { composes: richCard; padding: 10px 12px; }
+.verdictHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.verdictIcon { color: var(--accent); flex-shrink: 0; }
+.verdictTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-1);
+}
+.verdictScore {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--fg-1);
+  font-weight: 700;
+}
+.verdictMax { color: var(--fg-5); font-weight: 400; font-size: 10.5px; }
+.verdictBar {
+  position: relative;
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.verdictBar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width var(--dur-2) var(--ease-out);
+}
+.verdictCard[data-good] .verdictBar i { background: var(--status-ok); }
+.verdictSummary {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--fg-3);
+}
+.verdictMetrics { margin-top: 6px; }
+.verdictToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--fg-4);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.verdictToggle:hover { color: var(--fg-2); }
+.verdictMetricList {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.verdictMetric {
+  display: grid;
+  grid-template-columns: 130px 48px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+  padding: 3px 0;
+  border-top: 1px dashed var(--border-subtle);
+}
+.verdictMetricLabel { color: var(--fg-3); }
+.verdictMetricValue { font-family: var(--font-mono); color: var(--fg-1); font-weight: 600; }
+.verdictMetricDetail {
+  color: var(--fg-4);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.verdictNotes {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.verdictNote {
+  font-size: 10px;
+  color: var(--fg-4);
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+
+/* ── 行内消息编辑（Polynoia-parity "看还能编辑"）────────────────── */
+.editTrigger {
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.textStack:hover .editTrigger { opacity: 1; }
+.editBtnIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-1);
+  color: var(--fg-4);
+  cursor: pointer;
+}
+.editBtnIcon:hover { color: var(--accent); border-color: var(--accent); }
+.editBox { display: flex; flex-direction: column; gap: 6px; }
+.editArea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg-1);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  resize: vertical;
+  outline: none;
+}
+.editActions { display: flex; gap: 8px; justify-content: flex-end; }
+.editBtnPrimary, .editBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.editBtnPrimary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+}
+.editBtnPrimary:disabled { opacity: .45; cursor: default; }
+.editBtn {
+  border: 1px solid var(--border);
+  background: var(--bg-elev-1);
+  color: var(--fg-3);
+}
+
+/* ── neo 嵌入变体：chat 观感但滚动交给外层（NeoChat 中栏） ────────── */
+.neoEmbed {
+  overflow: visible;
+  flex: none;
+  min-height: 0;
+  padding: 4px 2px 8px;
+}

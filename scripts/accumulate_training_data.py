@@ -28,7 +28,7 @@ from typing import List
 # Add project root to path
 ROOT = Path(__file__).parent.parent
 DATA_DIR = ROOT / "scripts" / "data" / "training"
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "backend" / "python"))
 
 from shadowflow.assembly.activation import ActivationSelector, ConnectionResolver
 from shadowflow.highlevel import (

@@ -29,7 +29,7 @@ import { createRequire } from 'node:module';
 // server/src/* is compiled as CommonJS (see server/tsconfig.json); use
 // createRequire so the named exports survive the CJS↔ESM bridge.
 const require = createRequire(import.meta.url);
-const registry = require('../server/src/detectors/cli-registry.ts') as typeof import('../server/src/detectors/cli-registry');
+const registry = require('../backend/node/src/detectors/cli-registry.ts') as typeof import('../backend/node/src/detectors/cli-registry');
 const { KNOWN_CLIS } = registry;
 type CliDescriptor = (typeof KNOWN_CLIS)[number];
 

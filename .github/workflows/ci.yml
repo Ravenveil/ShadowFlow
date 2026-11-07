@@ -29,7 +29,8 @@ env:
 
 jobs:
   # ------------------------------------------------------------------
-  # Lint — eslint covers both src/ (web) and server/ (api)
+  # Lint — eslint spans frontend/src + backend/node/src + tests (config
+  # and plugin stack live at repo root; see .eslintrc.cjs).
   # ------------------------------------------------------------------
   lint:
     name: lint (eslint)
@@ -45,7 +46,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            server/package-lock.json
+            frontend/package-lock.json
+            backend/node/package-lock.json
 
       - name: Install npm dependencies
         run: npm ci
@@ -54,10 +56,10 @@ jobs:
         run: npm run lint
 
   # ------------------------------------------------------------------
-  # Backend typecheck — tsc --noEmit over server/src (no emit, no dist)
+  # Backend typecheck — tsc --noEmit over backend/node/src (no emit, no dist)
   # ------------------------------------------------------------------
   typecheck-backend:
-    name: typecheck (server)
+    name: typecheck (backend/node)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -70,20 +72,21 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            server/package-lock.json
+            frontend/package-lock.json
+            backend/node/package-lock.json
 
-      - name: Install npm dependencies (root + server)
-        # server/src 下的 *test.ts 会 import vitest / supertest，而这两个是
-        # 根开发依赖；tsc --noEmit 覆盖它们，只装 server 会一片 TS2307。
-        run: |
-          npm ci
-          cd server && npm ci
+      - name: Install npm dependencies (backend/node)
+        # 自包含：vitest / supertest 已是 backend/node 的开发依赖（repo 拆分后
+        # 不再借用根 node_modules），单装即可过 tsc --noEmit。
+        run: cd backend/node && npm ci
 
       - name: tsc --noEmit
-        run: cd server && npx tsc --noEmit
+        run: cd backend/node && npx tsc --noEmit
 
   # ------------------------------------------------------------------
-  # Backend tests — vitest project "server" (real Express routers, temp cwd)
+  # Backend tests — 两轨全量（2026-11-07 main 线扩容语义随拆分落地）：
+  # vitest 式全量（backend/node/src/**，脚本式程序化排除）+ 脚本式
+  # test:scripts（tsx 子进程、退出码判结果）。
   # ------------------------------------------------------------------
   test-backend:
     name: test (backend)
@@ -99,18 +102,17 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            server/package-lock.json
+            frontend/package-lock.json
+            backend/node/package-lock.json
 
-      - name: Install npm dependencies (root + server)
-        # vitest runner lives at root; the server project needs server/node_modules
-        # (express, better-sqlite3, ...). Installing only root made every server
-        # suite die with ERR_MODULE_NOT_FOUND.
-        run: |
-          npm ci
-          cd server && npm ci
+      - name: Install npm dependencies (backend/node)
+        run: cd backend/node && npm ci
 
-      - name: vitest (server project)
-        run: npx vitest run --project server
+      - name: vitest (backend/node 全量 vitest 式)
+        run: cd backend/node && npx vitest run
+
+      - name: script-style tests (tsx 子进程)
+        run: node scripts/run-script-tests.mjs
 
   # ------------------------------------------------------------------
   # Frontend tests — vitest project "web" (jsdom)
@@ -129,16 +131,17 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            server/package-lock.json
+            frontend/package-lock.json
+            backend/node/package-lock.json
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Install npm dependencies (frontend)
+        run: cd frontend && npm ci
 
       - name: vitest (web project)
         # 固定 2 个 worker：32 核机器上默认会起十几个 worker，transform 抢 IO 时
         # React.lazy 的 chunk 偶发加载失败，表现为「本机绿、CI 红」的随机假失败。
         # CI runner 本来就只有 2 核，这个值和线上行为一致。
-        run: npx vitest run --project web --maxWorkers=2
+        run: cd frontend && npx vitest run --project web --maxWorkers=2
 
   # ------------------------------------------------------------------
   # Frontend E2E — Playwright route smoke (catches ErrorBoundary crashes)
@@ -160,28 +163,31 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            server/package-lock.json
+            frontend/package-lock.json
+            backend/node/package-lock.json
 
-      - name: Install npm dependencies (root + server)
-        # webServer 用 `npm run dev` 拉起网关（tsx watch），它的 express /
-        # better-sqlite3 在 server/node_modules，只装根目录网关起不来，
-        # Playwright 会卡在等端口直到超时。
+      - name: Install npm dependencies (root + frontend + backend/node)
+        # webServer 用 `npm --prefix .. run dev` 拉起统一启动器（scripts/dev.mjs），
+        # 它会 spawn backend/node 的 tsx 网关与 frontend 的 vite：
+        # express / better-sqlite3 在 backend/node/node_modules，
+        # vite / @playwright/test 在 frontend/node_modules，三边都要装。
         run: |
           npm ci
-          cd server && npm ci
+          cd frontend && npm ci
+          cd ../backend/node && npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: cd frontend && npx playwright install --with-deps chromium
 
       - name: Run route smoke tests
-        run: npx playwright test tests/e2e/route-smoke.spec.ts
+        run: cd frontend && npx playwright test tests/e2e/route-smoke.spec.ts
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report/
+          path: frontend/playwright-report/
           retention-days: 7
 
   # ------------------------------------------------------------------

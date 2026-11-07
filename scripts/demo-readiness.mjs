@@ -80,7 +80,7 @@ export async function runOfflineChecks(opts = {}) {
   const prevCwd = process.cwd();
   try {
     process.chdir(tmp);
-    const sqlite = await import('../server/src/storage/sqlite');
+    const sqlite = await import('../backend/node/src/storage/sqlite');
     sqlite._resetForTests();
     sqlite.getDb();
     const demo = await import('./demo-exception-replay.mjs');
@@ -112,7 +112,7 @@ export async function runOfflineChecks(opts = {}) {
     items.push(fail('异常处理样例可重新生成', `脚本抛错：${err?.message ?? err}`));
   } finally {
     try {
-      const sqlite = await import('../server/src/storage/sqlite').catch(() => null);
+      const sqlite = await import('../backend/node/src/storage/sqlite').catch(() => null);
       try { sqlite?._resetForTests(); } catch { /* best-effort */ }
     } catch { /* best-effort */ }
     process.chdir(prevCwd);

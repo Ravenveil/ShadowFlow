@@ -265,7 +265,7 @@ async function main() {
       `${C.yellow}⚠ Python 侧依赖不全，已跳过 legacy FastAPI(:${PY_PORT})${C.reset}\n` +
         `${C.dim}  解释器: ${pyBin}\n` +
         `  受影响：legacy 路由会 503，其余功能正常。\n` +
-        `  补齐依赖: ${pyBin} -m pip install -e ".[server]"\n` +
+        `  补齐依赖: ${pyBin} -m pip install -e "./backend/python[server]"\n` +
         `  显式跳过: npm run dev -- --no-python${C.reset}\n`,
     );
   }
@@ -298,17 +298,21 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
     launch('py', C.py, pyBin, [
       '-m', 'uvicorn', 'shadowflow.server:app',
       '--host', '127.0.0.1', '--port', String(PY_PORT), '--reload',
-    ]);
+      // 监视收窄到 shadowflow/：全树监视会被 .workbuddy/tmp 等杂散 .py 抖动
+      // 反复触发 reload（Windows 上旧 worker 不退 → 新 worker 抢不到 8000
+      // → uvicorn 退出 code=1 → dev.mjs 整树收摊，2026-11-07 连崩两次实证）。
+      '--reload-dir', path.join(ROOT, 'backend', 'python', 'shadowflow'),
+    ], { cwd: path.join(ROOT, 'backend', 'python') });
     console.log(`${C.dim}  [py] ${pyBin}${C.reset}`);
   }
   launch('gw', C.gw, process.execPath, [
     path.join('node_modules', 'tsx', 'dist', 'cli.mjs'),
     'watch', 'src/index.ts',
-  ], { cwd: path.join(ROOT, 'server') });
-  console.log(`${C.dim}  [gw] tsx watch server/src/index.ts${C.reset}`);
+  ], { cwd: path.join(ROOT, 'backend', 'node') });
+  console.log(`${C.dim}  [gw] tsx watch backend/node/src/index.ts${C.reset}`);
   launch('web', C.web, process.execPath, [
     path.join('node_modules', 'vite', 'bin', 'vite.js'),
-  ], { env: { SF_DEV_OPEN: '0' } }); // vite 不自己开浏览器,由本启动器统一在就绪后开
+  ], { cwd: path.join(ROOT, 'frontend'), env: { SF_DEV_OPEN: '0' } }); // vite 不自己开浏览器,由本启动器统一在就绪后开
   console.log(`${C.dim}  [web] vite${C.reset}\n`);
 
   // 3) 就绪探测(任一进程死掉会走 exit handler 直接收摊,这里只会等超时)

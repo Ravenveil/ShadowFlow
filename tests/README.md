@@ -86,7 +86,7 @@ npx tsx tests/wire-contract.test.ts && \
 
 ### 各自的 PASS / SKIP 规则
 
-- **wire-contract.test.ts** — 扫 `src/` 和 `server/src/` 所有 `localStorage.{set,get}Item('sf.*')` / `setStoredString`/`getStoredString`/`setSetting`/`getSetting` 调用 + 所有常量声明 `const X_STORAGE = 'sf.xxx'`。
+- **wire-contract.test.ts** — 扫 `frontend/src/` 和 `backend/node/src/` 所有 `localStorage.{set,get}Item('sf.*')` / `setStoredString`/`getStoredString`/`setSetting`/`getSetting` 调用 + 所有常量声明 `const X_STORAGE = 'sf.xxx'`。
   - 0 unallowed zombie + 0 unallowed phantom = PASS
   - 一边引用、另一边合法缺失的 key（如 BYOK `sf_anthropic_key` 走 header）放在文件顶部 `ALLOWLIST` 里，必须写 reason
 - **cli-spawn-smoke.test.ts** — 对 `KNOWN_CLIS` 每一项 `spawnSync(binary, [version_arg])`：

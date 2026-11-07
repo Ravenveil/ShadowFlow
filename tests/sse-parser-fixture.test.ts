@@ -30,13 +30,13 @@ import { createRequire } from 'node:module';
 // aren't surfaced (Node ESM sees a single `default` export holding the whole
 // module.exports object). Use createRequire to get the CJS namespace directly.
 const require = createRequire(import.meta.url);
-const claudeMod = require('../server/src/parsers/cli-streams/claude-stream-json.ts') as typeof import('../server/src/parsers/cli-streams/claude-stream-json');
-const codexMod = require('../server/src/parsers/cli-streams/codex-stream-json.ts') as typeof import('../server/src/parsers/cli-streams/codex-stream-json');
-const ghMod = require('../server/src/parsers/cli-streams/gh-copilot.ts') as typeof import('../server/src/parsers/cli-streams/gh-copilot');
+const claudeMod = require('../backend/node/src/parsers/cli-streams/claude-stream-json.ts') as typeof import('../backend/node/src/parsers/cli-streams/claude-stream-json');
+const codexMod = require('../backend/node/src/parsers/cli-streams/codex-stream-json.ts') as typeof import('../backend/node/src/parsers/cli-streams/codex-stream-json');
+const ghMod = require('../backend/node/src/parsers/cli-streams/gh-copilot.ts') as typeof import('../backend/node/src/parsers/cli-streams/gh-copilot');
 const { parseClaudeStreamJson } = claudeMod;
 const { parseCodexStreamJson } = codexMod;
 const { parseGhCopilot } = ghMod;
-import type { SseEvent } from '../server/src/parsers/parser';
+import type { SseEvent } from '../backend/node/src/parsers/parser';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
