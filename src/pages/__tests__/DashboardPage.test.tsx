@@ -206,9 +206,10 @@ describe('DashboardPage — 产品盈利看板（2026-11-07 重构）', () => {
     vi.mocked(fetchCraftSales).mockResolvedValue({ items: [] });
     vi.mocked(fetchCraftTimeseries).mockResolvedValue({ days: 30, series: [] });
     render(<DashboardPage />);
-    expect(await screen.findByText(/还没上架商品/)).toBeInTheDocument();
+    // 先等 bars 空态渲染（依赖 overview 就绪 = refresh 完成），避免拿到加载前的初始空态
+    expect(await screen.findByText(/窗口内还没生意/)).toBeInTheDocument();
+    expect(screen.getByText(/还没上架商品/)).toBeInTheDocument();
     expect(screen.getByText(/还没记过销售/)).toBeInTheDocument();
-    expect(screen.getByText(/窗口内还没生意/)).toBeInTheDocument();
   });
 
   it('加载失败：显示错误条', async () => {

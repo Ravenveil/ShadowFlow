@@ -50,7 +50,7 @@
 /* ── 区块 ─────────────────────────────────────────────────────────────── */
 .neo-db-section { margin-bottom: 22px; max-width: 960px; }
 .neo-db-section-title { margin: 0 0 10px; font-size: 13px; font-weight: 650; }
-.neo-db-panel { border: 1px solid var(--t-line); border-radius: 14px; background: var(--t-card, var(--t-bg)); padding: 16px; }
+.neo-db-panel { border: 1px solid color-mix(in srgb, var(--t-line) 70%, var(--t-fg-3)); border-radius: 14px; background: var(--t-card, var(--t-bg)); padding: 16px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
 
 /* ── 趋势图（SVG 折线）────────────────────────────────────────────────── */
 .neo-db-chart-wrap { display: flex; gap: 6px; margin-bottom: 10px; }
@@ -90,15 +90,27 @@
    数据源：GET/POST /api/craft-profit/*。 */
 
 /* 概览五卡：第一张「赚了」放大强调 */
-.neo-cp-hero-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 22px; }
-.neo-cp-card--hero { grid-column: span 2; }
+.neo-cp-hero-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.neo-cp-hero-cards .neo-db-card { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); border-color: color-mix(in srgb, var(--t-line) 70%, var(--t-fg-3)); }
+.neo-cp-card--hero { grid-column: span 2; background: color-mix(in srgb, #D62828 5%, var(--t-card, var(--t-bg))) !important; }
 @media (max-width: 720px) { .neo-cp-card--hero { grid-column: span 1; } }
 .neo-cp-hero-value { font-size: 30px; font-weight: 750; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; color: #D62828; }
 .neo-cp-hero-value.neg { color: #15803D; }
+.neo-cp-hero-value.zero { color: var(--t-fg-3); }
+
+/* 数据看板双列网格：宽屏两列，窄屏折行 */
+.neo-cp-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; align-items: start; }
+.neo-cp-grid2 > .neo-db-section { margin-bottom: 16px; min-width: 0; }
+
+/* 面板头部：标题 + 右侧小注（数据看板感的统一头部） */
+.neo-cp-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--t-line); }
+.neo-cp-panel-title { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: -0.005em; }
+.neo-cp-panel-note { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* 每卖 100 元去向：堆叠分段条 + 图例 */
 .neo-cp-per100 { display: flex; flex-direction: column; gap: 10px; }
 .neo-cp-per100-track { display: flex; height: 18px; border-radius: 999px; overflow: hidden; background: var(--t-accent-tint); }
+.neo-cp-per100-track.empty { background: repeating-linear-gradient(135deg, var(--t-accent-tint), var(--t-accent-tint) 6px, transparent 6px, transparent 12px); border: 1px dashed var(--t-line); }
 .neo-cp-seg { display: block; height: 100%; min-width: 0; transition: width 0.2s ease; }
 .neo-cp-seg.seg-artisan { background: #8B5CF6; }
 .neo-cp-seg.seg-shipping { background: #3B82F6; }
@@ -116,7 +128,13 @@
 .neo-cp-bar.up { fill: #D62828; }
 .neo-cp-bar.down { fill: #22C55E; }
 .neo-cp-bar-zero { stroke: var(--t-line); stroke-width: 1; stroke-dasharray: 3 3; }
-.neo-cp-bar-legend { margin: 8px 0 0; font-size: 11px; color: var(--t-fg-4); }
+
+/* 空态：紧凑一行 / 图表虚线占位（不做大片留白） */
+.neo-cp-empty { margin: 0; padding: 12px 4px; font-size: 12px; color: var(--t-fg-4); }
+.neo-cp-empty-inline { margin: 0; font-size: 12px; color: var(--t-fg-4); }
+.neo-cp-empty-chart { position: relative; height: 110px; display: flex; align-items: center; justify-content: center; }
+.neo-cp-empty-chart::after { content: ''; position: absolute; left: 4px; right: 4px; top: 50%; border-top: 1px dashed var(--t-line); }
+.neo-cp-empty-chart p { position: relative; margin: 0; padding: 0 12px; background: var(--t-card, var(--t-bg)); font-size: 12px; color: var(--t-fg-4); }
 
 /* 录入区：双表单并排，窄屏折行 */
 .neo-cp-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; max-width: 960px; }

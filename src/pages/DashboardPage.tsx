@@ -248,11 +248,13 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     }
   };
 
-  /** 环比：上期为 0 → 「新增」；否则 ±百分比。 */
-  const fmtDelta = (pct: number | null): string => {
+  /** 环比：本期为 0 → 「—」；上期为 0 → 「新增」；无变化 → 「持平」；否则 ±%。 */
+  const fmtDelta = (pct: number | null, value: number): string => {
+    if (value === 0) return '—';
     if (pct === null) return L('新增', 'New');
+    if (pct === 0) return L('持平', 'Flat');
     const sign = pct > 0 ? '+' : '';
-    return `${sign}${pct}% ${L('环比', 'vs prev.')}`;
+    return `${sign}${pct}%`;
   };
 
   return (
@@ -261,12 +263,6 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         <div>
           <p className="neo-db-eyebrow">CRAFT PROFIT</p>
           <h1 className="neo-db-title">{L('产品盈利', 'Product Profit')}</h1>
-          <p className="neo-db-sub">
-            {L(
-              '帮残障伙伴卖手工艺品：他们上架商品，我们营销、联系快递寄出。这里看赚了多少。',
-              'Handmade goods by artisans with disabilities — they list, we market & ship. Here is what we earn.',
-            )}
-          </p>
         </div>
         <button
           type="button"
@@ -305,10 +301,14 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         <div className="neo-cp-hero-cards" data-testid="cp-overview-cards">
           <div className="neo-db-card neo-cp-card--hero">
             <p className="neo-db-card-label">{L('赚了（净利）', 'Profit (net)')}</p>
-            <div className={`neo-cp-hero-value${overview.profit_cents < 0 ? ' neg' : ''}`}>
+            <div
+              className={`neo-cp-hero-value${
+                overview.profit_cents > 0 ? '' : overview.profit_cents < 0 ? ' neg' : ' zero'
+              }`}
+            >
               {fmtYuan(overview.profit_cents)}
             </div>
-            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.profit)}</p>
+            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.profit, overview.profit_cents)}</p>
             <p className="neo-db-card-hint">
               {L('利润率', 'Margin')} {overview.margin_pct === null ? '—' : `${overview.margin_pct}%`}
             </p>
@@ -316,7 +316,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           <div className="neo-db-card">
             <p className="neo-db-card-label">{L('卖了多少钱', 'Revenue')}</p>
             <div className="neo-db-card-value">{fmtYuan(overview.revenue_cents)}</div>
-            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.revenue)}</p>
+            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.revenue, overview.revenue_cents)}</p>
           </div>
           <div className="neo-db-card">
             <p className="neo-db-card-label">{L('给手艺人', 'To artisans')}</p>
@@ -335,7 +335,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           <div className="neo-db-card">
             <p className="neo-db-card-label">{L('卖出件数', 'Units sold')}</p>
             <div className="neo-db-card-value">{fmtInt(overview.units)}</div>
-            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.units)}</p>
+            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.units, overview.units)}</p>
             <p className="neo-db-card-hint">
               {fmtInt(overview.sales_count)} {L('笔生意', 'orders')}
             </p>
@@ -344,127 +344,156 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
       )}
 
       {overview && (
-        <section className="neo-db-section">
-          <h2 className="neo-db-section-title">{L('每卖 100 元，钱花在哪儿', 'Where every ¥100 goes')}</h2>
-          <div className="neo-db-panel">
-            <div className="neo-cp-per100" data-testid="cp-per100">
-              <div className="neo-cp-per100-track">
-                <span
-                  className="neo-cp-seg seg-artisan"
-                  style={{ width: `${overview.per100.artisan}%` }}
-                  title={`${L('给手艺人', 'Artisans')} ${overview.per100.artisan}%`}
-                />
-                <span
-                  className="neo-cp-seg seg-shipping"
-                  style={{ width: `${overview.per100.shipping}%` }}
-                  title={`${L('快递', 'Shipping')} ${overview.per100.shipping}%`}
-                />
-                <span
-                  className="neo-cp-seg seg-marketing"
-                  style={{ width: `${overview.per100.marketing}%` }}
-                  title={`${L('营销', 'Marketing')} ${overview.per100.marketing}%`}
-                />
-                <span
-                  className="neo-cp-seg seg-profit"
-                  style={{ width: `${overview.per100.profit}%` }}
-                  title={`${L('净赚', 'Profit')} ${overview.per100.profit}%`}
-                />
+        <div className="neo-cp-grid2">
+          <section className="neo-db-section">
+            <div className="neo-db-panel">
+              <div className="neo-cp-panel-head">
+                <h2 className="neo-cp-panel-title">{L('每卖 100 元，钱花在哪儿', 'Where every ¥100 goes')}</h2>
+                <span className="neo-cp-panel-note">{L(`近 ${days} 天`, `Last ${days}d`)}</span>
               </div>
-              <div className="neo-cp-per100-legend">
-                <span><i className="neo-cp-dot seg-artisan" />{L('给手艺人', 'Artisans')} {overview.per100.artisan}%</span>
-                <span><i className="neo-cp-dot seg-shipping" />{L('快递', 'Shipping')} {overview.per100.shipping}%</span>
-                <span><i className="neo-cp-dot seg-marketing" />{L('营销', 'Marketing')} {overview.per100.marketing}%</span>
-                <span><i className="neo-cp-dot seg-profit" />{L('净赚', 'Profit')} {overview.per100.profit}%</span>
-              </div>
+              {overview.revenue_cents > 0 ? (
+                <div className="neo-cp-per100" data-testid="cp-per100">
+                  <div className="neo-cp-per100-track">
+                    <span
+                      className="neo-cp-seg seg-artisan"
+                      style={{ width: `${overview.per100.artisan}%` }}
+                      title={`${L('给手艺人', 'Artisans')} ${overview.per100.artisan}%`}
+                    />
+                    <span
+                      className="neo-cp-seg seg-shipping"
+                      style={{ width: `${overview.per100.shipping}%` }}
+                      title={`${L('快递', 'Shipping')} ${overview.per100.shipping}%`}
+                    />
+                    <span
+                      className="neo-cp-seg seg-marketing"
+                      style={{ width: `${overview.per100.marketing}%` }}
+                      title={`${L('营销', 'Marketing')} ${overview.per100.marketing}%`}
+                    />
+                    <span
+                      className="neo-cp-seg seg-profit"
+                      style={{ width: `${overview.per100.profit}%` }}
+                      title={`${L('净赚', 'Profit')} ${overview.per100.profit}%`}
+                    />
+                  </div>
+                  <div className="neo-cp-per100-legend">
+                    <span><i className="neo-cp-dot seg-artisan" />{L('给手艺人', 'Artisans')} {overview.per100.artisan}%</span>
+                    <span><i className="neo-cp-dot seg-shipping" />{L('快递', 'Shipping')} {overview.per100.shipping}%</span>
+                    <span><i className="neo-cp-dot seg-marketing" />{L('营销', 'Marketing')} {overview.per100.marketing}%</span>
+                    <span><i className="neo-cp-dot seg-profit" />{L('净赚', 'Profit')} {overview.per100.profit}%</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="neo-cp-per100" data-testid="cp-per100">
+                  <div className="neo-cp-per100-track empty" />
+                  <p className="neo-cp-empty-inline">
+                    {L('还没生意。卖了第一单，这里就显示钱花在哪儿。', 'No sales yet — the first order fills this bar.')}
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
-        </section>
+          </section>
+
+          <section className="neo-db-section">
+            <div className="neo-db-panel">
+              <div className="neo-cp-panel-head">
+                <h2 className="neo-cp-panel-title">{L('每天赚多少', 'Profit by day')}</h2>
+                <span className="neo-cp-panel-note">
+                  <i className="neo-cp-dot seg-profit" /> {L('赚', 'Profit')}
+                  <i className="neo-cp-dot seg-neg" style={{ marginLeft: 10 }} /> {L('亏', 'Loss')}
+                </span>
+              </div>
+              {series.some((d) => d.profit_cents !== 0) ? (
+                <ProfitBars series={series} />
+              ) : (
+                <div className="neo-cp-empty-chart" data-testid="cp-bars-empty">
+                  <p>{L('窗口内还没生意', 'No sales in this window')}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       )}
 
-      <section className="neo-db-section">
-        <h2 className="neo-db-section-title">{L('每天赚多少', 'Profit by day')}</h2>
-        <div className="neo-db-panel">
-          {series.some((d) => d.profit_cents !== 0) ? (
-            <ProfitBars series={series} />
-          ) : (
-            <p className="neo-db-chart-empty">{L('窗口内还没生意', 'No sales in this window')}</p>
-          )}
-          <p className="neo-cp-bar-legend">
-            <i className="neo-cp-dot seg-profit" /> {L('赚钱', 'Profit')}
-            <i className="neo-cp-dot seg-neg" style={{ marginLeft: 14 }} /> {L('亏钱', 'Loss')}
-          </p>
-        </div>
-      </section>
-
-      <section className="neo-db-section">
-        <h2 className="neo-db-section-title">{L('哪个商品最赚钱', 'Best-selling products')}</h2>
-        <div className="neo-db-panel">
-          {products.length === 0 ? (
-            <p className="neo-db-chart-empty">
-              {L('还没上架商品。下面「记一笔」就能上架。', 'No products yet — add one in the entry section below.')}
-            </p>
-          ) : (
-            <table className="neo-db-table" data-testid="cp-products-table">
-              <thead>
-                <tr>
-                  <th>{L('商品', 'Product')}</th>
-                  <th className="neo-db-table-num">{L('卖出', 'Sold')}</th>
-                  <th className="neo-db-table-num">{L('卖了多少钱', 'Revenue')}</th>
-                  <th className="neo-db-table-num">{L('赚了', 'Profit')}</th>
-                  <th className="neo-db-table-num">{L('每件赚', 'Per unit')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td className="neo-db-table-num">{fmtInt(p.sold_units)}</td>
-                    <td className="neo-db-table-num">{fmtYuan(p.revenue_cents)}</td>
-                    <td className="neo-db-table-num">{fmtYuan(p.profit_cents)}</td>
-                    <td className="neo-db-table-num">{fmtYuan(p.profit_per_unit_cents)}</td>
+      <div className="neo-cp-grid2">
+        <section className="neo-db-section">
+          <div className="neo-db-panel">
+            <div className="neo-cp-panel-head">
+              <h2 className="neo-cp-panel-title">{L('哪个商品最赚钱', 'Best-selling products')}</h2>
+              <span className="neo-cp-panel-note">{L(`近 ${days} 天`, `Last ${days}d`)}</span>
+            </div>
+            {products.length === 0 ? (
+              <p className="neo-cp-empty">
+                {L('还没上架商品。下面「记一笔」就能上架。', 'No products yet — add one in the entry section below.')}
+              </p>
+            ) : (
+              <table className="neo-db-table" data-testid="cp-products-table">
+                <thead>
+                  <tr>
+                    <th>{L('商品', 'Product')}</th>
+                    <th className="neo-db-table-num">{L('卖出', 'Sold')}</th>
+                    <th className="neo-db-table-num">{L('卖了多少钱', 'Revenue')}</th>
+                    <th className="neo-db-table-num">{L('赚了', 'Profit')}</th>
+                    <th className="neo-db-table-num">{L('每件赚', 'Per unit')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
+                </thead>
+                <tbody>
+                  {products.map((p) => (
+                    <tr key={p.id}>
+                      <td>{p.name}</td>
+                      <td className="neo-db-table-num">{fmtInt(p.sold_units)}</td>
+                      <td className="neo-db-table-num">{fmtYuan(p.revenue_cents)}</td>
+                      <td className="neo-db-table-num">{fmtYuan(p.profit_cents)}</td>
+                      <td className="neo-db-table-num">{fmtYuan(p.profit_per_unit_cents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
 
-      <section className="neo-db-section">
-        <h2 className="neo-db-section-title">{L('最近的生意', 'Recent sales')}</h2>
-        <div className="neo-db-panel">
-          {sales.length === 0 ? (
-            <p className="neo-db-chart-empty">{L('还没记过销售。', 'No sales recorded yet.')}</p>
-          ) : (
-            <table className="neo-db-table" data-testid="cp-sales-table">
-              <thead>
-                <tr>
-                  <th>{L('时间', 'Time')}</th>
-                  <th>{L('商品', 'Product')}</th>
-                  <th className="neo-db-table-num">{L('件数', 'Qty')}</th>
-                  <th className="neo-db-table-num">{L('卖了', 'Revenue')}</th>
-                  <th className="neo-db-table-num">{L('赚了', 'Profit')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.map((s) => (
-                  <tr key={s.id}>
-                    <td>{fmtTime(s.created_at)}</td>
-                    <td>{s.product_name}</td>
-                    <td className="neo-db-table-num">{fmtInt(s.qty)}</td>
-                    <td className="neo-db-table-num">{fmtYuan(s.price_cents * s.qty)}</td>
-                    <td className="neo-db-table-num">{fmtYuan(s.profit_cents)}</td>
+        <section className="neo-db-section">
+          <div className="neo-db-panel">
+            <div className="neo-cp-panel-head">
+              <h2 className="neo-cp-panel-title">{L('最近的生意', 'Recent sales')}</h2>
+              <span className="neo-cp-panel-note">{L('最新 20 笔', 'Last 20')}</span>
+            </div>
+            {sales.length === 0 ? (
+              <p className="neo-cp-empty">{L('还没记过销售。', 'No sales recorded yet.')}</p>
+            ) : (
+              <table className="neo-db-table" data-testid="cp-sales-table">
+                <thead>
+                  <tr>
+                    <th>{L('时间', 'Time')}</th>
+                    <th>{L('商品', 'Product')}</th>
+                    <th className="neo-db-table-num">{L('件数', 'Qty')}</th>
+                    <th className="neo-db-table-num">{L('卖了', 'Revenue')}</th>
+                    <th className="neo-db-table-num">{L('赚了', 'Profit')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
+                </thead>
+                <tbody>
+                  {sales.map((s) => (
+                    <tr key={s.id}>
+                      <td>{fmtTime(s.created_at)}</td>
+                      <td>{s.product_name}</td>
+                      <td className="neo-db-table-num">{fmtInt(s.qty)}</td>
+                      <td className="neo-db-table-num">{fmtYuan(s.price_cents * s.qty)}</td>
+                      <td className="neo-db-table-num">{fmtYuan(s.profit_cents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      </div>
 
       {/* ── 录入区：上架商品 / 记一笔销售 / 演示数据 ───────────────────── */}
       <section className="neo-db-section">
-        <h2 className="neo-db-section-title">{L('记一笔', 'Record')}</h2>
+        <div className="neo-cp-panel-head">
+          <h2 className="neo-cp-panel-title">{L('记一笔', 'Record')}</h2>
+          <span className="neo-cp-panel-note">{L('上架商品 / 记一笔销售', 'List a product / Record a sale')}</span>
+        </div>
         <div className="neo-cp-form-grid">
           <form
             className="neo-db-panel neo-cp-form"
