@@ -34,6 +34,9 @@ const value = (name, dflt) => {
 
 const ONLY = value('--only', '');
 const JOBS = Math.max(1, Number(value('--jobs', '4')) || 4);
+// 单测试超时（秒）。CI 环境曾出现整步挂死 15 分钟拖垮 job 的情况——
+// 没有超时保护时一个挂起的子进程会把整个 runner 卡到 job timeout。
+const TIMEOUT_S = Math.max(10, Number(value('--timeout', '120')) || 120);
 
 /** 递归收集 backend/node/src 下所有 *.test.ts。 */
 function walk(dir, out = []) {
@@ -102,9 +105,28 @@ function runOne(file) {
           shell: process.platform === 'win32',
         });
     let out = '';
+    let settled = false;
+    // 超时必须直接 settle：被测脚本若拉起孙进程（chromium 等），
+    // SIGKILL 直接子进程后 stdio 管道仍被孙进程占着，'close' 永不触发，
+    // 只等 close 会让 promise 永挂——这正是 CI 拖垮 job 的根因。
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill('SIGKILL'); } catch { /* 已退出 */ }
+      done({
+        file,
+        ok: false,
+        code: -9,
+        ms: Date.now() - started,
+        tail: `超时 ${TIMEOUT_S}s，子进程已杀（挂起点排查：单独跑此文件复现）`,
+      });
+    }, TIMEOUT_S * 1000);
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
     child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       const lines = out.split('\n').filter((l) => l.trim());
       done({
         file,
@@ -121,19 +143,23 @@ console.log(`跑 ${all.length} 个脚本式测试（并发 ${JOBS}）…\n`);
 
 const results = [];
 let cursor = 0;
+let doneCount = 0;
 async function worker() {
   while (cursor < all.length) {
     const i = cursor++;
     results[i] = await runOne(all[i]);
+    // 实时进度：完成一个打一行，CI 日志能直接看出卡在哪个文件。
+    doneCount += 1;
+    const r = results[i];
+    console.log(`[${doneCount}/${all.length}] ${r.ok ? 'PASS' : 'FAIL'}  ${r.file}  (${(r.ms / 1000).toFixed(1)}s)`);
   }
 }
 await Promise.all(Array.from({ length: Math.min(JOBS, all.length) }, worker));
 
 const failed = results.filter((r) => !r.ok);
-for (const r of results) {
-  const mark = r.ok ? 'PASS' : 'FAIL';
-  console.log(`${mark}  ${r.file}  (${(r.ms / 1000).toFixed(1)}s)`);
-  if (!r.ok) console.log(`      exit=${r.code}\n      ${r.tail.split('\n').join('\n      ')}`);
+for (const r of failed) {
+  console.log(`\nFAIL  ${r.file}  (${(r.ms / 1000).toFixed(1)}s)`);
+  console.log(`      exit=${r.code}\n      ${r.tail.split('\n').join('\n      ')}`);
 }
 
 console.log(`\n脚本式测试：${results.length - failed.length} 通过 / ${failed.length} 失败 / 共 ${results.length}`);

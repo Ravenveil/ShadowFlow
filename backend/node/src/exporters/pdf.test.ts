@@ -95,7 +95,15 @@ async function main() {
 
   try {
     const t0 = Date.now();
-    const pdf = await htmlFileToPdf(htmlPath, 'A4', { width: 800, height: 600 });
+    // e2e 是 best-effort：chromium 在部分 CI 环境会**挂死**（既不启动成功
+    // 也不抛错）——try/catch 的 SKIP 降级接不住挂。加超时竞速兜底，
+    // 到点按超时抛错走 catch → SKIP，与文件头声明的降级语义一致。
+    const pdf = await Promise.race([
+      htmlFileToPdf(htmlPath, 'A4', { width: 800, height: 600 }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('chromium e2e timeout 60s（挂死降级 SKIP）')), 60_000),
+      ),
+    ]);
     const dur = Date.now() - t0;
     console.log(`  (chromium render took ~${dur}ms)`);
 
@@ -123,7 +131,9 @@ async function main() {
   console.log(
     `\n${passCount} passed, ${failCount} failed, ${skipCount} skipped`,
   );
-  if (failCount > 0) process.exit(1);
+  // 无条件退出：e2e 超时降级后挂死的 htmlFileToPdf 仍持有子进程句柄，
+  // 事件循环不空，靠自然退出会把整个进程挂在这一行。
+  process.exit(failCount > 0 ? 1 : 0);
 }
 
 main().catch((e) => {
