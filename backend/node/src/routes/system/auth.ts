@@ -36,6 +36,9 @@ import {
   updateEmailUserDisplayName,
   addLead,
 } from '../../storage/auth';
+// 登录信息隔离批 — 会话签发时同步 users 表（真实用户库）。user_id = session.address
+// 的自然主键；role 引导（首个邮箱用户 / SF_ADMIN_EMAIL → admin）见 storage/users.ts。
+import { ensureUser } from '../../storage/users';
 
 const router = Router();
 
@@ -124,15 +127,20 @@ router.post('/guest', (_req: Request, res: Response) => {
     const rawToken = randomHex(32);
     const tokenHash = sha256(rawToken);
     const expiresAt = new Date(Date.now() + GUEST_SESSION_TTL_MS).toISOString();
-
-    createSession(tokenHash, 'guest', 'guest', expiresAt);
+    // 登录信息隔离批 — 每个 guest 会话一个独立 user_id（guest_<hex>），游客之间
+    // 数据互不可见。旧数据里 address='guest' 的共享会话仍可用（映射同一用户行）。
+    const guestId = `guest_${randomHex(12)}`;
+    createSession(tokenHash, guestId, 'guest', expiresAt);
+    const user = ensureUser({ user_id: guestId, auth_type: 'guest', display_name: 'Guest' });
 
     res.json({
       token: rawToken,
       user: {
         address: 'guest',
+        user_id: user.user_id,
         display_name: 'Guest',
         auth_type: 'guest',
+        role: user.role,
       },
     });
   } catch (err) {
@@ -220,15 +228,22 @@ router.post('/verify', async (req: Request, res: Response) => {
   const expiresAt = new Date(Date.now() + WALLET_SESSION_TTL_MS).toISOString();
   createSession(tokenHash, address, 'wallet', expiresAt);
 
-  // 7. Return token + profile
+  // 7. Return token + profile（users 表同步 upsert，带出 user_id/role 给前端）。
   const profile = getProfile(address);
+  const user = ensureUser({
+    user_id: address,
+    auth_type: 'wallet',
+    display_name: profile?.display_name ?? null,
+  });
   res.json({
     token: rawToken,
     user: {
       address: address.toLowerCase(),
+      user_id: user.user_id,
       did,
       display_name: profile?.display_name ?? null,
       auth_type: 'wallet',
+      role: user.role,
     },
   });
 });
@@ -253,13 +268,17 @@ router.post('/register', (req: Request, res: Response) => {
     const rawToken = randomHex(32);
     const expiresAt = new Date(Date.now() + EMAIL_SESSION_TTL_MS).toISOString();
     createSession(sha256(rawToken), email, 'email', expiresAt);
+    // users 表同步 upsert（admin 引导：首个邮箱用户 / SF_ADMIN_EMAIL → admin）。
+    const user = ensureUser({ user_id: email, auth_type: 'email', display_name: name });
     res.status(201).json({
       token: rawToken,
       user: {
         address: email,
         email,
+        user_id: user.user_id,
         display_name: name,
         auth_type: 'email',
+        role: user.role,
       },
     });
   } catch (err) {
@@ -288,13 +307,20 @@ router.post('/login', (req: Request, res: Response) => {
     const rawToken = randomHex(32);
     const expiresAt = new Date(Date.now() + EMAIL_SESSION_TTL_MS).toISOString();
     createSession(sha256(rawToken), email, 'email', expiresAt);
+    const appUser = ensureUser({
+      user_id: email,
+      auth_type: 'email',
+      display_name: user.display_name,
+    });
     res.json({
       token: rawToken,
       user: {
         address: email,
         email,
-        display_name: user.display_name,
+        user_id: appUser.user_id,
+        display_name: appUser.display_name,
         auth_type: 'email',
+        role: appUser.role,
       },
     });
   } catch (err) {
@@ -395,10 +421,13 @@ router.get('/me', (req: Request, res: Response) => {
 
   // Guest sessions have no profile row
   if (session.auth_type === 'guest') {
+    const appUser = ensureUser({ user_id: session.address, auth_type: 'guest', display_name: 'Guest' });
     return res.json({
       address: 'guest',
+      user_id: appUser.user_id,
       display_name: 'Guest',
       auth_type: 'guest',
+      role: appUser.role,
     });
   }
 
@@ -408,11 +437,18 @@ router.get('/me', (req: Request, res: Response) => {
     if (!user) {
       return res.status(401).json({ error: 'Profile not found' });
     }
+    const appUser = ensureUser({
+      user_id: session.address,
+      auth_type: 'email',
+      display_name: user.display_name,
+    });
     return res.json({
       address: user.email,
       email: user.email,
+      user_id: appUser.user_id,
       display_name: user.display_name,
       auth_type: 'email',
+      role: appUser.role,
     });
   }
 
@@ -421,12 +457,19 @@ router.get('/me', (req: Request, res: Response) => {
     // Session exists but profile was deleted — treat as expired
     return res.status(401).json({ error: 'Profile not found' });
   }
+  const appUser = ensureUser({
+    user_id: session.address,
+    auth_type: 'wallet',
+    display_name: profile.display_name,
+  });
 
   res.json({
     address: profile.address,
     did: profile.did,
+    user_id: appUser.user_id,
     display_name: profile.display_name,
     auth_type: 'wallet',
+    role: appUser.role,
   });
 });
 

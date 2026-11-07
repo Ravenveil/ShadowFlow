@@ -261,6 +261,38 @@ export function getDb(): Database.Database {
   CREATE INDEX IF NOT EXISTS idx_memory_profile_events
     ON memory_profile_events(subject_id, key, id);`);
 
+  // ── 真实用户 + 资源归属（登录信息隔离批）──────────────────────────────────
+  // users：真实用户表。user_id 用 address/邮箱做自然主键（guest 会话是
+  //        `guest_<hex>` 独立 id，互不串数据）。role: 'user'|'admin'；
+  //        disabled=1 时会话保留但数据面 403。注册/登录/游客签发时 upsert。
+  // resource_owners：统一归属映射（resource_type × resource_id → owner_user_id）。
+  //        不给业务表加列、对 Python JSON 存储的资源（SF_GROUPS_BACKEND=python
+  //        的群）同样生效——归属真源只在这一张表。消息不单独记归属：永远挂在
+  //        group/conversation 下，随父资源校验（见 middleware/auth-context.ts）。
+  //        存量无主资源策略：第一个访问（含列表）的登录用户认领（claim），
+  //        admin 始终可见全部。
+  db.exec(`CREATE TABLE IF NOT EXISTS users (
+    user_id TEXT PRIMARY KEY,
+    email TEXT,
+    display_name TEXT,
+    auth_type TEXT NOT NULL DEFAULT 'email',
+    role TEXT NOT NULL DEFAULT 'user',
+    disabled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+  CREATE TABLE IF NOT EXISTS resource_owners (
+    resource_type TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    owner_user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(resource_type, resource_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_resource_owners_owner
+    ON resource_owners(owner_user_id);`);
+
   // 多产物登记（2026-11-07）— run_artifacts：一 run 多产物的独立登记表。
   // 动机：run-sessions 此前「last blueprint wins」（runs 表三字段只留最后一件
   // 产物），多产物 run 的其余产物在产物面板/项目产物里全部不可见。

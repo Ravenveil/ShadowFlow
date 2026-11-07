@@ -23,9 +23,17 @@ import {
   setConversationProject,
 } from '../../storage/conversations';
 import { getOrCreateProject, getProject } from '../../storage/projects';
+// 登录信息隔离批 — 会话归属：create 写入 resource_owners；:pid（项目）/:cid
+// （会话）/by-group/:gid（群）按归属校验（非本人 404）。消息挂在 conversation
+// 下随父校验。无 req.user（旧测试直挂）→ 行为不变。
+import { getReqUser, ownerGuard, sendNotFound } from '../../middleware/auth-context';
+import { accessOwner, setOwner } from '../../storage/resource-owners';
 
 // Mounted at /api/projects — handles per-project conversation listing/creation.
 export const projectScopedConversationsRouter = Router({ mergeParams: true });
+
+// /:pid 系路由 — 项目归属守卫（非本人 404）。
+projectScopedConversationsRouter.param('pid', ownerGuard('project', 'pid'));
 
 projectScopedConversationsRouter.get(
   '/:pid/conversations',
@@ -55,12 +63,18 @@ projectScopedConversationsRouter.post(
         ? body.title.trim()
         : undefined;
     const c = createConversation(req.params.pid, title);
+    // create 时写归属（登录用户）。
+    const user = getReqUser(req);
+    if (user) setOwner('conversation', c.conversation_id, user.user_id);
     res.status(201).json(c);
   },
 );
 
 // Mounted at /api/conversations — message endpoints keyed on conversation_id.
 const router = Router();
+
+// /:cid 系路由 — 会话归属守卫（消息随父校验）。
+router.param('cid', ownerGuard('conversation', 'cid'));
 
 /**
  * GAP A3 回写（2026-08-23）— 「移入项目」：按互链群 id（B1 group_id ↔ Python
@@ -106,8 +120,22 @@ router.patch('/by-group/:gid', (req: Request, res: Response) => {
   }
 
   const existing = getConversationByGroup(gid);
+  // 归属校验（登录用户）：已有会话按会话归属判（派生链含群/项目主）；尚无会话
+  // 按群归属判（无主群在此认领）。
+  const user = getReqUser(req);
+  if (user) {
+    const ok = existing
+      ? accessOwner('conversation', existing.conversation_id, user)
+      : accessOwner('group', gid, user);
+    if (!ok) {
+      sendNotFound(res, `Group '${gid}' not found`);
+      return;
+    }
+  }
   if (!existing) {
-    res.status(201).json(createConversation(projectId, undefined, gid));
+    const created = createConversation(projectId, undefined, gid);
+    if (user) setOwner('conversation', created.conversation_id, user.user_id);
+    res.status(201).json(created);
     return;
   }
   if (existing.project_id !== projectId) {

@@ -115,6 +115,11 @@ import type { TeamDef, SkillSlot } from '../../../lib/skill-types';
 
 const router = Router();
 
+// 登录信息隔离批 — 运行记录归属：POST 建会话/自动建会话写入 resource_owners，
+// 列表按 owner 过滤，/:id 系路由按归属校验（非本人 404）。无 req.user（旧测试
+// 直挂）→ 行为不变。
+router.param('id', ownerGuard('run_session', 'id'));
+
 // ── 模块拆分（2026-11-07）— 按内聚块外提，公共 API 经文末 re-export 保持不变 ──
 import { createToolCallProjector, type ToolCallProjection } from './tool-projection';
 import {
@@ -138,6 +143,9 @@ import {
 } from './registry';
 import { joinLessons, lessonsBlockForSession, recordRunLesson } from './lessons';
 import { captureBlueprintArtifact, coerceArtifactType, type CapturedArtifact } from './artifacts';
+// 登录信息隔离批 — 归属守卫/过滤（见 router.param('id') 与 GET /）。
+import { getReqUser, ownerGuard } from '../../../middleware/auth-context';
+import { filterOwned, setOwner } from '../../../storage/resource-owners';
 
 // ── GET /api/run-sessions — M3 三栏融合 ──────────────────────────────────────
 // 轻量列表：右栏「工作区」tab 按 conversation_id 或 group_id（B1 互链换算）
@@ -201,7 +209,13 @@ router.get('/', (req: Request, res: Response) => {
   }
   const sessions = [...byId.values()];
   sessions.sort((a, b) => b.updated_at - a.updated_at);
-  res.json({ sessions: sessions.slice(0, 50) });
+  // 登录信息隔离批 — 列表按归属过滤：无主 run 归第一个访问的登录用户（含本
+  // 列表调用），他人 run 不出现在列表。无 req.user（旧测试直挂）→ 不过滤。
+  const listUser = getReqUser(req);
+  const visible = listUser
+    ? filterOwned('run_session', sessions, (s) => s.session_id, listUser)
+    : sessions;
+  res.json({ sessions: visible.slice(0, 50) });
 });
 
 // ── POST /api/run-sessions ────────────────────────────────────────────────────
@@ -557,6 +571,16 @@ router.post('/', (req: Request, res: Response) => {
   }
 
   const session_id = uuidv4();
+  // 登录信息隔离批 — 归属落库：run 与其挂靠 conversation 记到登录用户名下。
+  // setOwner 是 INSERT OR IGNORE，已有归属（如群建会话时 group 链路已认领的
+  // conversation）绝不被抢走。无 req.user（旧测试直挂）→ 不写。
+  {
+    const owner = getReqUser(req);
+    if (owner) {
+      setOwner('run_session', session_id, owner.user_id);
+      if (validated_conversation_id) setOwner('conversation', validated_conversation_id, owner.user_id);
+    }
+  }
   sessionStore.set(session_id, {
     goal: goal_text,
     skill_name: validated_skill,
@@ -688,6 +712,15 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   }
 
   const new_session_id = uuidv4();
+  // 登录信息隔离批 — 续轮 run 归属跟随源会话（源会话已过 ownerGuard，本人才能
+  // 续轮）；conversation 沿用 source 的，INSERT OR IGNORE 不改已有归属。
+  {
+    const owner = getReqUser(req);
+    if (owner) {
+      setOwner('run_session', new_session_id, owner.user_id);
+      if (source.conversation_id) setOwner('conversation', source.conversation_id, owner.user_id);
+    }
+  }
   const overrides: Partial<typeof source> = {};
   if (typeof body.model === 'string' && body.model.length > 0) overrides.model = body.model;
   if (typeof body.provider === 'string' && body.provider.length > 0) overrides.provider = body.provider as typeof source.provider;

@@ -21,8 +21,31 @@ import {
   buildDaemonRunGraph,
   buildDaemonTaskTree,
 } from '../../lib/run-projection';
+// 登录信息隔离批 — 归属校验/过滤。:runId 既可能是 run_id 也可能是 session_id
+// （run-suggestions 历史上两者都认），故用 accessAny 联合判定。
+import { getReqUser, sendNotFound } from '../../middleware/auth-context';
+import { accessAny, filterOwned, removeOwner } from '../../storage/resource-owners';
 
 const router = Router();
+
+// 登录信息隔离批 — :runId 归属守卫。用 router.use 而非 router.param：proxy-
+// fallback 兜底的投影端点（/:runId/artifact-lineage 等）与 run-suggestions 的
+// /:runId/suggestions 在本 router 没有具名路由，param 回调不会触发；use 层按
+// 前缀匹配一切 /:runId/**，先判归属再放行到具名路由 / 后续 router。
+// 无 req.user（旧测试直挂）→ 直接过，行为不变；非本人 → 404（不泄露存在性）。
+router.use('/:runId', (req: Request, res: Response, next: NextFunction) => {
+  const user = getReqUser(req);
+  const runId = req.params.runId;
+  if (!user || !runId) {
+    next();
+    return;
+  }
+  if (!accessAny(['run', 'run_session'], runId, user)) {
+    sendNotFound(res, `Run ${runId} not found`);
+    return;
+  }
+  next();
+});
 
 // GET /runs → RunRecord[] (raw array, NOT envelope — see contract note above)
 // ?limit= (frontend src/api/runs.ts sends it): parse int, clamp 1..200;
@@ -38,16 +61,22 @@ router.get('/', (req: Request, res: Response) => {
     ...r,
     artifacts: artifactsByRun.get(r.run_id) ?? [],
   }));
+  // 登录信息隔离批 — 列表按归属过滤（无主 run 归第一个访问的登录用户）。
+  // 无 req.user（旧测试直挂）→ 不过滤，响应形状不变。
+  const user = getReqUser(req);
+  const visible = user
+    ? filterOwned('run', withArtifacts, (r) => r.run_id, user)
+    : withArtifacts;
   const raw = req.query.limit;
   if (typeof raw === 'string' && raw.trim() !== '') {
     const n = parseInt(raw, 10);
     if (!Number.isNaN(n)) {
       const limit = Math.min(Math.max(n, 1), 200);
-      res.json(withArtifacts.slice(0, limit));
+      res.json(visible.slice(0, limit));
       return;
     }
   }
-  res.json(withArtifacts);
+  res.json(visible);
 });
 
 // ── L6（GAP.md:13）— Node daemon run 的投影端点 ─────────────────────────────
@@ -77,6 +106,11 @@ router.get('/:runId/task-tree', (req: Request, res: Response, next: NextFunction
 // DELETE /runs/:runId
 router.delete('/:runId', (req: Request, res: Response) => {
   const deleted = deleteRun(req.params.runId);
+  // 登录信息隔离批 — 删 run 顺手清归属行（幂等；session 维度的归属行一并清）。
+  try {
+    removeOwner('run', req.params.runId);
+    removeOwner('run_session', req.params.runId);
+  } catch { /* 归属清理失败不影响删除结果 */ }
   if (deleted) res.json({ ok: true });
   else res.status(404).json({ error: `Run ${req.params.runId} not found` });
 });

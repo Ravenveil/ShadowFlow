@@ -26,6 +26,10 @@ import {
 } from '../../lib/run-suggestions';
 import { DEFAULT_MODELS } from '../../transport/api-clients';
 import { resolveProviderKey } from '../../transport/byokKey';
+// 登录信息隔离批 — 归属校验（与 runs.ts 的 :runId 守卫同一语义；本 router 可
+// 脱离 runsRouter 单独挂载，故内联再判一次，accessAny 幂等无副作用）。
+import { getReqUser, sendNotFound } from '../../middleware/auth-context';
+import { accessAny } from '../../storage/resource-owners';
 
 export interface RunSuggestionsDeps {
   generate: (
@@ -83,6 +87,13 @@ export function createRunSuggestionsRouter(deps?: Partial<RunSuggestionsDeps>): 
   const router = Router();
 
   router.get('/:runId/suggestions', async (req: Request, res: Response) => {
+    // 登录信息隔离批 — 非本人 run → 404（不泄露存在性）；无 req.user（旧测试
+    // 直挂）→ 跳过，行为不变。
+    const user = getReqUser(req);
+    if (user && !accessAny(['run', 'run_session'], req.params.runId, user)) {
+      sendNotFound(res, `Run ${req.params.runId} not found`);
+      return;
+    }
     const ctx = collectSuggestionContext(req.params.runId);
     if (!ctx) {
       res.status(404).json({ error: `Run ${req.params.runId} not found` });

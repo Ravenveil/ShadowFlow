@@ -25,11 +25,21 @@ import {
 } from '../../storage/projects';
 import { listConversations } from '../../storage/conversations';
 import { getDb } from '../../storage/sqlite';
+// 登录信息隔离批 — 项目归属：create 写入 resource_owners，列表按 owner 过滤，
+// :id 路由按归属校验（非本人 404）。无 req.user（旧测试直挂）→ 行为不变。
+import { getReqUser, ownerGuard } from '../../middleware/auth-context';
+import { filterOwned, setOwner } from '../../storage/resource-owners';
 
 const router = Router();
 
+// /:id 系路由（get/patch/delete/artifacts）统一归属守卫。
+router.param('id', ownerGuard('project', 'id'));
+
 router.get('/', (req: Request, res: Response) => {
-  const projects = listProjects();
+  let projects = listProjects();
+  // 归属过滤（admin 全量；无主行被第一个登录访问者认领）。
+  const user = getReqUser(req);
+  if (user) projects = filterOwned('project', projects, (p) => p.project_id, user);
   // GAP A3（2026-08-22）：?withSessions=1 → 每个项目附 sessions[]（该项目下的
   // 会话行，按 updated_at 新→旧）。数据模型复用 conversations.project_id（15.16
   // 已有外键），不新增表；shape 在 verbatim record 上额外加 id 别名 + sessions。
@@ -69,6 +79,9 @@ router.post('/', (req: Request, res: Response) => {
     design_system_id:
       typeof body.design_system_id === 'string' ? body.design_system_id : null,
   });
+  // create 时写归属（登录用户）；无 req.user 的旧直挂用法跳过。
+  const user = getReqUser(req);
+  if (user) setOwner('project', project.project_id, user.user_id);
   res.status(201).json(project);
 });
 

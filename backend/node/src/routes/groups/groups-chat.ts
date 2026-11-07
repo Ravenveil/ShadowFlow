@@ -102,6 +102,9 @@ import {
   getRunReplay,
   cancelRunSession,
 } from '../runs/run-sessions';
+// 登录信息隔离批 — GET /:id/dag：最近一次 run 的执行图折叠 + run 目标取名。
+import { buildDaemonRunGraph } from '../../lib/run-projection';
+import { listRunIndexByConversation } from '../../storage/run-index';
 // B3 · 网关过程事件 — 每轮 fan-out 开一条 gateway run，执行期过程（thinking
 // 占位/流式片段/错误/msg_foot）经 run 管线 emit，B2 timeline 自动归并回放。
 import { startGatewayRun } from '../../lib/gateway-run';
@@ -1841,6 +1844,157 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
     const msg = e instanceof Error ? e.message : String(e);
     if (!res.headersSent) {
       res.status(500).json({ error: { code: 'TIMELINE_FAILED', message: msg } });
+    }
+  });
+});
+
+// ── GET /api/groups/:id/dag — 群「当前/最近一次运行」的 DAG ─────────────────
+// 取数优先级（契约）：
+//   1. run replay/graph —— 互链 conversation 下最近一次仍有事件日志的 run，
+//      buildDaemonRunGraph 折叠出执行图（plan 任务节点优先；无 plan 退到
+//      步骤/工具节点并截断 30，防工具链撑爆前端）；
+//   2. team dag —— 无可用 run 时回落 group.team_id 的编排定义（loadTeamForRun，
+//      与 runFanout 执行路径同一数据源，policy_matrix 即前端 PolicyMatrix）；
+//   3. 群成员空图 —— 纯聊天群（无 run 无 team）：成员即节点、无边。
+// 出参对齐前端 SfTeamDag（frontend/src/chat-api.ts）——**裸对象**（getGroupDag
+// 用 apiFetch 直读顶层 edges，不做 {data} 解包）：
+//   { team_id, name, members, edges:[{source,target,mode,data:{mode}}],
+//     resolved_agents:[{id,title,sub?}], policy, source, run_id? }
+// 附加字段（source/run_id/errors）仅调试用，前端 normalizeDag 忽略。
+// 归属校验：groupAccessGuard 的 /:id/** 已统一把关（非本人 404，此处不再重复判）。
+
+/** TeamEdgeV1.kind → 前端 SfDagEdge.mode（direct|approve|conditional；原 kind 留 data.mode）。 */
+function dagEdgeMode(kind: string | undefined): string {
+  if (kind === 'approve') return 'approve';
+  if (kind === 'conditional') return 'conditional';
+  return 'direct'; // sequential / parallel / 未知 → direct
+}
+
+/** 成员展示名片段解析（fail-soft：agent 读不到就用 id 兜底；与 runFanout roster 同法）。 */
+async function resolveDagAgents(
+  ids: string[],
+): Promise<Array<{ id: string; title: string; sub?: string }>> {
+  const out: Array<{ id: string; title: string; sub?: string }> = [];
+  for (const id of ids) {
+    let title = id;
+    let sub: string | undefined;
+    try {
+      const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`);
+      if (a?.name) title = a.name;
+      if (a?.soul) sub = a.soul.split('\n').find((l) => l.trim())?.trim();
+    } catch { /* id 兜底 */ }
+    out.push(sub ? { id, title, sub } : { id, title });
+  }
+  return out;
+}
+
+router.get('/:id/dag', (req: Request, res: Response) => {
+  void (async () => {
+    const groupId = req.params.id;
+    const group = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
+    if (!group) {
+      // 与 timeline 同一语义：pyGet 把「Python 没起」与「群不存在」折叠成 null。
+      res.status(404).json({
+        error: {
+          code: 'GROUP_NOT_FOUND',
+          message: `group ${groupId} not found (or Python backend unreachable)`,
+        },
+      });
+      return;
+    }
+
+    // ── 1) run replay/graph：最近一次有事件日志的 run 折叠成执行图 ─────────
+    const conv = getConversationByGroup(groupId);
+    if (conv) {
+      const goals = new Map<string, string>();
+      try {
+        for (const r of listRunIndexByConversation(conv.conversation_id)) {
+          goals.set(r.session_id, r.goal);
+        }
+      } catch { /* sqlite 不可用 → name 兜底 run_id */ }
+      // listSessionsByConversation 最近更新在前 —— 第一个可重放的就是「当前/最近一次运行」。
+      for (const sessionId of listSessionsByConversation(conv.conversation_id)) {
+        const replay = getRunReplay(sessionId);
+        if (!replay) continue;
+        const graph = buildDaemonRunGraph(sessionId, replay);
+        // plan 任务节点是「任务级 DAG」的自然单位；纯步骤 run（无 plan_card）
+        // 退到全节点并截断。
+        const taskNodes = graph.nodes.filter((n) => n.kind === 'task');
+        const nodes = taskNodes.length > 0 ? taskNodes : graph.nodes.slice(0, 30);
+        if (nodes.length === 0) continue;
+        const keep = new Set(nodes.map((n) => n.id));
+        let edges = graph.edges
+          .filter((e) => keep.has(e.from_id) && keep.has(e.to_id))
+          .map((e) => ({
+            source: e.from_id,
+            target: e.to_id,
+            mode: 'direct',
+            data: { mode: e.type },
+          }));
+        if (edges.length === 0 && nodes.length > 1) {
+          // 任务节点之间的边被步骤隔断 → 按执行顺序补链（与 buildDaemonRunGraph 同策略）。
+          edges = nodes.slice(1).map((n, i) => ({
+            source: nodes[i]!.id,
+            target: n.id,
+            mode: 'direct',
+            data: { mode: 'control_flow' },
+          }));
+        }
+        res.json({
+          team_id: group.team_id ?? groupId,
+          name: goals.get(sessionId) || `run ${sessionId}`,
+          members: nodes.map((n) => n.id),
+          edges,
+          resolved_agents: nodes.map((n) => ({ id: n.id, title: n.label })),
+          policy: null,
+          source: 'run_graph',
+          run_id: sessionId,
+        });
+        return;
+      }
+    }
+
+    // ── 2) team dag 回落：编排定义（成员 + 边 + 策略矩阵）─────────────────
+    if (group.team_id) {
+      const { team, errors } = loadTeamForRun(group.team_id);
+      if (team && team.members.length > 0) {
+        res.json({
+          team_id: group.team_id,
+          name: team.name ?? group.team_id,
+          members: team.members,
+          edges: team.edges.map((e) => ({
+            source: e.from,
+            target: e.to,
+            mode: dagEdgeMode(e.kind),
+            data: { mode: e.kind ?? 'sequential' },
+          })),
+          resolved_agents: await resolveDagAgents(team.members),
+          policy: team.policy_matrix ?? null,
+          source: 'team',
+          errors,
+        });
+        return;
+      }
+      if (errors.length > 0) {
+        console.warn(`[groups-chat] dag: team ${group.team_id} load failed:`, errors.join('; '));
+      }
+    }
+
+    // ── 3) 纯聊天群空图：成员即节点、无边 ────────────────────────────────
+    const members = group.agent_ids ?? [];
+    res.json({
+      team_id: groupId,
+      name: '',
+      members,
+      edges: [],
+      resolved_agents: members.length > 0 ? await resolveDagAgents(members) : [],
+      policy: null,
+      source: 'group',
+    });
+  })().catch((e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { code: 'DAG_FAILED', message: msg } });
     }
   });
 });

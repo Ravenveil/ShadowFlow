@@ -63,6 +63,11 @@ import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/projects/conversations';
 import authRouter from './routes/system/auth';
+// 登录信息隔离批 — 真实用户 + 资源归属 + 管理员 API。数据路由必须登录（401），
+// 列表按 owner 过滤、详情按归属校验（非本人 404 不泄露存在性），admin 全量可见。
+import adminRouter from './routes/system/admin';
+import { attachUser, requireAuth, requireAdmin } from './middleware/auth-context';
+import { groupAccessGuard, captureGroupOwnerMiddleware } from './middleware/group-access';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
@@ -128,6 +133,29 @@ try {
 }
 initSqlite();
 
+// ── 登录信息隔离（2026-11 批）— 数据路由鉴权 ─────────────────────────────────
+// 数据面（群/项目/会话/运行记录及子路径）必须登录：attachUser 解析
+// `Authorization: Bearer <token>`（SSE 兼容 ?access_token=）→ 挂 req.user；
+// requireAuth 拦截无/无效 token（401 UNAUTHORIZED）与被禁用账号（403）。
+// 公共面（/health、/api/auth/*、/api/settings、/api/skills、/api/connectors
+// 等）不挂，保持匿名可用。归属过滤/校验在各路由内部按 req.user 生效（无
+// req.user 的旧直挂用法行为不变——测试零改动）。
+const PROTECTED_DATA_PATHS = [
+  '/api/groups',
+  '/api/projects',
+  '/api/conversations',
+  '/api/run-sessions',
+  '/api/runs',
+  '/api/chat',
+];
+app.use(PROTECTED_DATA_PATHS, attachUser, requireAuth);
+// /api/groups 归属守卫（列表过滤 / 建群归属捕获 / :id 归属校验）——必须挂在
+// groupsChatRouter **之前**，Node/Python 双群后端统一生效（见 middleware/group-access.ts）。
+app.use('/api/groups', groupAccessGuard());
+// 管理员 API（未登录 401；非 admin → 403 FORBIDDEN——requireAdmin 必须挂上，
+// 只挂 requireAuth 挡不住普通用户；引导策略见 storage/users.ts）。
+app.use('/api/admin', attachUser, requireAdmin, adminRouter);
+
 app.use('/api/run-sessions', runSessionsRouter);
 app.use('/api/runs', runsRouter);
 // 2026-08-23 — 完成态「后续建议」：GET /api/runs/:runId/suggestions。
@@ -184,7 +212,8 @@ app.use('/api/groups', groupsChatRouter);
 // 经 proxyFallback 转 Python，行为零变化。DM resolve 在 /api/chat/* 下单独挂。
 if (process.env.SF_GROUPS_BACKEND === 'node') {
   app.use('/api/groups', groupsNodeRouter);
-  app.post('/api/chat/dm/:agent_id/resolve', handleDmResolve);
+  // DM resolve 建群 → 响应捕获 group_id 记归属（登录用户）。
+  app.post('/api/chat/dm/:agent_id/resolve', captureGroupOwnerMiddleware(), handleDmResolve);
   console.log('[groups] SF_GROUPS_BACKEND=node — /api/groups served by Node SQLite store');
 }
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
