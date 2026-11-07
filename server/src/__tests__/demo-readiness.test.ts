@@ -6,27 +6,37 @@
  *   ② **附件数字与看板不一致时必须判失败** —— 这正是赛题现场最容易露馅的地方，
  *      页面一个数、附件另一个数，判成 pass 等于没检查。
  *
- * 测试不依赖 dev 栈：在线段用一个进程内的真实 HTTP server（随机端口）挂真实
- * Express Router 与真实 SQLite（临时 cwd 隔离），离线段在 %TEMP% 独立库里跑。
+ * 测试不依赖 dev 栈：一个进程内的真实 HTTP server（随机端口）挂真实 Express
+ * Router 与真实 SQLite（临时 cwd 隔离）；脚本整体以**子进程真跑 CLI**（tsx，
+ * 脚本内部要动态 import TS 存储层），子进程自带 %TEMP% 独立库，「切 cwd /
+ * 重置 sqlite」的副作用整个隔离在子进程里，不污染本测试进程。
+ *
+ * 为什么子进程而不是 import()（2026-11-07，缺口⑥）：vitest 会把非 node_modules
+ * 的 .mjs 强制塞进 vite-node SSR 转换（Windows 下 file:// URL 动态导入有历史故障
+ * 面）。原本「fetchImpl 注入改响应」的用例改为**服务端 tamper 中间件**——让看板
+ * 端点真的报假数，比改 fetch 层更贴近「页面一个数、附件另一个数」的现场形态。
+ *
+ * 注意：CLI 有失败项时退出码为 1（tamper / 不可达用例正是要它失败），所以按
+ * status/stdout 断言、不 throw；且必须**异步** spawn——在线段会 HTTP 回调本进程
+ * 的 express，同步 spawn 阻塞事件循环会把子进程挂死。
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { pathToFileURL } from 'node:url';
 
 // 模块加载时捕获仓库根（beforeAll 会把 cwd 切到临时库）。
 const REPO_ROOT = process.cwd();
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'demo-readiness.mjs');
+const TSX_CLI = path.join(REPO_ROOT, 'server', 'node_modules', 'tsx', 'dist', 'cli.mjs');
 
-type Readiness = {
-  runOfflineChecks(opts?: { tmpRoot?: string }): Promise<Array<{ name: string; level: string; detail: string }>>;
-  runOnlineChecks(opts: { baseUrl?: string; token?: string; fetchImpl?: typeof fetch }): Promise<Array<{ name: string; level: string; detail: string }>>;
-  summarize(items: Array<{ level: string }>): { total: number; pass: number; fail: number; warn: number; skip: number; ok: boolean };
-};
+type CheckItem = { name: string; level: string; detail: string };
+type Summary = { total: number; pass: number; fail: number; warn: number; skip: number; ok: boolean };
+type CliOutput = { items: CheckItem[]; summary: Summary };
 
 let tmp: string;
 let origCwd: string;
@@ -35,7 +45,43 @@ let board: typeof import('../storage/merchant-board');
 let router: typeof import('../routes/dashboard/merchant-board').default;
 let server: ReturnType<express.Express['listen']>;
 let baseUrl = '';
-let readiness: Readiness;
+/** 挂上即让 /api/merchant/overview 报假数（营收 +1），验证「不一致必须判失败」。 */
+let tamperOverview = false;
+
+/**
+ * 子进程真跑 CLI（--json）。有失败项时退出码 1，属预期形态，不 throw。
+ *
+ * 必须异步 spawn（不能 spawnSync）：在线段会 HTTP 回调本进程的 express 测试服务，
+ * 同步 spawn 阻塞事件循环 = 服务端永远不应答 = 子进程挂死。
+ */
+function runReadinessCli(args: string[]): Promise<CliOutput> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [TSX_CLI, SCRIPT, '--json', ...args], {
+      cwd: REPO_ROOT,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (d: string) => { stdout += d; });
+    child.stderr.on('data', (d: string) => { stderr += d; });
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`CLI 超时：${args.join(' ')}`));
+    }, 120000);
+    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('close', (status) => {
+      clearTimeout(timer);
+      // sqlite 初始化会先打一行日志，JSON 从第一个 '{' 开始。
+      const start = stdout.indexOf('{');
+      if (start < 0) {
+        reject(new Error(`CLI 没有输出 JSON（status=${status}）：${stdout.slice(0, 200)} / stderr: ${stderr.slice(0, 200)}`));
+        return;
+      }
+      resolve(JSON.parse(stdout.slice(start)) as CliOutput);
+    });
+  });
+}
 
 beforeAll(async () => {
   origCwd = process.cwd();
@@ -61,12 +107,19 @@ beforeAll(async () => {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', server: 'shadowflow-api', version: '1.0.0' });
   });
+  // tamper 观察点：让看板概览端点报假数（营收 +1），模拟「页面与附件对不上」。
+  app.use('/api/merchant', (req, res, next) => {
+    if (tamperOverview && req.path === '/overview') {
+      const origJson = res.json.bind(res);
+      res.json = ((body: Record<string, unknown>) =>
+        origJson({ ...body, revenue_cents: Number(body.revenue_cents) + 1 })) as typeof res.json;
+    }
+    next();
+  });
   app.use('/api/merchant', router);
   server = app.listen(0, '127.0.0.1');
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-
-  readiness = (await import(pathToFileURL(SCRIPT).href)) as Readiness;
 });
 
 afterAll(() => {
@@ -82,8 +135,7 @@ function byName(items: Array<{ name: string; level: string; detail: string }>) {
 
 describe('demo-readiness 在线段', () => {
   it('服务在跑、材料齐、口径一致 → 零失败', async () => {
-    const items = await readiness.runOnlineChecks({ baseUrl });
-    const s = readiness.summarize(items);
+    const { items, summary: s } = await runReadinessCli([`--base-url=${baseUrl}`]);
     expect(s.fail).toBe(0);
     expect(s.ok).toBe(true);
 
@@ -100,29 +152,20 @@ describe('demo-readiness 在线段', () => {
   });
 
   it('附件数字与看板不一致 → 必须判失败（现场最易露馅的场景）', async () => {
-    const tampered: typeof fetch = async (input, init) => {
-      const url = String(input);
-      const res = await fetch(url, init);
-      if (url.includes('/api/merchant/overview')) {
-        const body = (await res.json()) as Record<string, unknown>;
-        return new Response(JSON.stringify({ ...body, revenue_cents: Number(body.revenue_cents) + 1 }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
-      }
-      return res;
-    };
-    const items = await readiness.runOnlineChecks({ baseUrl, fetchImpl: tampered });
-    const s = readiness.summarize(items);
-    expect(s.ok).toBe(false);
-    const diff = items.find((i) => i.name === '附件与看板数字一致');
-    expect(diff?.level).toBe('fail');
-    expect(diff?.detail).toContain('revenue_cents');
+    tamperOverview = true;
+    try {
+      const { items, summary: s } = await runReadinessCli([`--base-url=${baseUrl}`]);
+      expect(s.ok).toBe(false);
+      const diff = items.find((i) => i.name === '附件与看板数字一致');
+      expect(diff?.level).toBe('fail');
+      expect(diff?.detail).toContain('revenue_cents');
+    } finally {
+      tamperOverview = false;
+    }
   });
 
   it('服务不可达 → 判失败并给出提示，而不是抛异常', async () => {
-    const items = await readiness.runOnlineChecks({ baseUrl: 'http://127.0.0.1:1' });
-    const s = readiness.summarize(items);
+    const { items, summary: s } = await runReadinessCli(['--base-url=http://127.0.0.1:1']);
     expect(s.ok).toBe(false);
     const map = byName(items);
     expect(map['服务可达'].level).toBe('fail');
@@ -132,12 +175,8 @@ describe('demo-readiness 在线段', () => {
   });
 
   it('鉴权缺失 → 提示配 token，不泄露 token 内容', async () => {
-    const guarded: typeof fetch = async (input, init) => {
-      const res = await fetch(input, init);
-      return res;
-    };
     // 直接用带错误 Authorization 的请求验证守卫行为（模拟远程访问被拒）。
-    const res = await guarded(`${baseUrl}/api/merchant/evidence`, { headers: { Authorization: 'Bearer wrong-token' } });
+    const res = await fetch(`${baseUrl}/api/merchant/evidence`, { headers: { Authorization: 'Bearer wrong-token' } });
     // 本机访问时 guard 允许回环，因此期望 200；若将来改成强制 token，这里会暴露出来。
     expect([200, 401, 403]).toContain(res.status);
   });
@@ -145,8 +184,7 @@ describe('demo-readiness 在线段', () => {
 
 describe('demo-readiness 离线段', () => {
   it('不需要 dev 栈也能跑，且全绿（材料形态 + 复现步骤）', async () => {
-    const items = await readiness.runOfflineChecks();
-    const s = readiness.summarize(items);
+    const { items, summary: s } = await runReadinessCli(['--offline']);
     expect(s.fail).toBe(0);
     expect(s.ok).toBe(true);
     expect(s.pass).toBeGreaterThanOrEqual(10);
@@ -156,8 +194,5 @@ describe('demo-readiness 离线段', () => {
     expect(map['markdown 标注为演示样例'].level).toBe('pass');
     expect(map['复现步骤含 first-order-replay.mjs'].level).toBe('pass');
     expect(map['复现步骤含 demo-exception-replay.mjs'].level).toBe('pass');
-    // 离线段会切 cwd 并重置 sqlite 句柄，测完要把本测试的库重新挂上。
-    sqlite._resetForTests();
-    sqlite.getDb();
   });
 });
