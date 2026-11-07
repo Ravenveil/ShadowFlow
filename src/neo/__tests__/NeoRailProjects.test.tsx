@@ -18,11 +18,8 @@ vi.mock('../../api/groupApi', () => ({
   resolveDmConversation: vi.fn().mockResolvedValue(null),
   resolveTeamGroup: vi.fn().mockResolvedValue(null),
 }));
-vi.mock('../../api/knowledge', () => ({
+vi.mock('../../api/memoryBank', () => ({
   listPacks: vi.fn().mockResolvedValue({ data: { packs: [] } }),
-}));
-vi.mock('../../api/knowledgeVaults', () => ({
-  listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
 vi.mock('../../api/memoryEntries', () => ({
   listMemoryEntries: vi.fn().mockResolvedValue([]),

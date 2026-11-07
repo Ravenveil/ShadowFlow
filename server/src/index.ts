@@ -30,8 +30,6 @@ import { groupsChatRouter } from './routes/groups/groups-chat';
 import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/system/fs-browse';
-// 2026-08-19 — 本地仓库知识库(注册表 + 扫描 + 安全读取,Obsidian vault 模式)
-import { knowledgeVaultsRouter } from './routes/knowledge/knowledge-vaults';
 // Story 15.14 — POST /api/artifacts/lint
 import artifactsRouter from './routes/system/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
@@ -173,9 +171,8 @@ if (process.env.SF_GROUPS_BACKEND === 'node') {
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
 // 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
 app.use('/api/fs', fsBrowseRouter);
-// 2026-08-19 — 本地仓库知识库(Obsidian vault 模式,注册表移植自 Shadow):
-// 注册/浏览/阅读本地文件夹,只读用户文件。同样必须挂在 proxyFallback 之前。
-app.use('/api/knowledge-vaults', knowledgeVaultsRouter);
+// 2026-11-07 知识库统一批：本地仓库 vaults（/api/knowledge-vaults）下线，
+// 本地文件夹语义并入多模态记忆库目录摄入（/api/memory-bank/packs/{id}/folders）。
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);

@@ -468,32 +468,36 @@ class EvalService:
     def _check_knowledge_access(
         self, blueprint: Dict[str, Any], failures: List[FailureReason]
     ) -> None:
-        """Verify bound KnowledgePacks are in 'ready' status."""
+        """Verify bound MemoryBank knowledge packs exist and are in 'ready' status."""
         bindings = blueprint.get("knowledge_bindings", [])
         if not bindings:
             return
         try:
-            from shadowflow.memory.knowledge_pack import _load_pack  # type: ignore[attr-defined]
+            from shadowflow.memory.memory_bank import MemoryBank
         except ImportError:
             # knowledge module not available in minimal installs
             return
+        import os
+        from pathlib import Path
+
+        bank = MemoryBank(root=Path(os.getenv("SHADOWFLOW_KNOWLEDGE_DIR", ".shadowflow/knowledge")))
         for kb in bindings:
             source_ref = kb.get("source_ref", "")
             if not source_ref:
                 continue
             try:
-                pack = _load_pack(source_ref)
-                if pack and getattr(pack, "status", None) != "ready":
+                manifest = bank.get_pack(source_ref)
+                if manifest.get("status") != "ready":
                     failures.append(FailureReason(
                         dimension=FailureDimension.knowledge_access,
-                        detail=f"KnowledgePack {source_ref!r} status is not 'ready'",
-                        suggested_fix="Re-index the knowledge pack in Knowledge Dock",
+                        detail=f"Knowledge pack {source_ref!r} status is not 'ready'",
+                        suggested_fix="Re-ingest the knowledge pack in Knowledge Dock",
                     ))
             except Exception:
                 failures.append(FailureReason(
                     dimension=FailureDimension.knowledge_access,
-                    detail=f"KnowledgePack {source_ref!r} could not be loaded",
-                    suggested_fix="Verify knowledge pack exists and is indexed",
+                    detail=f"Knowledge pack {source_ref!r} could not be loaded",
+                    suggested_fix="Verify the knowledge pack exists in the MemoryBank",
                 ))
 
     def _run_min_task(

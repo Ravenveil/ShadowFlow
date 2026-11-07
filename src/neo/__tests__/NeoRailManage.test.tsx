@@ -70,11 +70,8 @@ vi.mock('../../api/conversations', () => ({
     updated_at: '2026-08-21T00:00:00Z',
   }),
 }));
-vi.mock('../../api/knowledge', () => ({
+vi.mock('../../api/memoryBank', () => ({
   listPacks: vi.fn().mockResolvedValue({ data: { packs: [] } }),
-}));
-vi.mock('../../api/knowledgeVaults', () => ({
-  listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
 vi.mock('../../api/memoryEntries', () => ({
   listMemoryEntries: vi.fn().mockResolvedValue([]),

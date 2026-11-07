@@ -83,19 +83,8 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - optional dependency guard
     PatternManager = None
 
-# Story 9.1 — KnowledgePack + RetrievalProfile (independent, not part of legacy
-# agentgraph.memory). Imported eagerly because shadowflow.api.knowledge depends on
-# them.
-from shadowflow.memory.retrieval_profiles import RetrievalProfile, RetrievalMode
-from shadowflow.memory.knowledge_pack import (
-    KnowledgePack,
-    KnowledgeSource,
-    SourceType,
-    IngestStatus,
-    PackStatus,
-    FreshnessPolicy,
-    update_pack,
-)
+# 2026-11-07 知识库统一批：旧 KnowledgePack/RetrievalProfile 数据面已随知识库
+# 统一到多模态记忆库（shadowflow.memory.memory_bank）下线，不再导出。
 
 __all__ = [
     # 基础接口
@@ -136,14 +125,5 @@ __all__ = [
     "ContextResult",
     "UserMemoryFactory",
 
-    # Story 9.1 — KnowledgePack
-    "RetrievalProfile",
-    "RetrievalMode",
-    "KnowledgePack",
-    "KnowledgeSource",
-    "SourceType",
-    "IngestStatus",
-    "PackStatus",
-    "FreshnessPolicy",
-    "update_pack",
+    # Story 9.1 — KnowledgePack：已下线（2026-11-07 知识库统一批）
 ]

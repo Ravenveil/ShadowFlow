@@ -210,7 +210,6 @@ from shadowflow.api import approvals as _approvals_api
 from shadowflow.api import builder as _builder_api
 from shadowflow.api import catalog as _catalog_api
 from shadowflow.api import tools as _tools_api
-from shadowflow.api import knowledge as _knowledge_api
 from shadowflow.api import citations as _citations_api
 from shadowflow.api import memory as _memory_api
 from shadowflow.api import state as _state_api
@@ -265,7 +264,8 @@ app.include_router(_catalog_api.router)
 # /api 前缀），同一 router 再挂一份 /api/catalog 别名；原 /catalog 路径保持不变。
 app.include_router(_catalog_api.router, prefix="/api")
 app.include_router(_tools_api.router)
-app.include_router(_knowledge_api.router)
+# 2026-11-07 知识库统一批：/api/knowledge（旧 KnowledgePack）下线，知识库唯一
+# 实现 = 多模态记忆库 /api/memory-bank（create_memory_router 挂载见上）。
 app.include_router(_citations_api.router)
 app.include_router(_memory_api.router)
 app.include_router(_state_api.router)

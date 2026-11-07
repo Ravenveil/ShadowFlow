@@ -215,6 +215,7 @@ class MemoryConfig:
     parent_size: int = 1800
     max_table_rows_per_parent: int = 24
     max_file_bytes: int = 64 * 1024 * 1024
+    max_folder_files: int = 2000
     max_pdf_pages: int = 500
     max_images_per_document: int = 48
     max_table_rows: int = 200_000
@@ -235,6 +236,8 @@ class MemoryConfig:
             raise ValueError("Require 0 <= child_overlap < child_size")
         if self.max_file_bytes <= 0 or self.max_table_rows <= 0:
             raise ValueError("File and table limits must be positive")
+        if self.max_folder_files <= 0:
+            raise ValueError("max_folder_files must be positive")
         if self.candidate_multiplier < 1 or self.rrf_k < 1:
             raise ValueError("Retrieval candidate settings must be positive")
 
@@ -1647,6 +1650,86 @@ class MemoryBank:
     async def aingest_text(self, pack_id: str, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         return await asyncio.to_thread(self.ingest_text, pack_id, *args, **kwargs)
 
+    def ingest_folder(
+        self,
+        pack_id: str,
+        folder: Union[str, Path],
+        *,
+        recursive: bool = True,
+        metadata: Optional[Mapping[str, Any]] = None,
+        deduplicate: bool = True,
+    ) -> Dict[str, Any]:
+        """Batch-ingest every supported file under a local folder into a pack.
+
+        Each file goes through the exact same pipeline as ``ingest_file`` (so
+        checksum-based dedup stays idempotent). Unsupported/empty/oversized
+        files are skipped with a reason; per-file ingest failures are collected
+        instead of aborting the whole batch.
+        """
+        self._load_manifest(pack_id)
+        root = Path(folder).expanduser()
+        if not root.exists():
+            raise MemoryBankError("FOLDER_NOT_FOUND", f"Folder not found: {root}", status=404)
+        if not root.is_dir():
+            raise MemoryBankError("NOT_A_FOLDER", f"Not a directory: {root}")
+
+        candidates: List[Path] = []
+        if recursive:
+            for current, _dirs, names in os.walk(root, followlinks=False):
+                candidates.extend(Path(current) / name for name in names)
+        else:
+            candidates.extend(entry for entry in root.iterdir() if entry.is_file())
+        candidates = sorted(path for path in candidates if not path.is_symlink())
+        if len(candidates) > self.config.max_folder_files:
+            raise MemoryBankError(
+                "FOLDER_TOO_MANY_FILES",
+                f"Folder holds {len(candidates)} files; the limit is {self.config.max_folder_files}",
+                status=413,
+            )
+
+        files: List[Dict[str, Any]] = []
+        counts = {"ingested": 0, "deduplicated": 0, "skipped": 0, "failed": 0}
+        for path in candidates:
+            rel = path.relative_to(root).as_posix()
+            record: Dict[str, Any] = {"file": rel}
+            if _safe_suffix(path.name) not in _SUPPORTED_EXTENSIONS:
+                record.update(status="skipped", code="UNSUPPORTED_FORMAT")
+            else:
+                try:
+                    size = path.stat().st_size
+                except OSError as exc:
+                    record.update(status="failed", code="READ_FAILED", message=str(exc))
+                else:
+                    if size == 0:
+                        record.update(status="skipped", code="EMPTY_FILE")
+                    elif size > self.config.max_file_bytes:
+                        record.update(status="skipped", code="FILE_TOO_LARGE")
+                    else:
+                        file_metadata = {**(metadata or {}), "source_path": rel}
+                        try:
+                            result = self.ingest_file(
+                                pack_id, path, metadata=file_metadata, deduplicate=deduplicate,
+                            )
+                        except MemoryBankError as exc:
+                            record.update(status="failed", code=exc.code, message=exc.message)
+                        except Exception as exc:  # noqa: BLE001 - one bad file must not abort the batch
+                            record.update(status="failed", code="INGEST_FAILED", message=str(exc))
+                        else:
+                            if result.get("deduplicated"):
+                                record.update(status="deduplicated", source_id=result.get("source_id"))
+                            else:
+                                record.update(status="ingested", source_id=result.get("source_id"))
+            files.append(record)
+            counts[record["status"]] += 1
+
+        return {
+            "folder": str(root),
+            "recursive": recursive,
+            "total": len(candidates),
+            **counts,
+            "files": files,
+        }
+
     def _ingest_bytes(
         self,
         pack_id: str,
@@ -2228,6 +2311,12 @@ def create_memory_router(bank: MemoryBank, *, prefix: str = "/api/memory-bank") 
         query_variants: List[str] = Field(default_factory=list, max_length=4)
         use_reranker: bool = True
 
+    class FolderBody(BaseModel):
+        path: str = Field(min_length=1, max_length=2000)
+        recursive: bool = True
+        metadata: Dict[str, Any] = Field(default_factory=dict)
+        deduplicate: bool = True
+
     # NOTE: 本模块顶部有 `from __future__ import annotations`，路由处理器注解
     # 是字符串；FastAPI 解析时只查模块全局命名空间，而 PackBody 等是本工厂
     # 闭包内的局部类，解析失败会把 JSON body 退化成 query 参数（422）。
@@ -2235,6 +2324,7 @@ def create_memory_router(bank: MemoryBank, *, prefix: str = "/api/memory-bank") 
     globals()["PackBody"] = PackBody
     globals()["TextBody"] = TextBody
     globals()["QueryBody"] = QueryBody
+    globals()["FolderBody"] = FolderBody
 
     def errors(handler: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(handler)
@@ -2313,6 +2403,15 @@ def create_memory_router(bank: MemoryBank, *, prefix: str = "/api/memory-bank") 
             mime_type=upload.content_type or "", metadata=parsed_metadata,
         )
         return envelope(result)
+
+    @router.post("/packs/{pack_id}/folders", status_code=201)
+    @errors
+    async def ingest_folder(pack_id: str, body: FolderBody) -> Dict[str, Any]:
+        result = await asyncio.to_thread(
+            bank.ingest_folder, pack_id, body.path,
+            recursive=body.recursive, metadata=body.metadata, deduplicate=body.deduplicate,
+        )
+        return envelope(result, count=result["total"])
 
     @router.post("/packs/{pack_id}/query")
     @errors

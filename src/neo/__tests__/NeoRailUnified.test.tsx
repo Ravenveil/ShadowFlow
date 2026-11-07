@@ -27,11 +27,8 @@ vi.mock('../../api/groupApi', () => ({
 vi.mock('../../api/projects', () => ({
   listProjectsWithSessions: vi.fn().mockResolvedValue([]),
 }));
-vi.mock('../../api/knowledge', () => ({
+vi.mock('../../api/memoryBank', () => ({
   listPacks: vi.fn().mockResolvedValue({ data: { packs: [] } }),
-}));
-vi.mock('../../api/knowledgeVaults', () => ({
-  listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
 vi.mock('../../core/auth/AuthContext', () => ({
   useAuth: () => ({ user: null }),

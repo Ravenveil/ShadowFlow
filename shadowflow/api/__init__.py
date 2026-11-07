@@ -7,20 +7,16 @@ from shadowflow.api.policy_observability import (
     router as policy_obs_router,
     PolicyObsAggregator,
 )
-from shadowflow.api.knowledge import (
-    router as knowledge_router,
-    KnowledgeService,
-)
+# 2026-11-07 知识库统一批：旧 KnowledgePack API（/api/knowledge）随知识库统一到
+# 多模态记忆库（/api/memory-bank）后下线。
 from shadowflow.api.runs import router as runs_router
 
 __all__ = [
     "ops_router",
     "archive_router",
     "policy_obs_router",
-    "knowledge_router",
     "runs_router",
     "OpsAggregator",
     "ArchiveService",
     "PolicyObsAggregator",
-    "KnowledgeService",
 ]

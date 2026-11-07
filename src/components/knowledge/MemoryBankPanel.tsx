@@ -1,63 +1,66 @@
 /**
- * MemoryBankPanel — 多模态记忆库面板（PR #7 设计移植，2026-11-06）。
+ * MemoryBankPanel — 多模态记忆库「包详情」面板（PR #7 设计移植，2026-11-06；
+ * 2026-11-07 知识库统一批改为受控详情面板）。
  *
- * 挂在知识库页（KnowledgePage）作为独立的「记忆库」视图，与现有
- * KnowledgePack（/api/knowledge）并行不互替。
+ * 统一后的知识库唯一实现：/api/memory-bank（Python memory_bank.py）。
+ * 包列表 / 建包 / 导入本地文件夹在 KnowledgePage（neo-kv-rail + 添加菜单）；
+ * 本面板只负责单个知识包的详情：上传文件（multipart）→ 来源列表 → 文本检索
+ * → 删除来源/删除包。KnowledgePage 以 `key` 重挂载或 `reloadKey` 触发来源刷新。
  *
- * 主链路：建知识包 → 上传文件（multipart）→ 来源列表 → 文本检索 → 原文回读。
- * 后端：Python sidecar /api/memory-bank（memory_bank.py），未注入 Embedder
- * 时退化为 BM25 关键词检索（meta.rag_backend = 'keyword+structure'）。
- * 弹窗一律用 NeoConfirmModal（项目原生弹窗清零约定）。
+ * 后端：未注入 Embedder 时退化为 BM25 关键词检索
+ * （meta.rag_backend = 'keyword+structure'）。弹窗一律用 NeoConfirmModal。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Database, FileUp, Loader2, Search, Trash2 } from 'lucide-react';
+import { FileUp, Loader2, Search, Trash2 } from 'lucide-react';
 import {
   MemoryBankApiError,
-  createPack,
   deletePack,
   deleteSource,
   ingestFile,
-  listPacks,
   listSources,
   queryPack,
 } from '../../api/memoryBank';
-import type { MemoryBankHit, MemoryBankPack, MemoryBankSource } from '../../api/memoryBank';
+import type { MemoryBankHit, MemoryBankSource } from '../../api/memoryBank';
 import { NeoConfirmModal } from '../../neo/NeoConfirmModal';
 import './memory-bank.css';
 
-type Busy = null | 'create' | 'upload' | 'query' | 'delete';
+type Busy = null | 'upload' | 'query' | 'delete';
 
-/** 删除目标：包或来源（NeoConfirmModal 二次确认）。 */
-type DeleteTarget = { kind: 'pack'; id: string; name: string } | { kind: 'source'; id: string; name: string } | null;
+/** 删除目标：来源（NeoConfirmModal 二次确认）或整包。 */
+type DeleteTarget =
+  | { kind: 'pack'; id: string; name: string }
+  | { kind: 'source'; id: string; name: string }
+  | null;
 
-export default function MemoryBankPanel() {
-  const [packs, setPacks] = useState<MemoryBankPack[]>([]);
-  const [activePackId, setActivePackId] = useState<string | null>(null);
+export interface MemoryBankPanelProps {
+  /** 当前选中的知识包（KnowledgePage 左栏下发）。 */
+  packId: string | null;
+  /** 包名（头部展示；为空时显示 packId）。 */
+  packName?: string;
+  /** 递增触发来源列表刷新（KnowledgePage 目录导入等批量摄入后调用）。 */
+  reloadKey?: number;
+  /** 整包删除完成后回调（KnowledgePage 同步左栏列表）。 */
+  onPackDeleted?: () => void;
+}
+
+export default function MemoryBankPanel({
+  packId,
+  packName,
+  reloadKey = 0,
+  onPackDeleted,
+}: MemoryBankPanelProps) {
   const [sources, setSources] = useState<MemoryBankSource[]>([]);
   const [hits, setHits] = useState<MemoryBankHit[] | null>(null);
   const [ragBackend, setRagBackend] = useState<string>('');
   const [queryText, setQueryText] = useState('');
-  const [newPackName, setNewPackName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<Busy>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const activePack = packs.find((p) => p.pack_id === activePackId) ?? null;
-
-  const refreshPacks = useCallback(async () => {
+  const refreshSources = useCallback(async (id: string) => {
     try {
-      const res = await listPacks();
-      setPacks(res.data.packs);
-      setActivePackId((cur) => cur ?? res.data.packs[0]?.pack_id ?? null);
-    } catch (e) {
-      setError(e instanceof MemoryBankApiError ? `记忆库不可用：${e.status}` : '加载知识包失败');
-    }
-  }, []);
-
-  const refreshSources = useCallback(async (packId: string) => {
-    try {
-      const res = await listSources(packId);
+      const res = await listSources(id);
       setSources(res.data.sources);
     } catch {
       setSources([]);
@@ -65,41 +68,21 @@ export default function MemoryBankPanel() {
   }, []);
 
   useEffect(() => {
-    void refreshPacks();
-  }, [refreshPacks]);
-
-  useEffect(() => {
     setSources([]);
     setHits(null);
-    if (activePackId) void refreshSources(activePackId);
-  }, [activePackId, refreshSources]);
-
-  const handleCreatePack = async () => {
-    const name = newPackName.trim();
-    if (!name || busy) return;
-    setBusy('create');
     setError('');
-    try {
-      const res = await createPack({ name });
-      setNewPackName('');
-      await refreshPacks();
-      setActivePackId(res.data.pack_id);
-    } catch (e) {
-      setError(e instanceof MemoryBankApiError ? `创建失败：${e.code || e.status}` : '创建失败');
-    } finally {
-      setBusy(null);
-    }
-  };
+    if (packId) void refreshSources(packId);
+  }, [packId, reloadKey, refreshSources]);
 
   const handleUpload = async (files: FileList | null) => {
-    if (!files?.length || !activePackId || busy) return;
+    if (!files?.length || !packId || busy) return;
     setBusy('upload');
     setError('');
     try {
       for (const f of Array.from(files)) {
-        await ingestFile(activePackId, f);
+        await ingestFile(packId, f);
       }
-      await refreshSources(activePackId);
+      await refreshSources(packId);
     } catch (e) {
       setError(e instanceof MemoryBankApiError ? `上传失败：${e.code || e.status}` : '上传失败');
     } finally {
@@ -110,11 +93,11 @@ export default function MemoryBankPanel() {
 
   const handleQuery = async () => {
     const q = queryText.trim();
-    if (!q || !activePackId || busy) return;
+    if (!q || !packId || busy) return;
     setBusy('query');
     setError('');
     try {
-      const res = await queryPack(activePackId, { query: q, top_k: 5 });
+      const res = await queryPack(packId, { query: q, top_k: 5 });
       setHits(res.data.hits);
       setRagBackend(res.meta.rag_backend ?? '');
     } catch (e) {
@@ -131,12 +114,13 @@ export default function MemoryBankPanel() {
     try {
       if (deleteTarget.kind === 'pack') {
         await deletePack(deleteTarget.id);
-        const rest = packs.filter((p) => p.pack_id !== deleteTarget.id);
-        setPacks(rest);
-        setActivePackId(rest[0]?.pack_id ?? null);
-      } else if (activePackId) {
-        await deleteSource(activePackId, deleteTarget.id);
-        await refreshSources(activePackId);
+        setDeleteTarget(null);
+        onPackDeleted?.();
+        return;
+      }
+      if (packId) {
+        await deleteSource(packId, deleteTarget.id);
+        await refreshSources(packId);
       }
       setDeleteTarget(null);
     } catch (e) {
@@ -147,73 +131,32 @@ export default function MemoryBankPanel() {
   };
 
   return (
-    <div className="mbk" data-testid="memory-bank-panel">
-      <aside className="mbk-rail">
-        <div className="mbk-rail-head">
-          <Database size={15} />
-          <span>记忆库</span>
-        </div>
-        <div className="mbk-newpack">
-          <input
-            value={newPackName}
-            onChange={(e) => setNewPackName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleCreatePack();
-            }}
-            placeholder="新知识包名称"
-            aria-label="新知识包名称"
-            className="mbk-input"
-          />
-          <button
-            onClick={() => void handleCreatePack()}
-            disabled={busy === 'create' || !newPackName.trim()}
-            className="mbk-btn mbk-btn--primary"
-            data-testid="mbk-create-pack"
-          >
-            {busy === 'create' ? <Loader2 size={13} className="mbk-spin" /> : '建包'}
-          </button>
-        </div>
-        <div className="mbk-packlist">
-          {packs.map((p) => (
-            <button
-              key={p.pack_id}
-              onClick={() => setActivePackId(p.pack_id)}
-              className={`mbk-packrow${p.pack_id === activePackId ? ' is-active' : ''}`}
-              data-testid={`mbk-pack-${p.pack_id}`}
-            >
-              <span className="mbk-packrow-name">{p.name}</span>
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label={`删除知识包 ${p.name}`}
-                className="mbk-packrow-del"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteTarget({ kind: 'pack', id: p.pack_id, name: p.name });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    setDeleteTarget({ kind: 'pack', id: p.pack_id, name: p.name });
-                  }
-                }}
-              >
-                <Trash2 size={12} />
-              </span>
-            </button>
-          ))}
-          {packs.length === 0 && <p className="mbk-hint">还没有知识包，先建一个。</p>}
-        </div>
-      </aside>
-
+    <div className="mbk mbk--detail" data-testid="memory-bank-panel">
       <section className="mbk-main">
-        {!activePack ? (
+        {!packId ? (
           <div className="mbk-empty" data-testid="mbk-empty">
             <p className="mbk-empty-t1">选择或创建一个知识包</p>
-            <p className="mbk-empty-t2">上传文件建立可检索的多模态记忆库（支持 TXT/MD/CSV/JSON/HTML/XLSX/DOCX/PDF/图片）。</p>
+            <p className="mbk-empty-t2">
+              上传文件或导入本地文件夹，建立可检索的多模态记忆库（支持 TXT/MD/CSV/JSON/HTML/XLSX/DOCX/PDF/图片）。
+            </p>
           </div>
         ) : (
           <>
+            <div className="mbk-detail-head">
+              <span className="mbk-detail-title" data-testid="mbk-pack-title">
+                {packName || packId}
+              </span>
+              <button
+                data-testid="mbk-delete-pack"
+                onClick={() =>
+                  setDeleteTarget({ kind: 'pack', id: packId, name: packName || packId })
+                }
+                className="mbk-btn mbk-btn--danger"
+              >
+                <Trash2 size={13} /> 删除知识包
+              </button>
+            </div>
+
             <div className="mbk-toolbar">
               <input
                 ref={fileInputRef}
@@ -289,7 +232,7 @@ export default function MemoryBankPanel() {
                     </span>
                   </div>
                 ))}
-                {sources.length === 0 && <p className="mbk-hint">还没有来源，点「上传文件」。</p>}
+                {sources.length === 0 && <p className="mbk-hint">还没有来源，点「上传文件」或「导入本地文件夹」。</p>}
               </div>
 
               <div className="mbk-results" data-testid="mbk-results">

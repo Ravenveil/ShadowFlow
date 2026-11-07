@@ -177,6 +177,13 @@
   font-size: 13px;
 }
 
+/* 信息提示（目录导入进度/结果等非错误消息） */
+.neo-kp-alert--info {
+  border-color: color-mix(in srgb, var(--t-accent, #2563eb) 30%, transparent);
+  background: color-mix(in srgb, var(--t-accent, #2563eb) 8%, transparent);
+  color: var(--t-accent, #2563eb);
+}
+
 
 
 

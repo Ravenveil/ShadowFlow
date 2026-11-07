@@ -23,11 +23,8 @@ vi.mock('../../api/projects', () => ({
   listProjectsWithSessions: vi.fn().mockResolvedValue([]),
   createProject: vi.fn().mockResolvedValue({ project_id: 'p1', name: 'x' }),
 }));
-vi.mock('../../api/knowledge', () => ({
+vi.mock('../../api/memoryBank', () => ({
   listPacks: vi.fn().mockResolvedValue({ data: { packs: [] } }),
-}));
-vi.mock('../../api/knowledgeVaults', () => ({
-  listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
 vi.mock('../../api/memoryEntries', () => ({
   listMemoryEntries: vi.fn().mockResolvedValue([]),
