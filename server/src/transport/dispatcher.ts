@@ -21,6 +21,7 @@ import { ApiClientCallable } from './ApiClientCallable';
 import { CliCallable } from './CliCallable';
 import { AcpCallable } from './AcpCallable';
 import { McpCallable } from './McpCallable';
+import { resolveProviderBaseUrl } from './byokKey';
 
 /**
  * Executor string grammar.
@@ -56,6 +57,14 @@ export interface ResolveOptions {
    * key 由它决定（如 ARC 的 preflight 读 OPENAI_API_KEY）。与 apiKey 配对使用。
    */
   provider?: string;
+  /**
+   * BYOK 自定义 API 地址（2026-11-07 Day1 打通修复）：`byok:*` 的
+   * OpenAI-compat 端点覆盖。缺省时从 settings/byok 里同 provider 的
+   * `baseUrl` 兜底解析（`resolveProviderBaseUrl`），仍未配置才回退各
+   * client 的内置默认地址。此前该字段缺失，自定义网关/本地端点被打偏到
+   * 默认公网地址（SDK "Request timed out."）。
+   */
+  baseUrl?: string;
   /** Pinned model id (e.g., `claude-opus-4-7`, `glm-4.6`). */
   model?: string;
   /** Default ceilings the callable should encode into its requests. */
@@ -219,6 +228,10 @@ export function resolveCallable(
     }
     return new ApiClientCallable(provider, {
       apiKey: opts.apiKey,
+      // 2026-11-07 Day1 打通修复：显式 baseUrl > settings/byok 里同 provider
+      // 的 baseUrl > client 内置默认地址。此前完全不透传，自定义网关/本地
+      // 端点一律打偏到默认公网地址（SDK "Request timed out."）。
+      baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(provider),
       model: opts.model,
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,

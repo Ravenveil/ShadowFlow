@@ -65,6 +65,13 @@ const OPENAI_COMPAT_PROVIDERS = new Set([
 export interface ApiClientCallableOptions {
   /** BYOK key. Optional for ollama / lmstudio; otherwise required at turn time. */
   apiKey?: string;
+  /**
+   * BYOK 自定义 API 地址（2026-11-07 Day1 打通修复）。目前透传给
+   * OpenAI-compat 系 client 的 `baseURL`；未配置时回退各 provider 内置
+   * 默认地址。此前该字段缺失，settings/byok 里配的自定义网关/本地端点
+   * 在 run-session 管线上被静默忽略，请求打到默认公网地址后超时。
+   */
+  baseUrl?: string;
   /** Model pin; falls back to provider's default via DEFAULT_MODELS. */
   model?: string;
   /** Per-turn output cap; falls back to each ApiClient's internal 8192 default. */
@@ -77,7 +84,7 @@ function buildApiClient(
   provider: string,
   opts: ApiClientCallableOptions,
 ): ApiClient | null {
-  const { apiKey, model, maxTokens: max_tokens, temperature } = opts;
+  const { apiKey, baseUrl, model, maxTokens: max_tokens, temperature } = opts;
   if (provider === 'anthropic') {
     return new AnthropicApiClient({ apiKey, model, max_tokens, temperature });
   }
@@ -94,6 +101,7 @@ function buildApiClient(
     return new OpenAiCompatApiClient({
       providerId: provider,
       apiKey,
+      ...(baseUrl && baseUrl.length > 0 ? { baseURL: baseUrl } : {}),
       model,
       max_tokens,
       temperature,

@@ -97,3 +97,29 @@ export function resolveProviderKey(
   const envVal = process.env[PROVIDER_ENV_VAR[provider]];
   return typeof envVal === 'string' && envVal.trim() ? envVal.trim() : undefined;
 }
+
+/**
+ * 解析 provider 的 BYOK 自定义 baseUrl（2026-11-07 Day1 打通修复）。
+ *
+ * 与 `resolveProviderKey` 同一 store（settings/byok）：BYOK 设置页里用户为
+ * provider 配置的自定义 API 地址（本地网关 / 私有部署 / OpenAI 兼容中转）。
+ * 返回 undefined 表示未配置——调用方回退到各 client 的内置默认地址。
+ *
+ * 背景：此前 `resolveCallable('byok:<provider>')` 只传 key 不传 baseUrl，
+ * OpenAiCompatApiClient 回退到 `https://api.openai.com/v1` 等默认地址，
+ * 自定义网关/本地端点场景全部打偏（表现为 SDK "Request timed out."）。
+ */
+export function resolveProviderBaseUrl(
+  provider: ProviderId | string,
+): string | undefined {
+  try {
+    const cfg = getSetting('byok') as
+      | { providers?: Record<string, { baseUrl?: string }> }
+      | undefined;
+    const u = cfg?.providers?.[provider]?.baseUrl;
+    if (typeof u === 'string' && u.trim()) return u.trim();
+  } catch {
+    /* settings unavailable — fall through */
+  }
+  return undefined;
+}
