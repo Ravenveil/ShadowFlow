@@ -34,6 +34,7 @@ import { fsBrowseRouter } from './routes/system/fs-browse';
 import artifactsRouter from './routes/system/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
+import asrRouter from './routes/system/asr';
 import { detectAll } from './detectors/cli-detector';
 import { detectAcpAgents } from './detectors/acp-detector';
 import projectsRouter from './routes/projects/projects';
@@ -180,6 +181,9 @@ app.use('/api/fs', fsBrowseRouter);
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
+// 语音输入转写（2026-11-07）：POST /api/asr/transcribe，Node 直调 OpenAI 兼容
+// /audio/transcriptions（whisper-1 等）。同须挂 proxyFallback 之前。
+app.use('/api/asr', asrRouter);
 
 // /api/groups — formerly a placeholder stub that returned synthetic IDs and
 // empty arrays. Removed 2026-05-19 so groups requests fall through to the
