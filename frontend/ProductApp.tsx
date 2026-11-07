@@ -117,30 +117,70 @@ function groupPreview(group: GroupRecord): string {
   return content.length > 32 ? `${content.slice(0, 32)}…` : content;
 }
 
+/**
+ * 展示口径的 6 名部门核心员工（对齐后端 .shadowflow/agents 内置 agent：
+ * agent-market-analyst / agent-brand-strategist / agent-content-creator /
+ * agent-ops-specialist / agent-biz-developer / agent-compliance-reviewer）。
+ * 后端不可达时作为各视图的兜底演示数据；id 同时用作 DEMO_TEAM 的 DAG 节点 id。
+ */
 const agents = [
   {
-    name: "总经理",
-    role: "任务拆解与团队调度",
-    initials: "GM",
-    color: "#ff5e3a",
+    id: "MA",
+    name: "市场分析师",
+    role: "目标用户、市场、竞品和需求分析",
+    initials: "市场",
+    color: "#2777e8",
     status: "执行中",
   },
   {
-    name: "市场研究员",
-    role: "市场与竞品洞察",
-    initials: "MR",
-    color: "#2777e8",
+    id: "BP",
+    name: "品牌策划师",
+    role: "品牌定位、产品卖点、品牌故事",
+    initials: "品牌",
+    color: "#7c5cff",
+    status: "执行中",
+  },
+  {
+    id: "CC",
+    name: "内容策划师",
+    role: "商品详情页、图文、短视频脚本",
+    initials: "内容",
+    color: "#e2603a",
     status: "已完成",
   },
   {
-    name: "品牌策略师",
-    role: "定位与传播策略",
-    initials: "BS",
-    color: "#d97b38",
-    status: "执行中",
+    id: "OPS",
+    name: "运营专员",
+    role: "商品资料、上架准备、店铺运营支持",
+    initials: "运营",
+    color: "#0ea5a4",
+    status: "等待中",
   },
-  { name: "内容创意", role: "内容与渠道规划", initials: "CC", color: "#c64f7d", status: "等待中" },
+  {
+    id: "BD",
+    name: "商务专员",
+    role: "企业采购材料、潜在客户筛选跟进",
+    initials: "商务",
+    color: "#57a04a",
+    status: "等待中",
+  },
+  {
+    id: "CR",
+    name: "合规审核员",
+    role: "内容合规、授权、品牌伦理和质量检查",
+    initials: "合规",
+    color: "#d6455e",
+    status: "在线",
+  },
 ];
+
+/** 后端内置的调度中枢 / 服务账号不计入「AI 员工」展示（员工恒为 6 名部门核心员工）。 */
+const HIDDEN_AGENT_IDS = new Set(["agent-ceo", "agent-shadow-secretary"]);
+
+/** 「AI 员工」展示口径：API 列表过滤掉内置中枢与秘书。 */
+function displayAgents(list: AgentRecord[]): AgentRecord[] {
+  return list.filter((a) => !HIDDEN_AGENT_IDS.has(String(a.agent_id ?? "")));
+}
 
 export default function ProductApp() {
   const [view, setView] = useState<View>("chat");
@@ -684,7 +724,7 @@ export default function ProductApp() {
                       </Fragment>
                     );
                   })}
-                  {(agentsList.length > 0 ? agentsList : (agents as unknown as AgentRecord[])).map((agent) => (
+                  {(agentsList.length > 0 ? displayAgents(agentsList) : (agents as unknown as AgentRecord[])).map((agent) => (
                     <button
                       className="sf-agent-tree-row"
                       key={agent.agent_id ?? agent.name}
@@ -1288,7 +1328,7 @@ function RunPanel({
             <span>当前团队</span>
           </div>
           {(agentsList.length > 0
-            ? agentsList.map((a) => ({
+            ? displayAgents(agentsList).map((a) => ({
                 key: a.agent_id,
                 name: a.name || a.agent_id,
                 role: a.soul || a.role || "Agent",
@@ -1688,27 +1728,33 @@ const POLICY_RANK: Record<PolicyCellState, number> = { deny: 3, warn: 2, permit:
 const POLICY_CYCLE: (PolicyCellState | null)[] = [null, "permit", "warn", "deny"];
 const SF_PALETTE = ["#ff5e3a", "#2777e8", "#d97b38", "#c64f7d", "#7c5cff", "#0ea5a4"];
 
-/** 演示编队（后端不可达时的回落，与上方 agents 卡片同一批角色）。 */
+/** 演示编队（后端不可达时的回落，与上方 agents 卡片同一批 6 名部门员工）。 */
 const DEMO_TEAM: SfTeamDag = {
   team_id: "demo-atlas",
   name: "Atlas 新品发布作战室",
   edges: [
-    { source: "GM", target: "MR", mode: "direct" },
-    { source: "GM", target: "BS", mode: "direct" },
-    { source: "MR", target: "BS", mode: "direct" },
-    { source: "BS", target: "CC", mode: "approve" },
-    { source: "CC", target: "GM", mode: "conditional" },
+    { source: "MA", target: "BP", mode: "direct" },
+    { source: "MA", target: "BD", mode: "direct" },
+    { source: "BP", target: "CC", mode: "direct" },
+    { source: "CC", target: "CR", mode: "approve" },
+    { source: "CR", target: "CC", mode: "conditional" },
+    { source: "CR", target: "OPS", mode: "direct" },
+    { source: "BD", target: "OPS", mode: "direct" },
   ],
   resolved_agents: [
-    { id: "GM", title: "总经理" },
-    { id: "MR", title: "市场研究员" },
-    { id: "BS", title: "品牌策略师" },
-    { id: "CC", title: "内容创意" },
+    { id: "MA", title: "市场分析师" },
+    { id: "BP", title: "品牌策划师" },
+    { id: "CC", title: "内容策划师" },
+    { id: "OPS", title: "运营专员" },
+    { id: "BD", title: "商务专员" },
+    { id: "CR", title: "合规审核员" },
   ],
   policy: {
-    MR: { CC: "permit" },
-    BS: { CC: "warn" },
-    CC: { GM: "deny" },
+    MA: { BP: "permit", BD: "permit" },
+    BP: { CC: "permit" },
+    CC: { CR: "warn" },
+    CR: { CC: "deny", OPS: "permit" },
+    BD: { OPS: "warn" },
   },
 };
 
@@ -1848,8 +1894,9 @@ function SfDagPanel({ team, matrix }: { team: SfTeamDag; matrix: PolicyMatrix })
     return { stroke: "#c9c5ba", w: 1.6 };
   };
 
-  const colorOf = (id: string, index: number): string =>
-    agents.find((a) => a.initials === id)?.color ?? SF_PALETTE[index % SF_PALETTE.length];
+  const colorOf = (id: string, index: number, title?: string): string =>
+    agents.find((a) => a.id === id || a.initials === id || (!!title && a.name === title))?.color ??
+    SF_PALETTE[index % SF_PALETTE.length];
 
   return (
     <div className="sf-teamops-panel">
@@ -1923,7 +1970,7 @@ function SfDagPanel({ team, matrix }: { team: SfTeamDag; matrix: PolicyMatrix })
             const p = pos.get(n.id)!;
             const st = agentPolicy(matrix, n.id);
             const stroke = st ? POLICY_COLORS[st] : "#e3e0d8";
-            const color = colorOf(n.id, i);
+            const color = colorOf(n.id, i, n.title);
             return (
               <g key={n.id} transform={`translate(${p.x},${p.y})`}>
                 <rect
@@ -1984,8 +2031,9 @@ function SfPolicyPanel({
   const roster = team.resolved_agents.length
     ? team.resolved_agents
     : (team.members ?? []).map((id) => ({ id, title: id }));
-  const colorOf = (id: string, index: number): string =>
-    agents.find((a) => a.initials === id)?.color ?? SF_PALETTE[index % SF_PALETTE.length];
+  const colorOf = (id: string, index: number, title?: string): string =>
+    agents.find((a) => a.id === id || a.initials === id || (!!title && a.name === title))?.color ??
+    SF_PALETTE[index % SF_PALETTE.length];
   const cellOf = (a: string, b: string): PolicyCellState | null => matrix[a]?.[b] ?? null;
   return (
     <div className="sf-teamops-panel">
@@ -2001,14 +2049,14 @@ function SfPolicyPanel({
         <span />
         {roster.map((c, ci) => (
           <span className="sf-policy-head" key={`h${c.id}`} title={c.title}>
-            <i style={{ background: colorOf(c.id, ci) }}>{(c.title || c.id).slice(0, 1)}</i>
+            <i style={{ background: colorOf(c.id, ci, c.title) }}>{(c.title || c.id).slice(0, 1)}</i>
             {(c.title || c.id).slice(0, 2)}
           </span>
         ))}
         {roster.map((r, ri) => (
           <Fragment key={`r${r.id}`}>
             <span className="sf-policy-head sf-policy-row" title={r.title}>
-              <i style={{ background: colorOf(r.id, ri) }}>{(r.title || r.id).slice(0, 1)}</i>
+              <i style={{ background: colorOf(r.id, ri, r.title) }}>{(r.title || r.id).slice(0, 1)}</i>
               {(r.title || r.id).slice(0, 4)}
             </span>
             {roster.map((c) => {
@@ -2809,10 +2857,13 @@ function DashboardView() {
           </div>
           <ul className="sf-usage-bars">
             {[
-              ["总经理", 642, "#ff5e3a"],
-              ["市场研究员", 488, "#2777e8"],
-              ["品牌策略师", 397, "#8e6cff"],
-              ["内容创意", 313, "#2ec4a6"],
+              ["AI总经理", 642, "#ff5e3a"],
+              ["市场分析师", 488, "#2777e8"],
+              ["品牌策划师", 397, "#8e6cff"],
+              ["内容策划师", 313, "#2ec4a6"],
+              ["运营专员", 256, "#f5a623"],
+              ["商务专员", 198, "#12b76a"],
+              ["合规审核员", 142, "#667085"],
             ].map(([name, tokens, color]) => (
               <li key={name as string}>
                 <span className="sf-usage-name">{name}</span>
@@ -2988,9 +3039,9 @@ type SfScheduleRow = {
 
 function SchedulesView() {
   const demoRows: Array<{ id: string; name: string; agent: string; cron: string; next: string; enabled: boolean }> = [
-    { id: "demo-1", name: "每天生成竞品动态简报", agent: "市场研究员", cron: "每天 09:00", next: "明天 09:00", enabled: true },
-    { id: "demo-2", name: "汇总本周内容数据", agent: "内容创意", cron: "每周五 18:00", next: "周五 18:00", enabled: true },
-    { id: "demo-3", name: "检查品牌舆情风险", agent: "品牌策略师", cron: "每 6 小时", next: "今天 16:00", enabled: false },
+    { id: "demo-1", name: "每天生成竞品动态简报", agent: "市场分析师", cron: "每天 09:00", next: "明天 09:00", enabled: true },
+    { id: "demo-2", name: "汇总本周内容数据", agent: "内容策划师", cron: "每周五 18:00", next: "周五 18:00", enabled: true },
+    { id: "demo-3", name: "检查品牌舆情风险", agent: "合规审核员", cron: "每 6 小时", next: "今天 16:00", enabled: false },
   ];
   const [rows, setRows] = useState(demoRows);
   const [live, setLive] = useState(false);
