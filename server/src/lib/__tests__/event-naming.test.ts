@@ -61,11 +61,12 @@ function check(label: string, cond: boolean, detail?: string): void {
 
 /** run-session 链的生产发射面。新增发射文件时同步此清单与命名表。 */
 const WIRE_EMITTERS = [
-  'src/routes/run-sessions.ts',
+  'src/routes/runs/run-sessions/index.ts',
+  'src/routes/runs/run-sessions/registry.ts',
   'src/lib/timeline-projector.ts',
   'src/lib/timeline-replay.ts',
-  'src/assembler.ts',
-  'src/parser.ts',
+  'src/assembly/assembler.ts',
+  'src/parsers/parser.ts',
   'src/lib/tool-approval.ts',
   'src/lib/tool-runner.ts',
 ];

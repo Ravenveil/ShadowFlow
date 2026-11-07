@@ -108,7 +108,7 @@ vi.mock('../../lib/worktree-manager', () => ({
   commitWorktree: vi.fn(async () => null),
 }));
 
-import { runFanoutAsync, chatLessonsBlock } from '../groups-chat';
+import { runFanoutAsync, chatLessonsBlock } from '../groups/groups-chat';
 
 let tmp: string;
 let origCwd: string;

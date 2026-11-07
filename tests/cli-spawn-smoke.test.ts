@@ -29,7 +29,7 @@ import { createRequire } from 'node:module';
 // server/src/* is compiled as CommonJS (see server/tsconfig.json); use
 // createRequire so the named exports survive the CJS↔ESM bridge.
 const require = createRequire(import.meta.url);
-const registry = require('../server/src/cli-registry.ts') as typeof import('../server/src/cli-registry');
+const registry = require('../server/src/detectors/cli-registry.ts') as typeof import('../server/src/detectors/cli-registry');
 const { KNOWN_CLIS } = registry;
 type CliDescriptor = (typeof KNOWN_CLIS)[number];
 
@@ -164,7 +164,7 @@ function main() {
     console.log(
       '\nHint: a present-but-failing CLI usually means `version_arg` is wrong\n' +
         '(e.g. some CLIs use `version` as a subcommand instead of `--version`).\n' +
-        'Fix the entry in server/src/cli-registry.ts.',
+        'Fix the entry in server/src/detectors/cli-registry.ts.',
     );
     process.exit(1);
   }

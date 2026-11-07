@@ -19,8 +19,8 @@
  * SSE events — never thrown out of the generator.
  */
 
-import { parseAndExtract, type SseEvent } from '../../parser';
-import { resolveAcpCommand } from '../../acp-detector';
+import { parseAndExtract, type SseEvent } from '../../parsers/parser';
+import { resolveAcpCommand } from '../../detectors/acp-detector';
 import { JsonRpcStdioTransport, type JsonRpcNotification } from '../../protocols/jsonrpc-stdio';
 import type { RunnerInput } from './types';
 import fs from 'node:fs';

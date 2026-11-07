@@ -9,7 +9,7 @@
  * back to a `raw` block when the blob doesn't parse or is interrupted.
  */
 
-import { pipeChunksToSse, firstJsonValueEnd } from '../../assembler';
+import { pipeChunksToSse, firstJsonValueEnd } from '../../assembly/assembler';
 import type { TurnChunk } from '../../workflow/types';
 
 let pass = 0;

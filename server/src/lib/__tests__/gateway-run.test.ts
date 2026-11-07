@@ -26,7 +26,7 @@ import os from 'os';
 import path from 'path';
 
 let gatewayRun: typeof import('../gateway-run');
-let runSessions: typeof import('../../routes/run-sessions');
+let runSessions: typeof import('../../routes/runs/run-sessions');
 let conversations: typeof import('../../storage/conversations');
 let projects: typeof import('../../storage/projects');
 let sqlite: typeof import('../../storage/sqlite');
@@ -43,7 +43,7 @@ beforeAll(async () => {
   sqlite._resetForTests();
   projects = await import('../../storage/projects');
   conversations = await import('../../storage/conversations');
-  runSessions = await import('../../routes/run-sessions');
+  runSessions = await import('../../routes/runs/run-sessions');
   gatewayRun = await import('../gateway-run');
   timelineReplay = await import('../timeline-replay');
 });
@@ -353,6 +353,129 @@ describe('emit → runBus 事件日志 → B2 读回', () => {
         (e.data as { op?: string }).op === 'hop_update',
     );
     expect(hopPatches).toHaveLength(1);
+  });
+
+  // 2026-11-07 plan 卡任务行收口 — 崩溃/中断时行级 settle（plan_update_task）
+  // 从未发生，running 行回放永转圈（Loader2）。sweepOpenProcessCards 现补
+  // plan_update_task {status:'failed'} 终态。
+  it('finish 兜底清扫：未 settle 的 plan_card 任务行补 failed 终态', () => {
+    const groupId = 'g-sweep-plan-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '中断轮')!;
+    const planId = gw.nextId();
+    gw.emitMessage({
+      id: planId,
+      kind: 'plan_card',
+      turn_id: gw.turnId,
+      ts: Date.now() - 5_000,
+      title: '编排计划',
+      tasks: [
+        { id: 'node:a1', title: '甲', assignee: '小张', status: 'pending' },
+        { id: 'node:a2', title: '乙', assignee: '小李', status: 'pending' },
+      ],
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a1',
+      patch: { status: 'running' },
+    });
+    // a2 从未派发（有意 pending）。
+
+    const before = timelineReplay.replayTimeline(
+      runSessions.getRunReplay(gw.sessionId)!.events,
+    );
+    const beforePlan = before.find((m) => m.id === planId)!;
+    if (beforePlan.kind === 'plan_card') {
+      expect(beforePlan.tasks.find((t) => t.id === 'node:a1')!.status).toBe('running');
+    }
+
+    gw.finish('canceled');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    const after = timelineReplay.replayTimeline(replay.events);
+    const plan = after.find((m) => m.id === planId)!;
+    expect(plan.kind).toBe('plan_card');
+    if (plan.kind === 'plan_card') {
+      expect(plan.tasks.find((t) => t.id === 'node:a1')).toMatchObject({
+        status: 'failed',
+        note: '回合中断，任务未结算',
+      });
+      expect(plan.tasks.find((t) => t.id === 'node:a2')).toMatchObject({ status: 'pending' });
+    }
+    // 合成补丁只发一条（a1 的 failed 终态）。
+    const swept = replay.events.filter(
+      (e) =>
+        e.event === 'message-patch' &&
+        (e.data as { id?: string }).id === planId &&
+        (e.data as { op?: string }).op === 'plan_update_task' &&
+        (e.data as { patch?: { status?: string } }).patch?.status === 'failed',
+    );
+    expect(swept).toHaveLength(1);
+  });
+
+  it('终态清扫不改写已结算的计划行（done/blocked 原样保留）', () => {
+    const groupId = 'g-sweep-plan-idem-' + Date.now();
+    const gw = gatewayRun.startGatewayRun(groupId, '正常轮')!;
+    const planId = gw.nextId();
+    gw.emitMessage({
+      id: planId,
+      kind: 'plan_card',
+      turn_id: gw.turnId,
+      ts: Date.now() - 1_000,
+      title: '编排计划',
+      tasks: [
+        { id: 'node:a1', title: '甲', status: 'pending' },
+        { id: 'node:a2', title: '乙', status: 'pending' },
+        { id: 'node:a3', title: '丙', status: 'pending' },
+      ],
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a1',
+      patch: { status: 'running' },
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a1',
+      patch: { status: 'done', elapsed_ms: 800 },
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a2',
+      patch: { status: 'blocked' },
+    });
+    gw.emitPatch({
+      id: planId,
+      op: 'plan_update_task',
+      task_id: 'node:a3',
+      patch: { status: 'running' },
+    });
+    gw.finish('succeeded');
+
+    const replay = runSessions.getRunReplay(gw.sessionId)!;
+    const plan = timelineReplay.replayTimeline(replay.events).find((m) => m.id === planId)!;
+    if (plan.kind === 'plan_card') {
+      // 生产者的结算原样保留；只有 a3 的悬空行被收口。
+      expect(plan.tasks.find((t) => t.id === 'node:a1')).toMatchObject({
+        status: 'done',
+        elapsed_ms: 800,
+      });
+      expect(plan.tasks.find((t) => t.id === 'node:a2')).toMatchObject({ status: 'blocked' });
+      expect(plan.tasks.find((t) => t.id === 'node:a3')).toMatchObject({ status: 'failed' });
+    }
+    // a1/a2 无 failed 合成补丁；a3 恰一条。
+    const failedPatches = replay.events.filter(
+      (e) =>
+        e.event === 'message-patch' &&
+        (e.data as { id?: string }).id === planId &&
+        (e.data as { op?: string }).op === 'plan_update_task' &&
+        (e.data as { patch?: { status?: string } }).patch?.status === 'failed',
+    );
+    expect(failedPatches).toHaveLength(1);
+    expect((failedPatches[0]!.data as { task_id?: string }).task_id).toBe('node:a3');
   });
 });
 

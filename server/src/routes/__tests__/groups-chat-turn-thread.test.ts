@@ -114,7 +114,7 @@ vi.mock('../../lib/worktree-manager', () => ({
   commitWorktree: vi.fn(async () => null),
 }));
 
-import { runFanoutAsync } from '../groups-chat';
+import { runFanoutAsync } from '../groups/groups-chat';
 import type { ConversationMessage } from '../../lib/conversation-types';
 
 let tmp: string;

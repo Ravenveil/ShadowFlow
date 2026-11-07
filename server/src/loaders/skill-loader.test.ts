@@ -12,7 +12,7 @@ import os from 'os';
 import path from 'path';
 
 import { loadFsSkills } from './skill-loader';
-import { HARDCODED_SKILLS, reloadSkills, SKILLS } from '../skills';
+import { HARDCODED_SKILLS, reloadSkills, SKILLS } from './skills';
 
 let passCount = 0;
 let failCount = 0;

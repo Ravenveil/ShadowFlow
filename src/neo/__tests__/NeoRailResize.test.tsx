@@ -49,15 +49,13 @@ vi.mock('../../core/store/useInboxStore', () => {
 import { NeoRail } from '../NeoRail';
 import type { NeoNav, RailSection } from '../types';
 
-/** 与 NeoApp.SECTION_BY_NAV 收敛后同构：schedules/dashboard 不在映射表 →
- *  列表区保持进入前的内容（阅读态页不抢侧边栏）。 */
+/** 与 NeoApp.SECTION_BY_NAV 收敛后同构：schedules/dashboard/knowledge 不在
+ *  映射表 → 列表区保持进入前的内容（阅读态页不抢侧边栏）。 */
 function Harness({ initialNav }: { initialNav?: NeoNav } = {}) {
   const [nav, setNav] = useState<NeoNav>(initialNav ?? { view: 'home' });
   const [section, setSection] = useState<RailSection>('home');
   const map: Partial<Record<NeoNav['view'], RailSection>> = {
     home: 'home',
-    knowledge: 'knowledge',
-    memory: 'memory',
   };
   return (
     <NeoRail

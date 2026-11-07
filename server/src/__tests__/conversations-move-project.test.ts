@@ -17,7 +17,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let conversationsRouter: typeof import('../routes/conversations').default;
+let conversationsRouter: typeof import('../routes/projects/conversations').default;
 let runSessionsRouter: express.Router;
 let sqlite: typeof import('../storage/sqlite');
 let projectsStore: typeof import('../storage/projects');
@@ -41,8 +41,8 @@ beforeAll(async () => {
   sqlite._resetForTests();
   projectsStore = await import('../storage/projects');
   conversationsStore = await import('../storage/conversations');
-  conversationsRouter = (await import('../routes/conversations')).default;
-  runSessionsRouter = (await import('../routes/run-sessions')).default;
+  conversationsRouter = (await import('../routes/projects/conversations')).default;
+  runSessionsRouter = (await import('../routes/runs/run-sessions')).default;
   // 显式加时：全量并行（CI 2 核）下连续动态 import 五个模块偶尔拖过默认
   // hookTimeout 20s（真实失败 vs 环境慢无法区分）。60s 只放宽等待、不掩盖错误。
 }, 60_000);

@@ -22,7 +22,7 @@
 
 import { createConversation, getConversationByGroup } from '../storage/conversations';
 import { getOrCreateProject } from '../storage/projects';
-import { registerGatewayRun } from '../routes/run-sessions';
+import { registerGatewayRun } from '../routes/runs/run-sessions';
 import type { MessagePatch, TimelineMessage } from './contracts';
 
 /** goal 预览长度：'[chat] ' + 首条用户消息前 40 字。 */

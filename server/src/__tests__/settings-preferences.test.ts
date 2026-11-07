@@ -19,7 +19,7 @@ import request from 'supertest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import settingsRouter from '../routes/settings';
+import settingsRouter from '../routes/system/settings';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));

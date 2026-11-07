@@ -20,7 +20,8 @@ export interface NeoTarget {
 export type NeoNav =
   /** 新任务 hero（左栏列表 = 会话）。 */
   | { view: 'home' }
-  /** 知识库内嵌页（左栏列表 = 统一知识源：本地仓库 + 知识包）。
+  /** 知识库内嵌页（2026-11-07 用户反馈：左栏列表保持不动——知识库左侧边栏
+   *  保持成员显示，知识源列表由知识页自带 rail 承担）。
    *  sourceId = 'vault:<id>' | 'pack:<id>' 深链预选（2026-08-19 知识库统一批）。 */
   | { view: 'knowledge'; sourceId?: string }
   /** 数据看板内嵌页（2026-11-05，整合 OPC-OS PR#3 看板设计；左栏列表保持不动）。 */
@@ -50,6 +51,8 @@ export type NeoNav =
  * os-unified（2026-11-04 Grok Bot 范式批）：agents/teams 分区移除——成员即会话、
  * 团队即分组，全部并入 home 列表区。
  * 2026-11-06 折叠批：memory 分区移除（记忆整体并入「设置 → 记忆」）。
+ * 2026-11-06/11-07「内容页不抢侧边栏」：schedules/knowledge 已出 SECTION_BY_NAV
+ * ——两分区渲染保留（组件可直测/回退），但导航不再切过去，实际列表恒为 home。
  */
 export type RailSection = 'home' | 'knowledge' | 'schedules';
 
