@@ -188,8 +188,8 @@ async function main(): Promise<void> {
     );
   }
 
-  // ─── 8. dispatchSkillRunner — acp: placeholder ──
-  console.log('\n── dispatcher: acp: → EXECUTOR_NOT_IMPLEMENTED ──');
+  // ─── 8. dispatchSkillRunner — acp: → runAcpExecutor（Story 15.23 已实现） ──
+  console.log('\n── dispatcher: acp: → ACP_UNREACHABLE（目标未注册） ──');
   {
     const input: RunnerInput = {
       system_prompt: 'sys',
@@ -202,9 +202,13 @@ async function main(): Promise<void> {
       events.push(evt);
       if (events.length > 5) break;
     }
+    // acp: 早已不是占位符（Story 15.23 起接 runAcpExecutor）：目标不在
+    // 注册表（registry 只有 hermes/shadowsoul）→ 结构化 ACP_UNREACHABLE。
+    const err = events.find((e) => e.event === 'error')?.data as { code?: string } | undefined;
+    check('acp: 未注册目标 → ACP_UNREACHABLE', err?.code === 'ACP_UNREACHABLE');
     check(
-      'acp: emits EXECUTOR_NOT_IMPLEMENTED',
-      events.some(
+      'acp: 不再返回 EXECUTOR_NOT_IMPLEMENTED',
+      !events.some(
         (e) => e.event === 'error' && (e.data as { code?: string }).code === 'EXECUTOR_NOT_IMPLEMENTED',
       ),
     );

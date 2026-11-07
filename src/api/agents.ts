@@ -103,11 +103,16 @@ export interface AgentRecord {
 // Endpoints
 // ---------------------------------------------------------------------------
 
-export async function quickCreateAgent(req: QuickCreateRequest): Promise<AgentRecord> {
+export async function quickCreateAgent(
+  req: QuickCreateRequest,
+  /** 可选 abort：调用方套超时防挂死（入职问卷链路 2026-11-07）。additive。 */
+  opts?: { signal?: AbortSignal },
+): Promise<AgentRecord> {
   const res = await fetch(`${API_BASE_URL}/api/agents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
+    signal: opts?.signal,
   });
   const env = await _handleResponse<Envelope<AgentRecord>>(res);
   return env.data;

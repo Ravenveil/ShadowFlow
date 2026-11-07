@@ -66,6 +66,36 @@ describe('mapPythonTeamToRunShape', () => {
     });
     expect(r.edges).toEqual([]);
   });
+
+  // 2026-11-05 历史教训回归防线：mapMode 曾把 mode:'approve' 折叠成
+  // 'sequential'，审批语义在读路径就丢了（chat 执行器无从知道该边要人工
+  // 审批）。此表钉死 mapMode 全量契约，防复发。
+  it.each([
+    ['approve', 'approve'],
+    ['parallel', 'parallel'],
+    ['conditional', 'conditional'],
+    ['direct', 'sequential'],
+    ['something-new', 'sequential'],
+  ] as const)('mapMode 契约:mode:%s → kind:%s（防折叠回归）', (mode, kind) => {
+    const r = mapPythonTeamToRunShape({
+      team_id: 't', agent_ids: ['a', 'b'],
+      workflow: {
+        nodes: [{ id: 'n1', data: { agentId: 'a' } }, { id: 'n2', data: { agentId: 'b' } }],
+        edges: [{ source: 'n1', target: 'n2', data: { mode } }],
+      },
+    });
+    expect(r.edges[0]).toEqual({ from: 'a', to: 'b', kind });
+  });
+  it('edge.data 缺 mode → sequential（缺省不丢审批语义前提:只有显式 approve 才是审批边）', () => {
+    const r = mapPythonTeamToRunShape({
+      team_id: 't', agent_ids: ['a', 'b'],
+      workflow: {
+        nodes: [{ id: 'n1', data: { agentId: 'a' } }, { id: 'n2', data: { agentId: 'b' } }],
+        edges: [{ source: 'n1', target: 'n2' }],
+      },
+    });
+    expect(r.edges[0]).toEqual({ from: 'a', to: 'b', kind: 'sequential' });
+  });
 });
 
 describe('loadTeamForRun', () => {

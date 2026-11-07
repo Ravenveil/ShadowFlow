@@ -14,45 +14,45 @@
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { runSkillAssembler } from '../../assembly/assembler';
-import { classifyErrorCode } from '../../lib/classify-error';
+import { runSkillAssembler } from '../../../assembly/assembler';
+import { classifyErrorCode } from '../../../lib/classify-error';
 import {
   createRunBus,
   type RunEventSink,
   type RunEventRecord,
   type RunStatus,
-} from '../../lib/run-event-bus';
-import { createRunEventStore } from '../../lib/run-event-store';
-import { startLoopWatcher } from '../../lib/loop-watcher';
+} from '../../../lib/run-event-bus';
+import { createRunEventStore } from '../../../lib/run-event-store';
+import { startLoopWatcher } from '../../../lib/loop-watcher';
 // 阶段 1（ROADMAP-agentinfra / GAP G1）— Node 工具管线的人在环审批回路：
 // tool-approval 注册表经下方 emitter 把 permission_check 帧写进本文件的
 // 私有 runBus（落事件日志、可重放），决策经 POST /:id/permissions/:requestId 回填。
-import { toolApprovals, type PermissionDecision } from '../../lib/tool-approval';
+import { toolApprovals, type PermissionDecision } from '../../../lib/tool-approval';
 // Round 4 PR-E — canonical `@skill` token parser shared byte-equal with the
 // frontend (`src/lib/skillToken.ts`). Replaces an inline regex that drifted
 // in shape from the SkillDropdown UI; both call sites now agree on which
 // goal text patterns are recognised as inline-skill tokens.
-import { parseSkillToken } from '../../lib/skill-token';
-import { saveRun, type ArtifactType } from '../../storage/runs';
-import { getSetting } from '../../storage/settings';
+import { parseSkillToken } from '../../../lib/skill-token';
+import { saveRun, saveRunArtifacts, type ArtifactType } from '../../../storage/runs';
+import { getSetting } from '../../../storage/settings';
 // 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
-import { remember, contextBlock } from '../../storage/memory-lessons';
-import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
-import { SKILLS } from '../../loaders/skills';
-import { DESIGN_SYSTEMS } from '../../loaders/design-systems';
-import { composeSystemPrompt, type LayerToggles } from '../../prompts/prompt-assembly';
-import { composeMultiTurnPrompt } from '../../prompts';
-import { CONVERSATIONAL_AGENT_PROMPT } from '../../prompts/conversational';
-import { loadSkillSideFiles } from '../../loaders/skill-side-files';
+import { remember, promptBlock } from '../../../storage/memory-lessons';
+import { coercePackIds, knowledgeBlock } from '../../../lib/memory-bank';
+import { SKILLS } from '../../../loaders/skills';
+import { DESIGN_SYSTEMS } from '../../../loaders/design-systems';
+import { composeSystemPrompt, type LayerToggles } from '../../../prompts/prompt-assembly';
+import { composeMultiTurnPrompt } from '../../../prompts';
+import { CONVERSATIONAL_AGENT_PROMPT } from '../../../prompts/conversational';
+import { loadSkillSideFiles } from '../../../loaders/skill-side-files';
 import {
   PROVIDER_IDS,
   isProviderId,
   type ProviderId,
-} from '../../transport/api-clients';
-import { resolveProviderKey } from '../../transport/byokKey';
+} from '../../../transport/api-clients';
+import { resolveProviderKey } from '../../../transport/byokKey';
 // Story 15.14 — auto-critique pass after artifact-saved.
-import { runCritique } from '../../quality/critic';
+import { runCritique } from '../../../quality/critic';
 // Story 15.29 — multi-turn conversation glue: validate / auto-create
 // conversation, write user + assistant messages tied to this session.
 import {
@@ -63,858 +63,79 @@ import {
   getRecentMessages,
   setConversationGroup,
   updateMessageByTimelineId,
-} from '../../storage/conversations';
+} from '../../../storage/conversations';
 import {
   listRunIndexByConversation,
   setRunIndexStatus,
   upsertRunIndex,
-} from '../../storage/run-index';
-import { getOrCreateProject, getProject } from '../../storage/projects';
+} from '../../../storage/run-index';
+import { getOrCreateProject, getProject } from '../../../storage/projects';
 // 2026-05-19 — Cherry Studio parity: replace in-memory Map with a JSON-file
 // backed store so backend restarts no longer wipe live sessions. Survives
 // hot reload + crash; sensitive fields persisted under .shadowflow/ (gitignored,
 // same trust boundary as settings.json).
-import { createSessionStore } from '../../lib/session-store';
+import { createSessionStore } from '../../../lib/session-store';
 // S1 (skill-team-conversion-design-v1.md §5) — ContentBlock + ConversationMessage
 // data model; SessionRecord now carries `messages` so the future
 // ConversationRuntime (S5) can replay multi-turn history across SSE reconnects.
 import {
   SESSION_SCHEMA_VERSION,
   type ConversationMessage,
-} from '../../lib/conversation-types';
+} from '../../../lib/conversation-types';
 // S1.2 (intent-workflow-design-v1 §4.1) — TS-side intent classifier. Runs in
 // the SSE handler before the assembler kicks off so the front-end gets a
 // `classify` frame within ~1ms of stream open (LLM's own <sf:classify .../>
 // arrives many seconds later, after parser extraction). Two frames coexist;
 // front-end may diff them for consistency (S5.2 future story).
-import { classifyTS, detectExplicitSingleAgent, hasExplicitTeamIntent, shouldUsePlainConversation, SINGLE_AGENT_DIRECTIVE } from '../../lib/intent-router';
-import { loadTeam as loadGlobalTeam } from '../../lib/team-yaml';
+import { classifyTS, detectExplicitSingleAgent, hasExplicitTeamIntent, shouldUsePlainConversation, SINGLE_AGENT_DIRECTIVE } from '../../../lib/intent-router';
+import { loadTeam as loadGlobalTeam } from '../../../lib/team-yaml';
 // S2.3 (intent-workflow-design-v1 §4.4) — step artifact persistence + per-step
 // SSE frame. Parser fires node/edge/blueprint between `assemble:running` and
 // `assemble:done`; we collect them per open step, then on `done` package a
 // StepArtifact → stepStore.put() + emit `step-artifact` for the front-end.
-import { createStepStore } from '../../lib/step-store';
-import type { OutputKind, StepArtifact, UserAttachment } from '../../lib/contracts';
-import { goalWithAttachments } from '../../lib/attachment-refs';
+import { createStepStore } from '../../../lib/step-store';
+import type { OutputKind, StepArtifact } from '../../../lib/contracts';
+import { goalWithAttachments } from '../../../lib/attachment-refs';
 // S6.10-A — Trae/Codex-style timeline projection. Runs in parallel with the
 // legacy fine-grained event stream; emits `message` + `message-patch` SSE
 // frames that the front-end can subscribe to incrementally. Legacy events are
 // preserved unchanged so existing consumers keep working.
-import { createTimelineProjector } from '../../lib/timeline-projector';
+import { createTimelineProjector } from '../../../lib/timeline-projector';
 // Polynoia-parity — git evidence (commit records / real file diffs) captured
 // around the run inside a git-backed workspace. All helpers degrade to null.
-import { inspectGitRun, resolveGitHead } from '../../lib/git-introspect';
-import type { PlanTaskRow } from '../../lib/contracts';
+import { inspectGitRun, resolveGitHead } from '../../../lib/git-introspect';
+import type { PlanTaskRow } from '../../../lib/contracts';
 // S6.3 — skill-team synthesizer. When the active skill ships a structured
 // team.skill.yaml we bypass the LLM entirely and stream the design straight
 // from disk. Deterministic, free, and perfectly matches the v3 stacked
 // AgentDetail because every byte already lives in the skill files.
-import type { TeamDef, SkillSlot } from '../../lib/skill-types';
+import type { TeamDef, SkillSlot } from '../../../lib/skill-types';
 
 const router = Router();
 
-// ── Tool-call projection (clawsgo left-pane parity) ──────────────────────────
-// Extracted as a pure, exported factory so it can be unit-tested in isolation
-// (mirrors the `emitToolChunk` contract test). It translates the runtime's
-// structured `tool-use` / `tool-result` SSE payloads into normalized
-// `tool-call` frames the StepList nests under the owning step:
-//   { id, tool, title, input_summary, status: 'running'|'done'|'failed',
-//     result_summary?, result_count?, links?, elapsed_ms?, step_index?, node_id? }
-// Every field is derived from REAL runtime data — no fabrication. The projector
-// keeps an in-flight map keyed by the tool_use call id so the matching
-// `tool-result` flips status + attaches result summary, result_count, links and
-// elapsed timing. `node_id` already scopes calls per agent, so team/DAG runs
-// (whose chunks are node-stamped by executor.ts before pipeChunksToSse) project
-// through this exact path with no extra wiring.
-
-/** A normalized tool-call SSE payload. */
-export interface ToolCallProjection {
-  id: string;
-  tool: string;
-  title: string;
-  input_summary: string;
-  status: 'running' | 'done' | 'failed';
-  result_summary?: string;
-  /** clawsgo "找到 N 个结果" — real hit count parsed from the result, when known. */
-  result_count?: number;
-  links?: Array<{ label: string; url: string }>;
-  elapsed_ms?: number;
-  step_index?: number;
-  node_id?: string;
-}
-
-interface InFlightToolCall {
-  id: string;
-  tool: string;
-  step_index: number | null;
-  node_id?: string;
-  started_at: number;
-}
-
-/** Collapse an arbitrary tool input object into a one-line human summary. */
-export function summarizeToolInput(input: unknown): string {
-  if (input == null) return '';
-  if (typeof input === 'string') return input.slice(0, 160);
-  if (typeof input !== 'object') return String(input).slice(0, 160);
-  const obj = input as Record<string, unknown>;
-  for (const key of ['query', 'q', 'search', 'url', 'path', 'file_path', 'command', 'cmd', 'pattern', 'prompt']) {
-    const v = obj[key];
-    if (typeof v === 'string' && v.trim()) return `${key}: ${v.trim()}`.slice(0, 160);
-  }
-  try {
-    return JSON.stringify(obj).slice(0, 160);
-  } catch {
-    return '';
-  }
-}
-
-/** Collapse a tool result payload into a one-line summary. */
-export function summarizeToolResult(output: unknown): string {
-  if (output == null) return '';
-  const text = typeof output === 'string' ? output : (() => {
-    try { return JSON.stringify(output); } catch { return String(output); }
-  })();
-  return text.replace(/\s+/g, ' ').trim().slice(0, 200);
-}
-
-/**
- * Extract clickable result links (http(s) URLs) from a tool output — deduped,
- * capped at 5, host+path labelled — so the StepList can render clawsgo's
- * "found N results → clickable links". Only URLs that really appeared.
- */
-export function extractToolLinks(output: unknown): Array<{ label: string; url: string }> {
-  const text = typeof output === 'string' ? output : (() => {
-    try { return JSON.stringify(output); } catch { return ''; }
-  })();
-  if (!text) return [];
-  const urls = text.match(/https?:\/\/[^\s"'<>)\]]+/g);
-  if (!urls) return [];
-  const seen = new Set<string>();
-  const links: Array<{ label: string; url: string }> = [];
-  for (const url of urls) {
-    const clean = url.replace(/[.,;]+$/, '');
-    if (seen.has(clean)) continue;
-    seen.add(clean);
-    let label = clean;
-    try {
-      const u = new URL(clean);
-      label = u.hostname.replace(/^www\./, '') + (u.pathname !== '/' ? u.pathname : '');
-    } catch { /* keep raw */ }
-    links.push({ label: label.slice(0, 60), url: clean });
-    if (links.length >= 5) break;
-  }
-  return links;
-}
-
-/**
- * Parse a structured result count out of a tool result — clawsgo's
- * "找到 N 个结果" beat. Search / lookup tools announce their hit count in a
- * leading phrase ("found 12 results", "12 个结果", "3 matches", "5 行" …); we
- * pull the FIRST such number. Returns undefined when no count phrase is found,
- * so callers fall back to the link count. Only REAL numbers are surfaced.
- */
-export function parseResultCount(output: unknown): number | undefined {
-  const text = typeof output === 'string' ? output : (() => {
-    try { return JSON.stringify(output); } catch { return ''; }
-  })();
-  if (!text) return undefined;
-  const patterns: RegExp[] = [
-    /found\s+(\d[\d,]*)\s+(?:results?|matches|hits|items|files?|rows?)/i,
-    /(\d[\d,]*)\s+(?:results?|matches|hits|items|files?|rows?)\b/i,
-    /找到\s*(\d[\d,]*)\s*(?:个|条)?\s*(?:结果|匹配|项|条目|文件|行)/,
-    /(\d[\d,]*)\s*(?:个|条)\s*(?:结果|匹配|项|条目|文件)/,
-    /(\d[\d,]*)\s*行/,
-  ];
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m && m[1]) {
-      const n = Number(m[1].replace(/,/g, ''));
-      if (Number.isFinite(n) && n >= 0) return n;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Create a stateful tool-call projector. `idSeed` seeds the synthetic call-id
- * fallback used when the runtime omits a tool_use id. `now` is injectable for
- * deterministic elapsed timing in tests.
- *
- * `onToolUse` / `onToolResult` each return the projected `tool-call` payload to
- * forward over SSE, or null when the event carries no usable tool data.
- */
-export function createToolCallProjector(opts?: { idSeed?: string; now?: () => number }) {
-  const idSeed = (opts?.idSeed ?? 'sess').slice(0, 6);
-  const now = opts?.now ?? (() => Date.now());
-  const inFlight = new Map<string, InFlightToolCall>();
-  let seq = 0;
-
-  return {
-    onToolUse(data: unknown, currentStepIndex: number | null): ToolCallProjection | null {
-      if (!data || typeof data !== 'object') return null;
-      const d = data as { name?: unknown; input?: unknown; id?: unknown; node_id?: unknown };
-      const tool = typeof d.name === 'string' && d.name ? d.name : 'tool';
-      const callId = typeof d.id === 'string' && d.id ? d.id : `tc-${idSeed}-${seq++}`;
-      const node_id = typeof d.node_id === 'string' ? d.node_id : undefined;
-      inFlight.set(callId, { id: callId, tool, step_index: currentStepIndex, node_id, started_at: now() });
-      return {
-        id: callId,
-        tool,
-        title: summarizeToolInput(d.input) || tool,
-        input_summary: summarizeToolInput(d.input),
-        status: 'running',
-        ...(currentStepIndex !== null ? { step_index: currentStepIndex } : {}),
-        ...(node_id ? { node_id } : {}),
-      };
-    },
-
-    onToolResult(data: unknown): ToolCallProjection | null {
-      if (!data || typeof data !== 'object') return null;
-      const d = data as { for?: unknown; output?: unknown; is_error?: unknown; node_id?: unknown };
-      const callId = typeof d.for === 'string' ? d.for : undefined;
-      const tracked = callId ? inFlight.get(callId) : undefined;
-      const isError = d.is_error === true;
-      const links = extractToolLinks(d.output);
-      // clawsgo "找到 N 个结果" — real count phrase first, else link count.
-      const parsedCount = parseResultCount(d.output);
-      const resultCount = parsedCount != null ? parsedCount : links.length > 0 ? links.length : undefined;
-      const resolvedNode = typeof d.node_id === 'string' ? d.node_id : tracked?.node_id;
-      const out: ToolCallProjection = {
-        id: callId ?? `tc-${idSeed}-${seq++}`,
-        tool: tracked?.tool ?? 'tool',
-        title: tracked?.tool ?? 'tool',
-        input_summary: '',
-        status: isError ? 'failed' : 'done',
-        result_summary: summarizeToolResult(d.output),
-        ...(resultCount != null ? { result_count: resultCount } : {}),
-        ...(links.length > 0 ? { links } : {}),
-        ...(tracked ? { elapsed_ms: now() - tracked.started_at } : {}),
-        ...(tracked?.step_index != null ? { step_index: tracked.step_index } : {}),
-        ...(resolvedNode ? { node_id: resolvedNode } : {}),
-      };
-      if (callId) inFlight.delete(callId);
-      return out;
-    },
-  };
-}
-
-interface SessionRecord {
-  goal: string;
-  skill_name: string;
-  /** 2026-06-01 — 用户显式 @skill:<id> 或显式 skill_name 触发(非默认回退)。
-   *  true → assembler 走"组装意图"路:Branch 2 兜底时用组装指令(禁 discovery),
-   *  而非该 skill 的对话 prompt。见 .shadowflow/skills/agent-team-assembly。 */
-  explicit_skill?: boolean;
-  /** 2026-06-01 — 用户原始请求的 skill id(@skill:<id> 的 <id> / 显式 skill_name),
-   *  未经 SKILLS 注册表回退。≠ skill_name 时说明请求的 skill 不在注册表里;assembler
-   *  Branch 2 据此用 read_skill 去磁盘/网络拉真实蓝图,而非静默用默认 blueprint。 */
-  skill_requested?: string;
-  output_hint?: string;
-  workspace_id?: string;
-  mode?: string;
-  anthropic_key?: string;
-  /** Story 15.18 — selected LLM provider (default 'anthropic'). */
-  provider?: ProviderId;
-  /** Story 15.18 — BYOK key for the selected provider. */
-  api_key?: string;
-  /** Story 15.5 — Design System id chosen by user; defaults to 'none'. */
-  design_system_id?: string;
-  /** Story 15.9 — generation overrides forwarded from front-end localStorage. */
-  model?: string;
-  max_tokens?: number;
-  temperature?: number;
-  /**
-   * Story 15.19 v2 — optional executor override. POST body / future UI hint.
-   * Resolution order at the assembler boundary:
-   *   session.executor > skill.executor (frontmatter) > 'anthropic-direct'.
-   */
-  executor?: string;
-  /** 2026-05-30 — CLI 工作目录(绝对路径)。空 → assembler 回退到产物目录。
-   *  仅 cli:/acp:/mcp: 有意义。 */
-  cwd?: string;
-  /** Story 15.13 — multi-layer prompt assembly inputs (all optional). */
-  project_meta?: Record<string, unknown> | null;
-  /** Story 15.12 interface — pre-rendered side-files block; loader to be wired by 15.12. */
-  side_files?: string;
-  layer_toggles?: LayerToggles;
-  /**
-   * 2026-11-06 — 对话框知识库接线：多模态记忆库 pack id 列表（用户在 composer
-   * KNOWLEDGE chip 勾选）。stream 组装提示词时按 goal 检索命中注入「知识库参考」
-   * 块（fail-soft）；多轮接力每轮以当轮 goal 重新检索。
-   */
-  knowledge_pack_ids?: string[];
-  /**
-   * 2026-11-07 对话框拖拽传图 — 用户消息随行附件（composer 上传后随 POST 落库）。
-   * timeline user_turn 据此渲染缩略图；assembler goal 注入路径引用块让 agent 可读。
-   * 每轮独立（不跨轮继承）：follow-up 未传 = 本轮无附件。
-   */
-  attachments?: UserAttachment[];
-  /**
-   * Story 15.29 — conversation this run belongs to. Always set: when the
-   * client omits `conversation_id` we auto-create an anonymous one under
-   * the 'default' project so every run lives somewhere.
-   */
-  conversation_id?: string;
-  /**
-   * Story 15.14 follow-up 2026-05-11 — per-request auto_critique override
-   * from the UI toggle. When `false` the finally{} block skips the critique
-   * pass. When `undefined` the server falls back to settings.json (default
-   * true to preserve current behavior).
-   */
-  auto_critique?: boolean;
-  /**
-   * S1 (skill-team-conversion-design-v1.md §5 / D8) — session schema version.
-   * 0 / missing  → pre-S1, no `messages` field on disk.
-   * 1            → current; SessionRecord guarantees `messages: ConversationMessage[]`.
-   * Migrator in createSessionStore() below normalizes 0 → 1 on load.
-   */
-  version?: number;
-  /**
-   * S1 — multi-turn conversation history. ContentBlock-shaped, mirrors
-   * Anthropic Messages API. Populated by ConversationRuntime (S5) once it
-   * lands; for now writers may leave it empty.
-   */
-  messages?: ConversationMessage[];
-  created_at: number;
-  /**
-   * 2026-06-01 — last-activity timestamp for the activity-based TTL sweep.
-   * Bumped on every persist (touchSession) AND on each /stream attach, so a
-   * session a user keeps coming back to never expires out from under them.
-   * Old records (pre-2026-06-01) lack it; migrator defaults it to created_at.
-   * Replaces the old "created_at < now-1h" sweep that nuked sessions an hour
-   * after creation regardless of activity (root cause of the spurious
-   * "Session 不存在或已过期 404" the user hit on revisit).
-   */
-  updated_at?: number;
-}
-
-// ── Story 15.13 — layer_toggles + project_meta validators ────────────────────
-
-// 2026-05-11 review M1 (15.29): 加 'conversation_history' — 否则 client 通过
-// POST layer_toggles.conversation_history=false 想关闭历史会被 coerceLayerToggles
-// 静默丢弃 → 服务端永远 always-on，违反 spec AC3 toggle 契约。
-const LAYER_KEYS: ReadonlyArray<keyof LayerToggles> = [
-  'discovery',
-  'identity',
-  'ds',
-  'skill',
-  'project',
-  'conversation_history',
-  'sides',
-  'framework',
-];
-
-function coerceLayerToggles(raw: unknown): LayerToggles | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  const out: LayerToggles = {};
-  for (const k of LAYER_KEYS) {
-    const v = (raw as Record<string, unknown>)[k];
-    if (typeof v === 'boolean') out[k] = v;
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
-function coerceProjectMeta(raw: unknown): Record<string, unknown> | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-  // Shallow copy — composer handles per-value JSON.stringify.
-  return { ...(raw as Record<string, unknown>) };
-}
-
-// ── Story 15.9 — generation override validators ──────────────────────────────
-//
-// 2026-05-16 — Removed the claude-only MODEL_ALLOWLIST. Previously this Set
-// of 3 ids silently dropped every non-Claude model the user picked, so a
-// BYOK selection like `glm-5.1` / `gpt-4o` / `deepseek-chat` was coerced to
-// undefined and the server fell back to the default Claude model — the
-// classic "frontend done, backend not wired up" failure mode. We now accept
-// any non-empty string and let the per-provider streamCompletion surface
-// MODEL_NOT_FOUND if the id is bogus.
-
-const MODEL_MAX_LEN = 200;
-const MAX_TOKENS_MIN = 1024;
-const MAX_TOKENS_MAX = 32768;
-
-function coerceModel(raw: unknown): string | undefined {
-  if (typeof raw !== 'string') return undefined;
-  const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > MODEL_MAX_LEN) return undefined;
-  // Reject suspicious patterns (whitespace mid-id, control chars) — anything
-  // that wouldn't be a legal LLM model identifier — to avoid downstream
-  // weirdness without enforcing a per-provider allowlist.
-  if (/[\s\x00-\x1f]/.test(trimmed)) return undefined;
-  return trimmed;
-}
-
-function coerceMaxTokens(raw: unknown): number | undefined {
-  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
-  const n = Math.floor(raw);
-  return n >= MAX_TOKENS_MIN && n <= MAX_TOKENS_MAX ? n : undefined;
-}
-
-function coerceTemperature(raw: unknown): number | undefined {
-  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
-  return raw >= 0 && raw <= 1 ? raw : undefined;
-}
-
-/**
- * 2026-11-07 拖拽传图 — 附件数组清洗。只保留 name/path/url 均为非空字符串的
- * 项（is_image 归一布尔、size 归一非负整数）；上限 9 个（与 composer 同限）。
- * 非数组 → undefined（调用方区分「未传」与「显式清空」）。
- */
-function coerceAttachments(raw: unknown): UserAttachment[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const out: UserAttachment[] = [];
-  for (const item of raw.slice(0, 9)) {
-    if (typeof item !== 'object' || item === null) continue;
-    const rec = item as Record<string, unknown>;
-    const name = typeof rec.name === 'string' ? rec.name.trim() : '';
-    const p = typeof rec.path === 'string' ? rec.path.trim() : '';
-    const url = typeof rec.url === 'string' ? rec.url.trim() : '';
-    if (!name || !p || !url) continue;
-    out.push({
-      name: name.slice(0, 255),
-      path: p.slice(0, 1024),
-      url: url.slice(0, 1024),
-      is_image: rec.is_image === true,
-      size: typeof rec.size === 'number' && Number.isFinite(rec.size) && rec.size >= 0
-        ? Math.floor(rec.size)
-        : undefined,
-    });
-  }
-  return out;
-}
-
-// ── Story 15.29 — conversation history rendering ─────────────────────────
-//
-// Reads up to 20 recent messages from sqlite (ascending order — getRecentMessages
-// already does this). Excludes the trailing user message we just appended in
-// this turn (so it isn't duplicated inside the history layer AND inside the
-// goal slot). Renders a markdown block with `### User` / `### Assistant`
-// headings. Token-bloat guards:
-//   - per-message content > 1024 char → truncate + "…(truncated)" suffix
-//   - total block > 4096 char → drop oldest until under cap, preserve order
-//
-// Returns `undefined` when there is no conversation_id, no prior messages,
-// or only the single just-written user message — composeSystemPrompt then
-// drops the conversation_history layer entirely.
-const HISTORY_LIMIT = 20;
-const HISTORY_PER_MSG_MAX = 1024;
-const HISTORY_BLOCK_MAX = 4096;
-
-// sse-frame-leak stop-bleed (2026-05-31). ShadowFlow serializes its own SSE as
-// `event: <name>\ndata: <one-line json>\n\n`. When a prior turn's leaked frames
-// got stored as assistant content, re-injecting them here as CONVERSATION
-// HISTORY makes the LLM parrot the frame shape back — and the parser's
-// sse-frame-leak guard then renders the WHOLE turn as `raw` blocks (no real
-// <sf:node>/<sf:complete> ever produced → TEAM 0 + errored run). We strip the
-// frame-shaped lines before they re-enter the prompt, closing the feedback loop
-// at its source. Tight match (an `event:` line immediately followed by a `data:`
-// line opening with `{`/`[`) so normal prose is untouched. Mirrors
-// parser.ts:588's guard regex. The structural fix (typed event stream, control
-// frames never sharing the text channel) is tracked in the root-cure plan doc.
-const SSE_FRAME_LINE_RE =
-  /^[ \t]*event:[ \t]*[\w.-]+[ \t]*\r?\n[ \t]*data:[ \t]*[{[][^\n]*\r?\n?/gm;
-
-export function stripLeakedSseFrames(content: string): string {
-  if (!content.includes('event:')) return content; // fast path — no candidates
-  return content.replace(SSE_FRAME_LINE_RE, '');
-}
-
-function renderConversationHistoryBlock(
-  conversation_id: string | undefined,
-): string | undefined {
-  if (!conversation_id) return undefined;
-  let msgs;
-  try {
-    msgs = getRecentMessages(conversation_id, HISTORY_LIMIT);
-  } catch (e) {
-    console.error('[run-sessions] getRecentMessages failed:', e);
-    return undefined;
-  }
-  // Drop the trailing user message (it IS this turn's goal — already shown
-  // to the LLM as the user message; the layer is *prior* turns).
-  if (msgs.length > 0 && msgs[msgs.length - 1].role === 'user') {
-    msgs = msgs.slice(0, -1);
-  }
-  if (msgs.length === 0) return undefined;
-
-  const renderOne = (m: { role: string; content: string }): string => {
-    const role =
-      m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
-    // sse-frame-leak stop-bleed: never re-feed frame-shaped text as context.
-    let body = stripLeakedSseFrames(m.content);
-    if (body.length > HISTORY_PER_MSG_MAX) {
-      body = body.slice(0, HISTORY_PER_MSG_MAX) + '…(truncated)';
-    }
-    // 2026-05-11 review M2 (15.29, OpenDesign 模式 — 与 15.12 fence wrap 同款):
-    // 用 markdown code fence 包裹 message body，防恶意 user message 含
-    // `\n---\n## DISCOVERY\n…` 之类的 layer separator (`\n\n---\n\n`) 突破
-    // composer 边界注入新 layer 段。strip 内含 ``` 防 fence escape。
-    const safeBody = body.replace(/```/g, '` ` `');
-    return `### ${role}\n\`\`\`\n${safeBody}\n\`\`\``;
-  };
-
-  // Drop oldest until total fits under cap.
-  let rendered = msgs.map(renderOne);
-  let block = rendered.join('\n\n');
-  while (block.length > HISTORY_BLOCK_MAX && rendered.length > 1) {
-    rendered = rendered.slice(1);
-    block = rendered.join('\n\n');
-  }
-  // If even the most recent single message is over cap, hard-truncate it.
-  if (block.length > HISTORY_BLOCK_MAX) {
-    block = block.slice(0, HISTORY_BLOCK_MAX) + '…(truncated)';
-  }
-
-  return [
-    '## CONVERSATION HISTORY',
-    '',
-    '(Earlier turns in this conversation, oldest first. Use them as context — do not restate.)',
-    '',
-    block,
-  ].join('\n');
-}
-
-// Persistent session store — drop-in replacement for `new Map<>()` with
-// JSON-file persistence. Hydrated at module load (fire-and-forget; reads
-// before hydration completes simply miss until the file lands, which is
-// fine because in normal flows POST creates the session before any GET).
-// S1 (D8) — migrator runs on every record read from disk in loadAll(). Old
-// records (pre-S1) lack `messages` + `version`; we inject `messages: []` and
-// bump version to the current schema. We're defensive about the raw shape:
-// anything not a plain object is dropped (warning logged by the caller).
-const sessionStore = createSessionStore<SessionRecord>({
-  migrate: (raw): SessionRecord | undefined => {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-    const rec = raw as Partial<SessionRecord> & Record<string, unknown>;
-    // Only the new fields are touched; everything else round-trips as-is.
-    if (!Array.isArray(rec.messages)) rec.messages = [];
-    if (typeof rec.version !== 'number' || rec.version < SESSION_SCHEMA_VERSION) {
-      rec.version = SESSION_SCHEMA_VERSION;
-    }
-    // 2026-06-01 — pre-existing records have no `updated_at`; seed it from
-    // created_at so the activity-based TTL has a sensible starting point.
-    if (typeof rec.updated_at !== 'number') {
-      rec.updated_at = typeof rec.created_at === 'number' ? rec.created_at : Date.now();
-    }
-    return rec as SessionRecord;
-  },
-});
-// 后端合一·阶段0 — 启动回填：把内存 store 里已有的 session↔conversation 映射
-// 补进持久 run_index（幂等 upsert），老 run 的历史从此也不怕 TTL 回收。
-void sessionStore.loadAll().then(() => {
-  try {
-    for (const [id, s] of sessionStore.entries()) {
-      if (!s.conversation_id) continue;
-      upsertRunIndex({
-        session_id: id,
-        conversation_id: s.conversation_id,
-        goal: s.goal ?? '',
-        created_at: s.created_at,
-      });
-    }
-  } catch (err) {
-    console.warn('[run-sessions] run_index backfill failed:', err);
-  }
-});
-
-// 2026-06-01 — activity-based session TTL. Old code swept any session
-// `created_at < now-1h`, i.e. killed it one hour after CREATION no matter how
-// recently it was viewed — so coming back to a run after lunch surfaced a
-// spurious "Session 不存在或已过期 (404)". Sessions persist to disk (session-store),
-// so the only thing TTL guards is unbounded cardinality; an idle window is the
-// right axis, not absolute age. 24h of inactivity is generous for a desktop
-// tool and still bounds the on-disk session count.
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-
-/** Effective last-activity instant for the TTL sweep. */
-function sessionLastActivity(s: SessionRecord): number {
-  return Math.max(s.created_at ?? 0, s.updated_at ?? 0);
-}
-
-/**
- * Re-persist a session with a refreshed `updated_at`. Cheap (session-store
- * double-writes async) and keeps an actively-viewed session from expiring.
- * No-op if the session is already gone.
- */
-function touchSession(id: string): void {
-  const s = sessionStore.get(id);
-  if (!s) return;
-  s.updated_at = Date.now();
-  sessionStore.set(id, s);
-}
-
-// S2.3 — module-level singleton. One bucket per session; cleanup happens
-// alongside sessionStore's activity-based TTL sweep (clear() on session delete
-// is effectively handled by the step-store's idempotent disk-removal).
-const stepStoreSingleton = createStepStore();
-
-// T3-1 (2026-05-27): the legacy per-connection `activeStreams` registry +
-// ActiveStream interface were removed. Abort / retry-pending / resume-pending
-// now go through `runBus` (emit + cancel), which buffers and fans out to every
-// attached view instead of poking one connection's `res`.
-
-// T3-1 (docs/architecture/opendesign-streaming-architecture-study.md §5): the
-// run-event bus makes each run a persistent entity with a buffered, monotonically
-// numbered event log + a set of attached SSE views. The pipeline runs ONCE
-// (guarded by runBus.claimStart) and emit()s into the log; every GET /stream
-// connection is a detachable view that resumes from `?after`/Last-Event-ID.
-// This is what decouples execution from the SSE connection — reconnects replay
-// the buffered events instead of re-running the whole LLM pipeline.
-// O2 / T3-5 — inject disk persistence so the run timeline survives a Node
-// restart (hydrated at construction; debounced snapshots on emit/finish). Runs
-// that were mid-flight at crash hydrate as `canceled` with their history intact
-// + a synthetic "interrupted by restart" terminal frame, so a reconnect replays
-// the timeline read-only instead of re-running the pipeline.
-const runBus = createRunBus({ persist: createRunEventStore() });
-
-// 阶段 1 — tool-approval 帧直写 runBus：待审请求与最终决策都以命名事件
-// `permission_check` 落进该 run 的单调编号事件日志（重连经 attach 重放，
-// 重启经 run-event-store hydrate）——「决策为命名事件，可回放」的落点。
-// 注册表本体在 lib（assembler / executor 构造 prompter 时引用同一单例）。
-toolApprovals.setEmitter((sessionId, event, frame) => {
-  runBus.emit(sessionId, event, frame);
-});
-
-/**
- * T3 A8 — graceful shutdown entry point for the daemon. Cancels every active
- * run (aborting its signal → the cli spawner SIGTERM→SIGKILLs its child) and
- * waits a short grace so child processes are reaped before the process exits.
- * Wired to SIGTERM/SIGINT in index.ts.
- */
-export async function shutdownActiveRuns(graceMs?: number): Promise<void> {
-  await runBus.shutdownActive(graceMs !== undefined ? { graceMs } : undefined);
-}
-
-/**
- * O4 — /stream disposition resolver (pure, unit-testable).
- *
- * When a client opens GET /:id/stream we must decide HOW to serve it. The
- * legacy behavior hard-404'd the moment the in-memory session was gone (e.g.
- * the 1h session TTL fired, or the user came back to an old run after a restart)
- * — even though the run's full timeline may still be replayable from the
- * run-event-bus (hydrated from disk). That looked like a broken/lost run.
- *
- * New disposition, in priority order:
- *   - `live`   : the session is present → normal path (may claimStart + run).
- *   - `replay` : the session is gone but the run exists in the bus (live OR
- *                hydrated-from-disk) → READ-ONLY replay of the buffered timeline,
- *                ending with whatever terminal/synthetic frame the bus holds.
- *                NEVER claimStart, NEVER re-execute, NEVER spend tokens.
- *   - `gone`   : neither a session nor any recoverable run → accurate 404.
- *
- * `run` is the result of looking the run up in the bus AFTER an attempted lazy
- * `hydrateOne` (so a disk-only snapshot has already been pulled back in). Keeping
- * this a pure function of {hasSession, run} makes the decision testable without
- * Express/fs (mirrors the swapDagRun unit-test pattern in groups-chat.ts).
- */
-export type StreamDisposition =
-  | { kind: 'live' }
-  | { kind: 'replay'; status: RunStatus }
-  | { kind: 'gone' };
-
-export function resolveStreamDisposition(args: {
-  hasSession: boolean;
-  run: { status: RunStatus } | undefined;
-}): StreamDisposition {
-  if (args.hasSession) return { kind: 'live' };
-  if (args.run) return { kind: 'replay', status: args.run.status };
-  return { kind: 'gone' };
-}
-
-// ── B2 · 统一消息读路径 (unified-conversation-core-plan-2026-06-11 §B2) ──────
-// groups-chat.ts 的 GET /api/groups/:id/timeline 需要「conversation → run 列表
-// → 每个 run 的事件日志」，但 sessionStore / runBus 都是本文件私有（刻意：执行
-// 状态单一所有权）。这里导出两个轻量只读查询，而不是把 store 本体漏出去。
-
-/**
- * List run-session ids belonging to a conversation, most-recently-updated
- * first. Read-only; never touches runBus.
- */
-export function listSessionsByConversation(conversationId: string): string[] {
-  const hits = new Map<string, number>();
-  // 阶段0 — 持久索引为主源（TTL 回收后历史仍在）…
-  try {
-    for (const r of listRunIndexByConversation(conversationId)) {
-      hits.set(r.session_id, r.updated_at);
-    }
-  } catch {
-    // sqlite 不可用时仅靠内存——保持旧行为
-  }
-  // …内存 store 兜底合并（覆盖索引未及写入的瞬时窗口）。
-  for (const [id, s] of sessionStore.entries()) {
-    if (s.conversation_id !== conversationId) continue;
-    hits.set(id, Math.max(hits.get(id) ?? 0, s.updated_at ?? s.created_at ?? 0));
-  }
-  return [...hits.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
-}
-
-/**
- * Read-only snapshot of one run's status + buffered event log for timeline
- * replay. Uses `hydrateOne` so a run whose snapshot is on disk but not in
- * memory (post-restart / post-TTL) is recovered with the same read-only
- * semantics as the /stream replay path. Returns null when there is nothing
- * to replay (no in-memory run, no disk snapshot).
- */
-export function getRunReplay(
-  sessionId: string,
-): { status: RunStatus; events: RunEventRecord[] } | null {
-  const run = runBus.hydrateOne(sessionId) ?? runBus.get(sessionId);
-  if (!run) return null;
-  return { status: run.status, events: run.events };
-}
-
-/**
- * 2026-11-04 群聊「停止生成」— 按会话 id 取消一个在跑的 run（执行状态
- * 单一所有权仍在 runBus；groups-chat.ts 的 stop 路由经此入口取消 gateway
- * run，与 POST /:id/abort 的 runBus.cancel 同一通路）。幂等：unknown id /
- * 已终态都静默返回 false，调用方据此决定是否还走 AbortController 通道。
- */
-export function cancelRunSession(sessionId: string): boolean {
-  const run = runBus.get(sessionId) ?? runBus.hydrateOne(sessionId);
-  if (!run || runBus.isTerminal(run.status)) return false;
-  runBus.emit(sessionId, 'aborted', { session_id: sessionId, reason: 'user_requested' });
-  runBus.cancel(sessionId);
-  return true;
-}
-
-// ── B3 · 网关过程事件 (unified-conversation-core-plan-2026-06-11 §B3) ────────
-// 聊天网关 (groups-chat.ts runFanout) 执行期的过程（thinking/原始流/状态行）
-// 复用 run 体系管线：每轮 fanout 注册一条轻量 "gateway run"，过程投影成
-// TimelineMessage 经 'message'/'message-patch' 事件 emit 进 runBus 事件日志。
-// B2 的 GET /api/groups/:id/timeline 已按 conversation 归并所有 run —— 这些
-// 过程卡因此零前端改动即可回放（实时推送是 F5 的活）。
-//
-// sessionStore / runBus 仍保持本文件私有（与 listSessionsByConversation /
-// getRunReplay 同款边界）：这里只导出一个注册入口，emit/finish 以闭包形式
-// 交还调用方，store 本体不外漏。
-
-/** B3 — handle returned by registerGatewayRun; closures over the private runBus. */
-export interface GatewayRunHandle {
-  session_id: string;
-  /** Append a 'message' / 'message-patch' event into this run's event log. */
-  emit: (event: 'message' | 'message-patch', payload: unknown) => void;
-  /** Mark the run terminal (idempotent — runBus.finish guards re-entry). */
-  finish: (status: Exclude<RunStatus, 'running'>) => void;
-}
-
-/**
- * B3 — register a lightweight "gateway run" session for one chat fan-out round.
- * The session appears in GET /api/run-sessions (per conversation) and its event
- * log feeds the B2 timeline merge. `claimStart` is called here ON PURPOSE: if
- * the front-end later opens GET /:id/stream on this session, the 'live' path's
- * claimStart returns false → it only ATTACHES (replays the gateway's events)
- * and never boots the skill-assembler pipeline for a chat round.
- */
-export function registerGatewayRun(meta: {
-  goal: string;
-  conversation_id: string;
-}): GatewayRunHandle {
-  const session_id = uuidv4();
-  sessionStore.set(session_id, {
-    goal: meta.goal,
-    skill_name: 'chat-gateway',
-    conversation_id: meta.conversation_id,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-  });
-  // 阶段0 — 持久索引：TTL 回收后历史过程卡仍可经 conversation 找回
-  try {
-    upsertRunIndex({ session_id, conversation_id: meta.conversation_id, goal: meta.goal });
-  } catch { /* sqlite 不可用不阻塞聊天 */ }
-  runBus.claimStart(session_id); // ensure() + started=true（单一执行权归网关）
-  return {
-    session_id,
-    emit: (event, payload) => {
-      runBus.emit(session_id, event, payload);
-    },
-    finish: (status) => {
-      runBus.finish(session_id, status);
-      touchSession(session_id); // 结束时刷新活跃度，避免 TTL 早扫
-      try { setRunIndexStatus(session_id, status ?? 'succeeded'); } catch { /* 同上 */ }
-      // 经验记忆自动沉淀（best-effort）— 网关聊天轮失败同样记教训
-      try {
-        recordRunLesson(
-          { skill_name: 'chat-gateway', goal: meta.goal },
-          { aborted: status === 'canceled', failed: status === 'failed', errorMessage: status === 'failed' ? 'chat gateway round failed' : null },
-        );
-      } catch { /* 非致命 */ }
-    },
-  };
-}
-
-const VALID_ARTIFACT_TYPES: ReadonlyArray<ArtifactType> = ['yaml', 'html', 'markdown'];
-
-/**
- * 经验记忆召回块（run 提示词注入用）。按 skill_name 分域，空块返回 ''。
- * 开关：settings.memory.autoLearn（默认开）；settings.memory.recallTopK（默认 4）。
- */
-function lessonsBlockForSession(skillName: string): string {
-  try {
-    if (getSetting('memory.autoLearn') === false) return '';
-    const topK = getSetting('memory.recallTopK');
-    const k = typeof topK === 'number' && topK > 0 ? Math.min(Math.round(topK), 12) : 4;
-    const block = contextBlock(skillName ?? '', '', k);
-    return block ? `\n\n## 过往经验（自动沉淀，供参考）\n\n${block}` : '';
-  } catch {
-    return '';
-  }
-}
-
-/** skill 层内容 + 经验块拼接（两者都可能为空）。 */
-function joinLessons(base: string | undefined, lessonsBlock: string): string | undefined {
-  const baseStr = base ?? '';
-  if (!baseStr) return lessonsBlock || undefined;
-  return baseStr + lessonsBlock;
-}
-
-/**
- * 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）。
- *
- * 口径对齐对方"从已有事实里挖、不额外调模型"：
- *   - run 失败 → 教训（kind=lesson, source='run_failed'）：失败原因原文就是教训。
- *   - 用户中断 → 偏好（kind=preference, source='user_abort'）：用户不想让它跑完
- *     是对该类任务的明确态度。
- * 分域：scope_key 取 skill_name（与对方 employees.role 对齐）；task_type 一期留空。
- * 开关：settings.memory.autoLearn（默认开）。调用方已 try/catch，这里再兜一层。
- */
-function recordRunLesson(
-  session: { skill_name?: string; goal?: string },
-  outcome: { aborted: boolean; failed: boolean; errorMessage?: string | null },
-): void {
-  if (getSetting('memory.autoLearn') === false) return;
-  const scopeKey = (session.skill_name ?? '').slice(0, 120);
-  const goal = (session.goal ?? '').trim();
-  if (outcome.failed) {
-    const reason = (outcome.errorMessage ?? '').trim().slice(0, 400);
-    if (!reason) return; // 没有原因原文就不硬编——不造事实
-    remember({
-      content: `任务「${goal.slice(0, 80) || '(无目标)'}」失败：${reason}。同类任务执行前先按这条自查规避。`,
-      kind: 'lesson',
-      scope_key: scopeKey,
-      source: 'run_failed',
-      source_ref: '',
-      score: 0.85,
-    });
-  } else if (outcome.aborted) {
-    remember({
-      content: `用户中断了「${goal.slice(0, 80) || '(无目标)'}」这类任务。再次执行同类目标时先与用户确认范围与方式，再动手。`,
-      kind: 'preference',
-      scope_key: scopeKey,
-      source: 'user_abort',
-      source_ref: '',
-      score: 0.9,
-    });
-  }
-}
-
-
-function coerceArtifactType(raw: unknown): ArtifactType | null {
-  if (typeof raw !== 'string') return null;
-  return (VALID_ARTIFACT_TYPES as ReadonlyArray<string>).includes(raw)
-    ? (raw as ArtifactType)
-    : null;
-}
+// ── 模块拆分（2026-11-07）— 按内聚块外提，公共 API 经文末 re-export 保持不变 ──
+import { createToolCallProjector, type ToolCallProjection } from './tool-projection';
+import {
+  coerceAttachments,
+  coerceLayerToggles,
+  coerceMaxTokens,
+  coerceModel,
+  coerceProjectMeta,
+  coerceTemperature,
+} from './coerce';
+import { renderConversationHistoryBlock, stripLeakedSseFrames } from './history';
+import {
+  resolveStreamDisposition,
+  runBus,
+  sessionLastActivity,
+  SESSION_TTL_MS,
+  sessionStore,
+  stepStoreSingleton,
+  touchSession,
+  type SessionRecord,
+} from './registry';
+import { joinLessons, lessonsBlockForSession, recordRunLesson } from './lessons';
+import { captureBlueprintArtifact, coerceArtifactType, type CapturedArtifact } from './artifacts';
 
 // ── GET /api/run-sessions — M3 三栏融合 ──────────────────────────────────────
 // 轻量列表：右栏「工作区」tab 按 conversation_id 或 group_id（B1 互链换算）
@@ -1772,6 +993,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   const toolCallProjector = createToolCallProjector({ idSeed: id });
 
   // Story 15.8 — capture run outcome for persistence after generator drains.
+  // 多产物登记（2026-11-07）：capturedArtifacts 登记本 run 的**每一件** blueprint
+  // 产物（持久化到 run_artifacts 表）；artifactInfo 保留「最后一件 = 主产物」
+  // 语义，critique / saveRun 三字段 / 回执摘要的单件行为不变。
+  const capturedArtifacts: CapturedArtifact[] = [];
   let artifactInfo: {
     type: ArtifactType | null;
     filename: string | null;
@@ -1902,8 +1127,8 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
   // reconnect exactly like the in-flight messages.
   const projector = createTimelineProjector({ idSeed: id });
   const flushProjector = (emit: {
-    messages: import('../../lib/contracts').TimelineMessage[];
-    patches: import('../../lib/contracts').MessagePatch[];
+    messages: import('../../../lib/contracts').TimelineMessage[];
+    patches: import('../../../lib/contracts').MessagePatch[];
   }) => {
     for (const m of emit.messages) sendEvent('message', m);
     for (const p of emit.patches) sendEvent('message-patch', p);
@@ -2321,19 +1546,18 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
         console.error(`[run-sessions] tool-call projection error on event=${event}:`, toolCallErr);
       }
 
-      // Capture latest artifact info (last blueprint wins — usually only one).
+      // 多产物登记（2026-11-07）— 每件 blueprint 产物都进 capturedArtifacts
+      // （同名覆盖去重）；artifactInfo = 最后一件（主产物，沿用旧语义）。
       if (event === 'blueprint' && data && typeof data === 'object') {
-        const d = data as {
-          artifact_type?: unknown;
-          filename?: unknown;
-          artifact_url?: unknown;
-        };
-        const type = coerceArtifactType(d.artifact_type);
-        const filename = typeof d.filename === 'string' ? d.filename : null;
-        const url = typeof d.artifact_url === 'string' ? d.artifact_url : null;
-        if (type || filename || url) {
-          artifactInfo = { type, filename, url };
-        }
+        const entry = captureBlueprintArtifact(
+          capturedArtifacts,
+          data as {
+            artifact_type?: unknown;
+            filename?: unknown;
+            artifact_url?: unknown;
+          },
+        );
+        if (entry) artifactInfo = entry;
       } else if (event === 'error') {
         sawError = true;
         // Story 15.29 — capture error message for the assistant message.
@@ -2561,6 +1785,17 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
               : null,
           },
         );
+        // 多产物登记（2026-11-07）— 本 run 捕获的每件 blueprint 产物独立
+        // 落 run_artifacts（幂等全量重登记）。runs 三字段仍是主产物（最后
+        // 一件）——上面 saveRun 刚写完，这里补全其余产物/同名去重后的全集。
+        saveRunArtifacts(
+          persistedRunId,
+          capturedArtifacts.map((a) => ({
+            artifact_type: a.type,
+            artifact_filename: a.filename,
+            artifact_url: a.url,
+          })),
+        );
       } catch (persistErr) {
         // Don't fail the response just because we couldn't persist the
         // run record — the SSE stream is already over. Log and move on.
@@ -2579,7 +1814,14 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
     // Writing failure NEVER reaches the client (try/catch + console.error).
     if (session.conversation_id) {
       let summary: string;
-      if (artifactInfo.filename) {
+      // 多产物登记（2026-11-07）— 多件产物在回执里全部点名（此前只提最后
+      // 一件）。单件/无 filename 保持旧文案，链路优先级不变。
+      const artifactNames = capturedArtifacts
+        .map((a) => a.filename ?? a.url)
+        .filter((n): n is string => typeof n === 'string' && !!n);
+      if (artifactNames.length > 1) {
+        summary = `[Generated artifacts: ${artifactNames.join(', ')}]`;
+      } else if (artifactInfo.filename) {
         summary = `[Generated artifact: ${artifactInfo.filename}]`;
       } else if (stripLeakedSseFrames(collectedStreamText).trim().length > 0) {
         // P2 — control-frame channel isolation (root-cure plan §5). NEVER
@@ -3176,3 +2418,11 @@ async function* synthesizeTeamRun(
 }
 
 export default router;
+
+// ── 公共 API 面（历史 import 路径 './run-sessions' 保持不变） ──
+export * from './tool-projection';
+export * from './coerce';
+export * from './history';
+export * from './registry';
+export * from './lessons';
+export * from './artifacts';
