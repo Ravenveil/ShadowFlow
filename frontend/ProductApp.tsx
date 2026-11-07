@@ -3624,16 +3624,19 @@ type AdminUserRow = {
   user_id: string;
   email?: string | null;
   display_name?: string | null;
+  auth_type?: string;
   role?: string | null;
   disabled?: boolean;
   created_at?: string | number | null;
+  updated_at?: string | number | null;
+  resource_count?: number;
 };
 
-/** 管理员用户管理：GET /api/admin/users + PATCH 角色/停用 + DELETE。
- *  后端 404/403 → 优雅降级为「管理员接口未就绪」提示（待联调）。 */
+/** 管理员用户管理：GET /api/admin/users（{users:[…]} 信封）+ PATCH 角色/停用 + DELETE。
+ *  403 = 无管理员权限，404 = 接口未就绪 → 分别给出引导（待联调）。 */
 function AdminUsersSection() {
   const [rows, setRows] = useState<AdminUserRow[] | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "unavailable" | "error">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "unavailable" | "forbidden" | "error">("loading");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -3651,7 +3654,9 @@ function AdminUsersSection() {
       setState("ready");
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0;
-      if (status === 404 || status === 403) {
+      if (status === 403) {
+        setState("forbidden");
+      } else if (status === 404) {
         setState("unavailable");
       } else {
         setState("error");
@@ -3696,12 +3701,21 @@ function AdminUsersSection() {
   }
 
   if (state === "loading") return <p className="sf-live-tag">正在加载用户列表…</p>;
+  if (state === "forbidden") {
+    return (
+      <div className="sf-settings-placeholder">
+        <ShieldCheck size={25} />
+        <strong>无管理员权限</strong>
+        <p>当前账号不是管理员，无法查看用户列表（后端返回 403 FORBIDDEN）。</p>
+      </div>
+    );
+  }
   if (state === "unavailable") {
     return (
       <div className="sf-settings-placeholder">
         <ShieldCheck size={25} />
         <strong>管理员接口未就绪</strong>
-        <p>后端 /api/admin/users 返回 404/403，用户管理暂不可用（待后端联调）。</p>
+        <p>后端 /api/admin/users 返回 404，用户管理暂不可用（待后端联调）。</p>
         <button type="button" onClick={() => void load()}>
           重试
         </button>
@@ -3736,8 +3750,9 @@ function AdminUsersSection() {
           <div>
             <strong>{row.display_name || row.email || row.user_id.slice(0, 8)}</strong>
             <small>
-              {row.email ?? ""} · {row.role ?? "user"}
+              {row.email ?? ""} · {row.auth_type ?? "email"} · {row.role ?? "user"}
               {row.disabled ? " · 已停用" : ""}
+              {row.resource_count != null ? ` · ${row.resource_count} 个资源` : ""}
             </small>
           </div>
           <div className="sf-admin-actions">

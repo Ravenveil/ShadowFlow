@@ -412,13 +412,19 @@ export function openSse(path: string, options: SseOptions): () => void {
       const headers: Record<string, string> = { Accept: "text/event-stream" };
       const token = getAuthSnapshot().token;
       if (token) headers.Authorization = `Bearer ${token}`;
-      const sep = path.includes("?") ? "&" : "?";
-      const url =
-        options.lastEventId != null
-          ? `${SF_API_BASE}${path}${sep}last_event_id=${encodeURIComponent(options.lastEventId)}`
-          : `${SF_API_BASE}${path}`;
-      if (options.lastEventId != null) headers["Last-Event-ID"] = options.lastEventId;
+      const params: string[] = [];
+      // SSE 鉴权双路：Bearer 头 + access_token 查询参数（后端两种都认）
+      if (token) params.push(`access_token=${encodeURIComponent(token)}`);
+      if (options.lastEventId != null) {
+        params.push(`last_event_id=${encodeURIComponent(options.lastEventId)}`);
+        headers["Last-Event-ID"] = options.lastEventId;
+      }
+      const url = `${SF_API_BASE}${path}${params.length ? `${path.includes("?") ? "&" : "?"}${params.join("&")}` : ""}`;
       const res = await fetch(url, { headers, signal: controller.signal, cache: "no-store" });
+      if (res.status === 401) {
+        unauthorizedHandler?.();
+        throw new ApiError(401, "UNAUTHORIZED", "SSE 401");
+      }
       if (!res.ok || !res.body) {
         throw new ApiError(res.status, `SSE_HTTP_${res.status}`, `SSE ${res.status}`);
       }

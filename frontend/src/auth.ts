@@ -87,10 +87,15 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${SF_API_BASE}${path}`, { ...init, headers });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
-    const message =
-      body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string"
-        ? ((body as { error: string }).error)
-        : `HTTP ${res.status}`;
+    // 后端错误形状：{error:{code,message}} 或 {error:string}
+    const err = (body as { error?: unknown } | null)?.error;
+    let message = `HTTP ${res.status}`;
+    if (typeof err === "string") message = err;
+    else if (err && typeof err === "object") {
+      const e = err as { code?: string; message?: string };
+      message = e.message || e.code || message;
+      if (e.code === "USER_DISABLED") message = "账号已被停用，请联系管理员";
+    }
     throw new Error(message);
   }
   return body as T;
