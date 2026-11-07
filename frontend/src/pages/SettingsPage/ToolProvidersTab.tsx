@@ -17,7 +17,9 @@ import type { McpProvider, RegisterProviderPayload } from '../../common/types/ag
 // API helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../api/_base';
+
+const API_BASE_URL = getApiBase();
 
 async function apiFetchProviders(): Promise<McpProvider[]> {
   const res = await fetch(`${API_BASE_URL}/tools/providers`);

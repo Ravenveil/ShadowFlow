@@ -43,7 +43,9 @@ const IconGrip: React.FC<{ size?: number }> = ({ size = 14 }) => (
 
 import PetSpriteFace from './PetSpriteFace';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../../api/_base';
+
+const API_BASE = getApiBase();
 
 // ── Favorites persistence ─────────────────────────────────────────────────
 

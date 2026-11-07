@@ -48,7 +48,9 @@ const CATEGORY_META = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../../api/_base';
+
+const API_BASE = getApiBase();
 const LS_KEY = 'sf.mediaKeys';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
