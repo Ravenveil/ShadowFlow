@@ -298,6 +298,10 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
     launch('py', C.py, pyBin, [
       '-m', 'uvicorn', 'shadowflow.server:app',
       '--host', '127.0.0.1', '--port', String(PY_PORT), '--reload',
+      // 监视收窄到 shadowflow/：全树监视会被 .workbuddy/tmp 等杂散 .py 抖动
+      // 反复触发 reload（Windows 上旧 worker 不退 → 新 worker 抢不到 8000
+      // → uvicorn 退出 code=1 → dev.mjs 整树收摊，2026-11-07 连崩两次实证）。
+      '--reload-dir', path.join(ROOT, 'shadowflow'),
     ]);
     console.log(`${C.dim}  [py] ${pyBin}${C.reset}`);
   }
