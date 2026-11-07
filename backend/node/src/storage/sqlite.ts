@@ -82,6 +82,16 @@ export function getDb(): Database.Database {
   // B1 统一会话内核（2026-06-11）— 与 Python 群聊体系的显式互链：
   // conversation.group_id ↔ group.conversation_id（groups.py 同日加）。
   addColumnIfMissing(db, 'conversations', 'group_id', 'TEXT');
+  // T03/T02 BE-02（2026-11-07）— projects 营销录入七列 + 空间维度。旧库
+  // （001 旧 schema）走 ALTER 补列；新库 001-init.sql 已全列，幂等跳过。
+  // deliverables 存 JSON 数组文本，缺省 '[]'。
+  addColumnIfMissing(db, 'projects', 'client_name', 'TEXT');
+  addColumnIfMissing(db, 'projects', 'goal', 'TEXT');
+  addColumnIfMissing(db, 'projects', 'period', 'TEXT');
+  addColumnIfMissing(db, 'projects', 'budget', 'TEXT');
+  addColumnIfMissing(db, 'projects', 'deliverables', 'TEXT');
+  addColumnIfMissing(db, 'projects', 'brief', 'TEXT');
+  addColumnIfMissing(db, 'projects', 'workspace_id', 'TEXT');
   // 后端合一·阶段0（2026-06-12）— 持久 run 索引（storage/run-index.ts）。
   // session↔conversation 映射不再依赖内存 sessionStore 的 TTL 生命周期。
   db.exec(`CREATE TABLE IF NOT EXISTS run_index (
@@ -186,6 +196,10 @@ export function getDb(): Database.Database {
   // llm.ts 每次调用返回 usage 时落一条（input/output tokens + 估算成本），
   // 数据看板（routes/dashboard.ts）按天/按模型聚合现算。写入 best-effort，
   // 失败静默，绝不影响 LLM 主链路。
+  // 2026-11-07 成本追踪断点清零（T12/BE-07）：补 run_id/agent_id/project_id/
+  // duration_ms 四列——此前 recordUsage 只挂 /api/llm 老路径且无归属维度，
+  // DAG/Agent 链路成本是盲区，经营指标「交付成本」无米下锅。归属列一律
+  // NOT NULL DEFAULT ''（空串=未知归属，查询侧 COALESCE 兜底）。
   db.exec(`CREATE TABLE IF NOT EXISTS token_usage (
     id TEXT PRIMARY KEY,
     ts INTEGER NOT NULL,
@@ -193,10 +207,23 @@ export function getDb(): Database.Database {
     model TEXT NOT NULL DEFAULT '',
     input_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_est_usd REAL NOT NULL DEFAULT 0
+    cost_est_usd REAL NOT NULL DEFAULT 0,
+    run_id TEXT NOT NULL DEFAULT '',
+    agent_id TEXT NOT NULL DEFAULT '',
+    project_id TEXT NOT NULL DEFAULT '',
+    duration_ms INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(ts);
-  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);`);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_run ON token_usage(run_id);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_agent ON token_usage(agent_id);`);
+  // 成本追踪断点清零（2026-11-07，T12/BE-07）— 旧库（2026-11-05 建表，无归属
+  // 四列）走 ALTER 补列；新库 DDL 已全列，此处幂等跳过。必须放在上面建表
+  // 之后（否则旧库缺席、新库表未建时 ALTER 直接炸 no such table）。
+  addColumnIfMissing(db, 'token_usage', 'run_id', 'TEXT');
+  addColumnIfMissing(db, 'token_usage', 'agent_id', 'TEXT');
+  addColumnIfMissing(db, 'token_usage', 'project_id', 'TEXT');
+  addColumnIfMissing(db, 'token_usage', 'duration_ms', 'INTEGER');
 
   // 记忆交接 + 长期画像写回（2026-11-05，功能线③ OPC-OS PR#3 设计的另一半）—
   // 纯增量表，不动 memory_lessons / agent_hops 的既有语义。交接副本单独存

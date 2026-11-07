@@ -1326,6 +1326,11 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
           conversational: wantPlainConversation,
           // 2026-08-22 — 组装落库的工作区归属（team-persistence 写 Python team/agent 用）。
           workspace_id: session.workspace_id,
+          // T12/BE-07 成本归属收尾（2026-11-07）— 项目归属由 conversation 反查
+          // （POST 时已定：显式传入或按 project_id/group_id 自动创建），无会话则缺省。
+          project_id: session.conversation_id
+            ? (getConversation(session.conversation_id)?.project_id ?? undefined)
+            : undefined,
         });
     if (teamSpec && wantSyntheticFallback) {
       console.log(

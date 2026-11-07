@@ -20,7 +20,7 @@ import fs from 'fs';
 import path from 'path';
 
 // 与 agent-yaml.ts 相同的双目录解析（root 优先，server-local 兜底）。
-const ROOT_AGENTS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'agents');
+const ROOT_AGENTS_DIR = path.join(process.cwd(), '..', '..', '.shadowflow', 'agents');
 const LOCAL_AGENTS_DIR = path.join(process.cwd(), '.shadowflow', 'agents');
 
 const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;

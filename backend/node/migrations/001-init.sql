@@ -19,7 +19,18 @@ CREATE TABLE IF NOT EXISTS projects (
   skill_id        TEXT,
   design_system_id TEXT,
   created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL
+  updated_at      TEXT NOT NULL,
+  -- T03/BE-02 营销项目录入字段（2026-11-07）— 此前 POST 提交的客户/目标/
+  -- 周期/预算/交付物/Brief 被静默丢弃，交付周期等经营指标无数据来源。
+  client_name     TEXT NOT NULL DEFAULT '',
+  goal            TEXT NOT NULL DEFAULT '',
+  period          TEXT NOT NULL DEFAULT '',
+  budget          TEXT NOT NULL DEFAULT '',
+  deliverables    TEXT NOT NULL DEFAULT '[]',
+  brief           TEXT NOT NULL DEFAULT '',
+  -- T02/BE-02 空间维度 — 员工/团队已按 workspace 隔离，projects 此前缺
+  -- workspace_id（?workspace_id= 被忽略返回全量），多机构并行必串数据。
+  workspace_id    TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS conversations (

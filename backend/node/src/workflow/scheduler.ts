@@ -160,6 +160,7 @@ async function* runDagInternal(
   observer: NodeObserver,
   goal?: string,
   sessionId?: string,
+  projectId?: string,
 ): AsyncGenerator<TurnChunk> {
   const idx = buildIndex(team);
   const queue = new ChunkQueue();
@@ -247,6 +248,8 @@ async function* runDagInternal(
               // 阶段 1 — 审批关联：团队节点内 prompt 工具的 permission_check
               // 帧要落到正确的 run 事件日志，executor 需要知道 session id。
               session_id: sessionId,
+              // T12/BE-07 成本归属收尾 — 项目归属穿线到 per-node usageCtx。
+              project_id: projectId,
             };
 
             const incoming = idx.in.get(id) ?? [];
@@ -305,6 +308,7 @@ async function* runDagInternal(
                 workspace,
                 priorResults: new Map(results),
                 session_id: sessionId,
+                project_id: projectId,
               };
               const passed = result.status !== 'skipped'
                 && evaluateCondition(e.condition ?? '', ctx);
@@ -407,8 +411,9 @@ export function runDag(
   signal: AbortSignal,
   goal?: string,
   sessionId?: string,
+  projectId?: string,
 ): AsyncGenerator<TurnChunk> {
-  return runDagInternal(team, callable, workspace, signal, NULL_OBSERVER, goal, sessionId);
+  return runDagInternal(team, callable, workspace, signal, NULL_OBSERVER, goal, sessionId, projectId);
 }
 
 /**
@@ -424,6 +429,7 @@ export function runDagWithObserver(
   observer: NodeObserver,
   goal?: string,
   sessionId?: string,
+  projectId?: string,
 ): AsyncGenerator<TurnChunk> {
-  return runDagInternal(team, callable, workspace, signal, observer, goal, sessionId);
+  return runDagInternal(team, callable, workspace, signal, observer, goal, sessionId, projectId);
 }

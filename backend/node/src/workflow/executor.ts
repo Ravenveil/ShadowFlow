@@ -46,7 +46,7 @@ import type { NodeObserver } from './observer';
 //     };
 //   }
 import type { LlmCallable } from '../transport/LlmCallable';
-import { ApiClientCallable } from '../transport/ApiClientCallable';
+import { ApiClientCallable, trackUsage } from '../transport/ApiClientCallable';
 // Round 4 PR-D Lane 1 — per-agent ConversationRuntime path. When the agent
 // declares a tool whitelist AND the callable wraps a direct ApiClient,
 // we drive the agent through the multi-turn tool_use loop. Otherwise the
@@ -195,15 +195,25 @@ export async function executeNode(
     // paths) we fall back to `node.id`, byte-for-byte preserving the pre-goal
     // behaviour. The `?? node.id` is the BMAD-isolation flag.
     const userTurn = ctx.goal ?? node.id;
+    // T12/BE-07 成本归属：per-turn 传 usageCtx（callable 是并行节点共享实例，
+    // 归属必须走 per-call 参数而非实例字段）。run_id=run-session、agent_id=node。
+    const usageCtx = {
+      session_id: ctx.session_id ?? '',
+      run_id: ctx.session_id ?? '',
+      agent_id: node.id,
+      // T12/BE-07 成本归属收尾 — 项目归属（无归属记空串，与 UsageStamp 口径一致）。
+      project_id: ctx.project_id ?? '',
+    };
     const stream =
       pickedTools.length > 0 && callable instanceof ApiClientCallable
-        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn, ctx.session_id)
+        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn, ctx.session_id, ctx.project_id)
         : callable.turn({
             system,
             prompt: userTurn, // Branch 0: user goal; else node.id (BMAD). The
                             // persona + input slurp does the heavy lifting via `system`.
             history: [],     // Phase 2 decision A2: no history; artifact handoff.
             signal,
+            usageCtx,
           });
 
     // `LlmCallable.turn()` now yields canonical `TurnChunk` (post-Lane 1
@@ -292,8 +302,17 @@ function buildRuntimeStream(
   signal: AbortSignal,
   userTurn: string,
   sessionId?: string,
+  projectId?: string,
 ): AsyncGenerator<TurnChunk> {
-  const apiClient = callable.getApiClient();
+  // T12/BE-07 成本归属：tool-loop 路径经 getApiClient() 直连 stream，同样
+  // 包 trackUsage 落用量流水（per-node 闭包戳，与 turn() 路径同口径）。
+  const apiClient = trackUsage(callable.getApiClient(), () => ({
+    model: callable.resolvedModel,
+    session_id: sessionId ?? '',
+    run_id: sessionId ?? '',
+    agent_id: node.id,
+    project_id: projectId ?? '',
+  }));
   const registry = new ToolRegistry(
     pickedTools.map((name) => ({
       name,

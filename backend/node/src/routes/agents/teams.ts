@@ -43,7 +43,7 @@ const PYTHON_BASE = process.env.PYTHON_BACKEND_URL ?? 'http://localhost:8000';
 // Mirror of the path resolution in team-yaml.ts. Kept local because the
 // writer needs the same precedence (root wins over local) when picking
 // where to overwrite.
-const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'teams');
+const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '..', '.shadowflow', 'teams');
 const LOCAL_TEAMS_DIR = path.join(process.cwd(), '.shadowflow', 'teams');
 
 function resolveTeamFile(teamId: string): string | null {

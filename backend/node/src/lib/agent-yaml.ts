@@ -30,7 +30,7 @@ import type {
 // Demo bundles + user-edited agents live at `<repo>/.shadowflow/agents/`,
 // which is `cwd/../.shadowflow/agents/` from the server's perspective. Mirror
 // the dual-dir pattern from skill-loader.ts.
-const ROOT_AGENTS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'agents');
+const ROOT_AGENTS_DIR = path.join(process.cwd(), '..', '..', '.shadowflow', 'agents');
 const LOCAL_AGENTS_DIR = path.join(process.cwd(), '.shadowflow', 'agents');
 
 const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;

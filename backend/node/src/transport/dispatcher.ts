@@ -23,6 +23,7 @@ import { AcpCallable } from './AcpCallable';
 import { McpCallable } from './McpCallable';
 import { resolveProviderBaseUrl, resolveProviderKey, normalizeSdkBaseUrl } from './byokKey';
 import { getSetting } from '../storage/settings';
+import type { UsageStamp } from '../storage/token-usage';
 
 /**
  * Executor string grammar.
@@ -75,6 +76,12 @@ export interface ResolveOptions {
   sessionId?: string;
   /** Workspace cwd hint for CLI/ACP/MCP; falls back to LlmCallableTurnInput.workspace. */
   workspace?: string;
+  /**
+   * 成本归属戳（2026-11-07 T12/BE-07）— 透传给 ApiClientCallable 作构造期
+   * 默认归属（usage 流水落 run/agent/project 维度）。CLI/ACP/MCP 后端暂不
+   * 落用量流水（子进程 token 用量无从拦截）。
+   */
+  usageCtx?: UsageStamp;
 }
 
 /**
@@ -197,6 +204,7 @@ export function resolveCallable(
       model: opts.model,
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
+      usageCtx: opts.usageCtx,
     });
   }
 
@@ -286,6 +294,7 @@ export function resolveCallable(
       model: opts.model,
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
+      usageCtx: opts.usageCtx,
     });
   }
 

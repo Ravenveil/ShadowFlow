@@ -20,7 +20,7 @@ import {
   usageBreakdown,
   startOfDay,
 } from './token-usage';
-import { _resetForTests } from './sqlite';
+import { _resetForTests, getDb } from './sqlite';
 
 let failures = 0;
 function check(name: string, cond: boolean): void {
@@ -82,6 +82,38 @@ const now = Date.now();
   check('TopN 排序按 tokens 降序', byModel[0]?.key === 'big-model');
   const bySession = usageBreakdown(now - DAY, now + DAY, 'session_id', 10);
   check('按 session 分组正确', bySession.some((r) => r.key === 'bd-a'));
+}
+
+// ── T12/BE-07 归属戳与耗时列 ────────────────────────────────────────────────
+{
+  recordUsage({
+    session_id: 'sess-run',
+    model: 'm-x',
+    input_tokens: 10,
+    output_tokens: 20,
+    run_id: 'run-t1',
+    agent_id: 'agent-1',
+    project_id: 'proj-1',
+    duration_ms: 1234,
+    ts: now,
+  });
+  const row = getDb()
+    .prepare(`SELECT run_id, agent_id, project_id, duration_ms FROM token_usage WHERE run_id = 'run-t1'`)
+    .get() as { run_id: string; agent_id: string; project_id: string; duration_ms: number };
+  check('归属四列落库', row.run_id === 'run-t1' && row.agent_id === 'agent-1' && row.project_id === 'proj-1');
+  check('耗时列落库', row.duration_ms === 1234);
+
+  const byRun = usageBreakdown(now - DAY, now + DAY, 'run_id', 10);
+  check('按 run 分组可查', byRun.find((r) => r.key === 'run-t1')?.calls === 1);
+  const byAgent = usageBreakdown(now - DAY, now + DAY, 'agent_id', 10);
+  check('按 agent 分组可查', byAgent.find((r) => r.key === 'agent-1')?.calls === 1);
+  const byProject = usageBreakdown(now - DAY, now + DAY, 'project_id', 10);
+  check('按 project 分组可查', byProject.find((r) => r.key === 'proj-1')?.calls === 1);
+
+  // 旧流水（无归属）不炸聚合，落空串键
+  recordUsage({ session_id: 'sess-legacy', model: 'm-y', input_tokens: 1, output_tokens: 1, ts: now });
+  const byRun2 = usageBreakdown(now - DAY, now + DAY, 'run_id', 10);
+  check('无归属流水落空串键且聚合不炸', byRun2.some((r) => r.key === ''));
 }
 
 _resetForTests();

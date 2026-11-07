@@ -30,6 +30,7 @@
  */
 
 import type { ApiClient } from '../lib/conversation-runtime';
+import { DEFAULT_MODELS } from './api-clients';
 import { AnthropicApiClient } from './api-clients/anthropic-api-client';
 import { OpenAiCompatApiClient } from './api-clients/openai-compat-api-client';
 import { GoogleApiClient } from './api-clients/google-api-client';
@@ -41,6 +42,7 @@ import type {
   LlmCallableTurnInput,
 } from './LlmCallable';
 import { LlmCallError, type TurnChunk } from '../workflow/types';
+import { recordUsage, type UsageStamp } from '../storage/token-usage';
 
 /**
  * Provider ids the 13 ApiClient instances cover. Mirror of
@@ -84,6 +86,66 @@ export interface ApiClientCallableOptions {
   maxTokens?: number;
   /** 0..1 temperature; omitted from request when undefined. */
   temperature?: number;
+  /**
+   * 成本归属戳（2026-11-07 T12/BE-07）— 构造期固定归属（如群聊 per-agent
+   * 实例）。DAG 并行共享实例的场景走 `LlmCallableTurnInput.usageCtx`
+   * （per-turn 传参），两者合并时 input 优先。
+   */
+  usageCtx?: UsageStamp;
+}
+
+/**
+ * 给 `ApiClient.stream()` 包一层用量流水（2026-11-07 T12/BE-07 成本追踪断点
+ * 清零）。看到 `usage` 事件即落一条 token_usage（含耗时与归属戳），随后事件
+ * 原样透传——主链路零感知。recordUsage 自身 best-effort 静默，getStamp 的
+ * 异常也防御性吞掉（统计绝不影响模型调用）。
+ *
+ * 为什么包在 ApiClient 而不是 turn()：tool-loop 路径（ConversationRuntime
+ * 经 `getApiClient()` 直连 stream）绕过 turn()，挂钩放 stream 包装层两条
+ * 路径一次全覆盖。
+ */
+export function trackUsage(
+  client: ApiClient,
+  getStamp: () => UsageStamp,
+): ApiClient {
+  return {
+    stream: (args) => trackUsageStream(client.stream(args), getStamp),
+  };
+}
+
+async function* trackUsageStream<T>(
+  stream: AsyncIterable<T>,
+  getStamp: () => UsageStamp,
+): AsyncGenerator<T> {
+  const startedAt = Date.now();
+  for await (const ev of stream) {
+    try {
+      const kind = (ev as { kind?: string } | null)?.kind;
+      if (kind === 'usage') {
+        const u = ((ev as { usage?: Record<string, unknown> }).usage ?? {}) as {
+          input_tokens?: number;
+          output_tokens?: number;
+        };
+        recordUsage({
+          ...safeStamp(getStamp),
+          input_tokens: Number(u.input_tokens) || 0,
+          output_tokens: Number(u.output_tokens) || 0,
+          duration_ms: Date.now() - startedAt,
+        });
+      }
+    } catch {
+      /* 统计绝不影响主链路 */
+    }
+    yield ev;
+  }
+}
+
+function safeStamp(getStamp: () => UsageStamp): UsageStamp {
+  try {
+    return getStamp() ?? {};
+  } catch {
+    return {};
+  }
 }
 
 function buildApiClient(
@@ -148,6 +210,10 @@ export class ApiClientCallable implements LlmCallable {
   };
 
   private readonly client: ApiClient;
+  /** 构造期固定归属戳（T12/BE-07）；per-turn 由 input.usageCtx 覆盖。 */
+  private readonly usageCtxDefault?: UsageStamp;
+  /** 实际生效的 model 名（opts.model → provider 默认），落用量流水用。 */
+  readonly resolvedModel: string;
 
   constructor(
     private readonly provider: string,
@@ -164,6 +230,11 @@ export class ApiClientCallable implements LlmCallable {
       );
     }
     this.client = client;
+    this.usageCtxDefault = opts.usageCtx;
+    // 类型擦除同 byokKey.ts：provider 允许 byok:*/custom-* 泛化 string，
+    // DEFAULT_MODELS 只覆盖内置（custom-* 无默认 model，undefined 即可）。
+    this.resolvedModel =
+      opts.model || (DEFAULT_MODELS as Record<string, string | undefined>)[provider] || '';
   }
 
   /**
@@ -195,7 +266,14 @@ export class ApiClientCallable implements LlmCallable {
 
     let stream: AsyncIterable<unknown>;
     try {
-      stream = this.client.stream({
+      // T12/BE-07 成本流水：usage 事件经 trackUsage 落 token_usage（归属戳
+      // 合并顺序 input.usageCtx > opts.usageCtx；model 取 turn 指定或构造期
+      // 解析的 resolvedModel），事件本身原样透传。
+      stream = trackUsage(this.client, () => ({
+        model: input.model || this.resolvedModel,
+        ...this.usageCtxDefault,
+        ...input.usageCtx,
+      })).stream({
         system_prompt: input.system,
         messages,
         tools:

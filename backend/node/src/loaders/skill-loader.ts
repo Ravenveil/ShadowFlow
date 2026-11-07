@@ -46,7 +46,7 @@ const DEFAULT_SKILLS_DIR = path.join(process.cwd(), '.shadowflow', 'skills');
 // instead. We scan both locations and merge — local (server-rooted) entries
 // override root entries when both exist with the same id, so the existing
 // runtime-state convention (editor-export-demo etc.) keeps working.
-const ROOT_SKILLS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'skills');
+const ROOT_SKILLS_DIR = path.join(process.cwd(), '..', '..', '.shadowflow', 'skills');
 
 // 2026-06-03 — file-form built-in skills shipped IN the repo (git-tracked),
 // the ShadowFlow analogue of OpenDesign's `skills/` built-in root. Resolved
@@ -532,7 +532,7 @@ async function warmOneSkill(skillId: string): Promise<void> {
 
   const candidates = [
     path.join(process.cwd(), '.shadowflow', 'skills', skillId, 'references'),
-    path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'skills', skillId, 'references'),
+    path.join(process.cwd(), '..', '..', '.shadowflow', 'skills', skillId, 'references'),
   ];
   const refDir = candidates.find((d) => fs.existsSync(d));
   if (!refDir) return; // no on-disk references — caller (assembler) skips compile

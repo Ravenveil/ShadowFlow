@@ -29,7 +29,13 @@ import { getDb } from '../../storage/sqlite';
 const router = Router();
 
 router.get('/', (req: Request, res: Response) => {
-  const projects = listProjects();
+  // T02/BE-02 空间过滤：?workspace_id=ws-* 只返回该空间项目（此前被忽略
+  // 返回全量，多机构并行必串数据）。
+  const workspaceId =
+    typeof req.query.workspace_id === 'string' && req.query.workspace_id.length > 0
+      ? req.query.workspace_id
+      : undefined;
+  const projects = listProjects(workspaceId);
   // GAP A3（2026-08-22）：?withSessions=1 → 每个项目附 sessions[]（该项目下的
   // 会话行，按 updated_at 新→旧）。数据模型复用 conversations.project_id（15.16
   // 已有外键），不新增表；shape 在 verbatim record 上额外加 id 别名 + sessions。
@@ -52,6 +58,14 @@ router.post('/', (req: Request, res: Response) => {
     workspace_path?: unknown;
     skill_id?: unknown;
     design_system_id?: unknown;
+    // T03/BE-02 营销录入七字段——此前被静默丢弃（P0-2 修复）。
+    client_name?: unknown;
+    goal?: unknown;
+    period?: unknown;
+    budget?: unknown;
+    deliverables?: unknown;
+    brief?: unknown;
+    workspace_id?: unknown;
   };
   if (typeof body.name !== 'string' || body.name.trim().length === 0) {
     res
@@ -68,6 +82,15 @@ router.post('/', (req: Request, res: Response) => {
     skill_id: typeof body.skill_id === 'string' ? body.skill_id : null,
     design_system_id:
       typeof body.design_system_id === 'string' ? body.design_system_id : null,
+    client_name: typeof body.client_name === 'string' ? body.client_name : '',
+    goal: typeof body.goal === 'string' ? body.goal : '',
+    period: typeof body.period === 'string' ? body.period : '',
+    budget: typeof body.budget === 'string' ? body.budget : '',
+    deliverables: Array.isArray(body.deliverables)
+      ? body.deliverables.filter((d): d is string => typeof d === 'string')
+      : [],
+    brief: typeof body.brief === 'string' ? body.brief : '',
+    workspace_id: typeof body.workspace_id === 'string' ? body.workspace_id : '',
   });
   res.status(201).json(project);
 });
@@ -94,6 +117,17 @@ router.patch('/:id', (req: Request, res: Response) => {
   if ('design_system_id' in body)
     patch.design_system_id =
       typeof body.design_system_id === 'string' ? body.design_system_id : null;
+  // T03/BE-02 营销录入七字段（PATCH 同步支持）
+  if (typeof body.client_name === 'string') patch.client_name = body.client_name;
+  if (typeof body.goal === 'string') patch.goal = body.goal;
+  if (typeof body.period === 'string') patch.period = body.period;
+  if (typeof body.budget === 'string') patch.budget = body.budget;
+  if (Array.isArray(body.deliverables))
+    patch.deliverables = body.deliverables.filter(
+      (d): d is string => typeof d === 'string',
+    );
+  if (typeof body.brief === 'string') patch.brief = body.brief;
+  if (typeof body.workspace_id === 'string') patch.workspace_id = body.workspace_id;
 
   const updated = updateProject(req.params.id, patch);
   if (!updated) {
