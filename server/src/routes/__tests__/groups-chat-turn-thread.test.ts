@@ -161,7 +161,10 @@ describe('串行 fan-out（DM / 无 team 群）— whole-thread 回放保真', (
     groupRecord.messages.push(
       { content: '帮我复盘下昨天的投放', sender_kind: 'user', sender_name: 'boss' },
     );
-    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '帮我复盘下昨天的投放');
+    // 2026-11-07 策略矩阵路由后，泛提示词会按意图收敛成单专家应答（设计语义，
+    // 见 chat-strategy.heuristicPlan）；本用例测的是多 agent 线程保真（丢段即
+    // 红），故用 @ 点名定向派活保证双 agent 派发，断言本体不变。
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@pm @arch 帮我复盘下昨天的投放');
 
     expect(turnCalls).toHaveLength(2);
     const [first, second] = turnCalls;
@@ -201,7 +204,9 @@ describe('DAG 路径（team 群）— 快照线程不盲删末段', () => {
       { content: '上一轮的作答', sender_kind: 'agent', sender_name: '总经理' },
       { content: '第二轮问题', sender_kind: 'user', sender_name: 'boss' },
     );
-    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '第二轮问题');
+    // @ 点名定向派活保证 DAG 双节点都派发（策略矩阵下泛提示词会收敛单专家，
+    // 本用例测线程保真不测路由宽度，同上）。
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@pm @arch 第二轮问题');
 
     expect(turnCalls).toHaveLength(2);
     for (const call of turnCalls) {
