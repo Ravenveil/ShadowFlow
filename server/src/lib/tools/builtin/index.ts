@@ -1,5 +1,10 @@
 /**
- * builtin/index.ts — Default registry for the 9 ConversationRuntime builtins.
+ * builtin/index.ts — Default registry for the 17 ConversationRuntime builtins.
+ *
+ * 2026-11-07 — WorkBuddy 平台能力补齐: +8 provider-backed platform tools
+ * (send_email / im_read / im_send / github_request / github_write /
+ * image_generate / video_generate / generate_3d), all following web-search's
+ * env-provider + stub contract (see provider-http.ts).
  *
  * Exported pieces:
  *   - `builtinTools`                 ToolSpec[]    insertion-ordered list
@@ -7,7 +12,7 @@
  *   - `builtinDefaultModes`          Record<name, PermissionMode>
  *   - `createBuiltinRegistry()`      factory returning a fresh ToolRegistry
  *                                    seeded with all 9 ToolSpec entries.
- *   - `registerBuiltinExecutors()`   register the 9 executors against Lane 1's
+ *   - `registerBuiltinExecutors()`   register the executors against Lane 1's
  *                                    module-level executor registry. The
  *                                    workspace + allowedTools context is
  *                                    threaded via AsyncLocalStorage — the
@@ -47,19 +52,38 @@ import { globFilesTool, globFilesExecutor } from './glob-files';
 import { grepTool, grepExecutor } from './grep';
 import { webSearchTool, webSearchExecutor } from './web-search';
 import { fetchUrlTool, fetchUrlExecutor } from './fetch-url';
+import { imReadTool, imReadExecutor } from './im-read';
+import { githubRequestTool, githubRequestExecutor, githubWriteTool, githubWriteExecutor } from './github';
 import { writeFileTool, writeFileExecutor } from './write-file';
 import { editFileTool, editFileExecutor } from './edit-file';
+import { sendEmailTool, sendEmailExecutor } from './send-email';
+import { imSendTool, imSendExecutor } from './im-send';
+import { imageGenerateTool, imageGenerateExecutor } from './image-generate';
+import { videoGenerateTool, videoGenerateExecutor } from './video-generate';
+import { generate3dTool, generate3dExecutor } from './three-d-generate';
 import { shellExecTool, shellExecExecutor } from './shell-exec';
 
 export const builtinTools: ToolSpec[] = [
+  // read-tier (safe-by-default)
   readFileTool,
   listDirTool,
   globFilesTool,
   grepTool,
   webSearchTool,
   fetchUrlTool,
+  imReadTool,
+  githubRequestTool,
+  // write-tier
   writeFileTool,
   editFileTool,
+  sendEmailTool,
+  imSendTool,
+  githubWriteTool,
+  // generation-tier (costly providers)
+  imageGenerateTool,
+  videoGenerateTool,
+  generate3dTool,
+  // shell last
   shellExecTool,
 ];
 
@@ -70,8 +94,16 @@ export const builtinExecutors: Record<string, BuiltinToolExecutor> = {
   grep: grepExecutor,
   web_search: webSearchExecutor,
   fetch_url: fetchUrlExecutor,
+  im_read: imReadExecutor,
+  github_request: githubRequestExecutor,
   write_file: writeFileExecutor,
   edit_file: editFileExecutor,
+  send_email: sendEmailExecutor,
+  im_send: imSendExecutor,
+  github_write: githubWriteExecutor,
+  image_generate: imageGenerateExecutor,
+  video_generate: videoGenerateExecutor,
+  generate_3d: generate3dExecutor,
   shell_exec: shellExecExecutor,
 };
 
@@ -89,8 +121,16 @@ export const builtinDefaultModes: Record<string, PermissionMode> = {
   grep: 'allow',
   web_search: 'allow',
   fetch_url: 'allow',
+  im_read: 'allow',
+  github_request: 'allow',
   write_file: 'prompt',
   edit_file: 'prompt',
+  send_email: 'prompt',
+  im_send: 'prompt',
+  github_write: 'prompt',
+  image_generate: 'allow',
+  video_generate: 'prompt',
+  generate_3d: 'prompt',
   shell_exec: 'deny',
 };
 
@@ -147,7 +187,7 @@ export function runWithBuiltinContext<T>(
 }
 
 /**
- * Register all 9 builtin executors against Lane 1's tool-runner module
+ * Register all builtin executors against Lane 1's tool-runner module
  * registry. Idempotent — safe to call multiple times (last write wins per
  * tool name).
  *
