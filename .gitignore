@@ -38,6 +38,7 @@ templates/custom/
 
 # Ephemeral / plugin-managed directories
 .tmp/
+.tmp-*
 .claude/worktrees/
 .claude/skills/
 .agents/
