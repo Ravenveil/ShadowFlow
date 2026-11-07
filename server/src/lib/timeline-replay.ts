@@ -45,7 +45,13 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
   switch (patch.op) {
     case 'text_append': {
       if (msg.kind !== 'assistant_text') return msg;
-      return { ...msg, body: msg.body + patch.chunk };
+      return { ...msg, body: msg.body + patch.chunk, streaming: true };
+    }
+    // 2026-11-07 — 流式收口 + hop 生命周期此前缺失（与前端 reducer 对齐）：
+    // 回放后 assistant_text 不残留 streaming 光标、hop_card 不再永卡「待交接」。
+    case 'text_finalize': {
+      if (msg.kind !== 'assistant_text') return msg;
+      return { ...msg, streaming: false };
     }
     case 'append_step': {
       if (msg.kind !== 'step_panel') return msg;
