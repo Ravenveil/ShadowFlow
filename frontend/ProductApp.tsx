@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -25,10 +25,8 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
-  Upload,
   UserRound,
   Users,
-  WalletCards,
   X,
   Zap,
   AlertTriangle,
@@ -43,6 +41,31 @@ import "./product-app.css";
 import AuthModal from "./src/AuthModal";
 import EmbeddingSection from "./src/EmbeddingSection";
 import { authLogout, displayNameOf, initialsOf, useAuthState } from "./src/auth";
+import {
+  ApiError,
+  apiFetch,
+  decideApproval,
+  createGroup,
+  createProject,
+  getGroupDag,
+  getTeamDag,
+  getTeams,
+  listAgents,
+  listGroups,
+  listPendingApprovals,
+  listProjects,
+  resolveDm,
+  retryRunStep,
+  setUnauthorizedHandler,
+  type AgentRecord,
+  type GroupRecord,
+  type PendingApprovalItem,
+  type SfTeamDag as ApiTeamDag,
+  type TimelineMessage,
+} from "./src/chat-api";
+import { useGroupChat, type GroupChat } from "./src/useGroupChat";
+import { isTerminalRunStatus } from "./src/message-patches";
+import { TimelineList } from "./src/TimelineView";
 
 /** 人物头像（DiceBear micah —— 现代扁平插画，比 Lorelei 线稿更精致；
     按 agent accent 色铺底，加载失败回落字母头像。键 = AgentAvatar label）。 */
@@ -64,126 +87,6 @@ const viewCopy: Record<Exclude<View, "chat">, { title: string; subtitle: string 
   settings: { title: "设置", subtitle: "模型、Skills、集成、记忆与工作空间" },
 };
 
-type ThreadKind = "ceo" | "atlas" | "fresh" | "growth" | "research" | "proposal";
-
-type Conversation = {
-  id: string;
-  title: string;
-  preview: string;
-  time: string;
-  unread?: boolean;
-  pinned?: boolean;
-  thread: ThreadKind;
-};
-
-const ceoConversation: Conversation = {
-  id: "ceo",
-  title: "董事长",
-  preview: "全局调度 · 任务拆解与决策",
-  time: "刚刚",
-  unread: true,
-  pinned: true,
-  thread: "ceo",
-};
-
-const conversations: Conversation[] = [
-  {
-    id: "atlas",
-    title: "Atlas 新品发布计划",
-    preview: "品牌策略已进入人工审核",
-    time: "刚刚",
-    unread: true,
-    thread: "atlas",
-  },
-  {
-    id: "growth",
-    title: "Q2 内容增长策略",
-    preview: "内容团队已完成渠道排期",
-    time: "昨天",
-    thread: "growth",
-  },
-  {
-    id: "research",
-    title: "竞品市场研究",
-    preview: "已分析 24 个竞品样本",
-    time: "周一",
-    thread: "research",
-  },
-  {
-    id: "proposal",
-    title: "客户提案自动化",
-    preview: "等待补充预算范围",
-    time: "05/18",
-    thread: "proposal",
-  },
-];
-
-type ScriptReply = {
-  label: string;
-  name: string;
-  color: string;
-  time: string;
-  text: string;
-};
-
-const threadScripts: Record<Exclude<ThreadKind, "atlas" | "fresh">, { user: string; replies: ScriptReply[] }> = {
-  ceo: {
-    user: "团队现在的整体执行情况怎么样？接下来应该怎么排优先级？",
-    replies: [
-      {
-        label: "CEO",
-        name: "董事长",
-        color: "#ff5e3a",
-        time: "10:26",
-        text: "三个项目并行推进：Atlas 发布已进入人工审核环节，Q2 内容增长完成渠道排期，客户提案自动化在等待预算输入。建议今天优先敲定 Atlas 的品牌主张，其余两条线按计划自动推进。",
-      },
-      {
-        label: "CEO",
-        name: "董事长",
-        color: "#ff5e3a",
-        time: "10:27",
-        text: "需要调整优先级或临时加塞任务，直接在这里说一声，我会重新拆解并调度团队。",
-      },
-    ],
-  },
-  growth: {
-    user: "帮我制定 Q2 内容增长策略，重点是多渠道分发和内容复用。",
-    replies: [
-      {
-        label: "GM",
-        name: "总经理",
-        color: "#ff5e3a",
-        time: "昨天 14:02",
-        text: "已拆解为渠道矩阵、内容排期与数据复盘三条线。内容创意会先给出一周样例排期，市场研究员同步补充各渠道的竞品声量基线。",
-      },
-    ],
-  },
-  research: {
-    user: "输出一份竞品市场研究简报，覆盖最近上新的同类产品。",
-    replies: [
-      {
-        label: "MR",
-        name: "市场研究员",
-        color: "#2777e8",
-        time: "周一 09:40",
-        text: "完成 24 个竞品样本分析：可控的多 Agent 协作仍是最明显的差异化机会。简报已归档到知识库，可随时让品牌策略师引用。",
-      },
-    ],
-  },
-  proposal: {
-    user: "把客户提案流程自动化，先给一版落地方案。",
-    replies: [
-      {
-        label: "GM",
-        name: "总经理",
-        color: "#ff5e3a",
-        time: "05/18 16:20",
-        text: "方案已生成：提案模板 + 自动填充 + 人工终审三步走。当前在等待你补充预算范围，确认后我会生成完整执行计划。",
-      },
-    ],
-  },
-};
-
 const quickPrompts = [
   "制定 Atlas 新品发布计划",
   "分析竞品并输出简报",
@@ -191,14 +94,28 @@ const quickPrompts = [
   "创建一个定时任务",
 ];
 
-const dayLabels: Record<ThreadKind, string> = {
-  ceo: "今天 10:26",
-  atlas: "今天 10:24",
-  growth: "昨天 14:02",
-  research: "周一 09:40",
-  proposal: "05/18 16:20",
-  fresh: "新对话",
-};
+/** 相对时间（会话列表用）：刚刚 / N 分钟前 / N 小时前 / 昨天 / MM/DD。 */
+function fmtRelativeTime(iso?: string | number | null): string {
+  if (iso == null || iso === "") return "";
+  const ts = typeof iso === "number" ? iso : Date.parse(String(iso));
+  if (!Number.isFinite(ts)) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
+  if (diff < 172800_000) return "昨天";
+  const d = new Date(ts);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** 会话列表预览：最后一条消息内容截断。 */
+function groupPreview(group: GroupRecord): string {
+  const msgs = Array.isArray(group.messages) ? group.messages : [];
+  const last = msgs[msgs.length - 1];
+  const content = (last?.content ?? "").trim().replace(/\s+/g, " ");
+  if (!content) return "还没有消息";
+  return content.length > 32 ? `${content.slice(0, 32)}…` : content;
+}
 
 const agents = [
   {
@@ -230,9 +147,7 @@ export default function ProductApp() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [activeConversation, setActiveConversation] = useState<Conversation>(ceoConversation);
   const [message, setMessage] = useState("");
-  const [sentMap, setSentMap] = useState<Record<string, string[]>>({});
   const [detailOpen, setDetailOpen] = useState(true);
   const auth = useAuthState();
   const [authOpen, setAuthOpen] = useState(false);
@@ -240,11 +155,54 @@ export default function ProductApp() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement | null>(null);
 
+  // ── 真实数据：群列表 / Agent / 项目树 ────────────────────────────────────
+  const [groups, setGroups] = useState<GroupRecord[]>([]);
+  const [groupsState, setGroupsState] = useState<"loading" | "ready" | "error">("loading");
+  const [agentsList, setAgentsList] = useState<AgentRecord[]>([]);
+  const [projectsTree, setProjectsTree] = useState<SfProject[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [activeTitle, setActiveTitle] = useState("新对话");
+  const [ceoPinAvailable, setCeoPinAvailable] = useState(true);
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+
+  const chat = useGroupChat(activeGroupId);
+
   function openAuth(mode: "login" | "register") {
     setAuthMode(mode);
     setAuthOpen(true);
     setAccountMenuOpen(false);
   }
+
+  // 401 → 弹登录框（apiFetch 全局钩子）
+  useEffect(
+    () => setUnauthorizedHandler(() => setAuthOpen(true)),
+    [],
+  );
+
+  const reloadGroups = useCallback(async () => {
+    try {
+      const list = await listGroups("all");
+      list.sort((a, b) => {
+        const ta = a.updated_at ? Date.parse(String(a.updated_at)) : 0;
+        const tb = b.updated_at ? Date.parse(String(b.updated_at)) : 0;
+        return tb - ta;
+      });
+      setGroups(list);
+      setGroupsState("ready");
+    } catch {
+      setGroupsState("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void reloadGroups();
+    listAgents()
+      .then(setAgentsList)
+      .catch(() => setAgentsList([]));
+    listProjects()
+      .then(setProjectsTree)
+      .catch(() => setProjectsTree([]));
+  }, [reloadGroups]);
 
   // 点击账号区外部时收起「三个点」菜单
   useEffect(() => {
@@ -258,44 +216,111 @@ export default function ProductApp() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [accountMenuOpen]);
 
-  const chatStatusText =
-    activeConversation.thread === "ceo"
-      ? "董事长在线 · 全局调度"
-      : activeConversation.thread === "fresh"
-        ? "新对话 · 等待你的第一条指令"
-        : "3 位 Agent 正在协作";
+  const chatStatusText = !activeGroupId
+    ? "选择或新建一个会话"
+    : chat.status === "loading"
+      ? "正在加载会话…"
+      : chat.status === "error"
+        ? "会话加载失败 · 点击重试"
+        : chat.runs.some((r) => !isTerminalRunStatus(r.status))
+          ? "Agent 团队执行中"
+          : chat.typing
+            ? `${chat.typing} 正在输入…`
+            : "会话在线";
 
   const filteredConversations = useMemo(
     () =>
-      conversations.filter((conversation) =>
-        `${conversation.title}${conversation.preview}`.toLowerCase().includes(query.toLowerCase()),
+      groups.filter((group) =>
+        `${group.name ?? ""}${groupPreview(group)}`.toLowerCase().includes(query.toLowerCase()),
       ),
-    [query],
+    [groups, query],
   );
 
-  function openConversation(conversation: Conversation) {
-    setActiveConversation(conversation);
+  function openGroup(group: GroupRecord) {
+    setActiveGroupId(group.group_id);
+    setActiveTitle(group.name || "会话");
     setView("chat");
     setMobileRailOpen(false);
     if (window.innerWidth <= 820) setPanelOpen(false);
   }
 
-  function createConversation() {
-    setActiveConversation({
-      id: `new-${Date.now()}`,
-      title: "新对话",
-      preview: "还没有消息",
-      time: "刚刚",
-      thread: "fresh",
-    });
+  /** 「董事长」置顶：resolve DM（agent-ceo）→ 打开；失败回落第一个 agent 的 DM。 */
+  async function openCeoDm() {
+    const candidates = ["agent-ceo", ...agentsList.map((a) => a.agent_id)];
+    for (const agentId of candidates) {
+      try {
+        const res = await resolveDm(agentId);
+        if (res?.group_id) {
+          const label = agentId === "agent-ceo" ? "董事长" : agentsList.find((a) => a.agent_id === agentId)?.name || "单聊";
+          setActiveGroupId(res.group_id);
+          setActiveTitle(label);
+          setView("chat");
+          setMobileRailOpen(false);
+          void reloadGroups();
+          return;
+        }
+      } catch {
+        /* 试下一个候选 */
+      }
+    }
+    setCeoPinAvailable(false); // 一个 agent 都没有 → 隐藏置顶行
+  }
+
+  async function openAgentDm(agent: AgentRecord) {
+    try {
+      const res = await resolveDm(agent.agent_id);
+      if (res?.group_id) {
+        setActiveGroupId(res.group_id);
+        setActiveTitle(agent.name || agent.agent_id);
+        setView("chat");
+        setMobileRailOpen(false);
+        if (window.innerWidth <= 820) setPanelOpen(false);
+        void reloadGroups();
+      }
+    } catch {
+      /* 后端不可达 —— 静默 */
+    }
+  }
+
+  /** 新建对话 → POST /api/groups（真实建群）后进入。 */
+  async function createConversation() {
+    const name = `新对话 ${groups.length + 1}`;
+    try {
+      const group = await createGroup({ name: name.slice(0, 40), kind: "group" });
+      if (group?.group_id) {
+        setActiveGroupId(group.group_id);
+        setActiveTitle(group.name || name);
+        await reloadGroups();
+      }
+    } catch {
+      // 建群失败（后端不可达/未登录）→ 本地空会话兜底（明确演示态）
+      setActiveGroupId(null);
+      setActiveTitle("新对话");
+    }
     setView("chat");
     setMobileRailOpen(false);
     if (window.innerWidth <= 820) setPanelOpen(false);
   }
 
   function sendText(text: string) {
-    const id = activeConversation.id;
-    setSentMap((map) => ({ ...map, [id]: [...(map[id] || []), text] }));
+    if (!activeGroupId) {
+      // 无活动会话：先建群再发（快捷指令路径）
+      void (async () => {
+        const name = text.trim().slice(0, 40) || `新对话 ${groups.length + 1}`;
+        try {
+          const group = await createGroup({ name, kind: "group" });
+          if (group?.group_id) {
+            setActiveGroupId(group.group_id);
+            setActiveTitle(group.name || name);
+            await reloadGroups();
+          }
+        } catch {
+          /* 建群失败 → 无处可发 */
+        }
+      })();
+      return;
+    }
+    void chat.send(text);
   }
 
   function submitMessage(event: FormEvent) {
@@ -476,7 +501,7 @@ export default function ProductApp() {
                   <ArrowLeft size={15} />
                 </button>
                 <div className="sf-title-block">
-                  <strong>{activeConversation.title}</strong>
+                  <strong>{activeTitle}</strong>
                   <span>
                     <i /> {chatStatusText}
                   </span>
@@ -492,15 +517,18 @@ export default function ProductApp() {
           <div className="sf-top-actions">
             {view === "chat" && (
               <button className="sf-members">
-                {activeConversation.thread === "ceo" || activeConversation.thread === "fresh" ? (
-                  <span>董</span>
-                ) : (
-                  <>
-                    <span>GM</span>
-                    <span>MR</span>
-                    <span>BS</span>
-                  </>
-                )}
+                {(() => {
+                  const group = groups.find((g) => g.group_id === activeGroupId);
+                  const ids = group?.agent_ids ?? [];
+                  const members = ids
+                    .map((id) => agentsList.find((a) => a.agent_id === id))
+                    .filter(Boolean)
+                    .slice(0, 3) as AgentRecord[];
+                  if (members.length === 0) return <span>董</span>;
+                  return members.map((m) => (
+                    <span key={m.agent_id}>{(m.name || m.agent_id).slice(0, 1)}</span>
+                  ));
+                })()}
               </button>
             )}
             <button>
@@ -513,6 +541,20 @@ export default function ProductApp() {
             )}
           </div>
         </header>
+
+        {auth.ready && !auth.user && (
+          <div className="sf-login-banner" role="status">
+            <ShieldCheck size={15} />
+            <div>
+              <strong>请先登录以使用真实工作台数据</strong>
+              <small>当前为演示模式 —— 界面可浏览，数据将在登录后与后端打通</small>
+            </div>
+            <button onClick={() => openAuth("login")}>登录</button>
+            <button className="ghost" onClick={() => openAuth("register")}>
+              注册
+            </button>
+          </div>
+        )}
 
         {view === "chat" && (
           <div
@@ -534,7 +576,7 @@ export default function ProductApp() {
                     <X size={15} />
                   </button>
                 </div>
-                <button className="sf-new-chat" onClick={createConversation}>
+                <button className="sf-new-chat" onClick={() => void createConversation()}>
                   <Plus size={12} />
                   <span>新建</span>
                 </button>
@@ -547,69 +589,128 @@ export default function ProductApp() {
                   />
                   <kbd>⌘K</kbd>
                 </label>
-                <button
-                  className={`sf-ceo-pin ${activeConversation.id === "ceo" ? "active" : ""}`}
-                  onClick={() => openConversation(ceoConversation)}
-                >
-                  <AgentAvatar label="CEO" color="#ff5e3a" size="lg" />
-                  <div>
-                    <strong>董事长</strong>
-                    <small>全局调度 · 任务拆解与决策</small>
-                  </div>
-                  <i />
-                </button>
+                {ceoPinAvailable && (
+                  <button
+                    className={`sf-ceo-pin ${activeTitle === "董事长" ? "active" : ""}`}
+                    onClick={() => void openCeoDm()}
+                  >
+                    <AgentAvatar label="CEO" color="#ff5e3a" size="lg" />
+                    <div>
+                      <strong>董事长</strong>
+                      <small>全局调度 · 任务拆解与决策</small>
+                    </div>
+                    <i />
+                  </button>
+                )}
                 <p>最近对话</p>
                 <div className="sf-conversation-list">
-                  {filteredConversations.map((conversation) => (
+                  {groupsState === "loading" && <p className="sf-thread-hint">正在加载会话…</p>}
+                  {groupsState === "error" && (
+                    <p className="sf-thread-hint">
+                      会话加载失败（后端未连接）·{" "}
+                      <button type="button" className="sf-link-btn" onClick={() => void reloadGroups()}>
+                        重试
+                      </button>
+                    </p>
+                  )}
+                  {groupsState === "ready" && filteredConversations.length === 0 && (
+                    <p className="sf-thread-hint">
+                      {groups.length === 0
+                        ? "还没有会话 —— 点「新建」或用下面的快捷指令开始。"
+                        : "没有匹配的会话"}
+                    </p>
+                  )}
+                  {filteredConversations.map((group) => (
                     <button
-                      key={conversation.id}
-                      className={activeConversation.id === conversation.id ? "active" : ""}
-                      onClick={() => openConversation(conversation)}
+                      key={group.group_id}
+                      className={activeGroupId === group.group_id ? "active" : ""}
+                      onClick={() => openGroup(group)}
                     >
                       <span className="sf-conversation-icon">
                         <MessageSquare size={12} />
-                        {conversation.unread && <i />}
+                        {group.kind === "dm" && <i />}
                       </span>
                       <span>
-                        <strong>{conversation.title}</strong>
-                        <small>{conversation.preview}</small>
+                        <strong>{group.name || "未命名会话"}</strong>
+                        <small>{groupPreview(group)}</small>
                       </span>
-                      <time>{conversation.time}</time>
+                      <time>{fmtRelativeTime(group.updated_at)}</time>
                     </button>
                   ))}
                 </div>
                 <p>项目与 Agent</p>
                 <div className="sf-project-tree">
-                  <button className="sf-folder-row">
-                    <ChevronRight size={12} />
-                    <Folder size={13} />
-                    <span>Atlas 新品发布</span>
-                  </button>
-                  {agents.slice(0, 2).map((agent) => (
-                    <button className="sf-agent-tree-row" key={agent.name}>
-                      <AgentAvatar label={agent.initials} color={agent.color} small />
+                  {projectsTree.length === 0 && agentsList.length === 0 && (
+                    <p className="sf-thread-hint">暂无项目与 Agent（后端未连接或尚未创建）</p>
+                  )}
+                  {projectsTree.map((project) => {
+                    const expanded = !!expandedProjects[project.project_id];
+                    const sessions = Array.isArray(project.sessions) ? project.sessions : [];
+                    return (
+                      <Fragment key={project.project_id}>
+                        <button
+                          className="sf-folder-row"
+                          onClick={() =>
+                            setExpandedProjects((all) => ({
+                              ...all,
+                              [project.project_id]: !expanded,
+                            }))
+                          }
+                          aria-expanded={expanded}
+                        >
+                          <ChevronRight size={12} className={expanded ? "sf-rot90" : ""} />
+                          <Folder size={13} />
+                          <span>{project.name || project.project_id}</span>
+                          {sessions.length > 0 && <em className="sf-tree-count">{sessions.length}</em>}
+                        </button>
+                        {expanded &&
+                          (sessions.length === 0 ? (
+                            <p className="sf-thread-hint sf-tree-empty">暂无会话</p>
+                          ) : (
+                            sessions.map((session, idx) => {
+                              const s = session as { session_id?: string; status?: string; title?: string };
+                              return (
+                                <div className="sf-session-row" key={s.session_id ?? idx}>
+                                  <span />
+                                  <p>
+                                    {s.title || s.session_id || `会话 ${idx + 1}`}
+                                    {s.status ? ` · ${s.status}` : ""}
+                                  </p>
+                                </div>
+                              );
+                            })
+                          ))}
+                      </Fragment>
+                    );
+                  })}
+                  {(agentsList.length > 0 ? agentsList : (agents as unknown as AgentRecord[])).map((agent) => (
+                    <button
+                      className="sf-agent-tree-row"
+                      key={agent.agent_id ?? agent.name}
+                      onClick={() => void openAgentDm(agent)}
+                      title="点击打开单聊"
+                    >
+                      <AgentAvatar
+                        label={(agent.name || agent.agent_id || "?").slice(0, 2).toUpperCase()}
+                        color={
+                          agents.find((a) => a.name === agent.name)?.color ??
+                          SF_PALETTE[(agent.name ?? "").length % SF_PALETTE.length]
+                        }
+                        small
+                      />
                       <span>
-                        <strong>{agent.name}</strong>
-                        <small>{agent.role}</small>
+                        <strong>{agent.name || agent.agent_id}</strong>
+                        <small>{agent.soul || agent.role || "Agent"}</small>
                       </span>
                       <i className={agent.status === "执行中" ? "working" : ""} />
                     </button>
                   ))}
-                  <button className="sf-folder-row">
-                    <ChevronRight size={12} />
-                    <Folder size={13} />
-                    <span>Q2 内容增长</span>
-                  </button>
                 </div>
               </aside>
             )}
             <section className="sf-chat">
-              <div className="sf-chat-scroll sf-thread-enter" key={activeConversation.id}>
-                <ChatThread
-                  conversation={activeConversation}
-                  sent={sentMap[activeConversation.id] || []}
-                  onQuick={sendText}
-                />
+              <div className="sf-chat-scroll sf-thread-enter" key={activeGroupId ?? "none"}>
+                <ChatThread chat={chat} onQuick={sendText} onLogin={() => openAuth("login")} />
               </div>
 
               <form className="sf-composer" onSubmit={submitMessage}>
@@ -624,11 +725,9 @@ export default function ProductApp() {
                     }
                   }}
                   placeholder={
-                    activeConversation.thread === "ceo"
-                      ? "直接和董事长对话，或让它调度团队…"
-                      : activeConversation.thread === "fresh"
-                        ? "告诉团队接下来要做什么…"
-                        : "继续这个会话…"
+                    activeGroupId
+                      ? "继续这个会话，或给团队下发新任务…"
+                      : "告诉团队接下来要做什么…"
                   }
                 />
                 <div>
@@ -656,7 +755,13 @@ export default function ProductApp() {
             </section>
 
             {detailOpen && (
-              <RunPanel onClose={() => setDetailOpen(false)} />
+              <RunPanel
+                groupId={activeGroupId}
+                groupName={activeTitle}
+                chat={chat}
+                agentsList={agentsList}
+                onClose={() => setDetailOpen(false)}
+              />
             )}
           </div>
         )}
@@ -688,55 +793,10 @@ type RunStep = {
   substeps: { agent: string; slot: string; status: "done" | "running" | "pending" }[];
 };
 
-const RUN_STEPS: RunStep[] = [
-  {
-    name: "研究",
-    status: "done",
-    meta: "10:31 完成 · 4m 12s",
-    substeps: [
-      { agent: "市场研究员", slot: "竞品扫描与人群洞察", status: "done" },
-      { agent: "总经理", slot: "任务拆解与派发", status: "done" },
-    ],
-  },
-  {
-    name: "策略",
-    status: "running",
-    meta: "正在执行 · 2m 47s",
-    substeps: [
-      { agent: "品牌策略师", slot: "定位与主张草案", status: "running" },
-      { agent: "总经理", slot: "方案汇总复核", status: "pending" },
-    ],
-  },
-  {
-    name: "内容",
-    status: "pending",
-    meta: "等待策略产出",
-    substeps: [{ agent: "内容创意", slot: "渠道排期与创意", status: "pending" }],
-  },
-  {
-    name: "审核",
-    status: "pending",
-    meta: "由你确认",
-    substeps: [{ agent: "人工审核", slot: "品牌主张终审", status: "pending" }],
-  },
-];
-
-const RUN_DAG = {
-  nodes: [
-    { name: "研究", kind: "task" },
-    { name: "策略", kind: "task" },
-    { name: "内容", kind: "task" },
-    { name: "审核", kind: "approve" },
-  ],
-  edges: [
-    { from: "研究", to: "策略", mode: "顺序" },
-    { from: "策略", to: "内容", mode: "顺序" },
-    { from: "内容", to: "审核", mode: "approve · 人工门" },
-  ],
-};
-
 type ApprovalItem = {
   id: string;
+  /** 审批节点 id（POST /api/groups/:id/approvals/:nodeId 的 :nodeId）。 */
+  nodeId?: string;
   from: string;
   label: string;
   color: string;
@@ -754,50 +814,6 @@ type ApprovalItem = {
   impact: string;
 };
 
-const RUN_APPROVALS: ApprovalItem[] = [
-  {
-    id: "ap1",
-    from: "品牌策略师",
-    label: "BS",
-    color: "#d97b38",
-    summary: "Atlas 品牌主张 v2 定稿（含 slogan 3 选 1）",
-    when: "已等待 8 分钟",
-    state: "pending",
-    kind: "产出物定稿",
-    target: "atlas-brand-proposal.yaml · v2",
-    detail:
-      "定位语「一个人的营销公司」+ slogan 三选一（「让专业交付，不再靠堆人」为推荐项），引用了 12 份竞品与用户访谈来源。",
-    impact: "通过后锁定为最终品牌主张，内容创意组据此产出全部对外物料；驳回则退回品牌策略师修改后重新提交。",
-  },
-  {
-    id: "ap0",
-    from: "总经理",
-    label: "GM",
-    color: "#ff5e3a",
-    summary: "竞品研究口径与数据源确认",
-    when: "12 分钟前",
-    state: "approved",
-    kind: "研究口径确认",
-    target: "competitor-brief.md · 数据源清单",
-    detail: "竞品对比采用公开定价页 + 官网功能文档口径，剔除第三方评测二手数据。",
-    impact: "确认后市场研究员按该口径完成竞品简报。",
-  },
-  {
-    id: "ap-1",
-    from: "内容创意",
-    label: "CC",
-    color: "#c64f7d",
-    summary: "Q2 渠道预算追加 5 万",
-    when: "26 分钟前",
-    state: "rejected",
-    reason: "预算超限，请拆分到下季度再提",
-    kind: "预算支出",
-    target: "Q2 渠道投放预算 · +¥50,000",
-    detail: "申请在既有 Q2 渠道预算外追加 5 万元用于信息流加投，占季度总预算 18%。",
-    impact: "通过后触发财务记账并开启加投；驳回则加投计划搁置。",
-  },
-];
-
 type ArtifactItem = {
   id: string;
   name: string;
@@ -805,40 +821,7 @@ type ArtifactItem = {
   summary: string;
   size: string;
   pinned: boolean;
-};
-
-const RUN_ARTIFACTS: ArtifactItem[] = [
-  {
-    id: "ar1",
-    name: "atlas-brand-proposal.yaml",
-    type: "yaml",
-    summary: "定位与主张草案 · 品牌策略师",
-    size: "12 KB",
-    pinned: true,
-  },
-  {
-    id: "ar2",
-    name: "competitor-brief.md",
-    type: "markdown",
-    summary: "竞品简报 · 市场研究员",
-    size: "34 KB",
-    pinned: false,
-  },
-  {
-    id: "ar3",
-    name: "campaign-calendar.html",
-    type: "html",
-    summary: "投放排期预览 · 内容创意",
-    size: "18 KB",
-    pinned: false,
-  },
-];
-
-const TEAM_LIVE: Record<string, { sub: string; usage: string }> = {
-  总经理: { sub: "汇总复核策略方案", usage: "本轮 4.2k tokens · ¥0.004" },
-  市场研究员: { sub: "已交付竞品简报", usage: "本轮 6.1k tokens · ¥0.005" },
-  品牌策略师: { sub: "起草定位与主张草案", usage: "本轮 3.8k tokens · ¥0.003" },
-  内容创意: { sub: "等待策略产出后启动", usage: "本轮 0 tokens · ¥0.000" },
+  url?: string;
 };
 
 function fmtElapsed(ms: number): string {
@@ -851,72 +834,322 @@ function fmtElapsed(ms: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-function RunPanel({ onClose }: { onClose: () => void }) {
+/** timeline step_panel/plan_card → 步骤列表（无运行数据 → 空数组=空态）。 */
+function deriveSteps(messages: TimelineMessage[]): RunStep[] {
+  const panel = [...messages]
+    .reverse()
+    .find((m) => m.kind === "step_panel" && (m.steps ?? []).length > 0);
+  if (panel) {
+    return (panel.steps ?? []).map((s) => {
+      const status = s.status === "done" ? "done" : s.status === "running" ? "running" : "pending";
+      return {
+        name: s.name,
+        status,
+        meta: s.elapsed_ms != null ? fmtElapsed(s.elapsed_ms) : status === "pending" ? "等待中" : "",
+        substeps: (s.substeps ?? []).map((sub) => ({
+          agent: sub.name,
+          slot: "",
+          status:
+            sub.status === "done" ? "done" : sub.status === "running" ? "running" : "pending",
+        })),
+      };
+    });
+  }
+  const plan = [...messages]
+    .reverse()
+    .find((m) => m.kind === "plan_card" && (m.tasks ?? []).length > 0);
+  if (plan) {
+    return (plan.tasks ?? []).map((t) => ({
+      name: t.title,
+      status: t.status === "done" ? "done" : t.status === "running" ? "running" : "pending",
+      meta: t.assignee || t.agent_id || "",
+      substeps: [],
+    }));
+  }
+  return [];
+}
+
+/** timeline diff/commit/artifact 归并为产物列表。 */
+function deriveArtifacts(messages: TimelineMessage[]): ArtifactItem[] {
+  const out: ArtifactItem[] = [];
+  for (const m of messages) {
+    if (m.kind === "diff_panel" || m.kind === "file_diff") {
+      out.push({
+        id: m.id,
+        name: m.filename ?? m.path ?? "diff",
+        type: "diff",
+        summary: `+${m.added ?? 0} −${m.removed ?? 0}`,
+        size: `${(m.lines ?? []).length} 行`,
+        pinned: false,
+      });
+    } else if (m.kind === "commit_record") {
+      out.push({
+        id: m.id,
+        name: `${m.short_sha ?? ""} ${m.message ?? ""}`.trim() || "commit",
+        type: "commit",
+        summary: `${m.repo ?? ""}${m.author ? ` · ${m.author}` : ""}`,
+        size: `${m.files_changed ?? 0} 文件`,
+        pinned: false,
+        url: m.url,
+      });
+    } else if (m.kind === "artifact_card") {
+      out.push({
+        id: m.id,
+        name: m.filename ?? m.title ?? "artifact",
+        type: m.artifact_type ?? "file",
+        summary: m.note ?? "",
+        size: "",
+        pinned: false,
+        url: m.url,
+      });
+    }
+  }
+  return out;
+}
+
+/** msg_foot/status_line/tool_call 归并为运行统计。 */
+function deriveRunStats(messages: TimelineMessage[]): {
+  status: string;
+  elapsedMs: number;
+  tools: number;
+  tokens: number;
+  cost: number;
+} {
+  const foot = [...messages].reverse().find((m) => m.kind === "msg_foot");
+  const statusLine = [...messages].reverse().find((m) => m.kind === "status_line");
+  const toolCount = messages.filter((m) => m.kind === "tool_call").length;
+  return {
+    status: foot?.status === "done" ? "done" : statusLine && !statusLine.terminal ? "running" : (foot?.status ?? "idle"),
+    elapsedMs: foot?.elapsed_ms ?? (statusLine?.elapsed_s != null ? statusLine.elapsed_s * 1000 : 0),
+    tools: foot?.tools ?? toolCount,
+    tokens: foot?.tokens ?? 0,
+    cost: foot?.cost_cny ?? 0,
+  };
+}
+
+/** apiGet 的宽接口 DAG → 本地强类型 DAG（mode 归一、字段兜底）。 */
+function normalizeDag(d: ApiTeamDag): SfTeamDag {
+  return {
+    team_id: d.team_id ?? "",
+    name: d.name ?? "",
+    members: d.members ?? [],
+    resolved_agents: (d.resolved_agents ?? []).map((a) => ({
+      id: a.id,
+      title: a.title ?? a.id,
+      sub: a.sub,
+    })),
+    edges: (d.edges ?? []).map((e) => ({
+      source: e.source,
+      target: e.target,
+      mode: e.mode ?? e.data?.mode,
+      data: e.data,
+    })),
+    policy: (d.policy ?? null) as PolicyMatrix | null,
+  };
+}
+
+/** GET /api/groups/:id/approvals/pending 的条目 → UI 审批卡。 */
+function normalizeApproval(item: PendingApprovalItem, idx: number): ApprovalItem {
+  const id = String(item.approval_id ?? item.id ?? item.gate_id ?? item.node_id ?? `ap-${idx}`);
+  const nodeId = String(item.node_id ?? item.gate_id ?? item.approval_id ?? id);
+  const name = item.submitter_name || "Agent";
+  return {
+    id,
+    nodeId,
+    from: name,
+    label: name.slice(0, 2).toUpperCase(),
+    color: SF_PALETTE[name.length % SF_PALETTE.length],
+    summary: item.summary || `${item.kind ?? "审批"} · ${item.target ?? id}`,
+    when: item.waiting_seconds != null ? `已等待 ${fmtElapsed(item.waiting_seconds * 1000)}` : "等待中",
+    state: "pending",
+    kind: String(item.kind ?? "审批"),
+    target: String(item.target ?? id),
+    detail: String(item.detail ?? ""),
+    impact: String(item.impact ?? ""),
+  };
+}
+
+/** 群 DAG（或回落团队 DAG）的紧凑竖排渲染（复用 sf-dag-rail 样式）。 */
+function SfDagRail({ dag }: { dag: SfTeamDag }) {
+  const nodes = dag.resolved_agents.length
+    ? dag.resolved_agents
+    : (dag.members ?? []).map((id) => ({ id, title: id }));
+  const titleOf = (id: string) => nodes.find((n) => n.id === id)?.title ?? id;
+  return (
+    <div className="sf-dag-rail">
+      {nodes.map((node, idx) => {
+        const outs = dag.edges.filter((e) => e.source === node.id);
+        return (
+          <div key={node.id}>
+            <div className="sf-dag-node">
+              <span className={idx === 0 ? "entry" : ""} />
+              <strong>{node.title || node.id}</strong>
+              <em>{outs.some((e) => (e.mode ?? e.data?.mode) === "approve") ? "approve · 人工门" : "task"}</em>
+            </div>
+            {outs.map((e, i) => (
+              <p className="sf-dag-edge" key={`${e.target}-${i}`}>
+                ↓ {e.mode ?? e.data?.mode ?? "direct"} · {titleOf(e.target)}
+              </p>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 某 agent 在时间线里的最近活动（团队 tab 展开卡）。 */
+function lastActivityOf(messages: TimelineMessage[], name: string): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m.agent_name !== name && m.sender_name !== name) continue;
+    if (m.kind === "tool_call") return `${m.name ?? "工具"}${m.status ? ` · ${m.status}` : ""}`;
+    if (m.kind === "assistant_text") return "输出回复";
+    if (m.kind === "thinking") return m.label || "思考中";
+    return String(m.kind);
+  }
+  return "—";
+}
+
+function RunPanel({
+  groupId,
+  groupName,
+  chat,
+  agentsList,
+  onClose,
+}: {
+  groupId: string | null;
+  groupName: string;
+  chat: GroupChat;
+  agentsList: AgentRecord[];
+  onClose: () => void;
+}) {
   const [tab, setTab] = useState<"flow" | "team" | "approval" | "artifacts">("flow");
-  const [runState, setRunState] = useState<"running" | "stopped">("running");
-  const [startedAt] = useState(() => Date.now() - 754_000);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const [steps, setSteps] = useState<RunStep[]>(RUN_STEPS);
-  const [approvals, setApprovals] = useState<ApprovalItem[]>(RUN_APPROVALS);
-  const [artifacts, setArtifacts] = useState<ArtifactItem[]>(RUN_ARTIFACTS);
   const [dagOpen, setDagOpen] = useState(false);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
   const [opinions, setOpinions] = useState<Record<string, string>>({});
+  const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
+  const [decided, setDecided] = useState<ApprovalItem[]>([]);
+  const [approvalsLive, setApprovalsLive] = useState(false);
+  const [dag, setDag] = useState<SfTeamDag | null>(null);
+  const [artifactsPins, setArtifactsPins] = useState<Record<string, boolean>>({});
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
+  const messages = chat.messages;
+  const steps = useMemo(() => deriveSteps(messages), [messages]);
+  const artifacts = useMemo(() => deriveArtifacts(messages), [messages]);
+  const stats = useMemo(() => deriveRunStats(messages), [messages]);
+  const running = chat.runs.some((r) => !isTerminalRunStatus(r.status));
+
+  // 仅真实运行中才跳秒（不再伪造固定时长）
   useEffect(() => {
-    if (runState !== "running") return;
+    if (!running) return;
     const t = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [runState]);
+  }, [running]);
 
-  const elapsed = fmtElapsed(runState === "running" ? nowMs - startedAt : 754_000);
+  const loadApprovals = useCallback(async () => {
+    if (!groupId) return;
+    try {
+      const items = await listPendingApprovals(groupId);
+      setApprovals(items.map((item, idx) => normalizeApproval(item, idx)));
+      setApprovalsLive(true);
+    } catch {
+      setApprovals([]);
+      setApprovalsLive(false);
+    }
+  }, [groupId]);
+
+  useEffect(() => {
+    void loadApprovals();
+  }, [loadApprovals, tab]);
+
+  // DAG：GET /api/groups/:id/dag → 回落 GET /api/teams/:id/dag → 空态
+  useEffect(() => {
+    if (!groupId) return;
+    let dead = false;
+    (async () => {
+      try {
+        const d = await getGroupDag(groupId);
+        if (!dead && d && Array.isArray(d.edges)) setDag(normalizeDag(d));
+      } catch {
+        try {
+          const teams = await getTeams();
+          const tid = teams[0]?.team_id ?? teams[0]?.id;
+          if (!tid) throw new Error("no team");
+          const d = await getTeamDag(tid);
+          if (!dead && d && Array.isArray(d.edges)) setDag(normalizeDag(d));
+        } catch {
+          if (!dead) setDag(null);
+        }
+      }
+    })();
+    return () => {
+      dead = true;
+    };
+  }, [groupId, groupName]);
+
+  const elapsedText = fmtElapsed(stats.elapsedMs);
+  // 运行中且 msg_foot 尚未给出耗时 → 从最后一个 user_turn 起真实跳秒
+  const turnStart = useMemo(() => {
+    const lastUser = [...messages].reverse().find((m) => m.kind === "user_turn");
+    return lastUser?.ts ?? 0;
+  }, [messages]);
+  const liveElapsed =
+    running && stats.elapsedMs <= 0 && turnStart > 0 ? fmtElapsed(nowMs - turnStart) : elapsedText;
   const pendingCount = approvals.filter((a) => a.state === "pending").length;
+  const doneSteps = steps.filter((s) => s.status === "done").length;
 
-  const retryStep = (name: string) => {
-    setSteps((all) =>
-      all.map((x) => (x.name === name ? { ...x, status: "running" as const, meta: "重跑中…" } : x)),
-    );
-    window.setTimeout(() => {
-      setSteps((all) =>
-        all.map((x) => (x.name === name ? { ...x, status: "done" as const, meta: "刚刚 完成 · 4m 12s" } : x)),
-      );
-    }, 1800);
+  /** 步骤级重跑：优先调 run-sessions step retry，再消息重下发（无假动画）。 */
+  const retryStep = async (name: string, index: number) => {
+    const run = [...chat.runs].reverse().find((r) => r.session_id);
+    if (run) {
+      try {
+        await retryRunStep(run.session_id, index);
+      } catch {
+        /* retry 接口不可用 → 仅消息重下发 */
+      }
+    }
+    await chat.send(`重跑步骤「${name}」`);
   };
 
   const rerunAll = () => {
-    setSteps((all) =>
-      all.map((x) => (x.status === "done" ? { ...x, status: "running" as const, meta: "重跑中…" } : x)),
-    );
-    window.setTimeout(() => {
-      setSteps((all) =>
-        all.map((x) =>
-          x.status === "running" ? { ...x, status: "done" as const, meta: "刚刚 完成 · 4m 12s" } : x,
-        ),
-      );
-    }, 2200);
+    void chat.rerun();
   };
 
-  const resolveApproval = (id: string, state: "approved" | "rejected") => {
+  const resolveApproval = async (id: string, state: "approved" | "rejected") => {
+    const item = approvals.find((a) => a.id === id);
     const comment = (opinions[id] ?? "").trim();
-    setApprovals((all) =>
-      all.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              state,
-              when: "刚刚",
-              // 通过时意见 = 补充命令/说明；驳回时意见 = 说明原因
-              note: state === "approved" ? comment || undefined : undefined,
-              reason: state === "rejected" ? comment || undefined : undefined,
-            }
-          : x,
-      ),
-    );
+    const decidedItem: ApprovalItem = {
+      ...(item ?? {
+        id,
+        from: "Agent",
+        label: "AG",
+        color: "#999",
+        summary: id,
+        kind: "审批",
+        target: id,
+        detail: "",
+        impact: "",
+      }),
+      state,
+      when: "刚刚",
+      note: state === "approved" ? comment || undefined : undefined,
+      reason: state === "rejected" ? comment || undefined : undefined,
+    };
+    setApprovals((all) => all.filter((x) => x.id !== id));
+    setDecided((all) => [decidedItem, ...all]);
     setOpinions((all) => {
       const next = { ...all };
       delete next[id];
       return next;
     });
+    try {
+      await decideApproval(groupId ?? "", item?.nodeId ?? id, state === "approved" ? "approve" : "reject");
+    } catch {
+      // 409（无挂起）/ 404 / 网络失败 → 重拉 pending 与真实状态对齐
+      void loadApprovals();
+    }
   };
 
   return (
@@ -935,30 +1168,38 @@ function RunPanel({ onClose }: { onClose: () => void }) {
           </span>
           <div>
             <small>ACTIVE RUN</small>
-            <strong>Atlas 新品发布</strong>
+            <strong>{groupName}</strong>
           </div>
-          <em>68%</em>
+          <em>{steps.length > 0 ? `${Math.round((doneSteps / steps.length) * 100)}%` : "—"}</em>
         </div>
         <div className="sf-progress">
-          <i />
+          <i style={{ width: steps.length > 0 ? `${(doneSteps / steps.length) * 100}%` : "0%" }} />
         </div>
-        <p>3 / 4 个 Agent 已响应</p>
+        <p>
+          {steps.length > 0
+            ? `${doneSteps} / ${steps.length} 个步骤已完成`
+            : "暂无运行记录"}
+        </p>
         <div className="sf-run-meta">
-          <span className={`sf-run-pill ${runState}`}>{runState === "running" ? "运行中" : "已中断"}</span>
-          <span className="sf-run-ticker">
-            <Clock size={9} />
-            {elapsed}
+          <span className={`sf-run-pill ${running ? "running" : "stopped"}`}>
+            {running ? "运行中" : "空闲"}
           </span>
-          <span className="sf-run-cost">¥0.012</span>
+          {(stats.elapsedMs > 0 || (running && turnStart > 0)) && (
+            <span className="sf-run-ticker">
+              <Clock size={9} />
+              {liveElapsed}
+            </span>
+          )}
+          {stats.cost > 0 && <span className="sf-run-cost">¥{stats.cost.toFixed(3)}</span>}
         </div>
         <div className="sf-run-actions">
-          {runState === "running" ? (
-            <button className="sf-mini-btn danger" onClick={() => setRunState("stopped")}>
+          {running && groupId ? (
+            <button className="sf-mini-btn danger" onClick={() => void chat.stop()}>
               <Square size={8} /> 停止
             </button>
           ) : (
-            <button className="sf-mini-btn ok" onClick={() => setRunState("running")}>
-              <Play size={8} /> 继续执行
+            <button className="sf-mini-btn ok" onClick={() => void chat.rerun()}>
+              <Play size={8} /> 重跑上一轮
             </button>
           )}
           <button className="sf-mini-btn" onClick={rerunAll}>
@@ -985,59 +1226,58 @@ function RunPanel({ onClose }: { onClose: () => void }) {
       {tab === "flow" && (
         <div className="sf-panel-section">
           <div className="sf-panel-title">
-            <span>步骤 · 4</span>
+            <span>步骤{steps.length > 0 ? ` · ${steps.length}` : ""}</span>
             <button onClick={() => setDagOpen(!dagOpen)}>{dagOpen ? "收起 DAG" : "查看 DAG"}</button>
           </div>
-          <div className="sf-step-tree">
-            {steps.map((step, idx) => (
-              <div key={step.name}>
-                <div className={`sf-step-row ${step.status}`}>
-                  <span className="sf-step-dot">
-                    {step.status === "done" ? (
-                      <Check size={9} />
-                    ) : step.status === "running" ? (
-                      <RotateCcw size={9} className="sf-spin" />
-                    ) : (
-                      idx + 1
+          {steps.length === 0 ? (
+            <p className="sf-empty">
+              暂无运行记录 —— 在对话里给团队下发任务后，这里会实时显示执行步骤。
+            </p>
+          ) : (
+            <div className="sf-step-tree">
+              {steps.map((step, idx) => (
+                <div key={`${step.name}-${idx}`}>
+                  <div className={`sf-step-row ${step.status}`}>
+                    <span className="sf-step-dot">
+                      {step.status === "done" ? (
+                        <Check size={9} />
+                      ) : step.status === "running" ? (
+                        <RotateCcw size={9} className="sf-spin" />
+                      ) : (
+                        idx + 1
+                      )}
+                    </span>
+                    <div>
+                      <strong>{step.name}</strong>
+                      <small>{step.meta}</small>
+                    </div>
+                    {step.status === "done" && groupId && (
+                      <button className="sf-retry" onClick={() => void retryStep(step.name, idx)}>
+                        <RotateCcw size={8} /> 重跑
+                      </button>
                     )}
-                  </span>
-                  <div>
-                    <strong>{step.name}</strong>
-                    <small>{step.meta}</small>
+                    {step.status === "running" && <span className="sf-step-live">执行中</span>}
                   </div>
-                  {step.status === "done" && (
-                    <button className="sf-retry" onClick={() => retryStep(step.name)}>
-                      <RotateCcw size={8} /> 重跑
-                    </button>
-                  )}
-                  {step.status === "running" && <span className="sf-step-live">执行中</span>}
-                </div>
-                {step.substeps.map((sub) => (
-                  <div className="sf-step-sub" key={sub.slot}>
-                    <span />
-                    <p>
-                      {sub.agent} · {sub.slot}
-                    </p>
-                    <em className={sub.status}>{RUN_STATUS_TEXT[sub.status]}</em>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-          {dagOpen && (
-            <div className="sf-dag-rail">
-              {RUN_DAG.nodes.map((node, idx) => (
-                <div key={node.name}>
-                  <div className="sf-dag-node">
-                    <span className={idx === 0 ? "entry" : ""} />
-                    <strong>{node.name}</strong>
-                    <em>{node.kind === "approve" ? "approve · 人工门" : "task"}</em>
-                  </div>
-                  {idx < RUN_DAG.edges.length && <p className="sf-dag-edge">↓ {RUN_DAG.edges[idx].mode}</p>}
+                  {step.substeps.map((sub, si) => (
+                    <div className="sf-step-sub" key={`${sub.agent}-${si}`}>
+                      <span />
+                      <p>
+                        {sub.agent}
+                        {sub.slot ? ` · ${sub.slot}` : ""}
+                      </p>
+                      <em className={sub.status}>{RUN_STATUS_TEXT[sub.status] ?? sub.status}</em>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
           )}
+          {dagOpen &&
+            (dag ? (
+              <SfDagRail dag={dag} />
+            ) : (
+              <p className="sf-empty">暂无 DAG 数据（接口未就绪或该会话尚未运行）</p>
+            ))}
         </div>
       )}
 
@@ -1045,26 +1285,51 @@ function RunPanel({ onClose }: { onClose: () => void }) {
         <div className="sf-panel-section">
           <div className="sf-panel-title">
             <span>当前团队</span>
-            <button>管理</button>
           </div>
-          {agents.map((agent) => (
-            <div key={agent.name}>
-              <button className="sf-agent-row" onClick={() => setOpenAgent(openAgent === agent.name ? null : agent.name)}>
-                <AgentAvatar label={agent.initials} color={agent.color} small />
+          {(agentsList.length > 0
+            ? agentsList.map((a) => ({
+                key: a.agent_id,
+                name: a.name || a.agent_id,
+                role: a.soul || a.role || "Agent",
+                initials: (a.name || a.agent_id).slice(0, 2).toUpperCase(),
+                color:
+                  agents.find((x) => x.name === a.name)?.color ??
+                  SF_PALETTE[(a.name ?? a.agent_id).length % SF_PALETTE.length],
+                status: a.status ?? "在线",
+                live: lastActivityOf(messages, a.name || a.agent_id),
+              }))
+            : agents.map((a) => ({
+                key: a.name,
+                name: a.name,
+                role: a.role,
+                initials: a.initials,
+                color: a.color,
+                status: a.status,
+                live: "演示数据 · 后端未连接",
+              }))
+          ).map((row) => (
+            <div key={row.key}>
+              <button
+                className="sf-agent-row"
+                onClick={() => setOpenAgent(openAgent === row.name ? null : row.name)}
+              >
+                <AgentAvatar label={row.initials} color={row.color} small />
                 <div>
-                  <strong>{agent.name}</strong>
-                  <small>{agent.role}</small>
+                  <strong>{row.name}</strong>
+                  <small>{row.role}</small>
                 </div>
-                <span className={agent.status === "执行中" ? "running" : ""}>{agent.status}</span>
+                <span className={row.status === "执行中" || row.status === "running" ? "running" : ""}>
+                  {row.status}
+                </span>
               </button>
-              {openAgent === agent.name && (
+              {openAgent === row.name && (
                 <div className="sf-expand-card">
-                  <p>当前：{TEAM_LIVE[agent.name]?.sub ?? "—"}</p>
-                  <p className="mono">{TEAM_LIVE[agent.name]?.usage ?? "—"}</p>
+                  <p>当前：{row.live}</p>
                 </div>
               )}
             </div>
           ))}
+          {agentsList.length === 0 && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
         </div>
       )}
 
@@ -1072,12 +1337,20 @@ function RunPanel({ onClose }: { onClose: () => void }) {
         <div className="sf-panel-section">
           <div className="sf-panel-title">
             <span>人工审批门</span>
-            <button>{pendingCount} 项待审批</button>
+            <button onClick={() => void loadApprovals()}>{pendingCount} 项待审批 · 刷新</button>
           </div>
           <p className="sf-appr-hint">
             每张卡片写明正在等待审批的具体对象与影响。可直接通过 / 驳回，也可以在意见框里补充命令或说明原因。
           </p>
-          {approvals.map((ap) => (
+          {!approvalsLive && approvals.length === 0 && (
+            <p className="sf-empty">
+              暂无待审批事项（审批接口不可达或该会话没有挂起的审批门）。
+            </p>
+          )}
+          {approvalsLive && approvals.length === 0 && decided.length === 0 && (
+            <p className="sf-empty">暂无待审批事项 —— Agent 交接触发审批门时会出现在这里。</p>
+          )}
+          {[...approvals, ...decided].map((ap) => (
             <div className={`sf-appr-card ${ap.state}`} key={ap.id}>
               <div className="sf-appr-head">
                 <AgentAvatar label={ap.label} color={ap.color} small />
@@ -1094,8 +1367,8 @@ function RunPanel({ onClose }: { onClose: () => void }) {
                   <b>{ap.kind}</b>
                 </p>
                 <strong>{ap.target}</strong>
-                <small>{ap.detail}</small>
-                <small className="sf-appr-impact">通过后：{ap.impact}</small>
+                {ap.detail && <small>{ap.detail}</small>}
+                {ap.impact && <small className="sf-appr-impact">通过后：{ap.impact}</small>}
               </div>
               {ap.state === "pending" ? (
                 <>
@@ -1109,10 +1382,10 @@ function RunPanel({ onClose }: { onClose: () => void }) {
                     placeholder="意见（可选）：留空可直接通过 / 驳回；通过时可补充命令，驳回时请说明原因"
                   />
                   <div className="sf-appr-actions">
-                    <button className="ok" onClick={() => resolveApproval(ap.id, "approved")}>
+                    <button className="ok" onClick={() => void resolveApproval(ap.id, "approved")}>
                       <Check size={9} /> {(opinions[ap.id] ?? "").trim() ? "通过并附意见" : "通过"}
                     </button>
-                    <button className="no" onClick={() => resolveApproval(ap.id, "rejected")}>
+                    <button className="no" onClick={() => void resolveApproval(ap.id, "rejected")}>
                       <X size={9} /> {(opinions[ap.id] ?? "").trim() ? "驳回并说明" : "驳回"}
                     </button>
                   </div>
@@ -1140,8 +1413,11 @@ function RunPanel({ onClose }: { onClose: () => void }) {
         <div className="sf-panel-section">
           <div className="sf-panel-title">
             <span>产物 · {artifacts.length}</span>
-            <button>全部下载</button>
+            <button onClick={() => chat.reload()}>刷新</button>
           </div>
+          {artifacts.length === 0 && (
+            <p className="sf-empty">暂无产物 —— 运行产出的 diff、提交与文件会归并到这里。</p>
+          )}
           {artifacts.map((art) => (
             <div className="sf-art-row" key={art.id}>
               <span className="sf-art-icon">
@@ -1150,31 +1426,35 @@ function RunPanel({ onClose }: { onClose: () => void }) {
               <div>
                 <strong>{art.name}</strong>
                 <small>
-                  {art.type} · {art.size} · {art.summary}
+                  {art.type}
+                  {art.size ? ` · ${art.size}` : ""}
+                  {art.summary ? ` · ${art.summary}` : ""}
                 </small>
               </div>
               <div className="sf-art-actions">
                 <button
-                  className={art.pinned ? "pin on" : "pin"}
-                  title={art.pinned ? "取消置顶" : "置顶"}
+                  className={artifactsPins[art.id] ? "pin on" : "pin"}
+                  title={artifactsPins[art.id] ? "取消置顶" : "置顶"}
                   onClick={() =>
-                    setArtifacts((all) =>
-                      all.map((x) => (x.id === art.id ? { ...x, pinned: !x.pinned } : x)),
-                    )
+                    setArtifactsPins((all) => ({ ...all, [art.id]: !all[art.id] }))
                   }
                 >
                   <Pin size={9} />
                 </button>
-                <button title="下载">
-                  <Download size={9} />
-                </button>
+                {art.url ? (
+                  <a href={art.url} target="_blank" rel="noreferrer" title="打开">
+                    <Download size={9} />
+                  </a>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="sf-run-foot">8 tools · 12.4k tokens · ¥0.012</div>
+      <div className="sf-run-foot">
+        {stats.tools} tools · {(stats.tokens / 1000).toFixed(1)}k tokens · ¥{stats.cost.toFixed(3)}
+      </div>
     </aside>
   );
 }
@@ -1249,140 +1529,80 @@ function CeoHero({ onQuick }: { onQuick: (text: string) => void }) {
   );
 }
 
-function AtlasThreadBody() {
-  return (
-    <>
-      <article className="sf-user-message">
-        <p>为 Atlas 的新品发布制定一套完整的营销方案，目标是获得 1,000 个早期用户。</p>
-      </article>
-      <article className="sf-agent-message">
-        <AgentAvatar label="GM" color="#ff5e3a" />
-        <div className="sf-message-body">
-          <div className="sf-message-author">
-            <strong>总经理</strong>
-            <span>10:24</span>
-          </div>
-          <p>
-            收到。我会先明确目标与交付标准，然后让研究员和策略师并行推进。关键品牌主张会在执行前交给你审核。
-          </p>
-          <div className="sf-plan">
-            <div className="sf-plan-head">
-              <span>
-                <GitBranch size={15} /> 执行计划
-              </span>
-              <small>4 个阶段 · 预计 18 分钟</small>
-            </div>
-            {[
-              ["市场与竞品研究", "市场研究员", "完成", "done"],
-              ["定位与传播策略", "品牌策略师", "执行中", "running"],
-              ["内容与渠道规划", "内容创意", "等待中", "pending"],
-              ["人工审核与交付", "你", "等待中", "pending"],
-            ].map(([title, owner, status, state], index) => (
-              <div className="sf-plan-row" key={title}>
-                <span className={state}>{state === "done" ? <Check size={12} /> : index + 1}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <small>{owner}</small>
-                </div>
-                <em className={state}>{status}</em>
-              </div>
-            ))}
-          </div>
-        </div>
-      </article>
+/** 真实时间线渲染入口：GET /api/groups/:id/timeline + SSE/run 流增量。
+ *  状态覆盖：加载 / 错误重试 / 空态（CeoHero + 快捷指令）/ 正常时间线 / 流式指示。 */
+function ChatThread({
+  chat,
+  onQuick,
+  onLogin,
+}: {
+  chat: GroupChat;
+  onQuick: (text: string) => void;
+  onLogin: () => void;
+}) {
+  const hasMessages = chat.messages.length > 0;
 
-      <article className="sf-agent-message">
-        <AgentAvatar label="MR" color="#2777e8" />
-        <div className="sf-message-body">
-          <div className="sf-message-author">
-            <strong>市场研究员</strong>
-            <span>10:31</span>
-          </div>
-          <p>
-            第一轮市场扫描完成。我分析了 24
-            个同类产品，发现“可控的多 Agent 协作”仍是最明显的差异化机会。
-          </p>
-          <button className="sf-artifact">
-            <span>
-              <FileText size={17} />
-            </span>
-            <div>
-              <strong>Atlas 市场与竞品研究</strong>
-              <small>研究报告 · 24 个来源 · 8 页</small>
-            </div>
-            <ChevronRight size={16} />
+  // 加载态：首次进入拉取 timeline
+  if (chat.status === "loading" && !hasMessages) {
+    return (
+      <div className="sf-empty">
+        <span className="sf-empty-spinner" />
+        <p>正在加载会话记录…</p>
+      </div>
+    );
+  }
+
+  // 错误态：拉取失败 → 重试 / 登录引导
+  if (chat.status === "error" && !hasMessages) {
+    return (
+      <div className="sf-empty">
+        <p>{chat.error ?? "会话加载失败"}</p>
+        <div className="sf-empty-actions">
+          <button type="button" className="sf-link-btn" onClick={() => chat.reload()}>
+            重试
+          </button>
+          <button type="button" className="sf-link-btn" onClick={onLogin}>
+            登录 / 注册
           </button>
         </div>
-      </article>
-    </>
-  );
-}
-
-function ChatThread({
-  conversation,
-  sent,
-  onQuick,
-}: {
-  conversation: Conversation;
-  sent: string[];
-  onQuick: (text: string) => void;
-}) {
-  const kind = conversation.thread;
-  const script = kind === "atlas" || kind === "fresh" ? null : threadScripts[kind];
+      </div>
+    );
+  }
 
   return (
     <>
-      {(kind === "ceo" || kind === "fresh") && <CeoHero onQuick={onQuick} />}
-      {kind !== "fresh" && (
-        <div className="sf-date-line">
-          <span>{dayLabels[kind]}</span>
+      {/* 空态：无消息时给引导与快捷指令，不渲染空时间线 */}
+      {!hasMessages && (
+        <>
+          <CeoHero onQuick={onQuick} />
+          <p className="sf-thread-hint">还没有消息 —— 试试上面的快捷指令，或直接输入你的第一个任务。</p>
+        </>
+      )}
+      {/* 正常态：真实时间线（全部 TimelineMessage kind） */}
+      <TimelineList messages={chat.messages} />
+      {/* 增量加载失败但已有内容：行内错误条，保留已渲染消息 */}
+      {chat.error && hasMessages && (
+        <div className="sf-inline-error">
+          <p>{chat.error}</p>
+          <button type="button" className="sf-link-btn" onClick={() => chat.reload()}>
+            重试
+          </button>
         </div>
       )}
-      {kind === "atlas" ? (
-        <AtlasThreadBody />
-      ) : kind === "fresh" ? (
-        sent.length === 0 && (
-          <p className="sf-thread-hint">还没有消息 —— 试试上面的快捷指令，或直接输入你的第一个任务。</p>
-        )
-      ) : (
-        script && (
-          <>
-            <article className="sf-user-message">
-              <p>{script.user}</p>
-            </article>
-            {script.replies.map((reply) => (
-              <article className="sf-agent-message" key={reply.time}>
-                <AgentAvatar label={reply.label} color={reply.color} />
-                <div className="sf-message-body">
-                  <div className="sf-message-author">
-                    <strong>{reply.name}</strong>
-                    <span>{reply.time}</span>
-                  </div>
-                  <p>{reply.text}</p>
-                </div>
-              </article>
-            ))}
-          </>
-        )
-      )}
-      {sent.map((text, index) => (
-        <article className="sf-user-message sf-new-message" key={`${index}-${text}`}>
-          <p>{text}</p>
-        </article>
-      ))}
-      {(kind === "atlas" || sent.length > 0) && (
+      {/* 流式指示：agent.typing 瞬态 / 发出后等待回复（sf-working 动画保留到收到回复） */}
+      {(chat.typing || chat.awaitingReply) && (
         <div className="sf-working">
           <span />
           <span />
           <span />
           <p>
-            {kind === "atlas" ? (
+            {chat.typing ? (
               <>
-                <strong>品牌策略师</strong> 正在生成定位假设
+                <strong>{chat.typing}</strong> 正在生成回复
               </>
             ) : (
               <>
-                <strong>董事长</strong> 正在拆解任务并调度团队
+                <strong>Agent</strong> 正在拆解任务并调度团队
               </>
             )}
           </p>
@@ -1404,6 +1624,7 @@ interface SfDagEdge {
   target: string;
   /** direct | approve | conditional（后端在 e.data.mode，这里归一） */
   mode?: string;
+  data?: { mode?: string };
 }
 interface SfDagAgent {
   id: string;
@@ -1443,13 +1664,9 @@ interface SfDashBreakdownItem {
   cost_est_usd?: number;
 }
 
-const SF_API_BASE: string =
-  ((import.meta as any).env && (import.meta as any).env.VITE_API_BASE) || "";
-
+/** 旧视图专用 fetch：委托 apiFetch（Bearer 鉴权 + 401 → AuthModal），保留 {data} 解包。 */
 async function sfFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${SF_API_BASE}${path}`, init);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json: unknown = await res.json().catch(() => null);
+  const json = await apiFetch<unknown>(path, init);
   if (json && typeof json === "object" && "data" in (json as Record<string, unknown>)) {
     return (json as { data: T }).data;
   }
@@ -2646,12 +2863,37 @@ function DashboardView() {
 
 function ProjectsView() {
   const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [liveProjects, setLiveProjects] = useState<SfProject[] | null>(null);
-  useEffect(() => {
+  const loadProjects = useCallback(() => {
     sfFetch<SfProject[]>("/api/projects?withSessions=1")
       .then((list) => setLiveProjects(Array.isArray(list) ? list : []))
       .catch(() => setLiveProjects(null));
   }, []);
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const input = form.elements.namedItem("projectName") as HTMLInputElement | null;
+    const name = input?.value.trim();
+    if (!name) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await createProject(name);
+      setShowCreate(false);
+      loadProjects();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "创建失败，请重试");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const cards: Array<[string, string, string, string, string]> =
     liveProjects === null
       ? [
@@ -2680,19 +2922,23 @@ function ProjectsView() {
       </div>
       {liveProjects === null && <p className="sf-live-tag">演示数据 · 后端未连接</p>}
       {showCreate && (
-        <form
-          className="sf-inline-create"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setShowCreate(false);
-          }}
-        >
+        <form className="sf-inline-create" onSubmit={handleCreate}>
           <Folder size={17} />
-          <input autoFocus required placeholder="输入项目名称" />
-          <button type="submit">创建</button>
-          <button type="button" onClick={() => setShowCreate(false)}>
+          <input
+            autoFocus
+            required
+            name="projectName"
+            maxLength={60}
+            placeholder="输入项目名称"
+            disabled={creating}
+          />
+          <button type="submit" disabled={creating}>
+            {creating ? "创建中…" : "创建"}
+          </button>
+          <button type="button" onClick={() => setShowCreate(false)} disabled={creating}>
             <X size={15} />
           </button>
+          {createError && <span className="sf-inline-create-error">{createError}</span>}
         </form>
       )}
       <div className="sf-project-grid">
@@ -3374,7 +3620,161 @@ function MemoryEntriesSection() {
   );
 }
 
+type AdminUserRow = {
+  user_id: string;
+  email?: string | null;
+  display_name?: string | null;
+  role?: string | null;
+  disabled?: boolean;
+  created_at?: string | number | null;
+};
+
+/** 管理员用户管理：GET /api/admin/users + PATCH 角色/停用 + DELETE。
+ *  后端 404/403 → 优雅降级为「管理员接口未就绪」提示（待联调）。 */
+function AdminUsersSection() {
+  const [rows, setRows] = useState<AdminUserRow[] | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "unavailable" | "error">("loading");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setState("loading");
+    setNotice(null);
+    try {
+      const json = await apiFetch<{ data?: AdminUserRow[]; users?: AdminUserRow[] } | AdminUserRow[]>(
+        "/api/admin/users",
+      );
+      const list = Array.isArray(json)
+        ? json
+        : ((json?.data ?? json?.users ?? []) as AdminUserRow[]);
+      setRows(list);
+      setState("ready");
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : 0;
+      if (status === 404 || status === 403) {
+        setState("unavailable");
+      } else {
+        setState("error");
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function patchUser(userId: string, patch: { role?: string; disabled?: boolean }) {
+    setBusyId(userId);
+    setNotice(null);
+    try {
+      await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      await load();
+      setNotice("已更新");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "操作失败");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteUser(userId: string) {
+    if (!window.confirm("确认删除该用户？此操作不可撤销。")) return;
+    setBusyId(userId);
+    setNotice(null);
+    try {
+      await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      await load();
+      setNotice("已删除");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "删除失败");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (state === "loading") return <p className="sf-live-tag">正在加载用户列表…</p>;
+  if (state === "unavailable") {
+    return (
+      <div className="sf-settings-placeholder">
+        <ShieldCheck size={25} />
+        <strong>管理员接口未就绪</strong>
+        <p>后端 /api/admin/users 返回 404/403，用户管理暂不可用（待后端联调）。</p>
+        <button type="button" onClick={() => void load()}>
+          重试
+        </button>
+      </div>
+    );
+  }
+  if (state === "error") {
+    return (
+      <div className="sf-settings-placeholder">
+        <AlertTriangle size={25} />
+        <strong>加载失败</strong>
+        <p>用户列表加载出错，请稍后重试。</p>
+        <button type="button" onClick={() => void load()}>
+          重试
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sf-admin-users">
+      <div className="sf-admin-users-head">
+        <span>共 {(rows ?? []).length} 个用户</span>
+        <button type="button" className="sf-link-btn" onClick={() => void load()}>
+          刷新
+        </button>
+        {notice && <em className="sf-admin-notice">{notice}</em>}
+      </div>
+      {(rows ?? []).length === 0 && <em className="sf-byok-empty">暂无用户</em>}
+      {(rows ?? []).map((row) => (
+        <article key={row.user_id}>
+          <div>
+            <strong>{row.display_name || row.email || row.user_id.slice(0, 8)}</strong>
+            <small>
+              {row.email ?? ""} · {row.role ?? "user"}
+              {row.disabled ? " · 已停用" : ""}
+            </small>
+          </div>
+          <div className="sf-admin-actions">
+            <button
+              type="button"
+              disabled={busyId === row.user_id}
+              onClick={() =>
+                void patchUser(row.user_id, { role: row.role === "admin" ? "user" : "admin" })
+              }
+            >
+              {row.role === "admin" ? "取消管理员" : "设为管理员"}
+            </button>
+            <button
+              type="button"
+              disabled={busyId === row.user_id}
+              onClick={() => void patchUser(row.user_id, { disabled: !row.disabled })}
+            >
+              {row.disabled ? "启用" : "停用"}
+            </button>
+            <button
+              type="button"
+              className="sf-danger-btn"
+              disabled={busyId === row.user_id}
+              onClick={() => void deleteUser(row.user_id)}
+            >
+              删除
+            </button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function SettingsView() {
+  const auth = useAuthState();
+  const isAdmin = auth.user?.role === "admin";
   const [section, setSection] = useState("模型与密钥");
   const groups: Array<[string, string[]]> = [
     ["账户", ["个人资料"]],
@@ -3383,6 +3783,7 @@ function SettingsView() {
     ["记忆", ["记忆条目", "Agent 画像", "交接与写回"]],
     ["数据", ["通知", "高级设置"]],
   ];
+  if (isAdmin) groups.push(["管理员", ["用户管理"]]);
   return (
     <section className="sf-settings">
       <aside>
@@ -3401,6 +3802,8 @@ function SettingsView() {
                   <Zap size={15} />
                 ) : item === "个人资料" ? (
                   <Users size={15} />
+                ) : item === "用户管理" ? (
+                  <ShieldCheck size={15} />
                 ) : item.includes("记忆") ? (
                   <Bot size={15} />
                 ) : (
@@ -3429,6 +3832,8 @@ function SettingsView() {
           <ConnectorsSection mcp />
         ) : section === "记忆条目" ? (
           <MemoryEntriesSection />
+        ) : section === "用户管理" ? (
+          <AdminUsersSection />
         ) : (
           <div className="sf-settings-placeholder">
             <Settings size={25} />

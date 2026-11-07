@@ -3731,3 +3731,540 @@
   color: #e2542f;
   border: 1px solid #f3d3c8;
 }
+
+/* ── 时间线渲染器（TimelineView.tsx）· sf-tl-* ───────────────────── */
+.sf-tl-fold {
+  margin: 7px 0 7px 44px;
+  border: 1px solid #e5e2da;
+  border-radius: 9px;
+  background: #fcfbf7;
+  overflow: hidden;
+}
+.sf-tl-fold.open {
+  background: #fff;
+}
+.sf-tl-fold-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  text-align: left;
+  color: #696970;
+}
+.sf-tl-fold-head:hover {
+  background: #f4f1e9;
+}
+.sf-tl-fold-head strong {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #17162d;
+}
+.sf-tl-fold-head small {
+  color: #999;
+  font-size: 7.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-tl-caret {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.sf-tl-fold.open .sf-tl-caret {
+  transform: rotate(90deg);
+}
+.sf-tl-fold-body {
+  border-top: 1px dashed #e5e2da;
+  padding: 8px 10px;
+}
+.sf-tl-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  border-radius: 99px;
+  padding: 2px 7px;
+  font: 500 7px "DM Mono", monospace;
+  letter-spacing: 0.05em;
+  font-style: normal;
+}
+.sf-tl-badge.running {
+  background: #fff3ef;
+  color: #ff5e3a;
+  border: 1px solid #f3d9d1;
+}
+.sf-tl-badge.ok {
+  background: #edf9f4;
+  color: #0f9d6b;
+  border: 1px solid #cbe7db;
+}
+.sf-tl-badge.err {
+  background: #fdefeb;
+  color: #e2542f;
+  border: 1px solid #f3d3c8;
+}
+.sf-tl-cursor {
+  display: inline-block;
+  width: 5px;
+  height: 10px;
+  margin-left: 3px;
+  border-radius: 1px;
+  background: #ff5e3a;
+  vertical-align: text-bottom;
+  animation: sf-caret-blink 1s steps(2) infinite;
+}
+.sf-tl-cursor.inline {
+  width: 4px;
+  height: 7px;
+}
+@keyframes sf-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.sf-tl-text {
+  color: #2b2a3a;
+  font-size: 9px;
+  line-height: 1.75;
+}
+.sf-tl-text p {
+  margin: 2px 0;
+}
+.sf-tl-pre {
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: #f7f5ef;
+  color: #4a4956;
+  font: 400 7.5px/1.7 "DM Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+.sf-tl-result {
+  margin: 0 0 5px;
+  color: #696970;
+  font-size: 8px;
+  line-height: 1.6;
+}
+.sf-tl-meta-line {
+  margin: 5px 0 5px 44px;
+  color: #aaa59d;
+  font-size: 7.5px;
+  font-family: "DM Mono", monospace;
+}
+.sf-tl-rationale {
+  margin: 7px 0 7px 44px;
+  border-left: 2px solid #f3d9d1;
+  padding: 3px 0 3px 9px;
+}
+.sf-tl-rationale strong {
+  color: #999;
+  font-size: 7.5px;
+  letter-spacing: 0.06em;
+}
+.sf-tl-rationale ul {
+  margin: 3px 0 0;
+  padding-left: 12px;
+  color: #696970;
+  font-size: 8.5px;
+  line-height: 1.8;
+}
+.sf-tl-diff {
+  margin: 0;
+  border-radius: 7px;
+  background: #f7f5ef;
+  font: 400 7.5px/1.8 "DM Mono", monospace;
+  overflow: auto;
+  max-height: 220px;
+}
+.sf-tl-diff-line {
+  display: block;
+  padding: 0 8px;
+  color: #7a7887;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sf-tl-diff-line.add {
+  background: #ecf8f2;
+  color: #14724f;
+}
+.sf-tl-diff-line.del {
+  background: #fdefeb;
+  color: #c0432c;
+}
+.sf-tl-commit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 7px 0 7px 44px;
+  border: 1px solid #e5e2da;
+  border-radius: 9px;
+  background: #fcfbf7;
+  padding: 7px 10px;
+}
+.sf-tl-commit svg {
+  flex-shrink: 0;
+  color: #0f9d6b;
+}
+.sf-tl-commit code {
+  border-radius: 4px;
+  background: #f0ede4;
+  color: #696970;
+  padding: 1px 5px;
+  font: 500 7.5px "DM Mono", monospace;
+}
+.sf-tl-commit strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8.5px;
+}
+.sf-tl-commit small {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #aaa59d;
+  font-size: 7px;
+}
+.sf-tl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8px;
+}
+.sf-tl-table th {
+  padding: 4px 6px;
+  border-bottom: 1px solid #e5e2da;
+  color: #999;
+  font-weight: 600;
+  text-align: left;
+}
+.sf-tl-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #f0ede4;
+  color: #4a4956;
+}
+.sf-tl-image {
+  margin: 7px 0 7px 44px;
+}
+.sf-tl-image img {
+  display: block;
+  max-width: 340px;
+  max-height: 260px;
+  border: 1px solid #e5e2da;
+  border-radius: 9px;
+}
+.sf-tl-image figcaption {
+  margin-top: 3px;
+  color: #aaa59d;
+  font-size: 7px;
+}
+.sf-tl-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #2777e8;
+  font-size: 8px;
+  text-decoration: none;
+}
+.sf-tl-link:hover {
+  text-decoration: underline;
+}
+.sf-tl-link-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 7px 0 7px 44px;
+  border: 1px solid #e5e2da;
+  border-radius: 9px;
+  background: #fcfbf7;
+  padding: 7px 10px;
+  text-decoration: none;
+}
+.sf-tl-link-card:hover {
+  background: #f4f1e9;
+}
+.sf-tl-link-card svg {
+  flex-shrink: 0;
+  color: #2777e8;
+}
+.sf-tl-link-card strong {
+  display: block;
+  color: #17162d;
+  font-size: 8.5px;
+}
+.sf-tl-link-card small {
+  color: #aaa59d;
+  font-size: 7px;
+}
+.sf-tl-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 7px 0 7px 44px;
+  border: 1px solid #e5e2da;
+  border-radius: 9px;
+  background: #fcfbf7;
+  padding: 7px 10px;
+}
+.sf-tl-verdict strong {
+  font-size: 8.5px;
+}
+.sf-tl-verdict small {
+  color: #999;
+  font-size: 7.5px;
+}
+.sf-tl-verdict .sf-tl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.sf-tl-intent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 7px 0 7px 44px;
+  border: 1px dashed #e5e2da;
+  border-radius: 9px;
+  background: #fcfbf7;
+  padding: 7px 10px;
+}
+.sf-tl-intent strong {
+  font-size: 8.5px;
+}
+.sf-tl-intent small {
+  color: #999;
+  font-size: 7.5px;
+  line-height: 1.6;
+}
+.sf-tl-intent .sf-tl-meta-line {
+  margin: 0;
+}
+.sf-tl-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 6px 0 0;
+  border: 1px solid #e5e2da;
+  border-radius: 6px;
+  background: #fff;
+  color: #696970;
+  padding: 2px 7px;
+  font-size: 7.5px;
+}
+
+/* ── 登录引导横幅 ─────────────────────────────────────────────── */
+.sf-login-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 14px 0;
+  border: 1px solid #f3d9d1;
+  border-radius: 11px;
+  background: #fff7f3;
+  padding: 9px 13px;
+}
+.sf-login-banner > svg {
+  flex-shrink: 0;
+  color: #ff5e3a;
+}
+.sf-login-banner > div {
+  min-width: 0;
+  flex: 1;
+}
+.sf-login-banner strong {
+  display: block;
+  font-size: 9.5px;
+}
+.sf-login-banner small {
+  color: #999;
+  font-size: 8px;
+}
+.sf-login-banner button {
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #17162d;
+  color: #fff;
+  padding: 6px 13px;
+  font-size: 8px;
+}
+.sf-login-banner button.ghost {
+  border: 1px solid #ddd8ce;
+  background: #fff;
+  color: #696970;
+}
+
+/* ── 空态 / 错误态 / 加载态 ───────────────────────────────────── */
+.sf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 40px auto;
+  color: #999;
+  font-size: 9px;
+  text-align: center;
+}
+.sf-empty-actions {
+  display: flex;
+  gap: 10px;
+}
+.sf-empty-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #e5e2da;
+  border-top-color: #ff5e3a;
+  border-radius: 50%;
+  animation: sf-spin 0.8s linear infinite;
+}
+.sf-inline-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 44px;
+  border: 1px solid #f3d3c8;
+  border-radius: 9px;
+  background: #fdefeb;
+  color: #c0432c;
+  padding: 7px 10px;
+  font-size: 8px;
+}
+.sf-inline-create-error {
+  grid-column: 1 / -1;
+  color: #e2542f;
+  font-size: 8px;
+}
+
+/* ── 通用小控件 ───────────────────────────────────────────────── */
+.sf-link-btn {
+  border: none;
+  background: none;
+  color: #2777e8;
+  padding: 0;
+  font-size: 8px;
+  cursor: pointer;
+}
+.sf-link-btn:hover {
+  text-decoration: underline;
+}
+.sf-danger-btn {
+  color: #e2542f;
+}
+.sf-rot90 {
+  transform: rotate(90deg);
+}
+/* ── 项目树：session 行 / 计数徽标 ────────────────────────────── */
+.sf-tree-count {
+  margin-left: auto;
+  border-radius: 99px;
+  background: #ece7de;
+  color: #8b867b;
+  padding: 1px 6px;
+  font: 500 7px "DM Mono", monospace;
+  font-style: normal;
+}
+.sf-tree-empty {
+  margin: 2px 0 4px 26px;
+  text-align: left;
+}
+.sf-session-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 22px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.sf-session-row:hover {
+  background: #ece7de;
+}
+.sf-session-row > span {
+  width: 4px;
+  height: 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #c9c4ba;
+}
+.sf-session-row p {
+  min-width: 0;
+  overflow: hidden;
+  color: #77737d;
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 管理员用户管理面板 ───────────────────────────────────────── */
+.sf-admin-users {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 14px;
+}
+.sf-admin-users-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #999;
+  font-size: 8px;
+}
+.sf-admin-notice {
+  color: #0f9d6b;
+  font-size: 7.5px;
+  font-style: normal;
+}
+.sf-admin-users article {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e5e2da;
+  border-radius: 10px;
+  background: #fff;
+  padding: 9px 12px;
+}
+.sf-admin-users article > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+.sf-admin-users article strong {
+  display: block;
+  font-size: 9px;
+}
+.sf-admin-users article small {
+  color: #999;
+  font-size: 7.5px;
+}
+.sf-admin-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sf-admin-actions button {
+  border: 1px solid #ddd8ce;
+  border-radius: 7px;
+  background: #faf8f3;
+  color: #696970;
+  padding: 4px 9px;
+  font-size: 7.5px;
+}
+.sf-admin-actions button:hover:not(:disabled) {
+  background: #ece7de;
+}
+.sf-admin-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sf-admin-actions button.sf-danger-btn {
+  border-color: #f3d3c8;
+  background: #fdefeb;
+}
+
+/* ── 团队编排补充（main 栅格列 / 策略行） ─────────────────────── */
+.sf-teamops-main {
+  min-width: 0;
+}
+.sf-policy-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

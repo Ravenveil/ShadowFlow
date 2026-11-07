@@ -15,10 +15,16 @@
 import { useSyncExternalStore } from "react";
 
 export interface AuthUser {
+  /** 后端 users.user_id（管理员面板/资源归属用；旧后端可能不返回）。 */
+  user_id?: string;
   address: string;
   email?: string;
   display_name: string | null;
   auth_type: "email" | "wallet" | "guest";
+  /** 角色：'admin' 时 SettingsView 显示管理员分区（旧后端不返回即普通用户）。 */
+  role?: "admin" | "user" | string;
+  /** 账号是否被停用（管理员操作结果）。 */
+  disabled?: boolean;
 }
 
 export interface AuthState {
