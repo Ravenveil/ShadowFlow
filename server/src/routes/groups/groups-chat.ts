@@ -283,6 +283,7 @@ export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
 // 让 runFanout / timeline 等调用点零改动。agent 读取仍走 Python HTTP（pyGetAgent）。
 
 import { PYTHON_BACKEND_URL } from '../../python-backend';
+import { applyCraftMarkers, ingestProductMaterial, isCraftGroup } from '../../storage/craft-intake';
 
 /** 读一个群（经群后端抽象）。返回蛇形 record（含 messages）或 null。 */
 async function pyGet<T>(path: string): Promise<T | null> {
@@ -868,7 +869,16 @@ async function runFanout(
 
   // 知识库参考（2026-11-06 对话框知识库接线）— 本轮用户消息检索记忆库命中
   // （fail-soft：Python 未起/超时/零命中 → 空串）；DAG/串行两条派发路径共用。
-  const kbText = await knowledgeBlock(knowledgePackIds, userText);
+  // 2026-11-07 手工艺品代卖 — 代卖团队群（isCraftGroup）里用户发来的产品
+  // 资料（介绍/图片/文档文本）自动同步到「手工艺品资料」记忆库 pack，并把
+  // pack id 并入本轮检索（同步失败不阻塞聊天）。
+  const craftScoped = isCraftGroup(group);
+  let kbPackIds = knowledgePackIds ?? [];
+  if (craftScoped) {
+    const packId = await ingestProductMaterial(userText).catch(() => null);
+    if (packId && !kbPackIds.includes(packId)) kbPackIds = [...kbPackIds, packId];
+  }
+  const kbText = await knowledgeBlock(kbPackIds, userText);
   if (kbText) {
     console.log(
       `[groups-chat] injecting knowledge_block (chars=${kbText.length}, packs=${knowledgePackIds?.length ?? 0})`,
@@ -1189,7 +1199,12 @@ async function runFanout(
               await commitAndEvidence(gw, wt, name, task?.title ?? userPrompt);
             }
             // 2026-11-04 思考剥离 — 与串行路径同款：<sf:thinking> 段不进最终回复。
-            return { text: stripThinking(buf), error: errMsg || undefined };
+            // 2026-11-07 代卖协议标记 — 成功回复里的 [intake]/[order]/[ship] 等
+            // 标记落产品盈利看板并从聊天文本剥掉（非代卖群 no-op）。
+            const outText = errMsg
+              ? stripThinking(buf)
+              : applyCraftMarkers(stripThinking(buf), { scoped: craftScoped }).cleaned;
+            return { text: outText, error: errMsg || undefined };
           },
           postMessage: async (m) => {
             await pyPostMessage(groupId, {
@@ -1453,7 +1468,8 @@ async function runFanout(
       }
       // 2026-11-04 思考剥离 — 最终聊天回复不含 <sf:thinking> 思考段
       // （思考已在过程卡实时流式展示）；全剥空 → 当空回复收口。
-      const reply = stripThinking(buf).trim();
+      // 2026-11-07 代卖协议标记 — 串行路径同款：落业务动作 + 剥标记。
+      const reply = applyCraftMarkers(stripThinking(buf), { scoped: craftScoped }).cleaned.trim();
       if (!reply) {
         await pyPostMessage(groupId, {
           content: `[chat] ${agentName} 返回空回复。`,

@@ -11,6 +11,8 @@
  * POST /api/craft-profit/products             → 上架商品（写，apiGuard）
  * POST /api/craft-profit/sales                → 记一笔销售（写，apiGuard）
  * POST /api/craft-profit/demo-seed            → 灌演示数据（写，apiGuard，幂等）
+ * GET  /api/craft-profit/team/status          → 代卖团队引用（team/group id）
+ * POST /api/craft-profit/team/setup           → 幂等搭建代卖 agent 团队（写，apiGuard）
  *
  * 口径在 storage 层算好（盈利 = 售价 − 给手艺人 − 快递 − 营销），
  * 路由只做参数整形与错误转译，前端不自己减。
@@ -35,6 +37,7 @@ import {
   runRound,
   setAutoOps,
 } from '../../storage/craft-profit-agent';
+import { craftTeamStatus, setupCraftTeam } from '../../storage/craft-team-setup';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();
@@ -112,6 +115,11 @@ router.get('/agent/status', (_req: Request, res: Response) => {
   }
 });
 
+// ── 代卖 agent 团队（CEO+营销+订单+快递+财务 流水线，群聊驱动）──────────────
+router.get('/team/status', (_req: Request, res: Response) => {
+  res.json({ team: craftTeamStatus() });
+});
+
 // ── 写端点（上架 / 记销售 / 演示数据）────────────────────────────────────────
 // 写接口默认只允许本机；远程调用需 SF_API_TOKEN（同 merchant-board 口径）。
 router.use(apiGuard());
@@ -165,6 +173,12 @@ router.post('/agent/auto', (req: Request, res: Response) => {
   } catch (err) {
     fail(res, err);
   }
+});
+
+router.post('/team/setup', (_req: Request, res: Response) => {
+  setupCraftTeam()
+    .then((result) => res.status(result.created ? 201 : 200).json(result))
+    .catch((err) => fail(res, err));
 });
 
 export default router;
