@@ -39,6 +39,7 @@ import { ensureGroupTeam, getGroup, postGroupMessage, resolveDmConversation } fr
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { SECRETARY_AGENT_ID } from './secretary';
 import { NeoOnboardingModal, ONBOARDING_DONE_KEY } from './NeoOnboardingModal';
+import { useOnboardingGate } from './useOnboardingGate';
 import type { NeoNav, NeoTarget, RailSection } from './types';
 import './neo.css';
 
@@ -373,25 +374,14 @@ export function NeoApp() {
 
   // ── 首访入职问卷（2026-11-06，模仿 ZCode/Codex 对话框弹出形式）────────────
   // 时序（用户反馈 2026-11-06 15:23）：先进秘书的会话 → 欢迎语渲染出来 → 问卷
-  // 再弹（欢迎先行，问卷不抢首屏）。触发条件 = 首访标记缺失 + 已处于会话视图；
-  // 延迟 800ms 让欢迎语先上屏。跳过 = 只记完成标记，零副作用。
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
-  useEffect(() => {
-    if (nav.view !== 'conversation') return;
-    let done = false;
-    try {
-      done = localStorage.getItem(ONBOARDING_DONE_KEY) === '1';
-    } catch {
-      /* localStorage 不可用 → 视为已完成（不弹） */
-      done = true;
-    }
-    if (done) return;
-    const timer = setTimeout(() => setOnboardingOpen(true), 800);
-    return () => clearTimeout(timer);
-  }, [nav.view]);
+  // 再弹（欢迎先行，问卷不抢首屏）。触发面收口（2026-11-07，文档口径）：只在
+  // **秘书的会话**弹（useOnboardingGate：首访标记缺失 + nav.groupId === 秘书
+  // DM gid），别的 agent 的 DM / 群聊不再误弹——此前只看 nav.view 会话视图。
+  // 延迟 800ms 让欢迎语先上屏；跳过 = 只记完成标记，零副作用。
+  const { open: onboardingOpen, close: closeOnboarding } = useOnboardingGate(nav);
   const handleOnboardingFinished = useCallback(
     (introMessage: string) => {
-      setOnboardingOpen(false);
+      closeOnboarding();
       if (!introMessage) return;
       // 秘书的会话 id：首访 effect 刚 resolve 过；此处从 inbox DM 反查，查不到
       // 就再 resolve 一次（幂等）。发送失败静默——画像已落 localStorage。
@@ -407,7 +397,7 @@ export function NeoApp() {
         return postGroupMessage(gid, introMessage, { senderKind: 'user' }).catch(() => undefined);
       }).catch(() => undefined);
     },
-    [],
+    [closeOnboarding],
   );
 
   // B36 Python 后端宕机横幅：只复用 usePythonBackendStatus 状态源（单例 20s
@@ -547,7 +537,7 @@ export function NeoApp() {
             } catch {
               /* ignore */
             }
-            setOnboardingOpen(false);
+            closeOnboarding();
           }}
           onAgentCreated={() => {
             // 专属助理 Agent 创建成功 → 刷新左栏会话/员工列表（Grok 范式：
