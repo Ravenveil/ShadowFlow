@@ -10,6 +10,11 @@
  *   GET  /api/teams/:id/dag           → load yaml + return {team, agents, errors}
  *   PUT  /api/teams/:id/dag           → write dag_layout back to yaml
  *   POST /api/teams/:id/dag/validate  → re-validate without persisting
+ *   GET  /api/teams/:id/plan          → 当前计划（T05① 计划确认门；无 → plan:null）
+ *   POST /api/teams/:id/plan          → 登记/替换计划（一律回 pending）
+ *   POST /api/teams/:id/plan/confirm  → 确认放行
+ *   POST /api/teams/:id/plan/reject   → 退回（记原因，仍拦执行）
+ *   POST /api/teams/dag-draft         → NL → DAG 草稿（带 teamId 时顺带挂计划）
  *
  * Yaml is source of truth (S0.5). Frontend BlueprintCanvas drags a node →
  * PUT writes the new {x,y} into dag_layout.nodes and flips dag_layout.mode
@@ -31,6 +36,12 @@ import {
   generateDagDraft,
   type DagDraftAgent,
 } from '../../lib/team-dag-draft';
+import {
+  registerPlan,
+  decidePlan,
+  getPlan,
+  type PlanGateRecord,
+} from '../../lib/plan-gate';
 import { resolveProviderKey } from '../../transport/byokKey';
 import { isProviderId, PROVIDER_IDS, type ProviderId } from '../../transport/api-clients';
 
@@ -295,12 +306,92 @@ function pickDraftProvider(
   return { model };
 }
 
+// ─── T05① 计划确认门（2026-11-07）──────────────────────────────────────────
+// 团队计划 = dag-draft 生成的 {nodes, edges} 草案（含交付标准 acceptance /
+// 风险 risk）。登记后落 pending —— 未确认前执行侧不启动任何执行节点
+// （plan-gate.ts 全局门：groups-chat 预检 + runTeamDagFanout 兜底）。
+// 语义：新计划一律回 pending（要重新确认）；confirm 放行；reject 退回
+// （记原因，仍拦——被退回的计划同样"未确认"）。
+
+const planSummary = (plan: PlanGateRecord) => ({
+  plan_id: plan.plan_id,
+  status: plan.status,
+  prompt: plan.prompt,
+  nodes: plan.nodes,
+  edges: plan.edges,
+  created_at: plan.created_at,
+  ...(plan.decided_at !== undefined ? { decided_at: plan.decided_at } : {}),
+  ...(plan.reject_reason !== undefined ? { reject_reason: plan.reject_reason } : {}),
+});
+
+router.get('/:id/plan', (req: Request, res: Response) => {
+  const teamId = req.params.id;
+  if (!VALID_ID_RE.test(teamId)) {
+    res.status(400).json({ error: { code: 'INVALID_ID', message: 'invalid team id' } });
+    return;
+  }
+  const plan = getPlan(teamId);
+  res.json({ data: { plan: plan ? planSummary(plan) : null }, meta: {} });
+});
+
+router.post('/:id/plan', (req: Request, res: Response) => {
+  const teamId = req.params.id;
+  if (!VALID_ID_RE.test(teamId)) {
+    res.status(400).json({ error: { code: 'INVALID_ID', message: 'invalid team id' } });
+    return;
+  }
+  const body = (req.body ?? {}) as { prompt?: unknown; nodes?: unknown; edges?: unknown };
+  const r = registerPlan(teamId, { prompt: body.prompt, nodes: body.nodes, edges: body.edges });
+  if (!r.ok) {
+    const errors = r.code === 'INVALID_PLAN' ? r.errors : [];
+    res.status(400).json({ error: { code: r.code, message: errors.join('; '), errors } });
+    return;
+  }
+  res.status(201).json({ data: { plan: planSummary(r.plan) }, meta: {} });
+});
+
+const decideHandler = (decision: 'confirm' | 'reject') => (req: Request, res: Response) => {
+  const teamId = req.params.id;
+  if (!VALID_ID_RE.test(teamId)) {
+    res.status(400).json({ error: { code: 'INVALID_ID', message: 'invalid team id' } });
+    return;
+  }
+  const body = (req.body ?? {}) as { plan_id?: unknown; reason?: unknown };
+  const r = decidePlan(teamId, decision, {
+    ...(typeof body.plan_id === 'string' ? { planId: body.plan_id } : {}),
+    reason: body.reason,
+  });
+  if (!r.ok) {
+    if (r.code === 'NOT_FOUND') {
+      res.status(404).json({ error: { code: 'PLAN_NOT_FOUND', message: 'no plan registered for this team' } });
+      return;
+    }
+    res.status(409).json({ error: { code: 'PLAN_STALE', message: 'plan_id does not match the current plan' } });
+    return;
+  }
+  res.json({ data: { plan: planSummary(r.plan) }, meta: {} });
+};
+
+router.post('/:id/plan/confirm', decideHandler('confirm'));
+router.post('/:id/plan/reject', decideHandler('reject'));
+
 router.post('/dag-draft', async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { prompt?: unknown; agentIds?: unknown };
+  const body = (req.body ?? {}) as { prompt?: unknown; agentIds?: unknown; teamId?: unknown };
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   if (!prompt) {
     res.status(400).json({ error: { code: 'INVALID_BODY', message: 'prompt (non-empty string) required' } });
     return;
+  }
+  // T05① — 可选 teamId：生成成功后把草稿登记为该团队的 pending 计划（挂
+  // 执行门）。先校验后调 LLM，省一次白跑。不传 = 纯生成器（旧行为不变）。
+  let teamId: string | undefined;
+  if (body.teamId !== undefined) {
+    const raw = typeof body.teamId === 'string' ? body.teamId.trim() : '';
+    if (!VALID_ID_RE.test(raw)) {
+      res.status(400).json({ error: { code: 'INVALID_TEAM_ID', message: 'teamId must be a valid team id' } });
+      return;
+    }
+    teamId = raw;
   }
   const agentIds = Array.isArray(body.agentIds)
     ? body.agentIds.filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
@@ -344,7 +435,14 @@ router.post('/dag-draft', async (req: Request, res: Response) => {
     });
     return;
   }
-  res.json({ data: { draft: outcome.draft }, meta: {} });
+  // T05① — 带 teamId 时登记 pending 计划（新计划一律回 pending，等确认）。
+  // 登记失败（草稿没过计划轻校验，极小概率）不拖垮草稿本身，plan 回 null。
+  let plan: ReturnType<typeof planSummary> | null = null;
+  if (teamId !== undefined) {
+    const r = registerPlan(teamId, { prompt, nodes: outcome.draft.nodes, edges: outcome.draft.edges });
+    if (r.ok) plan = planSummary(r.plan);
+  }
+  res.json({ data: { draft: outcome.draft, plan }, meta: {} });
 });
 
 export default router;

@@ -29,7 +29,9 @@ function IconShield({ cls }: { cls?: string }) {
   );
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../../api/_base';
+
+const API_BASE = getApiBase();
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 

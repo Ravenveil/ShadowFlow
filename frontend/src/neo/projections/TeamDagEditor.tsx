@@ -89,6 +89,7 @@ import {
   restoreTeamWorkflowVersion,
   branchTeamWorkflow,
   generateTeamDagDraft,
+  confirmTeamPlan,
   validateTeamDag,
   TeamApiError,
   type TeamDagDraft,
@@ -1251,6 +1252,9 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       }
     }
     setSaving(false);
+    // T05① — 保存成功 = 用户确认了计划（"随后'确认'写入"）→ 确认放行执行门。
+    // best-effort：无计划（纯手工编辑）时 404 静默，不影响保存结果。
+    void confirmTeamPlan(teamId).catch(() => {});
     // 保存成功 → 服务端已自动记一版，刷新版本面板（若开着）
     setVersionsToken((k) => k + 1);
     onSaved(wf);
@@ -1297,9 +1301,12 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     setAiBusy(true);
     setAiErrors([]);
     try {
+      // T05① — 传 teamId：生成成功即把草稿挂为该团队 pending 计划（未确认前
+      // 执行侧不启动执行节点；保存成功 = 确认放行，见 onSave）。
       const draft: TeamDagDraft = await generateTeamDagDraft(
         prompt,
         agents.map((a) => a.agent_id),
+        teamId,
       );
       loadWorkflowToCanvas(dagDraftToWorkflow(draft, agents));
       pushHistory();
@@ -1315,7 +1322,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
     } finally {
       setAiBusy(false);
     }
-  }, [aiPrompt, aiBusy, agents, loadWorkflowToCanvas, t, pushHistory]);
+  }, [aiPrompt, aiBusy, agents, teamId, loadWorkflowToCanvas, t, pushHistory]);
 
   return (
     <TeamDagActionCtx.Provider value={dagActions}>

@@ -27,7 +27,9 @@ interface ApiResponse {
   pets: PetInfo[];
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../../api/_base';
+
+const API_BASE = getApiBase();
 const LS_POS   = 'sf.petPos';
 const LS_DOCK  = 'sf.petDock';
 const PET_SIZE  = 80;   // px

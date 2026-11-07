@@ -22,7 +22,9 @@ const IconPaw: React.FC<{ size?: number; className?: string }> = ({ size = 18, c
 import { PetPickerModal } from './PetPickerModal';
 import { usePetStore } from './usePetStore';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+import { getApiBase } from '../../../api/_base';
+
+const API_BASE = getApiBase();
 
 // ── Pet browser helpers ─────────────────────────────────────────────────────
 

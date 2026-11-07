@@ -37,6 +37,7 @@ import { isProviderId } from '../../transport/api-clients';
 import type { ConversationMessage } from '../../lib/conversation-types';
 import { buildTurnThread } from '../../lib/turn-thread';
 import { loadTeamForRun } from '../../lib/team-source';
+import { getPlan, isPlanGateBlocking, planGateNotice } from '../../lib/plan-gate';
 import { runTeamDagFanout, type RunTeamDagDeps, type HopRecorder } from '../../lib/chat-dag/run-team-dag';
 import { computeDagLayers } from '../../lib/chat-dag/dag-layers';
 // 2026-11-05 @ 提及定向派活 — OpenBot「直接点名 = 定向 work assignment」：
@@ -423,6 +424,21 @@ interface AgentRecord {
  */
 export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
   return !!group.team_id;
+}
+
+/**
+ * T05① 计划确认门预检（纯函数，可纯测试；同 shouldRunTeamDag 闸口模式）。
+ * 非寒暄且团队有未确认计划（pending/rejected）→ 返回拦截通知（五要素齐显）；
+ * 寒暄 / 无 team_id / 无计划 / 已确认 → null（放行）。runFanout 拿到通知即
+ * 发系统消息并整轮不起执行（DAG 与串行两条派发路径都拦）。
+ */
+export function planGateNoticeFor(
+  group: Pick<GroupRecord, 'team_id'>,
+  casual: boolean,
+): string | null {
+  if (casual || !group.team_id) return null;
+  const plan = getPlan(group.team_id);
+  return isPlanGateBlocking(plan) ? planGateNotice(plan) : null;
 }
 
 // 1b（2026-06-12）— 群读写经 getGroupsBackend() 抽象：SF_GROUPS_BACKEND==='node'
@@ -1202,6 +1218,21 @@ async function runFanout(
   }
 
   try {
+    // ── T05① 计划确认门（全局预检，2026-11-07）────────────────────────────
+    // 团队存在未确认计划（pending/rejected）→ 本轮不启动任何执行节点（DAG 与
+    // 串行两条派发路径都拦），发系统通知列出计划五要素（任务/负责人/依赖/
+    // 交付标准/风险）与确认指引（判定与文案见 planGateNoticeFor/planGateNotice）。
+    // 寒暄不走执行节点，放行；无计划/已确认照常。执行器侧 runTeamDagFanout
+    // 另有兜底门（防确认/登记竞态）。
+    const gateNotice = planGateNoticeFor(group, casual);
+    if (gateNotice) {
+      void pyPostMessage(groupId, {
+        content: gateNotice,
+        sender_name: 'system',
+        sender_kind: 'system',
+      }).catch(() => {});
+      return;
+    }
     // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
     // 读不到 team(无 team_id / 文件缺失 / 无成员)→ 落到下面的串行 fan-out 降级。
     // 2026-11-07 寒暄路由 — casual 消息不进 DAG（单人接话），同样落到串行路径。
@@ -1356,6 +1387,15 @@ async function runFanout(
         const roundSpeakers: Array<{ id: string; name: string; excerpt: string }> = [];
 
         const deps: RunTeamDagDeps = {
+          // T05① 兜底门回调 — 预检通过后计划才登记（竞态）时执行器整轮拒绝
+          // 启动，这里补发确认通知。
+          onPlanBlocked: (plan) => {
+            void pyPostMessage(groupId, {
+              content: planGateNotice(plan),
+              sender_name: 'system',
+              sender_kind: 'system',
+            }).catch(() => {});
+          },
           getAgent: async (agentId) => {
             const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
             return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;

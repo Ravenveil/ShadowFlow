@@ -352,14 +352,39 @@ export interface TeamDagDraft {
   edges: TeamDagDraftEdge[];
 }
 
-export async function generateTeamDagDraft(prompt: string, agentIds?: string[]): Promise<TeamDagDraft> {
+export async function generateTeamDagDraft(prompt: string, agentIds?: string[], teamId?: string): Promise<TeamDagDraft> {
   const res = await fetch(`${API_BASE_URL}/api/teams/dag-draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...buildByokHeaders() },
-    body: JSON.stringify({ prompt, ...(agentIds && agentIds.length > 0 ? { agentIds } : {}) }),
+    body: JSON.stringify({
+      prompt,
+      ...(agentIds && agentIds.length > 0 ? { agentIds } : {}),
+      // T05① 计划确认门 — 带 teamId 时服务端顺带把草稿挂为该团队的 pending
+      // 计划（未确认前执行侧不启动执行节点）；不传 = 纯生成器（旧契约）。
+      ...(teamId ? { teamId } : {}),
+    }),
   });
-  const env = await _handleResponse<Envelope<{ draft: TeamDagDraft }>>(res);
+  const env = await _handleResponse<Envelope<{ draft: TeamDagDraft; plan?: { plan_id: string; status: string } | null }>>(res);
   return env.data.draft;
+}
+
+/**
+ * T05① 计划确认 — 确认当前计划放行（执行门打开）。
+ * 编辑器「保存」成功 = 用户确认了计划（T05"随后'确认'写入"），调本接口放行；
+ * 无计划时服务端 404，调用方 best-effort 忽略即可。
+ */
+export async function confirmTeamPlan(teamId: string, planId?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/plan/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(planId ? { plan_id: planId } : {}),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    let detail: unknown = body;
+    try { detail = JSON.parse(body); } catch { /* raw */ }
+    throw new TeamApiError(res.status, detail, _extractErrorCode(detail));
+  }
 }
 
 // ---------------------------------------------------------------------------
