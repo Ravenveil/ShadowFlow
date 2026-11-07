@@ -54,7 +54,18 @@ import {
   summarizeHops,
 } from '../../storage/agent-hops';
 // Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
-import { decomposeWithLlm, type ParsedTask } from '../../lib/orchestrator-parse';
+import { planWithLlm, type ParsedTask } from '../../lib/orchestrator-parse';
+import {
+  allHandsPlan,
+  casualPlan,
+  describePlan,
+  heuristicPlan,
+  isCasualChat,
+  mentionPlan,
+  STRATEGY_LABELS,
+  type ChatPlan,
+  type StrategyAgent,
+} from '../../lib/chat-strategy';
 // 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
 import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
 import {
@@ -745,23 +756,10 @@ async function integrateAndReport(
   }
 }
 
-// ── 寒暄路由（2026-11-07 用户反馈：「hi 后所有 agent 都回复」不合理）────────
-// 整条消息就是一句寒暄/应答（hi/你好/谢谢/收到/晚安…）→ 视为闲聊：只派一位
-// 应答者接话（成员首位），不进 DAG 编排（无计划卡/交接链），像普通群聊一样
-// 一人回复。@ 点名、任务消息行为不变（零回归）。
-const CASUAL_LINE_RE =
-  /^(?:hi+|hiya|hey+|hello+|yo|howdy|sup|hola|hello\s+there|good\s+(?:morning|afternoon|evening)|早上好|早安|早啊|早|中午好|下午好|晚上好|晚安|你好|您好|哈喽|嗨+|在吗|在么|在不在|thanks?|thank\s+(?:you|u)|thx+|tysm|ty|谢谢(?:你|您)?|多谢|感谢(?:你|您)?|辛苦了|麻烦了|ok(?:ay)?|好的?|好嘞|好滴|好哒|收到|明白|了解|没问题|嗯+|哦+|啊+|行|可以|拜拜|再见|88|回见|回头见)(?:[呀啦哦呢嘛呗哇吖!?！。.~～,，]*)$/i;
-
-/**
- * 寒暄判定（纯函数，可单测）：整条消息是一句寒暄/应答 → true。
- * 门槛：≤24 字、单行、无 @ 点名；任务/多行/点名消息一律走常规派发。
- */
-export function isCasualChat(text: string): boolean {
-  const t = (text ?? '').trim();
-  if (!t || t.length > 24) return false;
-  if (/[\n@]/.test(t)) return false;
-  return CASUAL_LINE_RE.test(t);
-}
+// ── 寒暄判定（2026-11-07）— 实现已迁入 lib/chat-strategy（策略矩阵第一行，
+// 纯函数单测在 chat-strategy.test.ts）。此处兼容再导出：groups-chat-mention
+// .test.ts 等既有引用方仍从本模块导入。
+export { isCasualChat };
 
 /**
  * Background fan-out: generate + persist one reply per group agent.
@@ -803,26 +801,19 @@ async function runFanout(
           .reverse()
           .find((m) => (m.sender_kind ?? 'user') === 'user')?.content ?? '');
   const rosterCandidates: MentionCandidate[] = [];
+  const planRoster: StrategyAgent[] = [];
   for (const id of allAgentIds) {
     try {
       const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`);
       rosterCandidates.push({ id, name: a?.name || id });
+      planRoster.push({ id, name: a?.name || id, soul: a?.soul ?? '' });
     } catch {
       rosterCandidates.push({ id, name: id });
+      planRoster.push({ id, name: id, soul: '' });
     }
   }
   const { mentionedIds, cleanText } = parseMentions(userText, rosterCandidates);
   const mentioned = new Set(mentionedIds);
-  let agentIds = mentioned.size > 0 ? allAgentIds.filter((id) => mentioned.has(id)) : allAgentIds;
-
-  // ── 寒暄路由（2026-11-07）────────────────────────────────────────────────
-  // 「hi/你好/谢谢」整条寒暄：不全员广播，只派成员首位单人接话（下方 DAG 分支
-  // 同样跳过 → 走单人串行，无计划卡/交接链/派发卡）。@ 点名或任务消息不受影响。
-  const casual = mentioned.size === 0 && isCasualChat(userText);
-  if (casual && agentIds.length > 1) {
-    agentIds = [agentIds[0]];
-  }
-
   // @ 未命中可见提示（零 LLM）：消息里有 @token 但一个都没对上成员 → 用户
   // 以为在点名、系统却全员派发，这是演示里最容易被问「为什么 @ 没生效」的
   // 场景。落一条 system 提示（可解释性 > 沉默降级）。纯文本无 @ → 不打扰。
@@ -835,6 +826,40 @@ async function runFanout(
       sender_kind: 'system',
     }).catch(() => {});
   }
+
+  // ── 意图识别 + 策略矩阵（2026-11-07，GrokBot 群聊范式）──────────────────
+  // 用户消息 → 意图（寒暄/问答/讨论/任务）→ 策略矩阵定协作策略（单人应答/
+  // 专家应答/流水线/并行拆分/圆桌/全员）→ 工单拆解（LLM 编排者优先，启发式
+  // 兜底）——**任何路径都不再「原文分发给全体成员」**。@ 点名 = 用户亲自调度
+  // （GrokBot「单点 @ 串行交接」语义），定向派活跳过拆解。
+  const parseProvider = executor.startsWith('byok:')
+    ? executor.slice(5)
+    : executor === 'anthropic-direct'
+      ? 'anthropic'
+      : null;
+  let plan: ChatPlan | null = null;
+  if (mentioned.size > 0) {
+    plan = mentionPlan(userText, cleanText, planRoster, [...mentioned]);
+  } else if (isCasualChat(userText)) {
+    plan = casualPlan(userText, planRoster);
+  } else if (hasAtToken) {
+    // @ 全未命中（上方已发提示）→ 全员参与（既有「按常规流程派发」语义）。
+    plan = allHandsPlan(userText, planRoster);
+  } else if (parseProvider && apiKey && isProviderId(parseProvider) && userText.trim()) {
+    plan = await planWithLlm({
+      userText,
+      agents: planRoster,
+      provider: parseProvider,
+      apiKey,
+      model,
+    });
+  }
+  if (!plan) plan = heuristicPlan(userText, planRoster);
+  const casual = plan.intent === 'casual';
+  const planTaskByAgent = new Map<string, ParsedTask>(plan.tasks.map((t) => [t.agentId, t]));
+  const agentIds = [...new Set(plan.tasks.map((t) => t.agentId))];
+  if (agentIds.length === 0) agentIds.push(allAgentIds[0]); // 防御：至少一人应答
+  const planNameOf = (id: string): string => planRoster.find((a) => a.id === id)?.name ?? id;
 
   // B3 · 网关过程事件 — 本轮 fan-out 开一条 gateway run（互链 conversation 下），
   // 执行期过程经 run 管线 emit；B2 GET /:id/timeline 自动归并回放。
@@ -859,32 +884,32 @@ async function runFanout(
     if (!casual && shouldRunTeamDag(group)) {
       const { team } = loadTeamForRun(group.team_id!);
       if (team && team.members.length > 0) {
-        // ── @ 提及定向派活（OpenBot 语义）─────────────────────────────────
-        // 有命中提及 → 团队收缩为被提及节点的诱导子图（成员/边双裁剪，conditional
-        // 返工边保留），且跳过 LLM 意图拆解（点名即完整任务说明，无需再拆）。
+        // ── 指派集合 → 团队子图收缩（@ 提及同款诱导子图：成员/边双裁剪，
+        // conditional 返工边保留）。策略矩阵/点名/拆解只指派子集时，未被
+        // 指派的成员不进执行图（不再「原文全员广播」）；全员策略或指派覆盖
+        // 全体 → 整图；指派全不在 team 名单（如 @ 的是非团队成员）→ 当没
+        // 提过（回落整图 + 原文，既有语义）。
         const fullRoster = team;
-        const team2 =
-          mentioned.size > 0 ? restrictTeamToMentions(fullRoster, [...mentioned]) : fullRoster;
-        const mentionRouted = mentioned.size > 0 && team2.members.length > 0;
-        const effTeam = mentionRouted ? team2 : fullRoster;
-        if (!mentionRouted) {
-          // 提及了成员但一个都不在 team 名单里（如 @ 的是非团队成员）→ 当没提过。
-          mentioned.clear();
-        }
+        const assignedInTeam = fullRoster.members.filter((id) => planTaskByAgent.has(id));
+        const routedToSubset =
+          plan.strategy !== 'all-hands' &&
+          assignedInTeam.length > 0 &&
+          assignedInTeam.length < fullRoster.members.length;
+        const effTeam = routedToSubset
+          ? restrictTeamToMentions(fullRoster, assignedInTeam)
+          : fullRoster;
 
         // group 已在 runFanout 顶部加载(含 messages);DAG 用单次快照即可(上游上下文经 upstream 参数流转,不靠 history)。
         const history0 = toHistory(group.messages);
         const latestUser0 = [...history0].reverse().find((m) => m.role === 'user');
-        // 提及路由时用清洗文本（去掉 @token）当派发 prompt，Agent 不被 @噪音干扰。
+        // 点名路由时用清洗文本（去掉 @token）当派发 prompt，Agent 不被 @噪音干扰。
         const userPrompt =
-          (mentionRouted ? cleanText : '')
+          (plan.source === 'mention' ? cleanText : '')
             || latestUser0?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
             || '';
 
-        // ── Polynoia INTENT_PARSE（2026-08-15）─────────────────────────────
-        // 编排者前置拆解：BYOK 有 key 时用 LLM 把用户消息拆成 per-agent 子任务
-        // prompt（生成合适 prompt 分阶段派发）；任何失败 → null → 降级为原文
-        // 分发（现状行为，零回归）。@ 提及定向派活时跳过（点名即任务说明）。
+        // ── 拆解已上移到 runFanout 顶部（plan：点名/寒暄/群呼/LLM/启发式）──
+        // 此处只解析 effTeam roster 供卡片名解析。
         const rosterEntries = await Promise.all(
           effTeam.members.map(async (id) => {
             const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`).catch(() => null);
@@ -894,53 +919,20 @@ async function runFanout(
         const roster = rosterEntries.filter((r): r is { id: string; name: string; soul: string } => r !== null);
         const rosterName = (id: string): string => roster.find((r) => r.id === id)?.name ?? id;
 
-        const parseProvider = executor.startsWith('byok:')
-          ? executor.slice(5)
-          : executor === 'anthropic-direct'
-            ? 'anthropic'
-            : null;
-        let parsedTasks: ParsedTask[] | null = null;
-        if (
-          !mentionRouted &&
-          parseProvider && apiKey && isProviderId(parseProvider) && userPrompt.trim()
-        ) {
-          parsedTasks = await decomposeWithLlm({
-            userText: userPrompt,
-            agents: roster,
-            provider: parseProvider,
-            apiKey,
-            model,
-          });
-        }
-        const taskByAgent = new Map<string, ParsedTask>();
-        if (parsedTasks) for (const t of parsedTasks) taskByAgent.set(t.agentId, t);
-
         // ── DISPATCH 决策可见化：intent 帧（NeverRaising）───────────────────
-        // 用户说一句话后能立刻看到「派给了谁、为什么」：拆解成功 → 团队 +
-        // per-agent 明细；拆解不可用（无 key/失败）→ 团队 + 降级原因。卡片本体
-        // 由前端 NeoGroupChat 的 NeoDispatchCard 渲染。
+        // 用户说一句话后能立刻看到「派给了谁、为什么」：意图 · 策略 · 参与者
+        // （点名 / 编排者拆解 / 策略矩阵来源统一经 describePlan 解释）。卡片
+        // 本体由前端 NeoGroupChat 的 NeoDispatchCard 渲染（后台折叠行内）。
         emitIntentCard(gw, {
           intent: userPrompt,
           target_kind: 'team',
           target_name: team.name ?? group.team_id!,
-          reason: mentionRouted
-            ? `用户点名 @${mentionedIds
-                .map((id) => rosterName(id))
-                .join('、')}，定向派发（跳过意图拆解）`
-            : parsedTasks
-              ? `编排者拆解为 ${parsedTasks.length} 个子任务，按 DAG 分层派发`
-              : '拆解不可用（无 BYOK key 或解析失败），用户原文分发给全体成员',
-          assignments: mentionRouted
-            ? effTeam.members.map((id) => ({
-                agent_id: id,
-                name: rosterName(id),
-                title: '定向派活',
-              }))
-            : parsedTasks?.map((t) => ({
-                agent_id: t.agentId,
-                name: rosterName(t.agentId),
-                title: t.title,
-              })),
+          reason: describePlan(plan, rosterName),
+          assignments: plan.tasks.map((t) => ({
+            agent_id: t.agentId,
+            name: rosterName(t.agentId),
+            title: t.title,
+          })),
         });
 
         // ── DISPATCH 可视化：plan_card（层号 = 并行批次）───────────────────
@@ -952,7 +944,7 @@ async function runFanout(
             for (const id of layer) {
               planTasks.push({
                 id: `node:${id}`,
-                title: taskByAgent.get(id)?.title ?? rosterName(id),
+                title: planTaskByAgent.get(id)?.title ?? rosterName(id),
                 assignee: rosterName(id),
                 status: 'pending',
                 batch: li + 1,
@@ -966,7 +958,10 @@ async function runFanout(
               kind: 'plan_card',
               turn_id: gw.turnId,
               ts: Date.now(),
-              title: '编排计划',
+              title:
+                plan.tasks.length > 1
+                  ? `编排计划 · ${STRATEGY_LABELS[plan.strategy]}`
+                  : '编排计划',
               ...(userPrompt ? { goal: userPrompt } : {}),
               tasks: planTasks,
             });
@@ -1104,9 +1099,9 @@ async function runFanout(
             const upstreamText = upstream.length
               ? `\n\n=== 上游 agent 产出 ===\n${upstream.map((u) => `[${u.from}]\n${u.text}`).join('\n\n')}`
               : '';
-            // INTENT_PARSE 产物优先 — 编排者拆出的 per-agent 子任务 prompt；
-            // 无拆解（无 key/失败/未分配）→ 用户原文（现状）。
-            const task = taskByAgent.get(agentId);
+            // 意图路由工单 prompt 优先（策略矩阵/点名/编排者拆解给该 agent 的
+            // 自包含指令）；未分配（指派全不在 team 名单的整图回落）→ 用户原文。
+            const task = planTaskByAgent.get(agentId);
             const basePrompt = task ? task.prompt : userPrompt;
             // worktree 隔离 — 本轮该 agent 的专属工作目录。
             const wt = wtByAgent.get(agentId);
@@ -1320,9 +1315,11 @@ async function runFanout(
       const fresh = await pyGet<GroupRecord>(`/api/groups/${encodeURIComponent(groupId)}`);
       const history = toHistory(fresh?.messages);
       const latestUser = [...history].reverse().find((m) => m.role === 'user');
-      // @ 提及路由时用清洗文本（@token 已删）当 prompt，Agent 不吃 @ 噪音。
+      // 意图路由工单 prompt 优先（策略矩阵/点名/拆解给该 agent 的自包含指令）；
+      // 兜底：点名清洗文本（@token 已删）→ 会话里的用户原文。
       const prompt =
-        (mentioned.size > 0 ? cleanText : '')
+        planTaskByAgent.get(agentId)?.prompt
+          || (plan.source === 'mention' ? cleanText : '')
           || latestUser?.blocks.map((b) => (b.kind === 'text' ? b.text : '')).join('')
           || '';
       if (prompt) serialPrompt = prompt;
@@ -1348,9 +1345,11 @@ async function runFanout(
           intent: prompt,
           target_kind: 'agent',
           target_name: agentName,
-          reason: mentioned.size > 0
-            ? '用户点名，定向派发（群未绑定团队）'
-            : '群未绑定团队，按成员依次处理用户原文',
+          reason: `${describePlan(plan, planNameOf)}${
+            plan.tasks.length > 1 && planTaskByAgent.has(agentId)
+              ? ` · 工单：${planTaskByAgent.get(agentId)!.title}`
+              : ''
+          }`,
         });
       }
 

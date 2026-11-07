@@ -9,6 +9,8 @@ import {
   composeParsePrompt,
   decomposeWithLlm,
   parseOrchestratorJson,
+  parseOrchestratorPlan,
+  planWithLlm,
   type OrchestratorAgent,
 } from '../orchestrator-parse';
 
@@ -126,6 +128,135 @@ describe('decomposeWithLlm', () => {
           { type: 'text-delta', text: '抱歉我无法' },
           { type: 'end' },
         ]),
+      }),
+    ).toBeNull();
+  });
+});
+
+// ── {intent, strategy, tasks} 计划对象（2026-11-07 策略矩阵升级）─────────────
+
+describe('parseOrchestratorPlan — 计划对象解析', () => {
+  it('解析 {intent,strategy,tasks} 对象并保留元数据', () => {
+    const raw = JSON.stringify({
+      intent: 'question',
+      strategy: 'expert',
+      tasks: [{ agentId: 'writer', title: '应答', prompt: '解释这段代码' }],
+    });
+    const plan = parseOrchestratorPlan(raw, AGENTS)!;
+    expect(plan).toMatchObject({ intent: 'question', strategy: 'expert', source: 'llm' });
+    expect(plan.tasks).toHaveLength(1);
+  });
+
+  it('对象 span 优先于内嵌数组（否则 tasks 数组会截走、丢掉 intent/strategy）', () => {
+    const raw =
+      '好的，计划如下：\n```json\n' +
+      JSON.stringify({
+        intent: 'discussion',
+        strategy: 'roundtable',
+        tasks: [
+          { agentId: 'writer', prompt: '观点1' },
+          { agentId: 'reviewer', prompt: '观点2' },
+        ],
+      }) +
+      '\n```\n完成。';
+    const plan = parseOrchestratorPlan(raw, AGENTS)!;
+    expect(plan.intent).toBe('discussion');
+    expect(plan.strategy).toBe('roundtable');
+    expect(plan.tasks).toHaveLength(2);
+  });
+
+  it('旧数组格式 → 合成计划：单任务 expert / 多任务 parallel', () => {
+    const one = parseOrchestratorPlan('[{"agentId":"ops","prompt":"发布"}]', AGENTS)!;
+    expect(one).toMatchObject({ intent: 'task', strategy: 'expert', source: 'llm' });
+
+    const two = parseOrchestratorPlan(
+      '[{"agentId":"writer","prompt":"p1"},{"agentId":"reviewer","prompt":"p2"}]',
+      AGENTS,
+    )!;
+    expect(two).toMatchObject({ intent: 'task', strategy: 'parallel' });
+    expect(two.tasks).toHaveLength(2);
+  });
+
+  it('intent/strategy 不在枚举内 → 收敛到安全缺省（task / parallel|expert）', () => {
+    const raw = JSON.stringify({
+      intent: 'bogus',
+      strategy: 'zzz',
+      tasks: [{ agentId: 'writer', prompt: 'p' }],
+    });
+    expect(parseOrchestratorPlan(raw, AGENTS)).toMatchObject({
+      intent: 'task',
+      strategy: 'expert',
+    });
+
+    const raw2 = JSON.stringify({
+      intent: 'bogus',
+      strategy: 'zzz',
+      tasks: [
+        { agentId: 'writer', prompt: 'p1' },
+        { agentId: 'reviewer', prompt: 'p2' },
+      ],
+    });
+    expect(parseOrchestratorPlan(raw2, AGENTS)).toMatchObject({
+      intent: 'task',
+      strategy: 'parallel',
+    });
+  });
+
+  it('垃圾输入 / 空工单 → null', () => {
+    expect(parseOrchestratorPlan('', AGENTS)).toBeNull();
+    expect(parseOrchestratorPlan('随便说点什么', AGENTS)).toBeNull();
+    expect(parseOrchestratorPlan('{"intent":"task","strategy":"expert","tasks":[]}', AGENTS)).toBeNull();
+    expect(parseOrchestratorPlan('{"intent":"task","tasks":[{"agentId":"ghost","prompt":"p"}]}', AGENTS)).toBeNull();
+  });
+});
+
+describe('planWithLlm — 计划对象输出', () => {
+  function mockCall(chunks: ProviderChunk[]) {
+    return async function* (): AsyncGenerator<ProviderChunk> {
+      for (const c of chunks) yield c;
+    } as unknown as typeof import('../../transport/api-clients').callProvider;
+  }
+
+  it('流式输出计划对象 → 完整 ChatPlan（意图+策略+工单）', async () => {
+    const json = JSON.stringify({
+      intent: 'discussion',
+      strategy: 'roundtable',
+      tasks: [
+        { agentId: 'writer', title: '观点', prompt: '给观点' },
+        { agentId: 'reviewer', title: '补充', prompt: '补观点' },
+      ],
+    });
+    const plan = await planWithLlm({
+      userText: '帮我选 A 还是 B',
+      agents: AGENTS,
+      provider: 'anthropic',
+      apiKey: 'sk-test',
+      callImpl: mockCall([
+        { type: 'text-delta', text: '```json\n' },
+        { type: 'text-delta', text: json },
+        { type: 'text-delta', text: '\n```' },
+        { type: 'end' },
+      ]),
+    });
+    expect(plan).toMatchObject({
+      intent: 'discussion',
+      strategy: 'roundtable',
+      source: 'llm',
+    });
+    expect(plan!.tasks.map((t) => t.agentId)).toEqual(['writer', 'reviewer']);
+  });
+
+  it('无 apiKey / 输出不可解析 → null（调用方降级启发式）', async () => {
+    expect(
+      await planWithLlm({ userText: 'x', agents: AGENTS, provider: 'anthropic' }),
+    ).toBeNull();
+    expect(
+      await planWithLlm({
+        userText: 'x',
+        agents: AGENTS,
+        provider: 'anthropic',
+        apiKey: 'sk-test',
+        callImpl: mockCall([{ type: 'text-delta', text: '没想好' }, { type: 'end' }]),
       }),
     ).toBeNull();
   });
