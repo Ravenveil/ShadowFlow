@@ -1338,7 +1338,13 @@ async function runFanout(
                 model,
                 workspace: wt?.dir ?? workspace,
                 // T12/BE-07 成本归属：run=群 turn、agent=被调 agent、session=群。
-                usageCtx: { session_id: groupId, run_id: gw?.turnId ?? '', agent_id: agentId },
+                // 收尾（2026-11-07）— project_id 由群互链 conversation 反查。
+                usageCtx: {
+                  session_id: groupId,
+                  run_id: gw?.turnId ?? '',
+                  agent_id: agentId,
+                  project_id: getConversationByGroup(groupId)?.project_id ?? '',
+                },
               });
               for await (const chunk of callable.turn({
                 // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
@@ -1603,7 +1609,13 @@ async function runFanout(
           model,
           workspace: wt?.dir ?? workspace,
           // T12/BE-07 成本归属：串行路径同口径（run=群 turn、agent=被调 agent）。
-          usageCtx: { session_id: groupId, run_id: gw?.turnId ?? '', agent_id: agentId },
+          // 收尾（2026-11-07）— project_id 由群互链 conversation 反查。
+          usageCtx: {
+            session_id: groupId,
+            run_id: gw?.turnId ?? '',
+            agent_id: agentId,
+            project_id: getConversationByGroup(groupId)?.project_id ?? '',
+          },
         });
         for await (const chunk of callable.turn({
           // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。

@@ -201,10 +201,12 @@ export async function executeNode(
       session_id: ctx.session_id ?? '',
       run_id: ctx.session_id ?? '',
       agent_id: node.id,
+      // T12/BE-07 成本归属收尾 — 项目归属（无归属记空串，与 UsageStamp 口径一致）。
+      project_id: ctx.project_id ?? '',
     };
     const stream =
       pickedTools.length > 0 && callable instanceof ApiClientCallable
-        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn, ctx.session_id)
+        ? buildRuntimeStream(callable, node, system, pickedTools, signal, userTurn, ctx.session_id, ctx.project_id)
         : callable.turn({
             system,
             prompt: userTurn, // Branch 0: user goal; else node.id (BMAD). The
@@ -300,6 +302,7 @@ function buildRuntimeStream(
   signal: AbortSignal,
   userTurn: string,
   sessionId?: string,
+  projectId?: string,
 ): AsyncGenerator<TurnChunk> {
   // T12/BE-07 成本归属：tool-loop 路径经 getApiClient() 直连 stream，同样
   // 包 trackUsage 落用量流水（per-node 闭包戳，与 turn() 路径同口径）。
@@ -308,6 +311,7 @@ function buildRuntimeStream(
     session_id: sessionId ?? '',
     run_id: sessionId ?? '',
     agent_id: node.id,
+    project_id: projectId ?? '',
   }));
   const registry = new ToolRegistry(
     pickedTools.map((name) => ({

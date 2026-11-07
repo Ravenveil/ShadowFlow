@@ -198,4 +198,10 @@ export interface NodeContext {
    * and 'prompt' tools keep the v1 fail-closed soft-deny.
    */
   session_id?: string;
+  /**
+   * T12/BE-07 成本归属收尾（2026-11-07）— 项目归属，从 run-sessions 路由经
+   * assembler → runDag 穿到 executor 的 usageCtx，落 token_usage.project_id。
+   * ABSENT（测试/库调用方）时 executor 记空串（=未知），与 UsageStamp 口径一致。
+   */
+  project_id?: string;
 }

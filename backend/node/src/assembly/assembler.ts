@@ -372,6 +372,9 @@ export interface SkillAssemblerOptions {
    *  拉真实蓝图,而不是静默用默认。 */
   skill_requested?: string;
   session_id: string;
+  /** T12/BE-07 成本归属收尾（2026-11-07）— 项目归属（run-sessions 路由由
+   *  conversation 反查传入）。缺省空串=未知，落 token_usage.project_id。 */
+  project_id?: string;
   anthropic_key?: string;
   signal?: AbortSignal;
   /**
@@ -445,7 +448,7 @@ let _assemblyDirectiveCache: string | null = null;
 function loadAssemblyDirective(): string {
   if (_assemblyDirectiveCache !== null) return _assemblyDirectiveCache;
   const dirs = [
-    path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'skills', 'agent-team-assembly'),
+    path.join(process.cwd(), '..', '..', '.shadowflow', 'skills', 'agent-team-assembly'),
     path.join(process.cwd(), '.shadowflow', 'skills', 'agent-team-assembly'),
   ];
   let out = '';
@@ -591,7 +594,7 @@ async function* emitCompiledTeamBlueprint(
 export async function* runSkillAssembler(
   opts: SkillAssemblerOptions,
 ): AsyncGenerator<ParserSseEvent> {
-  const { goal, skill_name, explicit_skill, skill_requested, session_id, anthropic_key, signal, system_prompt } = opts;
+  const { goal, skill_name, explicit_skill, skill_requested, session_id, project_id, anthropic_key, signal, system_prompt } = opts;
 
   const skill = SKILLS[skill_name] ?? SKILLS['agent-team-blueprint'];
   // Story 15.5: caller may have composed a DS-augmented prompt; fall back to
@@ -670,8 +673,9 @@ export async function* runSkillAssembler(
       temperature: opts.temperature,
       sessionId: session_id,
       // T12/BE-07 成本归属：组装期即一轮 run（run_id=session_id）；团队路径
-      // 的 per-node agent 归属由 executor 的 turn usageCtx 覆盖。
-      usageCtx: { session_id: session_id ?? '', run_id: session_id ?? '' },
+      // 的 per-node agent 归属由 executor 的 turn usageCtx 覆盖。收尾
+      // （2026-11-07）— project_id 补入，落 token_usage 项目维度。
+      usageCtx: { session_id: session_id ?? '', run_id: session_id ?? '', project_id: project_id ?? '' },
       // CLI/ACP/MCP cwd:用户在对话框选的目录优先,否则回退到 session 产物目录。
       workspace,
     });
@@ -796,7 +800,7 @@ export async function* runSkillAssembler(
     console.log(
       `[skill-assembler] running compiled team ${teamV1.team_id}: ${teamV1.members_ids.length} members, ${teamV1.edges_v1.length} edges, derivedFrom=${compiled.teamConfig.derivedFrom}`,
     );
-    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, undefined, session_id);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, undefined, session_id, project_id);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
@@ -808,7 +812,7 @@ export async function* runSkillAssembler(
     console.log(
       `[skill-assembler] running legacy team ${teamV1.team_id}: ${teamV1.members_ids.length} members (no compile cache)`,
     );
-    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, undefined, session_id);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, undefined, session_id, project_id);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }
@@ -852,7 +856,7 @@ export async function* runSkillAssembler(
     if (persisted) yield { event: 'team-saved', data: { ...persisted } };
     // 传 goal → executor 把 user-turn prompt 设为 goal(而非 node.id)。
     // session_id 串到 NodeContext,团队节点内 prompt 工具的审批帧才能落对 run 日志。
-    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, goal, session_id);
+    const chunkStream = runDag(teamV1, callable, projectDir, effectiveSignal, goal, session_id, project_id);
     yield* pipeChunksToSse(chunkStream, session_id, artifactCallback);
     return;
   }

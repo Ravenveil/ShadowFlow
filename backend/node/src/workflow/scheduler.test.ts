@@ -342,3 +342,67 @@ describe('runDag default observer', () => {
     expect(texts).toContain('b');
   });
 });
+
+// ─── T12/BE-07 成本归属收尾（2026-11-07）— project_id 穿线 ───────────────────
+
+describe('T12/BE-07 — project_id threads into per-node usageCtx', () => {
+  function capturingCallable(
+    seen: Array<{ prompt: string; usageCtx?: unknown }>,
+  ): LlmCallable {
+    return {
+      id: 'capture',
+      capabilities: {
+        supportsToolUse: false,
+        supportsMultiTurn: false,
+        supportsStreamingDelta: true,
+      },
+      async *turn(input: { prompt: string; usageCtx?: unknown }): AsyncGenerator<TurnChunk> {
+        seen.push({ prompt: input.prompt, usageCtx: input.usageCtx });
+        yield { type: 'text-delta', value: 'ok' };
+        yield { type: 'done' };
+      },
+    };
+  }
+
+  it('runDag 的 projectId/sessionId 落到每个节点的 turn usageCtx', async () => {
+    const team = mkTeam([mkAgent('n1'), mkAgent('n2')], [{ from: 'n1', to: 'n2' }]);
+    const ws = mkWorkspace();
+    const seen: Array<{ prompt: string; usageCtx?: unknown }> = [];
+    for await (const _ of runDag(
+      team,
+      capturingCallable(seen),
+      ws,
+      new AbortController().signal,
+      undefined,
+      'sess-9',
+      'proj-9',
+    )) {
+      /* drain */
+    }
+    expect(seen).toHaveLength(2);
+    for (const s of seen) {
+      expect(s.usageCtx).toEqual({
+        session_id: 'sess-9',
+        run_id: 'sess-9',
+        agent_id: s.prompt,
+        project_id: 'proj-9',
+      });
+    }
+  });
+
+  it('缺省 projectId → 记空串（UsageStamp 空=未知口径）', async () => {
+    const team = mkTeam([mkAgent('n1')], []);
+    const ws = mkWorkspace();
+    const seen: Array<{ prompt: string; usageCtx?: unknown }> = [];
+    for await (const _ of runDag(team, capturingCallable(seen), ws, new AbortController().signal)) {
+      /* drain */
+    }
+    expect(seen).toHaveLength(1);
+    expect(seen[0].usageCtx).toEqual({
+      session_id: '',
+      run_id: '',
+      agent_id: 'n1',
+      project_id: '',
+    });
+  });
+});
