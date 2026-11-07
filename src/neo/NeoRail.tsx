@@ -1584,7 +1584,7 @@ export function NeoRail({
         </button>
         {/* 记忆入口已折叠进设置（2026-11-06 折叠批）：记忆条目 / 画像 / 交接
             统一在「设置 → 记忆」下管理，左栏不再占一级导航行。 */}
-        {/* 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）：nav 常驻行。
+        {/* 产品盈利看板（2026-11-07 由「数据看板」重构）：nav 常驻行。
             列表区保持当前内容（dashboard 是内容阅读态，不占列表区）。 */}
         <button
           type="button"
@@ -1595,7 +1595,7 @@ export function NeoRail({
         >
           <BarChart3 size={15} strokeWidth={1.75} aria-hidden />
           <span className="neo-nav-row-name">
-            {t('neo.dashboard', { defaultValue: language === 'zh' ? '数据看板' : 'Dashboard' })}
+            {t('neo.dashboard', { defaultValue: language === 'zh' ? '产品盈利' : 'Product Profit' })}
           </span>
         </button>
         {/* 定时任务（2026-11-06，GrokBot 教程「定时任务」章节 + OpenBot /routines

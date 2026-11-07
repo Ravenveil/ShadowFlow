@@ -1,32 +1,34 @@
 /**
- * DashboardPage — 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）。
+ * DashboardPage — 产品盈利看板（2026-11-07 重构）。
  *
- * 指标全部从我们自己的域取材（token_usage / run_index / projects /
- * conversations）。图表轻量 SVG 自绘，不引新依赖。双形态：路由页 /dashboard
- * 全页；NeoApp 中栏 `<DashboardPage embedded />` 内嵌（rail 常驻——点击侧边栏
- * 「数据看板」后左侧边栏保持）。
+ * 业务：帮残障伙伴卖手工艺品 —— 对方只上架商品，我们负责营销、联系快递员
+ * 寄出商品。盈利 = 售价 − 给手艺人 − 快递费 − 营销分摊（记销售时按当时价格
+ * 快照进流水，后端算好口径，前端只展示）。
  *
- * 2026-11-05 功能线①：页尾新增「商家数据看板」独立分区（MerchantBoardPanel）。
- * 它跑的是另一套数据源（/api/merchant）与另一套口径（营收/客流/第一单链路），
- * 不混进上面这组 AI 用量卡片 —— 上面看「花了多少」，下面看「挣了多少」。
+ * 页面只回答三个问题：赚了多少、钱花在哪儿、随手记一笔。
+ * 旧版 AI 用量统计（token/调用/成本/run）与商家明细面板（MerchantBoardPanel）
+ * 已从页面移除；代码保留在 src/api/dashboard.ts 与 MerchantBoardPanel.tsx。
  *
- * 数据源：src/api/dashboard.ts → GET /api/dashboard/*（Node）。
+ * 金额一律整数分存储；表单输入用「元」，换算只发生在提交/展示两头。
+ * 双形态：路由 /dashboard 全页；NeoApp 中栏 <DashboardPage embedded />。
+ *
+ * 数据源：src/api/craftProfit.ts → GET/POST /api/craft-profit/*（Node）。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../common/i18n';
-import MerchantBoardPanel from './MerchantBoardPanel';
 import {
-  fetchDashboardOverview,
-  fetchDashboardTimeseries,
-  fetchDashboardBreakdown,
-  fetchDashboardBriefing,
-  type DashboardOverview,
-  type DashboardTimeseries,
-  type DashboardBreakdown,
-  type DashboardBriefing,
-  type TimeseriesMetric,
-  type BreakdownBy,
-} from '../api/dashboard';
+  fetchCraftOverview,
+  fetchCraftTimeseries,
+  fetchCraftProducts,
+  fetchCraftSales,
+  createCraftProduct,
+  createCraftSale,
+  seedCraftDemo,
+  type CraftOverview,
+  type CraftDayPoint,
+  type CraftProductRow,
+  type CraftSale,
+} from '../api/craftProfit';
 import './dashboard-neo.css';
 
 const DAY_WINDOWS = [7, 30, 90] as const;
@@ -36,101 +38,118 @@ function fmtInt(n: number): string {
   return new Intl.NumberFormat('zh-CN').format(Math.round(n));
 }
 
-function fmtCost(usd: number): string {
-  if (usd > 0 && usd < 0.01) return '<$0.01';
-  return `$${usd.toFixed(2)}`;
+/** 分 → ¥ 千分位两位小数。只在展示两头换算，存储/计算全程整数分。 */
+function fmtYuan(cents: number): string {
+  const sign = cents < 0 ? '-' : '';
+  const abs = Math.abs(cents);
+  return `${sign}¥${new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(abs / 100)}`;
 }
 
-function fmtCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(Math.round(n));
+function fmtDay(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function fmtDelta(pct: number | null): string {
-  if (pct === null) return '—';
-  const sign = pct > 0 ? '+' : '';
-  return `${sign}${pct}% 环比`;
+function fmtTime(ts: number): string {
+  const d = new Date(ts);
+  return `${fmtDay(ts)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/** 轻量 SVG 折线图（自绘，无依赖）。height 固定 120，宽度 viewBox 自适应。 */
-function TrendChart({
-  series,
-  metric,
-}: {
-  series: DashboardTimeseries['series'];
-  metric: TimeseriesMetric;
-}) {
-  const values = series.map((d) =>
-    metric === 'calls' ? d.calls : metric === 'cost' ? d.cost ?? 0 : d.tokens ?? 0,
-  );
-  const max = Math.max(...values, 1);
-  const allZero = values.every((v) => v === 0);
+/** 轻量 SVG 每日盈利柱状图（自绘，无依赖）：赚钱红柱、亏钱绿柱。 */
+function ProfitBars({ series }: { series: CraftDayPoint[] }) {
   const W = 640;
-  const H = 120;
-  const PAD = 6;
-  const step = series.length > 1 ? (W - PAD * 2) / (series.length - 1) : 0;
-  const pt = (v: number, i: number): [number, number] => [
-    PAD + i * step,
-    H - PAD - (v / max) * (H - PAD * 2),
-  ];
-  const points = values.map((v, i) => pt(v, i));
-  const path = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const area =
-    points.length > 1
-      ? `${path} L${points[points.length - 1][0].toFixed(1)},${H - PAD} L${points[0][0].toFixed(1)},${H - PAD} Z`
-      : '';
+  const H = 150;
+  const PAD = 8;
+  const values = series.map((d) => d.profit_cents);
+  const max = Math.max(...values, 0);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const y0 = H - PAD - ((0 - min) / span) * (H - PAD * 2);
+  const step = series.length > 0 ? (W - PAD * 2) / series.length : 0;
+  const barW = Math.max(2, Math.min(28, step * 0.55));
   return (
     <svg
       className="neo-db-chart-svg"
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label="usage trend chart"
-      data-testid="db-trend-chart"
+      aria-label="daily profit chart"
+      data-testid="cp-bars"
     >
-      {area && <path className="neo-db-chart-area" d={area} />}
-      {points.length > 1 && <path className="neo-db-chart-line" d={path} />}
-      {!allZero &&
-        points.map(([x, y], i) => (
-          <circle key={i} className="neo-db-chart-dot" cx={x} cy={y} r={2} />
-        ))}
+      <line className="neo-cp-bar-zero" x1={PAD} y1={y0} x2={W - PAD} y2={y0} />
+      {series.map((d, i) => {
+        const x = PAD + i * step + (step - barW) / 2;
+        const v = d.profit_cents;
+        const h = Math.abs(v / span) * (H - PAD * 2);
+        const y = v >= 0 ? y0 - h : y0;
+        return (
+          <rect
+            key={d.day}
+            className={v >= 0 ? 'neo-cp-bar up' : 'neo-cp-bar down'}
+            x={x}
+            y={y}
+            width={barW}
+            height={Math.max(v === 0 ? 0 : 1.5, h)}
+          >
+            <title>{`${fmtDay(d.day)} ${fmtYuan(v)}`}</title>
+          </rect>
+        );
+      })}
     </svg>
   );
 }
 
 type LoadStatus = 'idle' | 'loading' | 'success' | 'error';
 
+interface ProductFormState {
+  name: string;
+  price: string;
+  artisan: string;
+  shipping: string;
+  marketing: string;
+}
+
+const EMPTY_PRODUCT_FORM: ProductFormState = { name: '', price: '', artisan: '', shipping: '', marketing: '' };
+
 export default function DashboardPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t, language } = useI18n();
+  const L = (zh: string, en: string) => (language === 'zh' ? zh : en);
+
   const [days, setDays] = useState<DayWindow>(30);
-  const [metric, setMetric] = useState<TimeseriesMetric>('tokens');
-  const [breakdownBy, setBreakdownBy] = useState<BreakdownBy>('model');
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [timeseries, setTimeseries] = useState<DashboardTimeseries | null>(null);
-  const [breakdown, setBreakdown] = useState<DashboardBreakdown | null>(null);
-  const [briefing, setBriefing] = useState<DashboardBriefing | null>(null);
+  const [overview, setOverview] = useState<CraftOverview | null>(null);
+  const [series, setSeries] = useState<CraftDayPoint[]>([]);
+  const [products, setProducts] = useState<CraftProductRow[]>([]);
+  const [sales, setSales] = useState<CraftSale[]>([]);
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const [productForm, setProductForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
+  const [saleProductId, setSaleProductId] = useState('');
+  const [saleQty, setSaleQty] = useState('1');
+  const [formError, setFormError] = useState('');
+  const [formBusy, setFormBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setStatus('loading');
     setErrorMsg('');
     try {
-      const [ov, ts, bd, bf] = await Promise.all([
-        fetchDashboardOverview(days),
-        fetchDashboardTimeseries(days, metric),
-        fetchDashboardBreakdown(days, breakdownBy),
-        fetchDashboardBriefing(7),
+      const [ov, ts, pr, sa] = await Promise.all([
+        fetchCraftOverview(days),
+        fetchCraftTimeseries(days),
+        fetchCraftProducts(days),
+        fetchCraftSales(20),
       ]);
       setOverview(ov);
-      setTimeseries(ts);
-      setBreakdown(bd);
-      setBriefing(bf);
+      setSeries(ts.series);
+      setProducts(pr.items);
+      setSales(sa.items);
       setStatus('success');
     } catch (err) {
       setStatus('error');
       setErrorMsg(
-        t('db.loadFailed', {
+        t('cp.loadFailed', {
           defaultValue:
             language === 'zh'
               ? `看板加载失败：${err instanceof Error ? err.message : String(err)}`
@@ -138,24 +157,114 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         }),
       );
     }
-  }, [days, metric, breakdownBy, t, language]);
+  }, [days, t, language]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const L = (zh: string, en: string) => (language === 'zh' ? zh : en);
+  /** 元字符串 → 整数分；非法输入返回 null。 */
+  const toCents = (s: string): number | null => {
+    const n = Number.parseFloat(s);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.round(n * 100);
+  };
+
+  /** 每件盈利实时预览（只算当前表单，不落库）。 */
+  const profitPreview = useMemo(() => {
+    const price = Number.parseFloat(productForm.price);
+    const cost =
+      (Number.parseFloat(productForm.artisan) || 0) +
+      (Number.parseFloat(productForm.shipping) || 0) +
+      (Number.parseFloat(productForm.marketing) || 0);
+    if (!Number.isFinite(price)) return null;
+    return Math.round((price - cost) * 100);
+  }, [productForm]);
+
+  const handleCreateProduct = async () => {
+    const price = toCents(productForm.price);
+    const artisan = toCents(productForm.artisan || '0');
+    const shipping = toCents(productForm.shipping || '0');
+    const marketing = toCents(productForm.marketing || '0');
+    if (!productForm.name.trim()) {
+      setFormError(L('请先写商品名称', 'Please enter the product name'));
+      return;
+    }
+    if (price === null || price <= 0 || artisan === null || shipping === null || marketing === null) {
+      setFormError(L('金额填「元」，写 0 或正数就行', 'Amounts are in yuan — use 0 or a positive number'));
+      return;
+    }
+    setFormBusy(true);
+    setFormError('');
+    try {
+      await createCraftProduct({
+        name: productForm.name.trim(),
+        price_cents: price,
+        artisan_cents: artisan,
+        shipping_cents: shipping,
+        marketing_cents: marketing,
+      });
+      setProductForm(EMPTY_PRODUCT_FORM);
+      await refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  const handleCreateSale = async () => {
+    const qty = Number.parseInt(saleQty, 10);
+    if (!saleProductId) {
+      setFormError(L('先选一个商品', 'Pick a product first'));
+      return;
+    }
+    if (!Number.isInteger(qty) || qty < 1 || qty > 999) {
+      setFormError(L('件数填 1 到 999 的整数', 'Quantity must be an integer from 1 to 999'));
+      return;
+    }
+    setFormBusy(true);
+    setFormError('');
+    try {
+      await createCraftSale(saleProductId, qty);
+      await refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  const handleSeedDemo = async () => {
+    setFormBusy(true);
+    setFormError('');
+    try {
+      await seedCraftDemo();
+      await refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
+  /** 环比：上期为 0 → 「新增」；否则 ±百分比。 */
+  const fmtDelta = (pct: number | null): string => {
+    if (pct === null) return L('新增', 'New');
+    const sign = pct > 0 ? '+' : '';
+    return `${sign}${pct}% ${L('环比', 'vs prev.')}`;
+  };
 
   return (
-    <div className={`neo-db${embedded ? ' embedded' : ''}`} data-testid="dashboard-page">
+    <div className={`neo-db neo-cp${embedded ? ' embedded' : ''}`} data-testid="dashboard-page">
       <div className="neo-db-header">
         <div>
-          <p className="neo-db-eyebrow">{L('DATA PLATFORM', 'DATA PLATFORM')}</p>
-          <h1 className="neo-db-title">{L('数据看板', 'Dashboard')}</h1>
+          <p className="neo-db-eyebrow">CRAFT PROFIT</p>
+          <h1 className="neo-db-title">{L('产品盈利', 'Product Profit')}</h1>
           <p className="neo-db-sub">
             {L(
-              '调用 · token 消耗 · 成本估算 · run 成功率与每日简报',
-              'Calls · token usage · cost estimate · run success rate & daily briefing',
+              '帮残障伙伴卖手工艺品：他们上架商品，我们营销、联系快递寄出。这里看赚了多少。',
+              'Handmade goods by artisans with disabilities — they list, we market & ship. Here is what we earn.',
             )}
           </p>
         </div>
@@ -193,185 +302,307 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
       )}
 
       {overview && (
-        <div className="neo-db-cards" data-testid="db-overview-cards">
-          <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('LLM 调用', 'LLM calls')}</p>
-            <div className="neo-db-card-value">{fmtInt(overview.usage.calls)}</div>
-            <p className="neo-db-card-delta">{fmtDelta(overview.usage.deltas.calls)}</p>
-          </div>
-          <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('Token 消耗', 'Tokens')}</p>
-            <div className="neo-db-card-value">{fmtCompact(overview.usage.total_tokens)}</div>
-            <p className="neo-db-card-delta">{fmtDelta(overview.usage.deltas.total_tokens)}</p>
+        <div className="neo-cp-hero-cards" data-testid="cp-overview-cards">
+          <div className="neo-db-card neo-cp-card--hero">
+            <p className="neo-db-card-label">{L('赚了（净利）', 'Profit (net)')}</p>
+            <div className={`neo-cp-hero-value${overview.profit_cents < 0 ? ' neg' : ''}`}>
+              {fmtYuan(overview.profit_cents)}
+            </div>
+            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.profit)}</p>
             <p className="neo-db-card-hint">
-              ↑{fmtCompact(overview.usage.input_tokens)} ↓{fmtCompact(overview.usage.output_tokens)}
+              {L('利润率', 'Margin')} {overview.margin_pct === null ? '—' : `${overview.margin_pct}%`}
             </p>
           </div>
           <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('估算成本', 'Est. cost')}</p>
-            <div className="neo-db-card-value">{fmtCost(overview.usage.cost_est_usd)}</div>
-            <p className="neo-db-card-delta">{fmtDelta(overview.usage.deltas.cost_est_usd)}</p>
+            <p className="neo-db-card-label">{L('卖了多少钱', 'Revenue')}</p>
+            <div className="neo-db-card-value">{fmtYuan(overview.revenue_cents)}</div>
+            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.revenue)}</p>
           </div>
           <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('Run 成功率', 'Run success rate')}</p>
+            <p className="neo-db-card-label">{L('给手艺人', 'To artisans')}</p>
+            <div className="neo-db-card-value">{fmtYuan(overview.artisan_cents)}</div>
+          </div>
+          <div className="neo-db-card">
+            <p className="neo-db-card-label">{L('快递 + 营销', 'Shipping + marketing')}</p>
             <div className="neo-db-card-value">
-              {overview.runs.success_rate === null ? '—' : `${overview.runs.success_rate}%`}
+              {fmtYuan(overview.shipping_cents + overview.marketing_cents)}
             </div>
             <p className="neo-db-card-hint">
-              {fmtInt(overview.runs.total)} {L('次 · 失败', 'runs · failed')} {fmtInt(overview.runs.failed)}
+              {L('快递', 'Ship')} {fmtYuan(overview.shipping_cents)} ·{' '}
+              {L('营销', 'Mkt')} {fmtYuan(overview.marketing_cents)}
             </p>
           </div>
           <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('活跃项目 / 会话', 'Active projects / conversations')}</p>
-            <div className="neo-db-card-value">
-              {fmtInt(overview.active.projects)} / {fmtInt(overview.active.conversations)}
-            </div>
+            <p className="neo-db-card-label">{L('卖出件数', 'Units sold')}</p>
+            <div className="neo-db-card-value">{fmtInt(overview.units)}</div>
+            <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.units)}</p>
+            <p className="neo-db-card-hint">
+              {fmtInt(overview.sales_count)} {L('笔生意', 'orders')}
+            </p>
           </div>
         </div>
       )}
 
-      {timeseries && (
+      {overview && (
         <section className="neo-db-section">
-          <h2 className="neo-db-section-title">
-            {metric === 'tokens'
-              ? L('Token 趋势', 'Token trend')
-              : metric === 'calls'
-                ? L('调用趋势', 'Call trend')
-                : L('成本趋势', 'Cost trend')}
-          </h2>
-          <div className="neo-db-chart-wrap">
-            <div className="neo-db-panel" style={{ flex: 1 }}>
-              <div className="neo-db-tabs" style={{ marginBottom: 12 }}>
-                {(['tokens', 'calls', 'cost'] as TimeseriesMetric[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className={`neo-db-tab${metric === m ? ' on' : ''}`}
-                    onClick={() => setMetric(m)}
-                    data-testid={`db-metric-${m}`}
-                  >
-                    {m === 'tokens' ? L('Tokens', 'Tokens') : m === 'calls' ? L('调用', 'Calls') : L('成本', 'Cost')}
-                  </button>
-                ))}
+          <h2 className="neo-db-section-title">{L('每卖 100 元，钱花在哪儿', 'Where every ¥100 goes')}</h2>
+          <div className="neo-db-panel">
+            <div className="neo-cp-per100" data-testid="cp-per100">
+              <div className="neo-cp-per100-track">
+                <span
+                  className="neo-cp-seg seg-artisan"
+                  style={{ width: `${overview.per100.artisan}%` }}
+                  title={`${L('给手艺人', 'Artisans')} ${overview.per100.artisan}%`}
+                />
+                <span
+                  className="neo-cp-seg seg-shipping"
+                  style={{ width: `${overview.per100.shipping}%` }}
+                  title={`${L('快递', 'Shipping')} ${overview.per100.shipping}%`}
+                />
+                <span
+                  className="neo-cp-seg seg-marketing"
+                  style={{ width: `${overview.per100.marketing}%` }}
+                  title={`${L('营销', 'Marketing')} ${overview.per100.marketing}%`}
+                />
+                <span
+                  className="neo-cp-seg seg-profit"
+                  style={{ width: `${overview.per100.profit}%` }}
+                  title={`${L('净赚', 'Profit')} ${overview.per100.profit}%`}
+                />
               </div>
-              {timeseries.series.some((d) =>
-                metric === 'calls' ? d.calls > 0 : metric === 'cost' ? (d.cost ?? 0) > 0 : (d.tokens ?? 0) > 0,
-              ) ? (
-                <TrendChart series={timeseries.series} metric={metric} />
-              ) : (
-                <p className="neo-db-chart-empty">{L('窗口内暂无数据', 'No data in this window')}</p>
-              )}
+              <div className="neo-cp-per100-legend">
+                <span><i className="neo-cp-dot seg-artisan" />{L('给手艺人', 'Artisans')} {overview.per100.artisan}%</span>
+                <span><i className="neo-cp-dot seg-shipping" />{L('快递', 'Shipping')} {overview.per100.shipping}%</span>
+                <span><i className="neo-cp-dot seg-marketing" />{L('营销', 'Marketing')} {overview.per100.marketing}%</span>
+                <span><i className="neo-cp-dot seg-profit" />{L('净赚', 'Profit')} {overview.per100.profit}%</span>
+              </div>
             </div>
           </div>
         </section>
       )}
 
-      {breakdown && breakdown.items.length > 0 && (
-        <section className="neo-db-section">
-          <h2 className="neo-db-section-title">
-            {breakdownBy === 'model' ? L('按模型分布', 'By model') : L('按会话分布', 'By session')}
-          </h2>
-          <div className="neo-db-tabs" style={{ marginBottom: 10 }}>
-            {(['model', 'session'] as BreakdownBy[]).map((b) => (
-              <button
-                key={b}
-                type="button"
-                className={`neo-db-tab${breakdownBy === b ? ' on' : ''}`}
-                onClick={() => setBreakdownBy(b)}
-                data-testid={`db-breakdown-${b}`}
-              >
-                {b === 'model' ? L('模型', 'Model') : L('会话', 'Session')}
-              </button>
-            ))}
-          </div>
-          <div className="neo-db-panel">
-            <table className="neo-db-table" data-testid="db-breakdown-table">
+      <section className="neo-db-section">
+        <h2 className="neo-db-section-title">{L('每天赚多少', 'Profit by day')}</h2>
+        <div className="neo-db-panel">
+          {series.some((d) => d.profit_cents !== 0) ? (
+            <ProfitBars series={series} />
+          ) : (
+            <p className="neo-db-chart-empty">{L('窗口内还没生意', 'No sales in this window')}</p>
+          )}
+          <p className="neo-cp-bar-legend">
+            <i className="neo-cp-dot seg-profit" /> {L('赚钱', 'Profit')}
+            <i className="neo-cp-dot seg-neg" style={{ marginLeft: 14 }} /> {L('亏钱', 'Loss')}
+          </p>
+        </div>
+      </section>
+
+      <section className="neo-db-section">
+        <h2 className="neo-db-section-title">{L('哪个商品最赚钱', 'Best-selling products')}</h2>
+        <div className="neo-db-panel">
+          {products.length === 0 ? (
+            <p className="neo-db-chart-empty">
+              {L('还没上架商品。下面「记一笔」就能上架。', 'No products yet — add one in the entry section below.')}
+            </p>
+          ) : (
+            <table className="neo-db-table" data-testid="cp-products-table">
               <thead>
                 <tr>
-                  <th>{breakdownBy === 'model' ? L('模型', 'Model') : L('会话', 'Session')}</th>
-                  <th className="neo-db-table-num">{L('调用', 'Calls')}</th>
-                  <th className="neo-db-table-num">Tokens</th>
-                  <th className="neo-db-table-num">{L('成本', 'Cost')}</th>
+                  <th>{L('商品', 'Product')}</th>
+                  <th className="neo-db-table-num">{L('卖出', 'Sold')}</th>
+                  <th className="neo-db-table-num">{L('卖了多少钱', 'Revenue')}</th>
+                  <th className="neo-db-table-num">{L('赚了', 'Profit')}</th>
+                  <th className="neo-db-table-num">{L('每件赚', 'Per unit')}</th>
                 </tr>
               </thead>
               <tbody>
-                {breakdown.items.map((it) => (
-                  <tr key={it.key || '(none)'}>
-                    <td>{it.key || L('（未记录）', '(untracked)')}</td>
-                    <td className="neo-db-table-num">{fmtInt(it.calls)}</td>
-                    <td className="neo-db-table-num">{fmtCompact(it.total_tokens)}</td>
-                    <td className="neo-db-table-num">{fmtCost(it.cost_est_usd)}</td>
+                {products.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.name}</td>
+                    <td className="neo-db-table-num">{fmtInt(p.sold_units)}</td>
+                    <td className="neo-db-table-num">{fmtYuan(p.revenue_cents)}</td>
+                    <td className="neo-db-table-num">{fmtYuan(p.profit_cents)}</td>
+                    <td className="neo-db-table-num">{fmtYuan(p.profit_per_unit_cents)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
-      {briefing && (
-        <section className="neo-db-section">
-          <h2 className="neo-db-section-title">{L('每日简报', 'Daily briefing')}</h2>
-          <div className="neo-db-panel">
-            <div className="neo-db-brief-grid">
-              <div className="neo-db-brief-item">
-                <p className="neo-db-brief-k">{L('今日调用', 'Calls today')}</p>
-                <p className="neo-db-brief-v">{fmtInt(briefing.today.calls)}</p>
-              </div>
-              <div className="neo-db-brief-item">
-                <p className="neo-db-brief-k">{L('今日 token / 成本', 'Tokens / cost today')}</p>
-                <p className="neo-db-brief-v">
-                  {fmtCompact(briefing.today.total_tokens)} · {fmtCost(briefing.today.cost_est_usd)}
-                </p>
-              </div>
-              <div className="neo-db-brief-item">
-                <p className="neo-db-brief-k">{L('昨日调用', 'Calls yesterday')}</p>
-                <p className="neo-db-brief-v">{fmtInt(briefing.yesterday.calls)}</p>
-              </div>
-              <div className="neo-db-brief-item">
-                <p className="neo-db-brief-k">{L('近 7 日 token 合计', 'Tokens last 7d')}</p>
-                <p className="neo-db-brief-v">{fmtCompact(briefing.trend_7d.total_tokens)}</p>
-              </div>
+      <section className="neo-db-section">
+        <h2 className="neo-db-section-title">{L('最近的生意', 'Recent sales')}</h2>
+        <div className="neo-db-panel">
+          {sales.length === 0 ? (
+            <p className="neo-db-chart-empty">{L('还没记过销售。', 'No sales recorded yet.')}</p>
+          ) : (
+            <table className="neo-db-table" data-testid="cp-sales-table">
+              <thead>
+                <tr>
+                  <th>{L('时间', 'Time')}</th>
+                  <th>{L('商品', 'Product')}</th>
+                  <th className="neo-db-table-num">{L('件数', 'Qty')}</th>
+                  <th className="neo-db-table-num">{L('卖了', 'Revenue')}</th>
+                  <th className="neo-db-table-num">{L('赚了', 'Profit')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sales.map((s) => (
+                  <tr key={s.id}>
+                    <td>{fmtTime(s.created_at)}</td>
+                    <td>{s.product_name}</td>
+                    <td className="neo-db-table-num">{fmtInt(s.qty)}</td>
+                    <td className="neo-db-table-num">{fmtYuan(s.price_cents * s.qty)}</td>
+                    <td className="neo-db-table-num">{fmtYuan(s.profit_cents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      {/* ── 录入区：上架商品 / 记一笔销售 / 演示数据 ───────────────────── */}
+      <section className="neo-db-section">
+        <h2 className="neo-db-section-title">{L('记一笔', 'Record')}</h2>
+        <div className="neo-cp-form-grid">
+          <form
+            className="neo-db-panel neo-cp-form"
+            data-testid="cp-product-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateProduct();
+            }}
+          >
+            <p className="neo-cp-form-title">{L('上架商品', 'List a product')}</p>
+            <label className="neo-cp-field">
+              <span>{L('商品名称', 'Name')}</span>
+              <input
+                value={productForm.name}
+                onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                placeholder={L('例：手工编织收纳篮', 'e.g. Woven storage basket')}
+              />
+            </label>
+            <div className="neo-cp-field-row">
+              <label className="neo-cp-field">
+                <span>{L('售价（元）', 'Price (yuan)')}</span>
+                <input
+                  inputMode="decimal"
+                  value={productForm.price}
+                  onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                  placeholder="89"
+                />
+              </label>
+              <label className="neo-cp-field">
+                <span>{L('给手艺人（元）', 'To artisan (yuan)')}</span>
+                <input
+                  inputMode="decimal"
+                  value={productForm.artisan}
+                  onChange={(e) => setProductForm({ ...productForm, artisan: e.target.value })}
+                  placeholder="42"
+                />
+              </label>
             </div>
-            {briefing.lessons_learned.length > 0 && (
-              <div className="neo-db-lesson-kinds">
-                {briefing.lessons_learned.map((l) => (
-                  <span key={l.kind} className="neo-db-lesson-chip">
-                    {l.kind === 'lesson'
-                      ? L(`教训 ×${l.n}`, `Lessons ×${l.n}`)
-                      : l.kind === 'preference'
-                        ? L(`偏好 ×${l.n}`, `Preferences ×${l.n}`)
-                        : L(`弱项 ×${l.n}`, `Weaknesses ×${l.n}`)}
-                  </span>
-                ))}
-              </div>
-            )}
-            {briefing.failed_top.length > 0 && (
-              <div className="neo-db-lesson-kinds">
-                {briefing.failed_top.slice(0, 3).map((f, i) => (
-                  <span key={i} className="neo-db-lesson-chip">
-                    {L(`失败 ${f.n} 次：`, `Failed ×${f.n}: `)}
-                    {f.goal ? f.goal.slice(0, 24) : L('(无目标)', '(no goal)')}
-                  </span>
-                ))}
-              </div>
-            )}
-            {briefing.alerts.length > 0 && (
-              <div className="neo-db-alerts">
-                {briefing.alerts.map((a, i) => (
-                  <p key={i} className="neo-db-alert" data-testid="db-alert">
-                    {a}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+            <div className="neo-cp-field-row">
+              <label className="neo-cp-field">
+                <span>{L('快递费（元）', 'Shipping (yuan)')}</span>
+                <input
+                  inputMode="decimal"
+                  value={productForm.shipping}
+                  onChange={(e) => setProductForm({ ...productForm, shipping: e.target.value })}
+                  placeholder="8"
+                />
+              </label>
+              <label className="neo-cp-field">
+                <span>{L('营销分摊（元）', 'Marketing (yuan)')}</span>
+                <input
+                  inputMode="decimal"
+                  value={productForm.marketing}
+                  onChange={(e) => setProductForm({ ...productForm, marketing: e.target.value })}
+                  placeholder="6"
+                />
+              </label>
+            </div>
+            <p className="neo-cp-preview" data-testid="cp-profit-preview">
+              {profitPreview === null ? (
+                L('填好售价就能算每件赚多少', 'Fill in the price to see profit per unit')
+              ) : profitPreview < 0 ? (
+                <span className="neg">{L(`这样卖每件亏 ${fmtYuan(-profitPreview)}`, `Each sale loses ${fmtYuan(-profitPreview)}`)}</span>
+              ) : (
+                L(`每件赚 ${fmtYuan(profitPreview)}`, `Earn ${fmtYuan(profitPreview)} per unit`)
+              )}
+            </p>
+            <button type="submit" className="neo-cp-submit" disabled={formBusy} data-testid="cp-product-submit">
+              {L('上架', 'List product')}
+            </button>
+          </form>
 
-      {/* 功能线① 商家数据看板：独立数据源（/api/merchant）与独立口径，
-          不与上面这组 AI 用量指标混算。挂在页尾，失败只降级成一条提示。 */}
-      <MerchantBoardPanel />
+          <form
+            className="neo-db-panel neo-cp-form"
+            data-testid="cp-sale-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateSale();
+            }}
+          >
+            <p className="neo-cp-form-title">{L('记一笔销售', 'Record a sale')}</p>
+            <label className="neo-cp-field">
+              <span>{L('商品', 'Product')}</span>
+              <select
+                value={saleProductId}
+                onChange={(e) => setSaleProductId(e.target.value)}
+                data-testid="cp-sale-product"
+              >
+                <option value="">{L('选一个商品…', 'Pick a product…')}</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}（{fmtYuan(p.price_cents)}）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="neo-cp-field">
+              <span>{L('件数', 'Quantity')}</span>
+              <input
+                inputMode="numeric"
+                value={saleQty}
+                onChange={(e) => setSaleQty(e.target.value)}
+                data-testid="cp-sale-qty"
+              />
+            </label>
+            <p className="neo-cp-preview">
+              {L(
+                '按上架时的价格记账，之后改价不影响这笔。',
+                'Recorded at the listed price — later price changes do not rewrite history.',
+              )}
+            </p>
+            <button type="submit" className="neo-cp-submit" disabled={formBusy} data-testid="cp-sale-submit">
+              {L('记一笔', 'Record sale')}
+            </button>
+          </form>
+        </div>
+
+        {formError && (
+          <p className="neo-db-status neo-db-status--error" role="alert" data-testid="cp-form-error">
+            {formError}
+          </p>
+        )}
+
+        <div className="neo-cp-demo-row">
+          <button
+            type="button"
+            className="neo-db-refresh"
+            onClick={handleSeedDemo}
+            disabled={formBusy}
+            data-testid="cp-demo-seed"
+          >
+            {L('填一批手工艺品演示数据', 'Load demo craft data')}
+          </button>
+          <span className="neo-cp-demo-hint">
+            {L('8 件手工艺品 + 近 30 天的销售，方便先看效果。', '8 handmade products + ~30 days of sales to try it out.')}
+          </span>
+        </div>
+      </section>
     </div>
   );
 }
