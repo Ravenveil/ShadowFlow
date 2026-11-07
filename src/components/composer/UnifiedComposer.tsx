@@ -96,6 +96,9 @@ export interface UnifiedComposerSubmitPayload {
   skillName?: string;
   /** 多模态记忆库 pack id 列表（KNOWLEDGE chip 勾选；2026-11-06 换源）。 */
   knowledgePackIds: string[];
+  /** 连接器作用域 id 列表（加号菜单「连接器」勾选；2026-11-07 OpenBot 对齐批
+   *  — 随 run 落库做执行前裁定，见 server connector-registry）。 */
+  connectorIds?: string[];
   attachments: AttachedFile[];
   // executor/model/cwd are written to localStorage by the internal pickers
   // (sf.defaultExecutor / sf.model / sf.cwd) — read them there, as before.

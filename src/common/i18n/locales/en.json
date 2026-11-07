@@ -930,12 +930,14 @@
   "clawhub.uninstall.confirm": "Uninstall {{name}}? It will stop working in the platform (you can reinstall anytime).",
   "clawhub.uninstall.copyOnly": "This Claw must be uninstalled manually (command copied):\n{{cmd}}",
   "clawhub.uninstall.startFailed": "Failed to start uninstall",
-  "neo.composer.plusClawLabel": "ClawHub",
-  "neo.composer.plusClawNone": "No installed Claws yet — get one in ClawHub",
-  "neo.composer.plusClawMore": "Browse / install more in ClawHub",
-  "neo.composer.plusSearchClaw": "Search Claws",
-  "neo.composer.plusSkillLabel": "Skill",
+  "neo.composer.plusMenuTitle": "Skills / Connectors",
+  "neo.composer.plusSkillLabel": "Skills",
   "neo.composer.plusSearchSkill": "Search Skills",
   "neo.composer.plusSkillNone": "No installed Skills yet",
-  "neo.composer.plusImportSkill": "Import Skill (URL / installed)"
+  "neo.composer.plusImportSkill": "Import Skill (URL / installed)",
+  "neo.composer.plusConnectorLabel": "Connectors",
+  "neo.composer.plusSearchConnector": "Search connectors",
+  "neo.composer.plusConnectorNone": "No connectors available",
+  "neo.composer.plusConnectorManage": "Manage connectors",
+  "neo.composer.connectorScope": "Connector scope for this turn"
 }

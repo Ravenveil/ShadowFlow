@@ -596,8 +596,8 @@ a.neo-row-link {
   text-decoration: none;
 }
 
-/* ── 加号两层弹出菜单（2026-10-31，参考 WorkBuddy 交互）──────────────────
-   第一层：竖排入口行（ClawHub / Skill，带 ›）；光标移入即在右侧弹出第二层
+/* ── 加号两层弹出菜单（2026-11-07 重做：技能 / 连接器，WorkBuddy 形态）────
+   第一层：竖排入口行（技能 / 连接器，带 ›）；光标移入即在右侧弹出第二层
    列表面板（搜索 + 列表 + 底部动作）。两层同处一个 fixed 容器（flex 排布，
    8px 间隙），容器 mouseleave 才收起第二层 —— 光标跨间隙不闪断。 */
 .neo-plus-root {
@@ -606,6 +606,19 @@ a.neo-row-link {
   display: flex;
   align-items: flex-end;
   gap: 8px;
+  transform-origin: bottom left;
+  animation: neo-plus-in 0.12s ease;
+}
+
+@keyframes neo-plus-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* 第一层：窄入口面板 */
@@ -741,8 +754,26 @@ a.neo-row-link {
   line-height: 1;
   padding: 2px 6px;
   border-radius: 5px;
-  background: rgba(245, 158, 11, 0.14);
-  color: #b45309;
+  background: color-mix(in oklab, #8b5cf6 14%, transparent);
+  color: #6d28d9;
+}
+
+/* 连接器行：状态点（绿 = connected，灰 = 其他）+ 选中 ✓（多选 toggle） */
+.neo-plus-item-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--t-ink-3, #d1d5db);
+}
+
+.neo-plus-item-dot.on {
+  background: #22c55e;
+}
+
+.neo-plus-item-check {
+  flex-shrink: 0;
+  color: var(--t-accent, #2563eb);
 }
 
 .neo-plus-item-icon {

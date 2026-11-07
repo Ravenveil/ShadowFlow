@@ -285,6 +285,11 @@
   color: var(--t-fg-2);
   max-width: 260px;
 }
+/* 连接器作用域 chip（2026-11-07 OpenBot 对齐批）— 紫 tint 区分于附件/知识 */
+.neo-cp-attach--connector {
+  background: color-mix(in oklab, #8b5cf6 10%, var(--t-panel-2));
+  border-color: color-mix(in oklab, #8b5cf6 32%, var(--t-border));
+}
 .neo-cp-attach-icon {
   display: inline-flex;
   align-items: center;

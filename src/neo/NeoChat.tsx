@@ -254,6 +254,8 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
           knowledge_pack_ids: p.knowledgePackIds.length > 0 ? p.knowledgePackIds : undefined,
           // 拖拽传图（2026-11-07）— 随行附件：timeline 缩略图 + goal 引用块。
           attachments: atts.length > 0 ? atts : undefined,
+          // 连接器作用域（2026-11-07 OpenBot 对齐批）— run 创建随行落库。
+          connector_ids: p.connectorIds && p.connectorIds.length > 0 ? p.connectorIds : undefined,
         });
         window.dispatchEvent(new CustomEvent('sf:run-created'));
         onRunChange(resp.session_id);
@@ -271,6 +273,8 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
             knowledge_pack_ids: p.knowledgePackIds,
             // 拖拽传图（2026-11-07）— 每轮附件独立（空数组 = 本轮无附件）。
             attachments: atts,
+            // 连接器作用域（2026-11-07）— 显式给出数组即整体替换（空 = 清空）。
+            connector_ids: p.connectorIds ?? [],
           }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -462,7 +466,6 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               onNavigate={onNavigate}
               clawTarget={clawTarget}
               onClearClawTarget={() => setClawTarget(null)}
-              onPickClaw={(cliId) => setClawTarget({ cliId, name: cliId })}
               placeholder={t('neo.chat.followupPlaceholder', {
                 defaultValue: '补充指令，AI 会接着干 · 试试 @ 提及 Skill',
               })}
@@ -491,7 +494,6 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               onNavigate={onNavigate}
               clawTarget={clawTarget}
               onClearClawTarget={() => setClawTarget(null)}
-              onPickClaw={(cliId) => setClawTarget({ cliId, name: cliId })}
               placeholder={
                 clawTarget
                   ? t('neo.chat.clawPlaceholder', {

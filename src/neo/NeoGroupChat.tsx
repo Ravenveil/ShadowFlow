@@ -750,6 +750,8 @@ export function NeoGroupChat({
           // 对话框知识库（2026-11-06）— 记忆库 pack id 随消息下发，fan-out
           // 按本轮消息检索命中注入 Agent 提示词。
           knowledgePackIds: p.knowledgePackIds,
+          // 连接器作用域（2026-11-07 OpenBot 对齐批）— 随消息下发。
+          connectorIds: p.connectorIds,
         });
       } catch (err) {
         throw new Error(

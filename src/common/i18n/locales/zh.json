@@ -931,12 +931,14 @@
   "clawhub.uninstall.confirm": "确定卸载 {{name}}？卸载后该 Claw 将无法在平台使用（可随时重新安装）。",
   "clawhub.uninstall.copyOnly": "该 Claw 需手动卸载（已复制引导命令）：\n{{cmd}}",
   "clawhub.uninstall.startFailed": "发起卸载失败",
-  "neo.composer.plusClawLabel": "ClawHub",
-  "neo.composer.plusClawNone": "还没有已安装的 Claw，去 ClawHub 装一个",
-  "neo.composer.plusClawMore": "去 ClawHub 浏览 / 安装更多",
-  "neo.composer.plusSearchClaw": "搜索 Claw",
-  "neo.composer.plusSkillLabel": "Skill",
-  "neo.composer.plusSearchSkill": "搜索 Skill",
-  "neo.composer.plusSkillNone": "还没有已装的 Skill",
-  "neo.composer.plusImportSkill": "导入 Skill（URL / 已装列表）"
+  "neo.composer.plusMenuTitle": "技能 / 连接器",
+  "neo.composer.plusSkillLabel": "技能",
+  "neo.composer.plusSearchSkill": "搜索技能",
+  "neo.composer.plusSkillNone": "还没有已装的技能",
+  "neo.composer.plusImportSkill": "导入技能（URL / 已装列表）",
+  "neo.composer.plusConnectorLabel": "连接器",
+  "neo.composer.plusSearchConnector": "搜索连接器",
+  "neo.composer.plusConnectorNone": "没有可用的连接器",
+  "neo.composer.plusConnectorManage": "管理连接器",
+  "neo.composer.connectorScope": "本轮连接器作用域"
 }

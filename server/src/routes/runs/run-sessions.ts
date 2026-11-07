@@ -39,6 +39,8 @@ import { getSetting } from '../../storage/settings';
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
 import { remember, contextBlock } from '../../storage/memory-lessons';
 import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
+import { coerceConnectorIds } from '../../lib/connector-registry';
+import { recordAction } from '../../lib/action-journal';
 import { SKILLS } from '../../loaders/skills';
 import { DESIGN_SYSTEMS } from '../../loaders/design-systems';
 import { composeSystemPrompt, type LayerToggles } from '../../prompts/prompt-assembly';
@@ -349,6 +351,12 @@ interface SessionRecord {
    * 每轮独立（不跨轮继承）：follow-up 未传 = 本轮无附件。
    */
   attachments?: UserAttachment[];
+  /**
+   * 2026-11-07 OpenBot 对齐批 — 本轮连接器作用域（composer 加号菜单「连接器」
+   * 勾选）。语义同 knowledge_pack_ids：随会话落库，使用侧按 id 取连接器策略
+   * （auto/prompt/block）做执行前裁定；作用域决策本身记 action-journal。
+   */
+  connector_ids?: string[];
   /**
    * Story 15.29 — conversation this run belongs to. Always set: when the
    * client omits `conversation_id` we auto-create an anonymous one under
@@ -1024,6 +1032,8 @@ router.post('/', (req: Request, res: Response) => {
     knowledge_pack_ids,
     // 2026-11-07 — 对话框拖拽传图：随行附件（coerceAttachments 清洗）。
     attachments,
+    // 2026-11-07 OpenBot 对齐批 — 连接器作用域（coerceConnectorIds 清洗）。
+    connector_ids,
     // Story 15.19 v2 — optional executor selector.
     executor,
     // Story 15.18 — optional provider selector.
@@ -1054,6 +1064,7 @@ router.post('/', (req: Request, res: Response) => {
     layer_toggles?: unknown;
     knowledge_pack_ids?: unknown;
     attachments?: unknown;
+    connector_ids?: unknown;
     executor?: unknown;
     provider?: unknown;
     cwd?: unknown;
@@ -1065,6 +1076,8 @@ router.post('/', (req: Request, res: Response) => {
 
   // 2026-11-07 拖拽传图 — 附件清洗前置：允许「只发附件不打字」（goal 可空）。
   const validated_attachments = coerceAttachments(attachments);
+  // OpenBot 对齐批 — 连接器作用域清洗（非空字符串、去重、≤32）。
+  const validated_connector_ids = coerceConnectorIds(connector_ids);
 
   if (
     (!goal || typeof goal !== 'string' || goal.trim().length === 0) &&
@@ -1327,6 +1340,8 @@ router.post('/', (req: Request, res: Response) => {
       validated_knowledge_pack_ids.length > 0 ? validated_knowledge_pack_ids : undefined,
     attachments:
       validated_attachments && validated_attachments.length > 0 ? validated_attachments : undefined,
+    connector_ids:
+      validated_connector_ids.length > 0 ? validated_connector_ids : undefined,
     executor: validated_executor,
     cwd: validated_cwd,
     conversation_id: validated_conversation_id,
@@ -1334,6 +1349,17 @@ router.post('/', (req: Request, res: Response) => {
     created_at: Date.now(),
     updated_at: Date.now(),
   });
+
+  // OpenBot 对齐（2026-11-07）— 连接器作用域决策「执行前裁定」留痕。
+  if (validated_connector_ids.length > 0) {
+    recordAction({
+      session_id,
+      tool_name: 'connector.scope',
+      phase: 'decided',
+      decision: 'auto',
+      detail: { connector_ids: validated_connector_ids },
+    });
+  }
 
   // 后端合一·阶段0 — 持久 run 索引（修：历史随 sessionStore TTL 消失）
   try {
@@ -1406,6 +1432,7 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     cwd?: unknown;
     knowledge_pack_ids?: unknown;
     attachments?: unknown;
+    connector_ids?: unknown;
   };
   // Accept either `content` (chat-style payload that the RunSessionPage send box
   // uses) or `goal` (mirrors POST /api/run-sessions). content wins when both
@@ -1440,6 +1467,20 @@ router.post('/:id/messages', (req: Request, res: Response) => {
   // 拖拽传图（2026-11-07）— 每轮附件独立：显式数组整体替换（空 = 本轮无附件），
   // 未传也清空而非继承 source 上一轮（防陈旧缩略图/引用块粘连到新轮）。
   overrides.attachments = incomingAttachments;
+  // OpenBot 对齐（2026-11-07）— 连接器作用域：显式给出数组即整体替换（空 =
+  // 本轮清空）；未给继承 source 会话。作用域决策同样「执行前裁定」留痕。
+  if (Array.isArray(body.connector_ids)) {
+    overrides.connector_ids = coerceConnectorIds(body.connector_ids);
+    if (overrides.connector_ids.length > 0) {
+      recordAction({
+        session_id: new_session_id,
+        tool_name: 'connector.scope',
+        phase: 'decided',
+        decision: 'auto',
+        detail: { connector_ids: overrides.connector_ids, follow_up_of: sourceId },
+      });
+    }
+  }
 
   sessionStore.set(new_session_id, {
     ...source,

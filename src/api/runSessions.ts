@@ -84,6 +84,9 @@ export interface RunSessionCreateRequest {
   knowledge_pack_ids?: string[];
   /** 2026-11-07 拖拽传图 — 随行附件（结构化；LLM 引用块由服务端注入 goal）。 */
   attachments?: import('../lib/attachments').UserAttachment[];
+  /** 2026-11-07 OpenBot 对齐批 — 本轮连接器作用域（加号菜单「连接器」勾选）。
+   *  服务端落库后按连接器策略（auto/prompt/block）做执行前裁定。 */
+  connector_ids?: string[];
 }
 
 export interface RunSessionCreateResponse {

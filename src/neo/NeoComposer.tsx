@@ -59,12 +59,13 @@ import {
   Cpu,
   ExternalLink,
   PawPrint,
+  Plug,
   Search,
   Mic,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
-import { listDetectedClis, type DetectedCli } from '../api/cli';
-import { resolveClawMeta } from '../config/clawhub';
+// 连接器（2026-11-07 OpenBot 对齐批）：加号菜单「连接器」面板数据源。
+import { listConnectors, type ConnectorItem } from '../api/connectors';
 import { listPacks as listMemoryPacks, type MemoryBankPack } from '../api/memoryBank';
 import { useI18n } from '../common/i18n';
 import {
@@ -133,12 +134,12 @@ export interface NeoComposerProps {
    *  时回落 react-router navigate。 */
   onNavigate?: (nav: NeoNav) => void;
   /** ClawHub（2026-06，FR-03）：当前 Claw 聊天 target（非空时 chip 行显示
-   *  Claw 徽章，提示用户对话将由该 Claw 驱动）。 */
+   *  Claw 徽章，提示用户对话将由该 Claw 驱动）。唯一入口是 ClawHub 页
+   *  「对话」按钮的 sf.claw-target localStorage 桥（2026-11-07 加号菜单
+   *  ClawHub 入口移除后）。 */
   clawTarget?: { cliId: string; name: string } | null;
   /** ClawHub（2026-06）：清除 Claw target。 */
   onClearClawTarget?: () => void;
-  /** ClawHub（2026-10-31 加号菜单）：从菜单挑选 Claw → 父级设为聊天 target。 */
-  onPickClaw?: (cliId: string) => void;
   /** 群聊 @ 提及成员（2026-11-05，OpenBot 定向派活语义）：非空时 @ 菜单在
    *  Skills 之前列出这些成员（选中插入 @token，后端据此只派活给被点名者）。
    *  id 必须是成员 id（后端 mention 解析的锚点），title 用显示名。 */
@@ -907,47 +908,61 @@ function NeoSkillUrlChip({
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// NeoPlusMenu — 加号两层弹出菜单（2026-10-31 用户需求：参考 WorkBuddy 交互 —
-// 第一层竖排入口行，光标移入带「›」的行即在右侧弹出第二层列表面板）。
-//   Layer 1：ClawHub ›（Claw 选择）/ Skill ›（已装 Skill 选择 + URL 导入）
-//   Layer 2：搜索框 + 列表 + 底部动作（去 ClawHub 安装更多 / 打开 SkillPicker）
+// NeoPlusMenu — 加号两层弹出菜单（2026-11-07 重做：ClawHub 入口移除，形态
+// 对齐 WorkBuddy —— 「技能 / 连接器」入口）。
+//   Layer 1：技能 ›（已装 Skill 选择 + URL 导入）/ 连接器 ›（ACP/MCP 连接器
+//   勾选进本轮会话作用域，OpenBot 式执行前裁定对象）
+//   Layer 2：搜索框 + 列表 + 底部动作（导入 Skill / 管理连接器）
 // 两个面板同处一个 fixed portal 容器（flex 排布），容器 mouseleave 才收起
 // 第二层 —— 光标跨 8px 间隙移动不会闪断。空间不足时第二层翻到左侧。
+// 连接器为多选 toggle（选中留 ✓，可连选多个后点外收起）；Skill 选完即收。
 // ---------------------------------------------------------------------------
 
-function NeoPlusMenu({
+export function NeoPlusMenu({
   anchorRef,
   onClose,
-  onPickClaw,
   onPickSkill,
   onOpenSkillPicker,
+  onToggleConnector,
+  selectedConnectorIds,
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
-  onPickClaw: (cliId: string) => void;
   onPickSkill: (item: InstalledSkill) => void;
   onOpenSkillPicker: () => void;
+  onToggleConnector: (item: ConnectorItem) => void;
+  selectedConnectorIds: string[];
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [claws, setClaws] = useState<DetectedCli[] | null>(null);
   const [skills, setSkills] = useState<InstalledSkill[] | null>(null);
-  const [clawQuery, setClawQuery] = useState('');
+  const [connectors, setConnectors] = useState<ConnectorItem[] | null>(null);
   const [skillQuery, setSkillQuery] = useState('');
+  const [connQuery, setConnQuery] = useState('');
   // 当前展开的第二层（hover 驱动；null = 只显示第一层）。
-  const [sub, setSub] = useState<'claw' | 'skill' | null>(null);
+  const [sub, setSub] = useState<'skill' | 'connector' | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let alive = true;
-    listDetectedClis()
-      .then((snap) => { if (alive) setClaws(snap.items.filter((i) => i.is_claw && i.installed)); })
-      .catch(() => { if (alive) setClaws([]); });
     listInstalledSkills()
       .then((items) => { if (alive) setSkills(items); })
       .catch(() => { if (alive) setSkills([]); });
+    listConnectors()
+      .then((snap) => { if (alive) setConnectors(snap.items); })
+      .catch(() => { if (alive) setConnectors([]); });
     return () => { alive = false; };
   }, []);
+
+  // Esc 收起（菜单 portal 挂 body，监听 document）。注意本文件顶部 import
+  // 了 React 的 KeyboardEvent 类型，DOM 事件须用 globalThis.KeyboardEvent。
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   // 定位：锚点上方弹出，第二层默认在第一层右侧、空间不足翻左侧。
   const [pos, setPos] = useState<{ left: number; bottom: number; dir: 'right' | 'left' } | null>(null);
@@ -979,14 +994,15 @@ function NeoPlusMenu({
   if (!pos) return null;
 
   const q = (s: string) => s.trim().toLowerCase();
-  const filteredClaws = (claws ?? []).filter(
-    (c) =>
-      !q(clawQuery) ||
-      c.id.toLowerCase().includes(q(clawQuery)) ||
-      (c.description ?? '').toLowerCase().includes(q(clawQuery)),
-  );
   const filteredSkills = (skills ?? []).filter(
     (s) => !q(skillQuery) || s.id.toLowerCase().includes(q(skillQuery)) || s.name.toLowerCase().includes(q(skillQuery)),
+  );
+  const filteredConnectors = (connectors ?? []).filter(
+    (c) =>
+      !q(connQuery) ||
+      c.id.toLowerCase().includes(q(connQuery)) ||
+      c.name.toLowerCase().includes(q(connQuery)) ||
+      (c.description ?? '').toLowerCase().includes(q(connQuery)),
   );
 
   return createPortal(
@@ -1007,20 +1023,20 @@ function NeoPlusMenu({
       <div className="neo-plus-menu">
         <button
           type="button"
-          className={`neo-plus-item${sub === 'claw' ? ' on' : ''}`}
-          data-testid="neo-plus-row-claw"
-          onMouseEnter={() => setSub('claw')}
-          onClick={() => setSub('claw')}
+          className={`neo-plus-item${sub === 'skill' ? ' on' : ''}`}
+          data-testid="neo-plus-row-skill"
+          onMouseEnter={() => setSub('skill')}
+          onClick={() => setSub('skill')}
         >
           <span
             className="neo-plus-item-icon"
-            style={{ color: '#f59e0b' }}
+            style={{ color: '#14b8a6' }}
             aria-hidden
           >
-            <PawPrint size={14} strokeWidth={2} />
+            <BookOpen size={14} strokeWidth={2} />
           </span>
           <span className="neo-plus-item-name">
-            {t('neo.composer.plusClawLabel', { defaultValue: 'ClawHub' })}
+            {t('neo.composer.plusSkillLabel', { defaultValue: '技能' })}
           </span>
           <ChevronRight size={13} strokeWidth={2} aria-hidden className="neo-plus-item-chev" />
         </button>
@@ -1029,72 +1045,73 @@ function NeoPlusMenu({
 
         <button
           type="button"
-          className={`neo-plus-item${sub === 'skill' ? ' on' : ''}`}
-          data-testid="neo-plus-row-skill"
-          onMouseEnter={() => setSub('skill')}
-          onClick={() => setSub('skill')}
+          className={`neo-plus-item${sub === 'connector' ? ' on' : ''}`}
+          data-testid="neo-plus-row-connector"
+          onMouseEnter={() => setSub('connector')}
+          onClick={() => setSub('connector')}
         >
-          <span className="neo-plus-item-icon" aria-hidden>
-            <BookOpen size={14} strokeWidth={2} />
+          <span
+            className="neo-plus-item-icon"
+            style={{ color: '#8b5cf6' }}
+            aria-hidden
+          >
+            <Plug size={14} strokeWidth={2} />
           </span>
           <span className="neo-plus-item-name">
-            {t('neo.composer.plusSkillLabel', { defaultValue: 'Skill' })}
+            {t('neo.composer.plusConnectorLabel', { defaultValue: '连接器' })}
           </span>
           <ChevronRight size={13} strokeWidth={2} aria-hidden className="neo-plus-item-chev" />
         </button>
       </div>
 
-      {/* ── Layer 2 · ClawHub：搜索 + 已装 Claw 列表 + 去 ClawHub ──────────── */}
-      {sub === 'claw' && (
-        <div className="neo-plus-sub" data-testid="neo-plus-sub-claw">
+      {/* ── Layer 2 · 连接器：搜索 + ACP/MCP 连接器列表（多选 toggle）+ 管理 ─ */}
+      {sub === 'connector' && (
+        <div className="neo-plus-sub" data-testid="neo-plus-sub-connector">
           <div className="neo-plus-sub-search">
             <Search size={13} strokeWidth={2} aria-hidden />
             <input
-              value={clawQuery}
-              onChange={(e) => setClawQuery(e.target.value)}
-              placeholder={t('neo.composer.plusSearchClaw', { defaultValue: '搜索 Claw' })}
+              value={connQuery}
+              onChange={(e) => setConnQuery(e.target.value)}
+              placeholder={t('neo.composer.plusSearchConnector', { defaultValue: '搜索连接器' })}
               className="neo-plus-sub-search-input"
             />
           </div>
           <div className="neo-plus-sub-list">
-            {claws === null && (
+            {connectors === null && (
               <div className="neo-plus-note">{t('common.loading', { defaultValue: '加载中…' })}</div>
             )}
-            {claws !== null && filteredClaws.length === 0 && (
+            {connectors !== null && filteredConnectors.length === 0 && (
               <div className="neo-plus-note">
-                {t('neo.composer.plusClawNone', { defaultValue: '还没有已安装的 Claw，去 ClawHub 装一个' })}
+                {t('neo.composer.plusConnectorNone', { defaultValue: '没有可用的连接器' })}
               </div>
             )}
-            {filteredClaws.map((c) => {
-              const brand = resolveClawMeta(c.id);
-              // 2026-11-06 美化批：官方品牌 SVG 优先，未收录回落 monogram
-              const glyph = BrandGlyph({ brandId: c.id, size: 14 });
+            {filteredConnectors.map((c) => {
+              const on = selectedConnectorIds.includes(c.id);
               return (
                 <button
                   key={c.id}
                   type="button"
-                  className="neo-plus-item"
-                  data-testid={`neo-plus-claw-${c.id}`}
+                  className={`neo-plus-item${on ? ' on' : ''}`}
+                  data-testid={`neo-plus-connector-${c.id}`}
                   title={c.description ?? c.id}
-                  onClick={() => { onPickClaw(c.id); onClose(); }}
+                  onClick={() => onToggleConnector(c)}
                 >
-                  <span
-                    className="claw-brand-badge"
-                    style={{
-                      background: `color-mix(in oklab, ${brand.tint} 18%, transparent)`,
-                      color: brand.tint,
-                    }}
-                    aria-hidden
-                  >
-                    {glyph ?? brand.monogram}
+                  <span className="neo-plus-item-icon" aria-hidden>
+                    <Plug size={13} strokeWidth={2} />
                   </span>
                   <span className="neo-plus-item-main">
-                    <span className="neo-plus-item-name">{c.id}</span>
-                    {c.description && (
-                      <span className="neo-plus-item-desc">{c.description}</span>
-                    )}
+                    <span className="neo-plus-item-name">{c.name}</span>
+                    <span className="neo-plus-item-desc">{c.description ?? c.binary}</span>
                   </span>
-                  <span className="neo-plus-item-tag">Claw</span>
+                  <span
+                    className={`neo-plus-item-dot${c.status === 'connected' ? ' on' : ''}`}
+                    title={c.status}
+                    aria-hidden
+                  />
+                  <span className="neo-plus-item-tag">{c.kind.toUpperCase()}</span>
+                  {on && (
+                    <Check size={13} strokeWidth={2.5} aria-hidden className="neo-plus-item-check" />
+                  )}
                 </button>
               );
             })}
@@ -1103,12 +1120,12 @@ function NeoPlusMenu({
             <button
               type="button"
               className="neo-plus-item neo-plus-item--more"
-              data-testid="neo-plus-clawhub-more"
-              onClick={() => { onClose(); navigate('/settings#clawhub'); }}
+              data-testid="neo-plus-connectors-manage"
+              onClick={() => { onClose(); navigate('/settings#connectors'); }}
             >
               <span className="neo-plus-item-icon"><ExternalLink size={13} strokeWidth={2} aria-hidden /></span>
               <span className="neo-plus-item-name">
-                {t('neo.composer.plusClawMore', { defaultValue: '去 ClawHub 浏览 / 安装更多' })}
+                {t('neo.composer.plusConnectorManage', { defaultValue: '管理连接器' })}
               </span>
             </button>
           </div>
@@ -1327,7 +1344,6 @@ export function NeoComposer({
   onNavigate,
   clawTarget,
   onClearClawTarget,
-  onPickClaw,
   mentionItems,
   onScheduleCommand,
 }: NeoComposerProps) {
@@ -1355,9 +1371,21 @@ export function NeoComposer({
   const [dismissedUrls, setDismissedUrls] = useState<Set<string>>(() => new Set());
   const [pendingSkill, setPendingSkill] = useState<SkillIngestSummary | null>(null);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
-  // 加号竖版菜单（2026-10-31）：Claw 挑选 + Skill 导入聚合入口。
+  // 加号竖版菜单（2026-11-07 重做）：技能 / 连接器聚合入口（ClawHub 入口移除）。
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const plusAnchorRef = useRef<HTMLDivElement>(null);
+  // 连接器作用域（加号菜单「连接器」勾选）：多选 toggle，随提交 payload 的
+  // connectorIds 下行（run 落库后按连接器策略做执行前裁定，OpenBot 对齐）。
+  const [connectorPicks, setConnectorPicks] = useState<
+    Array<Pick<ConnectorItem, 'id' | 'name' | 'kind'>>
+  >([]);
+  const toggleConnectorPick = (c: Pick<ConnectorItem, 'id' | 'name' | 'kind'>) => {
+    setConnectorPicks((prev) =>
+      prev.some((p) => p.id === c.id)
+        ? prev.filter((p) => p.id !== c.id)
+        : [...prev, { id: c.id, name: c.name, kind: c.kind }],
+    );
+  };
   // `@` / `/` 内联命令菜单。
   const [installedSkills, setInstalledSkills] = useState<InstalledSkill[] | null>(null);
   // `/` 模式额外拉 GET /api/skills（含 `<id>:<cmd>` 子命令 + description）。
@@ -1608,6 +1636,8 @@ export function NeoComposer({
         text,
         skillName: resolvedSkillName,
         knowledgePackIds: knowledge,
+        // 连接器作用域（2026-11-07 OpenBot 对齐批）— run 创建/接力随行落库。
+        connectorIds: connectorPicks.map((c) => c.id),
         attachments: uploaded,
       });
       // 提交成功清空输入框 + 附件（发出即清，不残留）；失败保留文字方便重发。
@@ -1969,8 +1999,8 @@ export function NeoComposer({
           />
         </div>
 
-        {/* 附件 chips + 已挂知识库 chips —— 仅在有内容时渲染 */}
-        {(attachments.length > 0 || knowledge.length > 0) && (
+        {/* 附件 chips + 已挂知识库 chips + 连接器 chips —— 仅在有内容时渲染 */}
+        {(attachments.length > 0 || knowledge.length > 0 || connectorPicks.length > 0) && (
           <div className="neo-cp-attachments" data-testid="start-attachments">
             {attachments.map((a) => (
               <span
@@ -2027,25 +2057,49 @@ export function NeoComposer({
                 </button>
               </span>
             ))}
+            {connectorPicks.map((c) => (
+              <span
+                key={c.id}
+                data-testid="start-connector-chip"
+                className="neo-cp-attach neo-cp-attach--connector"
+                title={t('neo.composer.connectorScope', { defaultValue: '本轮连接器作用域' })}
+              >
+                <span aria-hidden className="neo-cp-attach-icon">
+                  <Plug size={12} strokeWidth={2} />
+                </span>
+                <span className="neo-cp-attach-label">{c.name}</span>
+                <span className="neo-cp-attach-meta">· {c.kind.toUpperCase()}</span>
+                <button
+                  type="button"
+                  onClick={() => setConnectorPicks((prev) => prev.filter((p) => p.id !== c.id))}
+                  aria-label={t('start.attachmentRemove')}
+                  className="neo-cp-attach-x"
+                  data-testid="start-connector-chip-clear"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
           </div>
         )}
 
-        {/* ── chip 行：导入 Skill ｜ Claw target ｜ 模型 ｜ 目录 ｜ 模式 ｜ 知识 ｜ 发送 ── */}
+        {/* ── chip 行：加号（技能/连接器）｜ Claw target ｜ 模型 ｜ 目录 ｜ 模式 ｜ 知识 ｜ 发送 ── */}
         <div className="neo-cp-bar">
-          {/* 加号 = 竖版弹出菜单（2026-10-31）：从 ClawHub 挑选 / 导入 Skill。
-              原行为（直接开 SkillPicker）移入菜单第二项。 */}
+          {/* 加号 = 竖版弹出菜单（2026-11-07 重做）：技能 / 连接器聚合入口。 */}
           <div ref={plusAnchorRef} className="neo-cp-pop-anchor">
             <NeoChipBtn
               glyph={<Plus size={16} strokeWidth={1.75} />}
               onClick={() => setPlusMenuOpen((v) => !v)}
               testId="start-chip-import-skill"
-              title={t('start.importSkill')}
+              title={t('neo.composer.plusMenuTitle', { defaultValue: '技能 / 连接器' })}
+              active={plusMenuOpen}
             />
             {plusMenuOpen && (
               <NeoPlusMenu
                 anchorRef={plusAnchorRef}
                 onClose={() => setPlusMenuOpen(false)}
-                onPickClaw={(id) => onPickClaw?.(id)}
+                onToggleConnector={toggleConnectorPick}
+                selectedConnectorIds={connectorPicks.map((c) => c.id)}
                 onPickSkill={(item) => {
                   // 已装 skill 合成 summary 形状，与 SkillPicker 走同一代码路径。
                   setPendingSkill({

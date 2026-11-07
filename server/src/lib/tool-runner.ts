@@ -34,6 +34,7 @@
 import type { ToolRegistry, ToolSpec } from './tool-spec';
 import type { PermissionPolicyV2, PermissionOutcomeV2 } from './permission-policy-v2';
 import type { PermissionDecision } from './tool-approval';
+import { recordAction, type ActionJournalEntry } from './action-journal';
 
 /**
  * 阶段 1 — human-in-the-loop approval callback. Given the pending tool_use,
@@ -152,6 +153,39 @@ export class ToolRunner {
   async dispatch(
     toolUse: { name: string; input: unknown },
     signal: AbortSignal,
+    ctx?: { sessionId?: string },
+  ): Promise<ToolDispatchResult> {
+    // OpenBot 对齐（2026-11-07）—「执行前裁定、执行后留痕」：decided 帧在
+    // 权限裁定落定后、执行器跑之前写入（decisionOf 映射 auto/approve/deny/
+    // block）；recorded 帧在派发收尾后写入（ok + duration）。两条成对，构成
+    // action-journal 可回放链。留痕失败绝不影响派发（recordAction 内部吞错）。
+    const started = Date.now();
+    const result = await this.dispatchInternal(toolUse, signal, (decision) => {
+      recordAction({
+        phase: 'decided',
+        tool_name: toolUse.name,
+        session_id: ctx?.sessionId,
+        decision,
+        detail: { input: summarizeForJournal(toolUse.input) },
+      });
+    });
+    recordAction({
+      phase: 'recorded',
+      tool_name: toolUse.name,
+      session_id: ctx?.sessionId,
+      ok: !result.isError,
+      duration_ms: Date.now() - started,
+      ...(result.isError
+        ? { detail: { error: summarizeForJournal(result.output) } }
+        : {}),
+    });
+    return result;
+  }
+
+  private async dispatchInternal(
+    toolUse: { name: string; input: unknown },
+    signal: AbortSignal,
+    onDecided: (decision: NonNullable<ActionJournalEntry['decision']>) => void,
   ): Promise<ToolDispatchResult> {
     const { name, input } = toolUse;
 
@@ -159,6 +193,7 @@ export class ToolRunner {
     const spec = this.registry.get(name);
     if (!spec) {
       const perm = this.policy.authorize(name); // for the record, even on miss
+      onDecided(decisionOf(perm));
       return {
         output: { error: `unknown tool '${name}' (not in this skill's registry)` },
         isError: true,
@@ -182,6 +217,8 @@ export class ToolRunner {
         };
       }
     }
+    // 裁定落定（含人审升级后）→ decided 帧先于执行写入。
+    onDecided(decisionOf(permission));
     if (!permission.allow) {
       // Build a structured error payload that includes the mode so the
       // runtime can decide whether to also emit a `permission_check` SSE
@@ -248,5 +285,23 @@ export class ToolRunner {
         permission,
       };
     }
+  }
+}
+
+/** 权限裁定 → action-journal decision 枚举（OpenBot 语义）。 */
+function decisionOf(
+  perm: PermissionOutcomeV2,
+): NonNullable<ActionJournalEntry['decision']> {
+  if (perm.allow) return perm.mode === 'prompt' ? 'approve' : 'auto';
+  return perm.mode === 'prompt' ? 'deny' : 'block';
+}
+
+/** 留痕摘要：JSON 截断 400 字符，不可序列化兜底。 */
+function summarizeForJournal(value: unknown): string {
+  try {
+    const s = typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value));
+    return s.length > 400 ? `${s.slice(0, 400)}…` : s;
+  } catch {
+    return '[unserializable]';
   }
 }

@@ -471,6 +471,9 @@ export async function postGroupMessage(
     /** 2026-11-06 · 对话框知识库 — 多模态记忆库 pack id 列表，网关 fan-out
      *  按本轮消息检索命中注入 Agent 提示词（fail-soft）。 */
     knowledgePackIds?: string[];
+    /** 2026-11-07 · 连接器作用域（加号菜单「连接器」勾选，OpenBot 对齐批）—
+     *  随消息下发，供网关/执行侧按连接器策略做执行前裁定。 */
+    connectorIds?: string[];
     /** AbortSignal — allows cancelling an in-flight POST. */
     signal?: AbortSignal;
   },
@@ -488,6 +491,7 @@ export async function postGroupMessage(
       executor: options?.executor,
       model: options?.model,
       knowledge_pack_ids: options?.knowledgePackIds,
+      connector_ids: options?.connectorIds,
     }),
     signal: options?.signal,
   });
