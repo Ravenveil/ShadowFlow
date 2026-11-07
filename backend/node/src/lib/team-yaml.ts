@@ -28,6 +28,41 @@ import type { SkillAgentDef, TeamDef } from './skill-types';
 export const ROOT_TEAMS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'teams');
 export const LOCAL_TEAMS_DIR = path.join(process.cwd(), '.shadowflow', 'teams');
 
+/**
+ * 2026-11-08（#56 拆分路径深度修复）— team 目录解析候选。
+ *
+ * #56 把 `server/` 平移到 `backend/node/`（cwd 相对 repo 根深一层）后，固定的
+ * `../..` 猜测（ROOT_TEAMS_DIR 3-up、LOCAL_TEAMS_DIR cwd）都够不到 repo 根的
+ * `.shadowflow/teams/`，`loadTeam('BMAD-METHOD')` 等从 repo 根读 fixture 的用例
+ * 在 CI（`cd backend/node && npx vitest run`）全红。
+ *
+ * 这里在原有两候选之后**纯追加**「从 cwd 逐级向上」的 `.shadowflow/teams`
+ * 候选（最多 5 级，覆盖 server/（1 层）与 backend/node/（2 层）等历史/现役
+ * 布局）。追加而非重排保证零行为变化：原来能命中的目录仍优先命中，原来命不中
+ * 的（如 repo 根 fixture）现在能命中。resolveTeamFile 取首个命中、listTeams 用
+ * seen 去重，故追加候选只会新增发现、不会重复或遮蔽。
+ */
+const TEAM_SEARCH_DIRS: string[] = (() => {
+  const dirs: string[] = [ROOT_TEAMS_DIR, LOCAL_TEAMS_DIR];
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    dirs.push(path.join(dir, '.shadowflow', 'teams'));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  // 归一化后去重（ROOT/LOCAL 可能与逐级向上候选重叠）。
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of dirs) {
+    const r = path.resolve(d);
+    if (seen.has(r)) continue;
+    seen.add(r);
+    out.push(d);
+  }
+  return out;
+})();
+
 export const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
 // ─── Schema (extends TeamDef with v1 fields the S0.5 yaml adds) ──────────────
@@ -93,7 +128,7 @@ const cache = new Map<string, CacheEntry>();
 
 function resolveTeamFile(teamId: string): string | null {
   if (!VALID_ID_RE.test(teamId)) return null;
-  for (const dir of [ROOT_TEAMS_DIR, LOCAL_TEAMS_DIR]) {
+  for (const dir of TEAM_SEARCH_DIRS) {
     const fp = path.join(dir, `${teamId}.team.yaml`);
     if (fs.existsSync(fp)) return fp;
   }
@@ -366,7 +401,7 @@ export function listTeams(): { teams: TeamDefV1[]; errors: string[] } {
   const teams: TeamDefV1[] = [];
   const errors: string[] = [];
   const seen = new Set<string>();
-  for (const dir of [ROOT_TEAMS_DIR, LOCAL_TEAMS_DIR]) {
+  for (const dir of TEAM_SEARCH_DIRS) {
     if (!fs.existsSync(dir)) continue;
     let files: string[];
     try {

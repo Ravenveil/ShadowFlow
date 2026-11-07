@@ -33,6 +33,33 @@ import type {
 const ROOT_AGENTS_DIR = path.join(process.cwd(), '..', '..', '..', '.shadowflow', 'agents');
 const LOCAL_AGENTS_DIR = path.join(process.cwd(), '.shadowflow', 'agents');
 
+/**
+ * 2026-11-08（#56 拆分路径深度修复，同 team-yaml.ts）— agent 目录解析候选。
+ * #56 把 `server/` 平移到 `backend/node/`（cwd 相对 repo 根深一层）后，固定的
+ * 3-up / cwd 猜测够不到 repo 根的 `.shadowflow/agents/`。在原两候选后纯追加
+ * 「从 cwd 逐级向上」的候选（最多 5 级），覆盖 server/（1 层）与 backend/node/
+ * （2 层）等布局。追加而非重排 = 零行为变化：原命中仍命中，原命不中的现在命中。
+ */
+const AGENT_SEARCH_DIRS: string[] = (() => {
+  const dirs: string[] = [ROOT_AGENTS_DIR, LOCAL_AGENTS_DIR];
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    dirs.push(path.join(dir, '.shadowflow', 'agents'));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of dirs) {
+    const r = path.resolve(d);
+    if (seen.has(r)) continue;
+    seen.add(r);
+    out.push(d);
+  }
+  return out;
+})();
+
 const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
@@ -83,10 +110,9 @@ function buildAnchors(
 /** Resolve an agent id to its yaml file on disk, checking root first then server-local. */
 function resolveAgentFile(agentId: string): string | null {
   if (!VALID_ID_RE.test(agentId)) return null;
-  const candidates = [
-    path.join(ROOT_AGENTS_DIR, `${agentId}.agent.yaml`),
-    path.join(LOCAL_AGENTS_DIR, `${agentId}.agent.yaml`),
-  ];
+  const candidates = AGENT_SEARCH_DIRS.map((dir) =>
+    path.join(dir, `${agentId}.agent.yaml`),
+  );
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
@@ -180,7 +206,7 @@ export function listAgents(): { agents: SkillAgentDef[]; errors: string[] } {
   const agents: SkillAgentDef[] = [];
   const errors: string[] = [];
   const seen = new Set<string>();
-  for (const dir of [ROOT_AGENTS_DIR, LOCAL_AGENTS_DIR]) {
+  for (const dir of AGENT_SEARCH_DIRS) {
     if (!fs.existsSync(dir)) continue;
     let files: string[];
     try {
