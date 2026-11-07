@@ -2211,6 +2211,14 @@ interface SfDashBriefing {
   };
   alerts: string[];
 }
+/** /api/dashboard/agents —— Agent 产出排行（agent_hops 交接产出字符/次数现算）。 */
+interface SfDashAgentItem {
+  agent: string;
+  hops: number;
+  output_chars: number;
+  done: number;
+  failed: number;
+}
 
 /** 旧视图专用 fetch：委托 apiFetch（Bearer 鉴权 + 401 → AuthModal），保留 {data} 解包。 */
 async function sfFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -3078,12 +3086,12 @@ function DashboardView() {
   const [refreshing, setRefreshing] = useState(false);
   const [reload, setReload] = useState(0);
   const [state, setState] = useState<SfLoadState>("loading");
-  // 全部实时接 /api/dashboard/{overview,timeseries,breakdown,briefing}；不可达显示空态
+  // 全部实时接 /api/dashboard/{overview,timeseries,breakdown,briefing,agents}；不可达显示空态
   const [ov, setOv] = useState<SfDashOverview | null>(null);
   const [series, setSeries] = useState<number[] | null>(null);
   const [seriesDays, setSeriesDays] = useState<number[]>([]);
   const [breakdown, setBreakdown] = useState<SfDashBreakdownItem[] | null>(null);
-  const [sessionRows, setSessionRows] = useState<SfDashBreakdownItem[]>([]);
+  const [agentRows, setAgentRows] = useState<SfDashAgentItem[]>([]);
   const [brief, setBrief] = useState<SfDashBriefing | null>(null);
 
   useEffect(() => {
@@ -3091,14 +3099,14 @@ function DashboardView() {
     setState("loading");
     (async () => {
       try {
-        const [o, t, b, br, sb] = await Promise.all([
+        const [o, t, b, br, ag] = await Promise.all([
           sfFetch<SfDashOverview>(`/api/dashboard/overview?days=${days}`),
           sfFetch<{ series?: Array<{ day?: number; tokens?: number; calls?: number; cost?: number }> }>(
             `/api/dashboard/timeseries?days=${days}&metric=${metric}`,
           ),
           sfFetch<{ items?: SfDashBreakdownItem[] }>(`/api/dashboard/breakdown?days=${days}&by=model`),
           sfFetch<SfDashBriefing>(`/api/dashboard/briefing?days=7`),
-          sfFetch<{ items?: SfDashBreakdownItem[] }>(`/api/dashboard/breakdown?days=${days}&by=session`),
+          sfFetch<{ items?: SfDashAgentItem[] }>(`/api/dashboard/agents?days=${days}`),
         ]);
         if (dead) return;
         setOv(o ?? null);
@@ -3111,7 +3119,7 @@ function DashboardView() {
         );
         setBreakdown(b.items ?? []);
         setBrief(br ?? null);
-        setSessionRows(sb.items ?? []);
+        setAgentRows(ag.items ?? []);
         setState("ready");
       } catch {
         if (dead) return;
@@ -3120,7 +3128,7 @@ function DashboardView() {
         setSeriesDays([]);
         setBreakdown(null);
         setBrief(null);
-        setSessionRows([]);
+        setAgentRows([]);
         setState("error");
       }
     })();
@@ -3187,11 +3195,11 @@ function DashboardView() {
       `${Math.round(((row.total_tokens ?? 0) / totalTokens) * 100)}%`,
     ]);
   })();
-  // 会话用量排行（breakdown?by=session）
-  const sessionBars: Array<[string, number]> = sessionRows
+  // Agent 产出排行（/api/dashboard/agents，agent_hops 交接产出字符）
+  const agentBars: Array<[string, number, number]> = agentRows
     .slice(0, 6)
-    .map((row) => [(row.key || "未标记会话").slice(0, 8), row.total_tokens ?? 0] as [string, number]);
-  const maxSessionTok = Math.max(...sessionBars.map(([, n]) => n), 1);
+    .map((row) => [row.agent.slice(0, 8), row.output_chars ?? 0, row.hops ?? 0] as [string, number, number]);
+  const maxAgentChars = Math.max(...agentBars.map(([, n]) => n), 1);
 
   function refresh() {
     setRefreshing(true);
@@ -3392,28 +3400,28 @@ function DashboardView() {
         <article className="sf-agent-usage-card">
           <div className="sf-card-title">
             <div>
-              <strong>会话用量排行</strong>
-              <span>按 Token 统计 · 实时</span>
+              <strong>Agent 产出排行</strong>
+              <span>按交接产出字符 · 实时</span>
             </div>
           </div>
           <ul className="sf-usage-bars">
-            {sessionBars.length === 0 && (
+            {agentBars.length === 0 && (
               <li>
                 <span className="sf-usage-name">暂无数据</span>
               </li>
             )}
-            {sessionBars.map(([name, tokens], i) => (
-              <li key={name}>
+            {agentBars.map(([name, chars, hops], i) => (
+              <li key={name} title={`${name} · 交接 ${hops} 次`}>
                 <span className="sf-usage-name">{name}</span>
                 <span className="sf-usage-track">
                   <i
                     style={{
-                      width: `${(tokens / maxSessionTok) * 100}%`,
+                      width: `${(chars / maxAgentChars) * 100}%`,
                       background: SF_PALETTE[i % SF_PALETTE.length],
                     }}
                   />
                 </span>
-                <span className="sf-usage-val">{fmtCompact(tokens)}</span>
+                <span className="sf-usage-val">{fmtCompact(chars)} 字</span>
               </li>
             ))}
           </ul>

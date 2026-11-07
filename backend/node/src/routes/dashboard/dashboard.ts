@@ -140,6 +140,37 @@ router.get('/breakdown', (req: Request, res: Response) => {
   res.json({ days, by, items });
 });
 
+// ── Agents（Agent 产出排行，从 agent_hops 现算）──────────────────────────────
+// token_usage 只有 session/model 维度（调用方不传 agent 归属），per-agent 的
+// "用量"诚实口径是 agent_hops 的交接产出字符 + 交接次数/成功率。前端排行卡
+// 按 output_chars 排序渲染。
+
+router.get('/agents', (req: Request, res: Response) => {
+  const days = parseDays(req.query.days, 30);
+  const { from, to } = windowFor(days);
+  const items = getDb()
+    .prepare(
+      `SELECT COALESCE(NULLIF(to_agent, ''), '(未标记)') AS agent,
+              COUNT(*) AS hops,
+              COALESCE(SUM(output_chars), 0) AS output_chars,
+              COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS done,
+              COALESCE(SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END), 0) AS failed
+       FROM agent_hops
+       WHERE created_at >= ? AND created_at < ?
+       GROUP BY COALESCE(NULLIF(to_agent, ''), '(未标记)')
+       ORDER BY output_chars DESC
+       LIMIT 10`,
+    )
+    .all(from, to) as Array<{
+    agent: string;
+    hops: number;
+    output_chars: number;
+    done: number;
+    failed: number;
+  }>;
+  res.json({ days, items });
+});
+
 // ── Briefing（每日简报，零 LLM，库内现算）────────────────────────────────────
 
 router.get('/briefing', (req: Request, res: Response) => {
