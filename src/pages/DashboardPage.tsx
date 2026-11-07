@@ -600,10 +600,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
               />
             </label>
             <p className="neo-cp-preview">
-              {L(
-                '按上架时的价格记账，之后改价不影响这笔。',
-                'Recorded at the listed price — later price changes do not rewrite history.',
-              )}
+              {L('按上架价记账，之后改价不影响这笔。', 'Priced at listing; later edits never rewrite history.')}
             </p>
             <button type="submit" className="neo-cp-submit" disabled={formBusy} data-testid="cp-sale-submit">
               {L('记一笔', 'Record sale')}

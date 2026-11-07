@@ -143,17 +143,23 @@
 .neo-cp-form-title { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
 .neo-cp-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--t-fg-3); }
 .neo-cp-field input, .neo-cp-field select {
-  height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--t-line);
+  width: 100%; box-sizing: border-box;
+  height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--t-line);
   background: var(--t-bg); color: var(--t-fg); font-size: 13px; font-family: inherit;
   font-variant-numeric: tabular-nums;
 }
 .neo-cp-field input:focus, .neo-cp-field select:focus { outline: none; border-color: var(--t-accent); }
 .neo-cp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.neo-cp-preview { margin: 0; font-size: 12px; color: var(--t-fg-3); font-variant-numeric: tabular-nums; min-height: 18px; }
+.neo-cp-preview { margin: 0; font-size: 11px; color: var(--t-fg-4); font-variant-numeric: tabular-nums; min-height: 16px; line-height: 1.5; }
 .neo-cp-preview .neg { color: #15803D; font-weight: 600; }
 .neo-cp-submit {
-  height: 32px; border-radius: 8px; border: 1px solid var(--t-accent);
-  background: var(--t-accent); color: var(--t-accent-ink); font-size: 12px;
+  width: 100%;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--t-accent);
+  background: var(--t-accent); color: var(--t-accent-ink);
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  white-space: nowrap;
   cursor: pointer; transition: all 0.15s ease;
 }
 .neo-cp-submit:hover { filter: brightness(1.1); }
