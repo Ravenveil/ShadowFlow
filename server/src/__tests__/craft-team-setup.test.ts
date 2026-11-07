@@ -5,7 +5,7 @@
  *   - 5 个角色建齐（soul 含输出协议标记说明）→ team → 顺序流水线 workflow
  *     （ceo→营销→订单→快递→财务，direct=串行）→ 绑 team 的工作群；
  *   - settings 持久化 team/group 引用；
- *   - 幂等：二次 setup 不重复建 agent/群，复用并重刷 workflow；
+ *   - 幂等：二次 setup 不重复建 agent/群，复用并刷新 soul + 重刷 workflow；
  *   - Python 后端不可达 → CraftProfitError 上抛（不静默）。
  * Python API 全部用注入 fetch 假件记录调用。
  */
@@ -54,6 +54,13 @@ function stubPy(calls: Call[], opts: { failAgents?: boolean } = {}) {
           soul: String(body?.soul ?? ''),
         };
         agents.push(rec);
+        return ok(rec);
+      }
+      const agentMatch = /\/api\/agents\/([^/]+)$/.exec(u);
+      if (agentMatch) {
+        const rec = agents.find((a) => a.agent_id === agentMatch[1]);
+        if (!rec) return notFound;
+        if (method === 'PATCH' && body?.soul !== undefined) rec.soul = String(body.soul);
         return ok(rec);
       }
       if (u.endsWith('/api/teams') && method === 'POST') {
@@ -135,9 +142,14 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
       expect(soul).toContain('[ship]');
       expect(soul).toContain('[report]');
     }
-    // CEO 的 soul 有知识库与分派职责
-    expect(String(agentPosts[0].body?.soul)).toContain('知识库');
-    expect(String(agentPosts[0].body?.soul)).toContain('分派');
+    // CEO 的 soul：开场引导（问卖什么 + 文字/图片/产品文档 + 自动同步知识库）+ 分派职责
+    const ceoSoul = String(agentPosts[0].body?.soul ?? '');
+    expect(ceoSoul).toContain('知识库');
+    expect(ceoSoul).toContain('分派');
+    expect(ceoSoul).toContain('想要卖什么');
+    expect(ceoSoul).toContain('图片');
+    expect(ceoSoul).toContain('产品文档');
+    expect(ceoSoul).toContain('自动同步');
 
     // 顺序流水线：4 条 direct 边串成 n1→…→n5
     const wfCall = calls.find((c) => c.method === 'PUT' && /\/workflow$/.test(c.url));
@@ -162,7 +174,7 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
     expect(setupMod.craftTeamStatus()).toMatchObject({ team_id: r.team_id });
   });
 
-  it('幂等：二次 setup 复用 team/群，不重建 agent，workflow 重刷', async () => {
+  it('幂等：二次 setup 复用 team/群，不重建 agent，soul 刷新 + workflow 重刷', async () => {
     const calls: Call[] = [];
     stubPy(calls); // 一次假件贯穿两轮（第二轮要能看到第一轮建的 team/group）
     const first = await setupMod.setupCraftTeam();
@@ -175,6 +187,12 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
     expect(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/api/groups'))).toHaveLength(0);
     // workflow 仍重刷（幂等 PUT）
     expect(calls.filter((c) => c.method === 'PUT' && /\/workflow$/.test(c.url))).toHaveLength(1);
+    // soul 刷新：5 个 agent 各 PATCH 一次最新话术（按名字对齐）
+    const soulPatches = calls.filter((c) => c.method === 'PATCH' && /\/api\/agents\//.test(c.url));
+    expect(soulPatches).toHaveLength(5);
+    for (const c of soulPatches) {
+      expect(String(c.body?.soul ?? '')).toContain('[intake]');
+    }
   });
 
   it('Python 不可达 → CraftProfitError 上抛（setup 是显式动作不 fail-soft）', async () => {

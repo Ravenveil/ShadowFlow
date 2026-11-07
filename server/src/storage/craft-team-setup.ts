@@ -68,9 +68,10 @@ const ROLES: RoleDef[] = [
     key: 'ceo',
     name: '代卖CEO',
     soul: `你是「手工艺品代卖」团队的 CEO，和用户直接对话。残障伙伴只负责提供手工艺品，团队帮他们营销、联系快递员寄出。
-用户发来的产品介绍、图片、文档说明已自动同步到知识库「手工艺品资料」（回答前可引用）。
+开场第一句先问用户想要卖什么手工艺品，再引导用户发送产品素材——文字（产品介绍）、图片、或者产品文档都行；并告诉用户：发来的素材会自动同步到知识库「手工艺品资料」，之后可以直接调用知识库功能（检索、引用）来辅助回答和推广。
+用户发来的产品介绍、图片、文档说明已自动同步到知识库（回答前可引用）。
 职责：
-1. 问清用户要卖什么手工艺品：名称、卖点、售价、给手艺人多少、快递费、营销预算分摊；
+1. 问清产品细节：名称、卖点、售价、给手艺人多少、快递费、营销预算分摊；
 2. 信息齐了就输出 [intake] 上架商品（一次可多个标记）；
 3. 把活分派给团队：营销专员去媒体平台发帖、上商品链接；订单管家跟踪订单出单；快递联络员联系快递员上门取件寄出；盈利分析官核算汇报盈利；
 4. 收到团队产出后用一两句话向用户小结进展。
@@ -127,6 +128,7 @@ export interface CraftTeamSetupResult {
 interface PyAgentRecord {
   agent_id?: string;
   id?: string;
+  name?: string;
 }
 
 interface PyTeamRecord {
@@ -146,7 +148,8 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
   if (existing?.team_id) {
     const team = await pyJson<PyTeamRecord>(`/api/teams/${encodeURIComponent(existing.team_id)}`);
     if (team) {
-      // 复用：补 workflow（幂等 PUT）+ 确保群还在。
+      // 复用：刷 soul（话术迭代后幂等 setup 即同步）+ 补 workflow（幂等 PUT）+ 确保群还在。
+      await refreshSouls(existing.agent_ids ?? []);
       const workflow = buildWorkflow(existing.agent_ids ?? []);
       if (existing.agent_ids?.length) {
         await pyJson(`/api/teams/${encodeURIComponent(existing.team_id)}/workflow`, {
@@ -234,6 +237,22 @@ function buildWorkflow(agentIds: string[]): {
     edges.push({ source: `n${i + 1}`, target: `n${i + 2}`, data: { mode: 'direct' } });
   }
   return { nodes, edges };
+}
+
+/**
+ * 复用路径的 soul 刷新：按名字对齐角色（用户改名的 agent 跳过），PATCH 最新话术。
+ * 单个失败不阻断复用（refresh 是锦上添花，不是搭建的前提）。
+ */
+async function refreshSouls(agentIds: string[]): Promise<void> {
+  for (const id of agentIds) {
+    const rec = await pyJson<PyAgentRecord>(`/api/agents/${encodeURIComponent(id)}`);
+    const role = ROLES.find((r) => r.name === rec?.name);
+    if (!role) continue;
+    await pyJson(`/api/agents/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ soul: role.soul }),
+    });
+  }
 }
 
 async function createGroup(teamId: string, agentIds: string[]): Promise<string> {
