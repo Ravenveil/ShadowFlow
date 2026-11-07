@@ -14,7 +14,7 @@
  * GET  /api/craft-profit/team/status          → 代卖团队引用（team/group id）
  * POST /api/craft-profit/team/setup           → 幂等搭建代卖 agent 团队（写，apiGuard）
  *
- * 口径在 storage 层算好（盈利 = 售价 − 给手艺人 − 快递 − 营销），
+ * 口径在 storage 层算好（盈利 = 售价 − 成本 − 快递），
  * 路由只做参数整形与错误转译，前端不自己减。
  */
 
@@ -131,9 +131,8 @@ router.post('/products', (req: Request, res: Response) => {
       createProduct({
         name: b.name,
         price_cents: b.price_cents,
-        artisan_cents: b.artisan_cents,
+        cost_cents: b.cost_cents,
         shipping_cents: b.shipping_cents,
-        marketing_cents: b.marketing_cents,
       }),
     );
   } catch (err) {

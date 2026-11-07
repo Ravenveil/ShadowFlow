@@ -58,8 +58,8 @@ afterEach(() => {
 
 /** CEO→营销→订单→快递→财务 的一轮完整 agent 输出（含协议标记）。 */
 const TRANSCRIPT = `收到你的产品资料了，先登记上架。
-[intake] {"name":"苗绣杯垫","price":68,"artisan":30,"shipping":8,"marketing":5}
-[intake] {"name":"手工编织篮","price":89,"artisan":42,"shipping":8,"marketing":6}
+[intake] {"name":"苗绣杯垫","price":68,"cost":30,"shipping":8}
+[intake] {"name":"手工编织篮","price":89,"cost":42,"shipping":8}
 
 我先去小红书发帖推广。
 [post] {"platform":"小红书","title":"山里来的温柔","text":"残障匠人手作苗绣杯垫"}
@@ -102,16 +102,15 @@ describe('applyCraftMarkers — 标记落库', () => {
     expect(products.map((p) => p.name).sort()).toEqual(['手工编织篮', '苗绣杯垫']);
     expect(products.find((p) => p.name === '苗绣杯垫')).toMatchObject({
       price_cents: 6800,
-      artisan_cents: 3000,
+      cost_cents: 3000,
       shipping_cents: 800,
-      marketing_cents: 500,
-      profit_per_unit_cents: 2500,
+      profit_per_unit_cents: 3000,
     });
 
-    // 销售按快照记账（2 件 × 每件盈利 2500）
+    // 销售按快照记账（2 件 × 每件盈利 3000）
     const sales = profit.listSales();
     expect(sales).toHaveLength(1);
-    expect(sales[0]).toMatchObject({ product_name: '苗绣杯垫', qty: 2, profit_cents: 5000 });
+    expect(sales[0]).toMatchObject({ product_name: '苗绣杯垫', qty: 2, profit_cents: 6000 });
 
     // 运营动态：营销 ×2（post+link）、订单 ×1、快递 ×1
     const events = profit.listAgentEvents(10);
@@ -125,7 +124,7 @@ describe('applyCraftMarkers — 标记落库', () => {
     // 盈利口径可查（收入 = 136 元）
     const ov = profit.overview(30);
     expect(ov.revenue_cents).toBe(13600);
-    expect(ov.profit_cents).toBe(5000);
+    expect(ov.profit_cents).toBe(6000);
   });
 
   it('未上架商品出单 → 可见失败（ok=false 带原因），不抛不落销售', () => {

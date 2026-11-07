@@ -1,9 +1,10 @@
 /**
  * DashboardPage — 产品盈利看板（2026-11-07 重构）。
  *
- * 业务：帮残障伙伴卖手工艺品 —— 对方只上架商品，我们负责营销、联系快递员
- * 寄出商品。盈利 = 售价 − 给手艺人 − 快递费 − 营销分摊（记销售时按当时价格
- * 快照进流水，后端算好口径，前端只展示）。
+ * 业务：手艺人在平台自产自销手工艺品，平台团队负责营销、联系快递员寄出。
+ * 盈利 = 售价 − 成本 − 快递费（2026-11-07 二次定版：原「给手艺人」改叫
+ * 「成本」，「营销分摊」整项删除；记销售时按当时价格快照进流水，后端算好
+ * 口径，前端只展示）。
  *
  * 页面只回答三个问题：赚了多少、钱花在哪儿、随手记一笔。
  * 旧版 AI 用量统计（token/调用/成本/run）与商家明细面板（MerchantBoardPanel）
@@ -150,12 +151,11 @@ function ProfitCurve({ series }: { series: CraftDayPoint[] }) {
 interface ProductFormState {
   name: string;
   price: string;
-  artisan: string;
+  cost: string;
   shipping: string;
-  marketing: string;
 }
 
-const EMPTY_PRODUCT_FORM: ProductFormState = { name: '', price: '', artisan: '', shipping: '', marketing: '' };
+const EMPTY_PRODUCT_FORM: ProductFormState = { name: '', price: '', cost: '', shipping: '' };
 
 export default function DashboardPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t, language } = useI18n();
@@ -229,23 +229,21 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
   const profitPreview = useMemo(() => {
     const price = Number.parseFloat(productForm.price);
     const cost =
-      (Number.parseFloat(productForm.artisan) || 0) +
-      (Number.parseFloat(productForm.shipping) || 0) +
-      (Number.parseFloat(productForm.marketing) || 0);
+      (Number.parseFloat(productForm.cost) || 0) +
+      (Number.parseFloat(productForm.shipping) || 0);
     if (!Number.isFinite(price)) return null;
     return Math.round((price - cost) * 100);
   }, [productForm]);
 
   const handleCreateProduct = async () => {
     const price = toCents(productForm.price);
-    const artisan = toCents(productForm.artisan || '0');
+    const cost = toCents(productForm.cost || '0');
     const shipping = toCents(productForm.shipping || '0');
-    const marketing = toCents(productForm.marketing || '0');
     if (!productForm.name.trim()) {
       setFormError(L('请先写商品名称', 'Please enter the product name'));
       return;
     }
-    if (price === null || price <= 0 || artisan === null || shipping === null || marketing === null) {
+    if (price === null || price <= 0 || cost === null || shipping === null) {
       setFormError(L('金额填「元」，写 0 或正数就行', 'Amounts are in yuan — use 0 or a positive number'));
       return;
     }
@@ -255,9 +253,8 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
       await createCraftProduct({
         name: productForm.name.trim(),
         price_cents: price,
-        artisan_cents: artisan,
+        cost_cents: cost,
         shipping_cents: shipping,
-        marketing_cents: marketing,
       });
       setProductForm(EMPTY_PRODUCT_FORM);
       await refresh();
@@ -402,18 +399,13 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
             <p className="neo-db-card-delta">{fmtDelta(overview.delta_pct.revenue, overview.revenue_cents)}</p>
           </div>
           <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('给手艺人', 'To artisans')}</p>
-            <div className="neo-db-card-value">{fmtYuan(overview.artisan_cents)}</div>
+            <p className="neo-db-card-label">{L('成本', 'Cost')}</p>
+            <div className="neo-db-card-value">{fmtYuan(overview.cost_cents)}</div>
+            <p className="neo-db-card-hint">{L('材料 + 制作', 'Materials + making')}</p>
           </div>
           <div className="neo-db-card">
-            <p className="neo-db-card-label">{L('快递 + 营销', 'Shipping + marketing')}</p>
-            <div className="neo-db-card-value">
-              {fmtYuan(overview.shipping_cents + overview.marketing_cents)}
-            </div>
-            <p className="neo-db-card-hint">
-              {L('快递', 'Ship')} {fmtYuan(overview.shipping_cents)} ·{' '}
-              {L('营销', 'Mkt')} {fmtYuan(overview.marketing_cents)}
-            </p>
+            <p className="neo-db-card-label">{L('快递费', 'Shipping')}</p>
+            <div className="neo-db-card-value">{fmtYuan(overview.shipping_cents)}</div>
           </div>
           <div className="neo-db-card">
             <p className="neo-db-card-label">{L('卖出件数', 'Units sold')}</p>
@@ -438,19 +430,14 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 <div className="neo-dash-per100" data-testid="cp-per100">
                   <div className="neo-dash-per100-track">
                     <span
-                      className="neo-dash-seg seg-artisan"
-                      style={{ width: `${overview.per100.artisan}%` }}
-                      title={`${L('给手艺人', 'Artisans')} ${overview.per100.artisan}%`}
+                      className="neo-dash-seg seg-cost"
+                      style={{ width: `${overview.per100.cost}%` }}
+                      title={`${L('成本', 'Cost')} ${overview.per100.cost}%`}
                     />
                     <span
                       className="neo-dash-seg seg-shipping"
                       style={{ width: `${overview.per100.shipping}%` }}
                       title={`${L('快递', 'Shipping')} ${overview.per100.shipping}%`}
-                    />
-                    <span
-                      className="neo-dash-seg seg-marketing"
-                      style={{ width: `${overview.per100.marketing}%` }}
-                      title={`${L('营销', 'Marketing')} ${overview.per100.marketing}%`}
                     />
                     <span
                       className="neo-dash-seg seg-profit"
@@ -459,9 +446,8 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                     />
                   </div>
                   <div className="neo-dash-per100-legend">
-                    <span><i className="neo-dash-dot seg-artisan" />{L('给手艺人', 'Artisans')} {overview.per100.artisan}%</span>
+                    <span><i className="neo-dash-dot seg-cost" />{L('成本', 'Cost')} {overview.per100.cost}%</span>
                     <span><i className="neo-dash-dot seg-shipping" />{L('快递', 'Shipping')} {overview.per100.shipping}%</span>
-                    <span><i className="neo-dash-dot seg-marketing" />{L('营销', 'Marketing')} {overview.per100.marketing}%</span>
                     <span><i className="neo-dash-dot seg-profit" />{L('净赚', 'Profit')} {overview.per100.profit}%</span>
                   </div>
                 </div>
@@ -679,11 +665,11 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 />
               </label>
               <label className="neo-dash-field">
-                <span>{L('给手艺人（元）', 'To artisan (yuan)')}</span>
+                <span>{L('成本（元）', 'Cost (yuan)')}</span>
                 <input
                   inputMode="decimal"
-                  value={productForm.artisan}
-                  onChange={(e) => setProductForm({ ...productForm, artisan: e.target.value })}
+                  value={productForm.cost}
+                  onChange={(e) => setProductForm({ ...productForm, cost: e.target.value })}
                   placeholder="42"
                 />
               </label>
@@ -696,15 +682,6 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                   value={productForm.shipping}
                   onChange={(e) => setProductForm({ ...productForm, shipping: e.target.value })}
                   placeholder="8"
-                />
-              </label>
-              <label className="neo-dash-field">
-                <span>{L('营销分摊（元）', 'Marketing (yuan)')}</span>
-                <input
-                  inputMode="decimal"
-                  value={productForm.marketing}
-                  onChange={(e) => setProductForm({ ...productForm, marketing: e.target.value })}
-                  placeholder="6"
                 />
               </label>
             </div>

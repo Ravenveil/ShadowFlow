@@ -2,8 +2,9 @@
  * craftProfit.ts — 产品盈利看板 API 客户端（2026-11-07）。
  * 后端：server/src/routes/dashboard/craft-profit.ts（/api/craft-profit/*）。
  *
- * 业务：帮残障伙伴卖手工艺品 —— 他们上架商品，我们营销 + 联系快递发货。
- * 盈利 = 售价 − 给手艺人 − 快递费 − 营销分摊（后端算好，前端只展示）。
+ * 业务：手艺人在平台自产自销手工艺品，平台团队负责营销 + 联系快递发货。
+ * 盈利 = 售价 − 成本 − 快递费（2026-11-07 二次定版：原「给手艺人」改叫
+ * 「成本」，「营销分摊」整项删除；后端算好，前端只展示）。
  * 金额一律整数分，页面输入用「元」，换算只发生在提交/展示两头。
  */
 import { getApiBase, authHeaders } from './_base';
@@ -16,14 +17,12 @@ export interface CraftOverview {
   sales_count: number;
   units: number;
   revenue_cents: number;
-  artisan_cents: number;
-  shipping_cents: number;
-  marketing_cents: number;
   cost_cents: number;
+  shipping_cents: number;
   profit_cents: number;
   margin_pct: number | null;
   /** 每卖 100 元的钱去向（%）。 */
-  per100: { artisan: number; shipping: number; marketing: number; profit: number };
+  per100: { cost: number; shipping: number; profit: number };
   /** 环比上一等长周期（%）；上期为 0 时 null（显示「新增」）。 */
   delta_pct: { profit: number | null; revenue: number | null; units: number | null };
 }
@@ -39,9 +38,8 @@ export interface CraftProductRow {
   id: string;
   name: string;
   price_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
   profit_per_unit_cents: number;
   created_at: number;
   sold_units: number;
@@ -55,9 +53,8 @@ export interface CraftSale {
   product_name: string;
   qty: number;
   price_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
   profit_cents: number;
   created_at: number;
 }
@@ -66,9 +63,8 @@ export interface CraftProductInput {
   name: string;
   /** 以下均为整数分。 */
   price_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
 }
 
 async function getJson<T>(path: string): Promise<T> {

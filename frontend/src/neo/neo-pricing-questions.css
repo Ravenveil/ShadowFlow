@@ -1,0 +1,83 @@
+/* neo-pricing-questions.css — 「手工艺品代卖」定价提问卡（输入框上方）。
+   颜色一律 var(--t-*)（day/night 双主题令牌），与 neo-chat.css 同规范。 */
+
+.neo-pricing-q {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--t-border);
+  border-radius: 14px;
+  background: var(--t-panel);
+}
+
+.neo-pricing-q-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.neo-pricing-q-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+
+.neo-pricing-q-note {
+  flex: 1;
+  font-size: 11px;
+  color: var(--t-fg-4);
+}
+
+.neo-pricing-q-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--t-fg-4);
+  cursor: pointer;
+}
+
+.neo-pricing-q-close:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+
+.neo-pricing-q-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.neo-pricing-q-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: 10px;
+  background: var(--t-panel-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.neo-pricing-q-card:hover {
+  border-color: var(--t-accent);
+}
+
+.neo-pricing-q-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--t-fg);
+}
+
+.neo-pricing-q-hint {
+  font-size: 11.5px;
+  color: var(--t-fg-3);
+}

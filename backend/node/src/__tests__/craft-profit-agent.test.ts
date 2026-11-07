@@ -58,7 +58,7 @@ beforeEach(() => {
 async function listProduct(name = '手工编织收纳篮'): Promise<string> {
   const res = await request(app())
     .post('/api/craft-profit/products')
-    .send({ name, price_cents: 8900, artisan_cents: 4200, shipping_cents: 800, marketing_cents: 600 });
+    .send({ name, price_cents: 8900, cost_cents: 4200, shipping_cents: 800 });
   expect(res.status).toBe(201);
   return res.body.id as string;
 }
@@ -91,10 +91,10 @@ describe('runRound — 一轮代卖运营', () => {
     expect(round.events[0].text).toMatch(/推广/);
     expect(round.events[1].text).toMatch(/售出 2 件，入账 ¥178\.00/);
 
-    // 销售入账：4 件 × 每件赚 33 元 = 132.00 元净利
+    // 销售入账：4 件 × 每件赚 39 元（89 − 42 − 8）= 156.00 元净利
     const ov = await request(app()).get('/api/craft-profit/overview');
     expect(ov.body.units).toBe(4);
-    expect(ov.body.profit_cents).toBe(13200);
+    expect(ov.body.profit_cents).toBe(15600);
   });
 
   it('运营动态可查：GET /agent/events 时间倒序、含营销/出单/快递三类', async () => {

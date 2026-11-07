@@ -3,7 +3,7 @@
  *
  * 真实 Express Router + 真实 SQLite（临时 cwd 隔离），覆盖：
  *   - 空库 overview / timeseries / products 不报错
- *   - 上架商品 → 记销售：分项盈利口径（售价 − 给手艺人 − 快递 − 营销）
+ *   - 上架商品 → 记销售：分项盈利口径（售价 − 成本 − 快递）
  *   - 每 100 元去向（per100）与环比（delta_pct）
  *   - timeseries 本地零点归桶 + 零值补齐
  *   - 演示数据幂等（已有商品不覆盖）
@@ -70,43 +70,40 @@ describe('空库不报错', () => {
 describe('上架商品与分项盈利口径', () => {
   let productId = '';
 
-  it('上架商品：售价 89 元、给手艺人 42、快递 8、营销 6 → 每件盈利 33 元', async () => {
+  it('上架商品：售价 89 元、成本 42、快递 8 → 每件盈利 39 元', async () => {
     const res = await request(app())
       .post('/api/craft-profit/products')
       .send({
         name: '手工编织收纳篮',
         price_cents: 8900,
-        artisan_cents: 4200,
+        cost_cents: 4200,
         shipping_cents: 800,
-        marketing_cents: 600,
       });
     expect(res.status).toBe(201);
-    expect(res.body.profit_per_unit_cents).toBe(3300);
+    expect(res.body.profit_per_unit_cents).toBe(3900);
     productId = res.body.id;
   });
 
-  it('记一笔销售 2 件：盈利 = 2 × 33 元，overview 分项齐全', async () => {
+  it('记一笔销售 2 件：盈利 = 2 × 39 元，overview 分项齐全', async () => {
     const sale = await request(app())
       .post('/api/craft-profit/sales')
       .send({ product_id: productId, qty: 2 });
     expect(sale.status).toBe(201);
-    expect(sale.body.profit_cents).toBe(6600);
+    expect(sale.body.profit_cents).toBe(7800);
 
     const ov = await request(app()).get('/api/craft-profit/overview');
     expect(ov.body.revenue_cents).toBe(17800);
-    expect(ov.body.artisan_cents).toBe(8400);
+    expect(ov.body.cost_cents).toBe(8400);
     expect(ov.body.shipping_cents).toBe(1600);
-    expect(ov.body.marketing_cents).toBe(1200);
-    expect(ov.body.cost_cents).toBe(11200);
-    expect(ov.body.profit_cents).toBe(6600);
+    expect(ov.body.profit_cents).toBe(7800);
     expect(ov.body.units).toBe(2);
     expect(ov.body.sales_count).toBe(1);
-    expect(ov.body.margin_pct).toBeCloseTo(37.1, 0);
+    expect(ov.body.margin_pct).toBeCloseTo(43.8, 0);
   });
 
-  it('per100 每卖 100 元去向：手艺人 47.2 / 快递 9 / 营销 6.7 / 盈利 37.1', async () => {
+  it('per100 每卖 100 元去向：成本 47.2 / 快递 9 / 盈利 43.8', async () => {
     const ov = await request(app()).get('/api/craft-profit/overview');
-    expect(ov.body.per100).toEqual({ artisan: 47.2, shipping: 9, marketing: 6.7, profit: 37.1 });
+    expect(ov.body.per100).toEqual({ cost: 47.2, shipping: 9, profit: 43.8 });
   });
 
   it('商品盈利排行：sold_units/revenue/profit 按窗口聚合', async () => {
@@ -115,15 +112,15 @@ describe('上架商品与分项盈利口径', () => {
     const row = ps.body.items[0];
     expect(row.sold_units).toBe(2);
     expect(row.revenue_cents).toBe(17800);
-    expect(row.profit_cents).toBe(6600);
-    expect(row.profit_per_unit_cents).toBe(3300);
+    expect(row.profit_cents).toBe(7800);
+    expect(row.profit_per_unit_cents).toBe(3900);
   });
 
-  it('timeseries：今天的桶里有 2 件、盈利 66 元', async () => {
+  it('timeseries：今天的桶里有 2 件、盈利 78 元', async () => {
     const ts = await request(app()).get('/api/craft-profit/timeseries?days=7');
     const today = ts.body.series[ts.body.series.length - 1];
     expect(today.units).toBe(2);
-    expect(today.profit_cents).toBe(6600);
+    expect(today.profit_cents).toBe(7800);
   });
 
   it('销售快照：改商品定价不影响历史盈利', async () => {
@@ -131,18 +128,17 @@ describe('上架商品与分项盈利口径', () => {
     await request(app()).post('/api/craft-profit/products').send({
       name: '改价测试商品',
       price_cents: 10000,
-      artisan_cents: 1000,
+      cost_cents: 1000,
       shipping_cents: 1000,
-      marketing_cents: 1000,
     });
     const created = await request(app())
       .post('/api/craft-profit/products')
-      .send({ name: '快照商品', price_cents: 5000, artisan_cents: 1000, shipping_cents: 500, marketing_cents: 500 });
+      .send({ name: '快照商品', price_cents: 5000, cost_cents: 1000, shipping_cents: 500 });
     await request(app()).post('/api/craft-profit/sales').send({ product_id: created.body.id, qty: 1 });
-    // 只读路径能算出 30 元盈利（快照），与商品当前配置一致
+    // 只读路径能算出 35 元盈利（快照），与商品当前配置一致
     const sales = await request(app()).get('/api/craft-profit/sales');
     const row = sales.body.items.find((s: { product_id: string }) => s.product_id === created.body.id);
-    expect(row.profit_cents).toBe(3000);
+    expect(row.profit_cents).toBe(3500);
   });
 });
 

@@ -4,7 +4,7 @@
  * 团队 agent 在回复里输出标记行声明业务动作，聊天展示前剥掉标记、把动作
  * 落到产品盈利库（storage/craft-intake.ts 负责副作用，本模块零 IO）：
  *
- *   [intake] {"name":"苗绣杯垫","price":68,"artisan":30,"shipping":8,"marketing":5}
+ *   [intake] {"name":"苗绣杯垫","price":68,"cost":20,"shipping":8}
  *   [post]   {"platform":"小红书","title":"山里来的温柔","text":"…"}
  *   [link]   {"product":"苗绣杯垫","url":"https://…"}
  *   [order]  {"product":"苗绣杯垫","qty":2}
@@ -30,9 +30,8 @@ export type CraftAction =
       kind: 'intake';
       name: string;
       price_cents: number;
-      artisan_cents: number;
+      cost_cents: number;
       shipping_cents: number;
-      marketing_cents: number;
     }
   | { kind: 'post'; platform: string; title: string; text: string }
   | { kind: 'link'; product: string; url: string }
@@ -105,19 +104,20 @@ function buildAction(tag: CraftTag, obj: Record<string, unknown>): CraftAction |
       const name = str(obj.name);
       if (!name) return 'intake 缺 name';
       const price = money(obj, 'price');
-      const artisan = money(obj, 'artisan');
+      // 成本：新格式 cost；旧格式 artisan 兜底（2026-11-07 口径切换前的
+      // 存量消息/旧 soul：给手艺人 → 成本，营销分摊整项删除）。
+      const hasCost = obj.cost !== undefined || obj.cost_cents !== undefined;
+      const cost = hasCost ? money(obj, 'cost') : money(obj, 'artisan');
       const shipping = money(obj, 'shipping');
-      const marketing = money(obj, 'marketing');
-      if (price === null || artisan === null || shipping === null || marketing === null) {
+      if (price === null || cost === null || shipping === null) {
         return 'intake 金额非法（单位元，或用 *_cents）';
       }
       return {
         kind: 'intake',
         name: name.slice(0, 200),
         price_cents: price,
-        artisan_cents: artisan,
+        cost_cents: cost,
         shipping_cents: shipping,
-        marketing_cents: marketing,
       };
     }
     case 'post':

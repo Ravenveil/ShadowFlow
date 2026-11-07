@@ -1,17 +1,18 @@
 /**
  * craft-profit.ts — 产品盈利看板存储层（2026-11-07）。
  *
- * 业务口径（2026-11-07 用户定版）：帮残障伙伴卖手工艺品 —— 他们只负责上架
- * 商品，我们负责营销、联系快递员寄出商品。所以每件商品的成本分三项：
- *   给手艺人 / 快递费 / 营销分摊，
- *   每件盈利 = 售价 − 给手艺人 − 快递费 − 营销分摊。
+ * 业务口径（2026-11-07 二次定版：我们是手艺人自己在平台营销售卖）：
+ * 手艺人在平台自产自销，平台团队负责品牌策划、营销推广、联系快递员寄出。
+ * 所以每件商品的成本分两项：成本（材料+制作）/ 快递费，
+ *   每件盈利 = 售价 − 成本 − 快递费
+ * （原「给手艺人」槽位改叫「成本」，「营销分摊」整项删除——营销平台自己做）。
  *
  * 与 merchant-board 同仓库风格：外接模块、自带幂等 DDL、金额一律整数分。
- * 快照口径：记一笔销售时把商品的四项金额快照进销售行，事后改商品定价
+ * 快照口径：记一笔销售时把商品的各项金额快照进销售行，事后改商品定价
  * 不回写历史 —— 业务看到的「上个月赚了多少」不会因为今天改价而变脸。
  *
  * 表：
- *   cp_products 商品（上架时定好售价与三项成本）
+ *   cp_products 商品（上架时定好售价与成本/快递费）
  *   cp_sales    销售流水（qty 件 × 单件快照金额，created_at 即卖出时间）
  */
 
@@ -26,9 +27,8 @@ CREATE TABLE IF NOT EXISTS cp_products (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   price_cents INTEGER NOT NULL,
-  artisan_cents INTEGER NOT NULL DEFAULT 0,
+  cost_cents INTEGER NOT NULL DEFAULT 0,
   shipping_cents INTEGER NOT NULL DEFAULT 0,
-  marketing_cents INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cp_sales (
@@ -36,9 +36,8 @@ CREATE TABLE IF NOT EXISTS cp_sales (
   product_id TEXT NOT NULL,
   qty INTEGER NOT NULL DEFAULT 1,
   price_cents INTEGER NOT NULL,
-  artisan_cents INTEGER NOT NULL DEFAULT 0,
+  cost_cents INTEGER NOT NULL DEFAULT 0,
   shipping_cents INTEGER NOT NULL DEFAULT 0,
-  marketing_cents INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cp_sales_created ON cp_sales(created_at);
@@ -52,6 +51,23 @@ CREATE TABLE IF NOT EXISTS cp_agent_events (
 CREATE INDEX IF NOT EXISTS idx_cp_agent_events_ts ON cp_agent_events(ts);
 `;
 
+/**
+ * 口径迁移（2026-11-07：给手艺人/营销分摊 → 成本）：老库补 cost_cents 列，
+ * 原「给手艺人」就是我们的拿货/制作成本 → 原值回填（营销分摊概念删除，不再
+ * 进盈利公式）。幂等：列已存在（新建库/已迁移）直接跳过。
+ */
+function migrate(conn: Database.Database): void {
+  for (const table of ['cp_products', 'cp_sales']) {
+    const cols = conn.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    const names = new Set(cols.map((c) => c.name));
+    if (names.has('cost_cents')) continue;
+    conn.exec(`ALTER TABLE ${table} ADD COLUMN cost_cents INTEGER NOT NULL DEFAULT 0`);
+    if (names.has('artisan_cents')) {
+      conn.exec(`UPDATE ${table} SET cost_cents = artisan_cents`);
+    }
+  }
+}
+
 /** 以库文件为 key 记已建表；测试 _resetForTests() 换库后会自动重建。 */
 const ready = new Set<string>();
 
@@ -60,6 +76,7 @@ function db(): Database.Database {
   const key = (conn as { name?: string }).name ?? 'default';
   if (!ready.has(key)) {
     conn.exec(DDL);
+    migrate(conn);
     ready.add(key);
   }
   return conn;
@@ -103,11 +120,10 @@ export interface CraftProduct {
   id: string;
   name: string;
   price_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
   created_at: number;
-  /** 每件盈利 = 售价 − 给手艺人 − 快递 − 营销（后端算好，前端不自己减）。 */
+  /** 每件盈利 = 售价 − 成本 − 快递（后端算好，前端不自己减）。 */
   profit_per_unit_cents: number;
 }
 
@@ -118,9 +134,8 @@ export interface CraftSale {
   qty: number;
   /** 单件快照金额（记账那一刻的商品口径）。 */
   price_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
   profit_cents: number;
   created_at: number;
 }
@@ -130,36 +145,33 @@ export interface CraftSale {
 export function createProduct(input: {
   name?: unknown;
   price_cents?: unknown;
-  artisan_cents?: unknown;
+  cost_cents?: unknown;
   shipping_cents?: unknown;
-  marketing_cents?: unknown;
 }): CraftProduct {
   const row = {
     id: randomUUID(),
     name: text(input.name, 200, 'name', true),
     price_cents: cents(input.price_cents ?? 0, 'price_cents'),
-    artisan_cents: cents(input.artisan_cents ?? 0, 'artisan_cents'),
+    cost_cents: cents(input.cost_cents ?? 0, 'cost_cents'),
     shipping_cents: cents(input.shipping_cents ?? 0, 'shipping_cents'),
-    marketing_cents: cents(input.marketing_cents ?? 0, 'marketing_cents'),
     created_at: Date.now(),
   };
   db()
     .prepare(
       `INSERT INTO cp_products
-         (id, name, price_cents, artisan_cents, shipping_cents, marketing_cents, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (id, name, price_cents, cost_cents, shipping_cents, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(row.id, row.name, row.price_cents, row.artisan_cents, row.shipping_cents, row.marketing_cents, row.created_at);
+    .run(row.id, row.name, row.price_cents, row.cost_cents, row.shipping_cents, row.created_at);
   return { ...row, profit_per_unit_cents: profitPerUnit(row) };
 }
 
 function profitPerUnit(p: {
   price_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
 }): number {
-  return p.price_cents - p.artisan_cents - p.shipping_cents - p.marketing_cents;
+  return p.price_cents - p.cost_cents - p.shipping_cents;
 }
 
 export function listProducts(): CraftProduct[] {
@@ -185,18 +197,17 @@ export function createSale(input: { product_id?: unknown; qty?: unknown }): Craf
     product_name: product.name,
     qty: n,
     price_cents: product.price_cents,
-    artisan_cents: product.artisan_cents,
+    cost_cents: product.cost_cents,
     shipping_cents: product.shipping_cents,
-    marketing_cents: product.marketing_cents,
     created_at: Date.now(),
   };
   db()
     .prepare(
       `INSERT INTO cp_sales
-         (id, product_id, qty, price_cents, artisan_cents, shipping_cents, marketing_cents, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, product_id, qty, price_cents, cost_cents, shipping_cents, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(row.id, row.product_id, row.qty, row.price_cents, row.artisan_cents, row.shipping_cents, row.marketing_cents, row.created_at);
+    .run(row.id, row.product_id, row.qty, row.price_cents, row.cost_cents, row.shipping_cents, row.created_at);
   return { ...row, profit_cents: profitPerUnit(row) * n };
 }
 
@@ -246,14 +257,12 @@ export interface CraftOverview {
   sales_count: number;
   units: number;
   revenue_cents: number;
-  artisan_cents: number;
-  shipping_cents: number;
-  marketing_cents: number;
   cost_cents: number;
+  shipping_cents: number;
   profit_cents: number;
   margin_pct: number | null;
   /** 每卖 100 元的钱去向（百分比，1 位小数）—— 页面「钱花在哪儿」直接用。 */
-  per100: { artisan: number; shipping: number; marketing: number; profit: number };
+  per100: { cost: number; shipping: number; profit: number };
   /** 环比上一等长周期的变化（%）；上期为 0 且本期 >0 时为 null（显示「新增」）。 */
   delta_pct: { profit: number | null; revenue: number | null; units: number | null };
 }
@@ -262,9 +271,8 @@ interface Sums {
   sales_count: number;
   units: number;
   revenue_cents: number;
-  artisan_cents: number;
+  cost_cents: number;
   shipping_cents: number;
-  marketing_cents: number;
 }
 
 function sumBetween(from: number, to: number): Sums {
@@ -273,9 +281,8 @@ function sumBetween(from: number, to: number): Sums {
       `SELECT COUNT(*) AS sales_count,
               COALESCE(SUM(qty), 0) AS units,
               COALESCE(SUM(qty * price_cents), 0) AS revenue_cents,
-              COALESCE(SUM(qty * artisan_cents), 0) AS artisan_cents,
-              COALESCE(SUM(qty * shipping_cents), 0) AS shipping_cents,
-              COALESCE(SUM(qty * marketing_cents), 0) AS marketing_cents
+              COALESCE(SUM(qty * cost_cents), 0) AS cost_cents,
+              COALESCE(SUM(qty * shipping_cents), 0) AS shipping_cents
          FROM cp_sales
         WHERE created_at >= ? AND created_at < ?`,
     )
@@ -301,10 +308,9 @@ export function overview(days = 30): CraftOverview {
   const cur = sumBetween(from, to);
   const prev = sumBetween(from - d * DAY_MS, from);
 
-  const cost = cur.artisan_cents + cur.shipping_cents + cur.marketing_cents;
-  const profit = cur.revenue_cents - cost;
-  const prevCost = prev.artisan_cents + prev.shipping_cents + prev.marketing_cents;
-  const prevProfit = prev.revenue_cents - prevCost;
+  const cost = cur.cost_cents;
+  const profit = cur.revenue_cents - cost - cur.shipping_cents;
+  const prevProfit = prev.revenue_cents - prev.cost_cents - prev.shipping_cents;
 
   return {
     days: d,
@@ -312,16 +318,13 @@ export function overview(days = 30): CraftOverview {
     sales_count: cur.sales_count,
     units: cur.units,
     revenue_cents: cur.revenue_cents,
-    artisan_cents: cur.artisan_cents,
+    cost_cents: cur.cost_cents,
     shipping_cents: cur.shipping_cents,
-    marketing_cents: cur.marketing_cents,
-    cost_cents: cost,
     profit_cents: profit,
     margin_pct: cur.revenue_cents > 0 ? Math.round((profit / cur.revenue_cents) * 1000) / 10 : null,
     per100: {
-      artisan: share(cur.artisan_cents, cur.revenue_cents),
+      cost: share(cur.cost_cents, cur.revenue_cents),
       shipping: share(cur.shipping_cents, cur.revenue_cents),
-      marketing: share(cur.marketing_cents, cur.revenue_cents),
       profit: share(profit, cur.revenue_cents),
     },
     delta_pct: {
@@ -348,7 +351,7 @@ export function productBreakdown(days = 30): ProductRow[] {
       `SELECT p.*,
               COALESCE(SUM(s.qty), 0) AS sold_units,
               COALESCE(SUM(s.qty * s.price_cents), 0) AS revenue_cents,
-              COALESCE(SUM(s.qty * (s.price_cents - s.artisan_cents - s.shipping_cents - s.marketing_cents)), 0)
+              COALESCE(SUM(s.qty * (s.price_cents - s.cost_cents - s.shipping_cents)), 0)
                 AS profit_cents
          FROM cp_products p
          LEFT JOIN cp_sales s ON s.product_id = p.id AND s.created_at >= ? AND s.created_at < ?
@@ -379,16 +382,15 @@ export function timeseries(days = 30): { days: number; series: DayPoint[] } {
 
   const rows = db()
     .prepare(
-      `SELECT qty, price_cents, artisan_cents, shipping_cents, marketing_cents, created_at
+      `SELECT qty, price_cents, cost_cents, shipping_cents, created_at
          FROM cp_sales
         WHERE created_at >= ? AND created_at < ?`,
     )
     .all(from, to) as Array<{
     qty: number;
     price_cents: number;
-    artisan_cents: number;
+    cost_cents: number;
     shipping_cents: number;
-    marketing_cents: number;
     created_at: number;
   }>;
 
@@ -411,16 +413,16 @@ export function timeseries(days = 30): { days: number; series: DayPoint[] } {
 
 // ── 演示数据（一批手工艺品 + 近 30 天销售）───────────────────────────────────
 
-const DEMO_PRODUCTS: Array<[string, number, number, number, number]> = [
-  // [名称, 售价, 给手艺人, 快递, 营销]（分）
-  ['手工编织收纳篮', 8900, 4200, 800, 600],
-  ['陶艺手作茶杯', 12800, 6000, 1000, 900],
-  ['剪纸窗花礼盒', 5900, 2600, 700, 500],
-  ['中国结挂饰', 4500, 2000, 600, 400],
-  ['手工皂礼盒', 7800, 3500, 800, 600],
-  ['刺绣手帕', 3900, 1800, 500, 300],
-  ['木质手工书签', 2900, 1200, 500, 300],
-  ['手绘帆布包', 9900, 4600, 900, 700],
+const DEMO_PRODUCTS: Array<[string, number, number, number]> = [
+  // [名称, 售价, 成本, 快递]（分）
+  ['手工编织收纳篮', 8900, 4200, 800],
+  ['陶艺手作茶杯', 12800, 6000, 1000],
+  ['剪纸窗花礼盒', 5900, 2600, 700],
+  ['中国结挂饰', 4500, 2000, 600],
+  ['手工皂礼盒', 7800, 3500, 800],
+  ['刺绣手帕', 3900, 1800, 500],
+  ['木质手工书签', 2900, 1200, 500],
+  ['手绘帆布包', 9900, 4600, 900],
 ];
 
 /**
@@ -435,21 +437,21 @@ export function seedDemo(): { seeded: boolean; products: number; sales: number }
   const now = Date.now();
   const insertProduct = conn.prepare(
     `INSERT INTO cp_products
-       (id, name, price_cents, artisan_cents, shipping_cents, marketing_cents, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, name, price_cents, cost_cents, shipping_cents, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const insertSale = conn.prepare(
     `INSERT INTO cp_sales
-       (id, product_id, qty, price_cents, artisan_cents, shipping_cents, marketing_cents, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, product_id, qty, price_cents, cost_cents, shipping_cents, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
 
   const ids: string[] = [];
   conn.transaction(() => {
-    for (const [name, price, artisan, shipping, marketing] of DEMO_PRODUCTS) {
+    for (const [name, price, cost, shipping] of DEMO_PRODUCTS) {
       const id = randomUUID();
       ids.push(id);
-      insertProduct.run(id, name, price, artisan, shipping, marketing, now - 30 * DAY_MS);
+      insertProduct.run(id, name, price, cost, shipping, now - 30 * DAY_MS);
     }
     // 近 30 天随机 40 笔：随机产品、1-3 件、随机落在窗口内。
     for (let i = 0; i < 40; i++) {
@@ -457,7 +459,7 @@ export function seedDemo(): { seeded: boolean; products: number; sales: number }
       const productId = ids[DEMO_PRODUCTS.indexOf(p)];
       const n = 1 + Math.floor(Math.random() * 3);
       const ts = now - Math.floor(Math.random() * 30 * DAY_MS);
-      insertSale.run(randomUUID(), productId, n, p[1], p[2], p[3], p[4], ts);
+      insertSale.run(randomUUID(), productId, n, p[1], p[2], p[3], ts);
       // 运营动态回填：出单 + 联系快递员寄出（智能体经营流水，时间与销售对齐）
       insertAgentEvent('order', `「${p[0]}」售出 ${n} 件，入账 ¥${((p[1] * n) / 100).toFixed(2)}`, ts);
       insertAgentEvent('shipping', `已联系快递员上门取件，寄出「${p[0]}」×${n}`, ts);

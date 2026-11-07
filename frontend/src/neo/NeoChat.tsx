@@ -36,6 +36,9 @@ import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import { NeoRunInline } from './NeoRunInline';
 import { NeoTeamSavedCard } from './NeoTeamSavedCard';
+// 定价提问卡（2026-11-07）— 手工艺品代卖：收到产品图片后输入框上方固定提问。
+import { NeoPricingQuestions } from './NeoPricingQuestions';
+import { SECRETARY_AGENT_ID } from './secretary';
 import { KnowledgeCitations } from '../components/knowledge/KnowledgeCitations';
 import './neo-chat.css';
 
@@ -184,6 +187,22 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
 
   // 模板画廊已随首页 hero 下线（2026-11-07）：prefill 通路一并移除。
 
+  // ── 定价提问卡（2026-11-07「收到图片后固定一些提问」）────────────────────
+  // 手工艺品代卖作用域（target=总经理）：发出带图片的提交后，输入框上方弹出
+  // 固定提问卡（售价/成本/快递费，内容固定不走 LLM）；回答（下一条无图提交）
+  // 或点 × 后收起。点卡把答案脚手架经 NeoComposer initialText 填进输入框
+  // （不直接发送）；n 计数让同一张卡连点也每次触发覆盖草稿。
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [pricingPick, setPricingPick] = useState<{ text: string; n: number } | null>(null);
+  const isCraftTarget = target?.kind === 'agent' && target.id === SECRETARY_AGENT_ID;
+  const pricingInitialText = pricingPick
+    ? pricingPick.text + (pricingPick.n % 2 ? ' ' : '')
+    : undefined;
+  useEffect(() => {
+    setPricingOpen(false);
+    setPricingPick(null);
+  }, [runId]);
+
   /**
    * 提交链路（与 NewTaskComposer.handleSubmit 同一通路）：
    *   无活跃 run → 建群(尽力,失败降级匿名) + createRunSession → onRunChange
@@ -197,6 +216,8 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
     // 结构化附件（上传后的 path/url）随请求下发：timeline user_turn 出缩略图，
     // 服务端把路径引用块注入 goal（LLM/agent 可读文件）。
     const atts = toUserAttachments(p.attachments);
+    // 定价提问卡触发信号：本轮提交带图片（手工艺品产品图）。
+    const hasImage = p.attachments.some((a) => a.isImage === true);
     try {
       if (!runId) {
         let groupId: string | undefined;
@@ -289,6 +310,11 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
       // 选中知识库 → 发送成功后对记忆库 pack 走 RAG query，引用卡挂消息流底部。
       if (p.knowledgePackIds.length > 0) {
         setCitations({ packIds: p.knowledgePackIds, query: text });
+      }
+      // 定价提问卡：带图提交 → 弹出固定提问；无图提交（= 回答）→ 收起。
+      if (isCraftTarget) {
+        setPricingOpen(hasImage);
+        if (!hasImage) setPricingPick(null);
       }
     } catch (err) {
       throw new Error(
@@ -458,6 +484,13 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
             )}
           </div>
           <div className="neo-chat-composer">
+            {/* 定价提问卡（代卖作用域，收图后弹出）— 挂 NeoComposer 之前 */}
+            {isCraftTarget && pricingOpen && (
+              <NeoPricingQuestions
+                onPick={(text) => setPricingPick((p) => ({ text, n: (p?.n ?? 0) + 1 }))}
+                onDismiss={() => setPricingOpen(false)}
+              />
+            )}
             <NeoComposer
               variant="chat"
               onSubmit={handleSubmit}
@@ -466,6 +499,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
               onNavigate={onNavigate}
               clawTarget={clawTarget}
               onClearClawTarget={() => setClawTarget(null)}
+              initialText={pricingInitialText}
               placeholder={t('neo.chat.followupPlaceholder', {
                 defaultValue: '补充指令，AI 会接着干 · 试试 @ 提及 Skill',
               })}
@@ -489,12 +523,20 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
             </div>
           </div>
           <div className="neo-empty-composer">
+            {/* 定价提问卡（代卖作用域）— 首条带图提交失败等过渡态也能弹出 */}
+            {isCraftTarget && pricingOpen && (
+              <NeoPricingQuestions
+                onPick={(text) => setPricingPick((p) => ({ text, n: (p?.n ?? 0) + 1 }))}
+                onDismiss={() => setPricingOpen(false)}
+              />
+            )}
             <NeoComposer
               variant={target ? 'chat' : 'hero'}
               onSubmit={handleSubmit}
               onNavigate={onNavigate}
               clawTarget={clawTarget}
               onClearClawTarget={() => setClawTarget(null)}
+              initialText={pricingInitialText}
               placeholder={
                 clawTarget
                   ? t('neo.chat.clawPlaceholder', {

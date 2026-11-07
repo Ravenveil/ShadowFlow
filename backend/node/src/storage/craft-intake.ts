@@ -103,9 +103,8 @@ function applyOne(action: CraftAction): AppliedAction {
         const p = createProduct({
           name: action.name,
           price_cents: action.price_cents,
-          artisan_cents: action.artisan_cents,
+          cost_cents: action.cost_cents,
           shipping_cents: action.shipping_cents,
-          marketing_cents: action.marketing_cents,
         });
         return { tag: 'intake', ok: true, detail: `上架「${p.name}」售价 ${yuan(p.price_cents)}` };
       }
