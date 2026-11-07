@@ -7,8 +7,14 @@
  * 定位：挂在现有 Node/Express 后端上的外接模块，自带幂等 DDL，不改 sqlite.ts
  * 也不碰他人模块；发布出口走 lib/social-platforms 适配器（mock/real 双模）。
  *
- * 状态机：draft → publishing → published | failed。published 是终态（防重复
- * 发到真实平台）；failed 可重试，attempt 递增、每次尝试都落 log。
+ * 状态机（C5，2026-11-07 补四态）：
+ *   draft ──submitForReview──> pending_review ──approve──> approved ──publish──> publishing ──> published | failed
+ *                                        └──reject(comment)──> rejected ──(重新提审)──> pending_review
+ *   draft ──publish──> publishing ──> published | failed（直发路径保留：人工直接
+ *   点发布即人工门本身；自动化批量外发按规范第五章走 submit-review→review→publish，
+ *   WAITING_HUMAN 期间与被退回的帖子一律禁止外发）。published 是终态（防重复
+ *   发到真实平台）；failed 可重试（内容未改，审批仍有效），attempt 递增、
+ *   每次尝试都落 log。审核决定留痕 review_json（最新）+ action journal（历史）。
  * 所有写路径参数绑定；金额口径复用 mb_products（整数分）。
  */
 
@@ -23,6 +29,7 @@ import {
   type PublishReceipt,
 } from '../lib/social-platforms';
 import { lintContent } from '../lib/social-platforms/compliance-lint';
+import { recordAction } from '../lib/action-journal';
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS sp_accounts (
@@ -53,7 +60,8 @@ CREATE TABLE IF NOT EXISTS sp_posts (
   ai_label INTEGER NOT NULL DEFAULT 1,
   label_text TEXT NOT NULL DEFAULT '内容由 AI 生成',
   compliance_json TEXT NOT NULL DEFAULT '{}',
-  ruleset_version TEXT NOT NULL DEFAULT ''
+  ruleset_version TEXT NOT NULL DEFAULT '',
+  review_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_sp_posts_status ON sp_posts(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_sp_posts_account ON sp_posts(account_id);
@@ -86,6 +94,7 @@ function db(): Database.Database {
       ['label_text', 'TEXT'],
       ['compliance_json', 'TEXT'],
       ['ruleset_version', 'TEXT'],
+      ['review_json', 'TEXT'],
     ] as const) {
       const cols = conn.prepare(`PRAGMA table_info(sp_posts)`).all() as Array<{ name: string }>;
       if (!cols.some((c) => c.name === col)) {
@@ -138,6 +147,8 @@ export interface PostRow {
   compliance_json: string;
   /** 词表版本（可回溯「当时按哪版规则判的」）。 */
   ruleset_version: string;
+  /** 最新审核决定 JSON（C5：{decision, comment, reviewer, ts}；未审过为 {}）。 */
+  review_json: string;
 }
 
 export interface PublishLogRow {
@@ -286,15 +297,16 @@ export function createPost(input: {
     label_text: labelText,
     compliance_json: JSON.stringify(lint),
     ruleset_version: lint.ruleset_version,
+    review_json: '{}',
   };
   db()
     .prepare(
       `INSERT INTO sp_posts (id, account_id, platform, title, content, media, product_id, status,
                              external_id, error, created_at, published_at,
-                             ai_label, label_text, compliance_json, ruleset_version)
+                             ai_label, label_text, compliance_json, ruleset_version, review_json)
        VALUES (@id, @account_id, @platform, @title, @content, @media, @product_id, @status,
                @external_id, @error, @created_at, @published_at,
-               @ai_label, @label_text, @compliance_json, @ruleset_version)`,
+               @ai_label, @label_text, @compliance_json, @ruleset_version, @review_json)`,
     )
     .run(row);
   return row;
@@ -327,6 +339,79 @@ export function getProductBrief(id: string): { name: string; price_cents: number
     .get(id) as { name: string; price_cents: number } | undefined;
 }
 
+// ── 人工审核门（C5，2026-11-07）──────────────────────────────────────────────
+// 规范第五章第 4 道检查：外发前停留 WAITING_HUMAN，通过或退回留痕（对齐 T09
+// 审批门语义）。留痕双落：review_json（行内最新决定）+ action journal（历史）。
+
+export interface ReviewRecord {
+  decision: 'approve' | 'reject';
+  comment?: string;
+  reviewer?: string;
+  ts: number;
+}
+
+/** 提交人工审核：draft | rejected → pending_review（WAITING_HUMAN）。 */
+export function submitForReview(id: string): PostRow {
+  const post = getPost(id);
+  if (!post) {
+    throw new SocialPublishError(404, 'POST_NOT_FOUND', `帖子不存在: ${id}`);
+  }
+  if (post.status !== 'draft' && post.status !== 'rejected') {
+    throw new SocialPublishError(
+      409,
+      'INVALID_STATUS',
+      `当前状态 ${post.status} 不能提审（仅 draft / rejected 可提审）`,
+    );
+  }
+  db().prepare(`UPDATE sp_posts SET status = 'pending_review' WHERE id = ?`).run(id);
+  recordAction({
+    tool_name: 'social.review',
+    phase: 'decided',
+    // 提审不是裁定本身（裁定是后续人工门），decision 留空，状态迁移落 detail。
+    detail: { post_id: id, from: post.status, to: 'pending_review' },
+  });
+  return getPost(id) as PostRow;
+}
+
+/** 审核决定：pending_review → approved | rejected；意见自由文本留痕（BE-06 同款口径）。 */
+export function reviewPost(
+  id: string,
+  decision: 'approve' | 'reject',
+  comment?: string,
+  reviewer?: string,
+): { post: PostRow; review: ReviewRecord } {
+  const post = getPost(id);
+  if (!post) {
+    throw new SocialPublishError(404, 'POST_NOT_FOUND', `帖子不存在: ${id}`);
+  }
+  if (post.status !== 'pending_review') {
+    throw new SocialPublishError(
+      409,
+      'INVALID_STATUS',
+      `当前状态 ${post.status} 不在审核中（仅 pending_review 可审核）`,
+    );
+  }
+  const review: ReviewRecord = {
+    decision,
+    ...(comment ? { comment: comment.slice(0, 500) } : {}),
+    ...(reviewer ? { reviewer: reviewer.slice(0, 64) } : {}),
+    ts: Date.now(),
+  };
+  const next = decision === 'approve' ? 'approved' : 'rejected';
+  db()
+    .prepare(`UPDATE sp_posts SET status = ?, review_json = ? WHERE id = ?`)
+    .run(next, JSON.stringify(review), id);
+  recordAction({
+    tool_name: 'social.review',
+    phase: 'decided',
+    // action journal 裁定枚举是 auto/approve/deny/block — reject 语义映射 deny。
+    decision: decision === 'approve' ? 'approve' : 'deny',
+    ...(reviewer ? { session_id: reviewer } : {}),
+    detail: { post_id: id, from: 'pending_review', to: next, comment: review.comment ?? '' },
+  });
+  return { post: getPost(id) as PostRow, review };
+}
+
 // ── 发布 ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -342,6 +427,14 @@ export async function publishPost(
   }
   if (post.status === 'published') {
     throw new SocialPublishError(409, 'POST_ALREADY_PUBLISHED', '帖子已发布，不能重复发布');
+  }
+  // C5 人工门（2026-11-07）：WAITING_HUMAN 期间与被退回的帖子禁止外发。
+  // draft 直发保留——人工点发布即人工门本身；自动化批量外发走提审→过审。
+  if (post.status === 'pending_review') {
+    throw new SocialPublishError(409, 'REVIEW_PENDING', '帖子在人工审核中，过审前不可外发');
+  }
+  if (post.status === 'rejected') {
+    throw new SocialPublishError(409, 'REVIEW_REJECTED', '帖子已被审核退回，请修改后重新提审');
   }
   const account = getAccount(post.account_id);
   if (!account) {

@@ -105,6 +105,8 @@ import {
 // B3 · 网关过程事件 — 每轮 fan-out 开一条 gateway run，执行期过程（thinking
 // 占位/流式片段/错误/msg_foot）经 run 管线 emit，B2 timeline 自动归并回放。
 import { startGatewayRun } from '../../lib/gateway-run';
+// 2026-11-07 BE-06 — 审批裁定（含意见）落 action journal 可回放留痕。
+import { recordAction } from '../../lib/action-journal';
 
 const router = Router();
 
@@ -122,7 +124,24 @@ const activeDagRuns = new Map<string, AbortController>();
 //   2) 会话内自然语言：该群下一条用户消息若以 批准/同意/approve/go/继续 开头 → 批；
 //      以 拒绝/不同意/reject/否/停 开头 → 拒。（群聊主链路不受影响：消息照常
 //      持久化 + fan-out；只在没有 pending 时才完全旁路。）
-const pendingApprovals = new Map<string, (v: 'approved' | 'rejected') => void>();
+//
+// 2026-11-07 BE-06 审批意见（T09 评审缺口收尾）— 决定升级为 ApprovalVerdict：
+// { decision, comment? }。两条决定路径都能附自由文本意见：
+//   1) API：body 增可选 comment（≤500 字）→ action journal 留痕 + 响应带回；
+//   2) 文本：决定词 + 显式分隔符（，,、:：）后半句收作意见（「同意，预算砍半」
+//      → approved + comment「预算砍半」）；无分隔符时必须是纯决定短语（「拒绝的
+//      诱惑」这类决定词开头的整句不吞，见 parseApprovalVerdict）。
+// 执行器侧 approval.request 契约仍是 Promise<'approved'|'rejected'>——闭包映射
+// v.decision 返回，意见经系统留痕消息落地，不破坏 run-team-dag 契约。
+
+/** 审批决定 + 可选自由文本意见（BE-06）。 */
+export interface ApprovalVerdict {
+  decision: 'approved' | 'rejected';
+  /** 审批意见（自由文本，可空）。 */
+  comment?: string;
+}
+
+const pendingApprovals = new Map<string, (v: ApprovalVerdict) => void>();
 
 /** 测试可见：清空审批注册表（groups-chat 路由单测隔离用）。 */
 export function clearPendingApprovals(): void {
@@ -147,11 +166,58 @@ export function parseApprovalDecision(text: string): 'approved' | 'rejected' | n
   return isApprove ? 'approved' : 'rejected';
 }
 
+// ── BE-06 审批意见解析（2026-11-07）────────────────────────────────────────
+// 决定词全集（含常见屈折形）——裸形态必须整串就是「决定词 + 轻声尾缀/标点」，
+// 决定词开头的整句（「拒绝的诱惑」「停止生成」）不算决定，防误吞派活。
+const APPROVE_WORD = '(?:批准|同意|通过|approved|approve|allowed|allow|yes|ok|okay|好)';
+const REJECT_WORD = '(?:拒绝|不同意|驳回|不行|rejected|reject|denied|deny|no|停|否)';
+const DECISION_TAIL = '(?:吧|啊|哦|呢|呀|的)?[。！!？?~～\\s]*';
+const BARE_APPROVE_RE = new RegExp(`^${APPROVE_WORD}${DECISION_TAIL}$`, 'i');
+const BARE_REJECT_RE = new RegExp(`^${REJECT_WORD}${DECISION_TAIL}$`, 'i');
+/** 显式分隔符——只有这些后面的半句才收作审批意见。 */
+const VERDICT_SEPARATORS = /[，,、:：]/;
+/** 文本路径意见长度上限（API 路径见 approvalDecisionHandler，500）。 */
+const MAX_TEXT_COMMENT = 200;
+
+/**
+ * 纯函数：解析会话文本里的「审批决定 + 可选意见」（BE-06，决定路径②意见版）。
+ * 规则：
+ *   - 有显式分隔符（，,、:：）→ 前半句必须是纯决定短语，后半句收作意见
+ *     （「同意，预算砍半」→ {approved, comment:'预算砍半'}）；
+ *   - 无分隔符 → 整串必须是纯决定短语（≤6 中文/≤10 拉丁闸门保留），无意见；
+ *     「拒绝的诱惑」「停止生成」「approve now」这类决定词开头的派活句 → null。
+ * parseApprovalDecision（宽松前缀版）保持不动——旧回归直打它；本函数供
+ * tryResolveApprovalFromText 用，语义更严（意见需要显式分隔符，防误吞）。
+ */
+export function parseApprovalVerdict(text: string): ApprovalVerdict | null {
+  const trimmed = text.trim();
+  const sep = trimmed.search(VERDICT_SEPARATORS);
+  if (sep >= 0) {
+    const head = trimmed.slice(0, sep).trim();
+    const comment = trimmed.slice(sep + 1).trim().slice(0, MAX_TEXT_COMMENT);
+    const decision = bareDecision(head);
+    if (!decision) return null;
+    return comment ? { decision, comment } : { decision };
+  }
+  const decision = bareDecision(trimmed);
+  return decision ? { decision } : null;
+}
+
+/** 裸决定短语判定：整串 = 决定词 + 轻尾缀/标点；带旧长度闸门兜底。 */
+function bareDecision(head: string): 'approved' | 'rejected' | null {
+  const latinChars = (head.match(/[a-z]/gi) ?? []).length;
+  const lenLimit = latinChars > 0 ? 10 : 6;
+  if (head.length > lenLimit) return null;
+  if (BARE_APPROVE_RE.test(head)) return 'approved';
+  if (BARE_REJECT_RE.test(head)) return 'rejected';
+  return null;
+}
+
 /** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
 export function tryResolveApprovalFromText(groupId: string, text: string): boolean {
   const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
   if (entries.length === 0) return false;
-  const verdict = parseApprovalDecision(text);
+  const verdict = parseApprovalVerdict(text);
   if (!verdict) return false;
   for (const [key, resolve] of entries) {
     pendingApprovals.delete(key);
@@ -280,13 +346,13 @@ export function nextChatTurnSeq(groupId: string): number {
  * 由 swapDagRun 拒收场；这里另挂 30 分钟兜底超时（与 run 超时同量级，避免永久
  * pending 占内存）——超时视作拒绝，审批 promise 永不悬挂。
  */
-export function registerPendingApproval(groupId: string, nodeId: string): Promise<'approved' | 'rejected'> {
-  return new Promise<'approved' | 'rejected'>((resolve) => {
+export function registerPendingApproval(groupId: string, nodeId: string): Promise<ApprovalVerdict> {
+  return new Promise<ApprovalVerdict>((resolve) => {
     const key = `${groupId}:${nodeId}`;
     pendingApprovals.set(key, resolve);
     setTimeout(() => {
       if (pendingApprovals.delete(key)) {
-        try { resolve('rejected'); } catch { /* settled */ }
+        try { resolve({ decision: 'rejected' }); } catch { /* settled */ }
       }
     }, 30 * 60_000).unref?.();
   });
@@ -301,7 +367,7 @@ export function swapDagRun(groupId: string, registry: Map<string, AbortControlle
     if (!key.startsWith(`${groupId}:`)) continue;
     const resolve = pendingApprovals.get(key);
     pendingApprovals.delete(key);
-    try { resolve?.('rejected'); } catch { /* settled */ }
+    try { resolve?.({ decision: 'rejected' }); } catch { /* settled */ }
   }
   const ac = new AbortController();
   registry.set(groupId, ac);
@@ -1451,12 +1517,14 @@ async function runFanout(
                   request: ({ nodeId, nodeName }: { nodeId: string; nodeName: string; preview: string; signal: AbortSignal }) =>
                     registerPendingApproval(groupId, nodeId).then((v) => {
                       // 决定落一条系统消息（审批留痕；postMessage 失败不回传）。
+                      // BE-06：审批意见附在留痕消息里；闭包只回 v.decision，
+                      // run-team-dag 的 approval.request 契约（'approved'|'rejected'）不动。
                       void pyPostMessage(groupId, {
-                        content: `[approval] ${nodeName} 的审批结果：${v === 'approved' ? '已批准 ✅' : '已拒绝 ❌'}`,
+                        content: `[approval] ${nodeName} 的审批结果：${v.decision === 'approved' ? '已批准 ✅' : '已拒绝 ❌'}${v.comment ? `（审批意见：${v.comment}）` : ''}`,
                         sender_name: 'system',
                         sender_kind: 'system',
                       }).catch(() => {});
-                      return v;
+                      return v.decision;
                     }),
                 },
                 onNodeBlocked: (blockedId: string) => {
@@ -1954,7 +2022,8 @@ router.post('/:id/messages', (req: Request, res: Response) => {
 
 /**
  * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05，决定路径①）。
- * body: { decision: 'approve' | 'reject' }。
+ * body: { decision: 'approve' | 'reject', comment?: string }（BE-06：可附审批意见，
+ * ≤500 字，落 action journal 留痕 + 响应带回）。
  * 命中挂起 → resolve 执行器 promise（执行器会补系统留痕消息 + plan_card blocked）；
  * 未命中 → 409（已决定/超时/无此挂起）。
  * 处理器导出供回归测试直打（不起真 Express）。
@@ -1965,12 +2034,25 @@ export function approvalDecisionHandler(
 ): void {
   const groupId = req.params.id;
   const nodeId = req.params.nodeId;
-  const decision = ((req.body ?? {}) as { decision?: unknown }).decision;
+  const body = (req.body ?? {}) as { decision?: unknown; comment?: unknown };
+  const decision = body.decision;
   if (decision !== 'approve' && decision !== 'reject') {
     res.status(400).json({
       error: { code: 'BAD_DECISION', message: "decision must be 'approve' or 'reject'" },
     });
     return;
+  }
+  // BE-06 审批意见：显式 API 路径的意见是自由文本，类型/长度校验，不静默截断。
+  let comment: string | undefined;
+  if (body.comment !== undefined) {
+    if (typeof body.comment !== 'string' || body.comment.trim().length > 500) {
+      res.status(400).json({
+        error: { code: 'BAD_COMMENT', message: 'comment must be a string of at most 500 characters' },
+      });
+      return;
+    }
+    const trimmedComment = body.comment.trim();
+    if (trimmedComment) comment = trimmedComment;
   }
   const key = `${groupId}:${nodeId}`;
   const resolve = pendingApprovals.get(key);
@@ -1981,10 +2063,17 @@ export function approvalDecisionHandler(
     return;
   }
   pendingApprovals.delete(key);
+  // BE-06 留痕：裁定（连同意见）落 action journal，「谁批/拒了什么、说了什么」可回放。
+  recordAction({
+    tool_name: 'group.approval',
+    phase: 'decided',
+    decision: decision === 'approve' ? 'approve' : 'deny',
+    detail: { group_id: groupId, node_id: nodeId, ...(comment ? { comment } : {}) },
+  });
   try {
-    resolve(decision === 'approve' ? 'approved' : 'rejected');
+    resolve({ decision: decision === 'approve' ? 'approved' : 'rejected', ...(comment ? { comment } : {}) });
   } catch { /* resolver 已 settle — 幂等 */ }
-  res.json({ group_id: groupId, node_id: nodeId, decision });
+  res.json({ group_id: groupId, node_id: nodeId, decision, ...(comment ? { comment } : {}) });
 }
 
 router.post('/:id/approvals/:nodeId', approvalDecisionHandler);

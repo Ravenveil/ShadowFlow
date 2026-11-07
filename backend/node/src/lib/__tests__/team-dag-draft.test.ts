@@ -205,3 +205,49 @@ describe('generateDagDraft', () => {
     expect(callImpl).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── BE-05 Plan Card 字段（2026-11-07，T05 缺口）────────────────────────────
+
+describe('DagDraftNode.acceptance / risk（交付标准与风险，T05 Plan Card 补齐）', () => {
+  it('prompt 输出 schema 含 acceptance/risk 两字段与规则行', () => {
+    const p = composeDagDraftPrompt('做一版营销页', ROSTER);
+    expect(p).toContain('"acceptance"');
+    expect(p).toContain('"risk"');
+    expect(p).toContain('交付标准');
+  });
+
+  it('parse 透传 acceptance/risk（trim 后各截 200 字）', () => {
+    const draft = parseDagDraftJson(
+      JSON.stringify({
+        nodes: [
+          {
+            id: 'n1',
+            agentId: 'pm',
+            name: '产品',
+            acceptance: '  原型评审通过  ',
+            risk: '长'.repeat(300),
+          },
+        ],
+        edges: [],
+      }),
+    )!;
+    expect(draft.nodes[0]!.acceptance).toBe('原型评审通过');
+    expect(draft.nodes[0]!.risk).toBe('长'.repeat(200));
+  });
+
+  it('缺省/空白/非字符串的 acceptance、risk 省略键（不编造）', () => {
+    const draft = parseDagDraftJson(
+      JSON.stringify({
+        nodes: [
+          { id: 'n1', acceptance: '   ', risk: 42 },
+          { id: 'n2' },
+        ],
+        edges: [],
+      }),
+    )!;
+    expect(draft.nodes[0]!.acceptance).toBeUndefined();
+    expect(draft.nodes[0]!.risk).toBeUndefined();
+    expect(draft.nodes[1]!.acceptance).toBeUndefined();
+    expect('acceptance' in draft.nodes[0]!).toBe(false);
+  });
+});
