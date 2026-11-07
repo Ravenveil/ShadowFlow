@@ -110,3 +110,28 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash);
+
+-- ── Email + password auth (2026-11-07 介绍页邮箱 → 注册登录) ─────────────────
+-- password_hash format: scrypt$<salt_hex>$<hash_hex> (see hashPassword in
+-- routes/system/auth.ts). Sessions for these accounts use auth_type='email'
+-- with auth_sessions.address holding the lowercased email.
+
+CREATE TABLE IF NOT EXISTS auth_email_users (
+  email         TEXT PRIMARY KEY,           -- lowercased
+  password_hash TEXT NOT NULL,
+  display_name  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ── Landing-page leads (订阅内测 / 申请内测 / 预约演示 留资) ──────────────────
+
+CREATE TABLE IF NOT EXISTS auth_leads (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL,
+  name       TEXT,
+  source     TEXT,                          -- 'newsletter' | 'demo' | 'plan' | ...
+  note       TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_auth_leads_email ON auth_leads(email);

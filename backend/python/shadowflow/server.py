@@ -232,12 +232,17 @@ from shadowflow.api.opc import opc as _opc_api
 # 多模态记忆库（PR #7 设计移植）：单文件 RAG 后端，BM25+向量混合检索。
 # 挂 /api/memory-bank 前缀，与 /api/knowledge、/api/memory 互不冲突；
 # 未注入 Embedder 时退化为 BM25 关键词检索（零额外依赖）。实例全局复用一次。
+# 2026-11-07：注入 SettingsBackedEmbedder —— 向量检索跟随 设置 → 向量模型
+# （.shadowflow/embedding-config.json，Node /api/settings/embedding 写入），
+# 未配置或关闭时自动退回 BM25，配置变更无需重启。
 from shadowflow.memory.memory_bank import (
     MemoryBank,
+    SettingsBackedEmbedder,
     create_memory_router as _create_memory_bank_router,
 )
 memory_bank = MemoryBank(
     root=Path(os.getenv("SHADOWFLOW_KNOWLEDGE_DIR", ".shadowflow/knowledge")),
+    embedder=SettingsBackedEmbedder(),
 )
 
 _ops_api.set_aggregator(_ops_api.OpsAggregator(

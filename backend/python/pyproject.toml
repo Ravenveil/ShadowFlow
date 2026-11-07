@@ -40,6 +40,7 @@ server = [
     "APScheduler>=3.10,<4",  # Story 14-2: schedule drawer
     "slowapi>=0.1.9",        # rate limiting
     "python-multipart>=0.0.9",  # FastAPI Form/File 端点注册时强校验，缺失则 uvicorn 启动即崩
+    "numpy>=1.24",           # 记忆库向量检索（memory_bank._dense_rankings），缺失时混合检索 500
 ]
 # pip install shadowflow[memory]  — Redis / SQLite 持久化
 memory = [
@@ -69,6 +70,7 @@ all = [
     "APScheduler>=3.10,<4",
     "slowapi>=0.1.9",
     "python-multipart>=0.0.9",
+    "numpy>=1.24",
     "aiosqlite>=0.19.0",
     "redis>=5.0.0",
     "mcp>=1.0",

@@ -1398,6 +1398,24 @@
   .footer-news form button {
     color: #ff5e3a !important;
   }
+  .footer-news-done {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 0;
+    border-bottom: 1px solid #494654;
+    background: transparent;
+    padding: 10px 0;
+    color: #ff5e3a !important;
+    font-size: 10px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .footer-news-done:hover {
+    color: #fff !important;
+  }
   .footer-bottom {
     display: flex;
     justify-content: space-between;

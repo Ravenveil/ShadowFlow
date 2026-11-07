@@ -12,6 +12,8 @@ __pycache__/
 .shadowflow/*
 !.shadowflow/agents/
 !.shadowflow/teams/
+# Node 网关运行时数据目录（app.sqlite、embedding-config.json 等含密钥文件）
+backend/node/.shadowflow/
 .env
 .env.*
 !.env.example

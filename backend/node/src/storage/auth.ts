@@ -33,8 +33,25 @@ export interface SessionRow {
   id: number;
   token_hash: string;
   address: string;
-  auth_type: 'wallet' | 'guest';
+  auth_type: 'wallet' | 'guest' | 'email';
   expires_at: string;
+  created_at: string;
+}
+
+export interface EmailUserRow {
+  email: string;
+  password_hash: string;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadRow {
+  id: number;
+  email: string;
+  name: string | null;
+  source: string | null;
+  note: string | null;
   created_at: string;
 }
 
@@ -87,7 +104,7 @@ export function useNonce(nonce: string): boolean {
 export function createSession(
   tokenHash: string,
   address: string,
-  authType: 'wallet' | 'guest',
+  authType: 'wallet' | 'guest' | 'email',
   expiresAt: string,
 ): void {
   getDb()
@@ -110,6 +127,13 @@ export function getSessionByTokenHash(tokenHash: string): SessionRow | null {
     )
     .get(tokenHash) as SessionRow | undefined;
   return row ?? null;
+}
+
+/**
+ * deleteSession — revoke a session by token hash (logout). Idempotent.
+ */
+export function deleteSession(tokenHash: string): void {
+  getDb().prepare(`DELETE FROM auth_sessions WHERE token_hash = ?`).run(tokenHash);
 }
 
 // ── Profile helpers ───────────────────────────────────────────────────────────
@@ -145,4 +169,73 @@ export function getProfile(address: string): ProfileRow | null {
     .prepare(`SELECT * FROM auth_profiles WHERE address = ?`)
     .get(address.toLowerCase()) as ProfileRow | undefined;
   return row ?? null;
+}
+
+// ── Email + password helpers (2026-11-07 介绍页邮箱 → 注册登录) ───────────────
+
+/**
+ * createEmailUser — register an email account. passwordHash is produced by
+ * `hashPassword()` in the route layer (scrypt). Throws if the email exists.
+ */
+export function createEmailUser(
+  email: string,
+  passwordHash: string,
+  displayName?: string | null,
+): EmailUserRow {
+  const now = new Date().toISOString();
+  const addr = email.toLowerCase();
+  getDb()
+    .prepare(
+      `INSERT INTO auth_email_users (email, password_hash, display_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(addr, passwordHash, displayName ?? null, now, now);
+  return {
+    email: addr,
+    password_hash: passwordHash,
+    display_name: displayName ?? null,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+/** getEmailUser — case-insensitive lookup, or null. */
+export function getEmailUser(email: string): EmailUserRow | null {
+  const row = getDb()
+    .prepare(`SELECT * FROM auth_email_users WHERE email = ?`)
+    .get(email.toLowerCase()) as EmailUserRow | undefined;
+  return row ?? null;
+}
+
+/** updateEmailUserDisplayName — self-service profile edit. */
+export function updateEmailUserDisplayName(email: string, displayName: string): void {
+  getDb()
+    .prepare(
+      `UPDATE auth_email_users SET display_name = ?, updated_at = ? WHERE email = ?`,
+    )
+    .run(displayName, new Date().toISOString(), email.toLowerCase());
+}
+
+// ── Leads (介绍页订阅 / 申请内测 / 预约演示 留资) ──────────────────────────────
+
+/** addLead — store a landing-page email capture. */
+export function addLead(
+  email: string,
+  opts: { name?: string | null; source?: string | null; note?: string | null } = {},
+): LeadRow {
+  const now = new Date().toISOString();
+  const result = getDb()
+    .prepare(
+      `INSERT INTO auth_leads (email, name, source, note, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(email.toLowerCase(), opts.name ?? null, opts.source ?? null, opts.note ?? null, now);
+  return {
+    id: Number(result.lastInsertRowid),
+    email: email.toLowerCase(),
+    name: opts.name ?? null,
+    source: opts.source ?? null,
+    note: opts.note ?? null,
+    created_at: now,
+  };
 }

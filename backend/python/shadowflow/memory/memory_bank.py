@@ -401,6 +401,118 @@ class OpenAICompatibleEmbedder:
         return self._request([text])[0]
 
 
+class SettingsBackedEmbedder:
+    """Embedder driven by the shared settings file (`.shadowflow/embedding-config.json`).
+
+    The settings UI (Node `/api/settings/embedding`) writes this file; reading
+    it here lets the knowledge base follow the configured embedding model
+    without a restart — the file is re-read whenever its mtime changes. While
+    disabled or unkeyed, `enabled` is False and MemoryBank degrades to BM25
+    keyword retrieval.
+
+    File contract (see backend/node/src/storage/embedding.ts)::
+
+        {"enabled": bool, "provider": str, "model": str,
+         "baseUrl": str, "apiKey": str}
+    """
+
+    def __init__(self, config_path: Optional[Union[str, Path]] = None) -> None:
+        self._explicit_path = Path(config_path) if config_path else None
+        self._lock = threading.Lock()
+        self._mtime: Optional[float] = None
+        self._delegate: Optional[OpenAICompatibleEmbedder] = None
+        self._enabled = False
+        self._name = ""
+        self._model = ""
+
+    # -- config -----------------------------------------------------------
+
+    def _candidates(self) -> List[Path]:
+        if self._explicit_path is not None:
+            return [self._explicit_path]
+        out: List[Path] = []
+        env_dir = os.environ.get("SHADOWFLOW_DATA_DIR")
+        if env_dir:
+            out.append(Path(env_dir) / "embedding-config.json")
+        cwd = Path.cwd()
+        for base in (cwd, *list(cwd.parents)[:5]):
+            out.append(base / ".shadowflow" / "embedding-config.json")
+            # Node 网关（backend/node）把数据目录放在自身 cwd 下
+            # （storage/embedding.ts → <gateway-cwd>/.shadowflow/embedding-config.json），
+            # Python 进程的 cwd 通常在仓库根或 backend/*，只向上找 .shadowflow/
+            # 会漏掉它 —— 补上这个布局变体，两侧才真正读写同一个文件。
+            out.append(base / "backend" / "node" / ".shadowflow" / "embedding-config.json")
+        return out
+
+    def _refresh(self) -> None:
+        path = next((c for c in self._candidates() if c.is_file()), None)
+        if path is None:
+            with self._lock:
+                self._mtime, self._delegate = None, None
+                self._enabled, self._name, self._model = False, "", ""
+            return
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            mtime = None
+        if mtime is not None and mtime == self._mtime:
+            return
+        raw: Optional[Mapping[str, Any]] = None
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, Mapping):
+                raw = loaded
+        except (OSError, ValueError):
+            raw = None
+        with self._lock:
+            self._mtime = mtime
+            if not raw:
+                self._delegate, self._name, self._model = None, "", ""
+                self._enabled = False
+                return
+            model = str(raw.get("model") or "").strip()
+            base_url = str(raw.get("baseUrl") or "").strip()
+            api_key = str(raw.get("apiKey") or "").strip()
+            self._enabled = bool(raw.get("enabled")) and bool(model and base_url and api_key)
+            self._model = model
+            self._name = f"openai-compatible:{model}" if self._enabled else ""
+            self._delegate = (
+                OpenAICompatibleEmbedder(base_url=base_url, api_key=api_key, model=model)
+                if self._enabled
+                else None
+            )
+
+    @property
+    def enabled(self) -> bool:
+        self._refresh()
+        return self._enabled
+
+    @property
+    def name(self) -> str:
+        self._refresh()
+        return self._name
+
+    def _require(self) -> OpenAICompatibleEmbedder:
+        self._refresh()
+        if self._delegate is None:
+            raise MemoryBankError(
+                "EMBEDDING_DISABLED",
+                "Embedding model is not configured (or disabled) in 设置 → 向量模型",
+                status=503,
+            )
+        return self._delegate
+
+    # -- Embedder protocol -------------------------------------------------
+
+    def embed_documents(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
+        if not texts:
+            return []
+        return self._require().embed_documents(texts)
+
+    def embed_query(self, text: str) -> Sequence[float]:
+        return self._require().embed_query(text)
+
+
 class CrossEncoderReranker:
     """Optional precision stage; BGE v2 m3 is suitable for multilingual business text."""
 
@@ -817,6 +929,19 @@ class MemoryBank:
         self._vector_cache: Dict[str, _VectorCacheEntry] = {}
         self._vector_cache_guard = threading.Lock()
 
+    @property
+    def _active_embedder(self) -> Optional[Embedder]:
+        """The embedder if it is usable right now, else None.
+
+        Settings-backed embedders (SettingsBackedEmbedder) can toggle at any
+        time; treating "disabled" as "no embedder" keeps the documented
+        BM25 keyword fallback intact.
+        """
+        embedder = self.embedder
+        if embedder is None or getattr(embedder, "enabled", True) is False:
+            return None
+        return embedder
+
     # -- paths, locks and persistence -------------------------------------
 
     def _lock(self, pack_id: str) -> threading.RLock:
@@ -1040,13 +1165,13 @@ class MemoryBank:
                 "description": description,
                 "status": "ready",
                 "retrieval_profile": {
-                    "mode": "hybrid" if self.embedder else "keyword",
+                    "mode": "hybrid" if self._active_embedder else "keyword",
                     "top_k": 5,
                     "child_size": self.config.child_size,
                     "child_overlap": self.config.child_overlap,
                     "parent_size": self.config.parent_size,
                 },
-                "embedding_model": getattr(self.embedder, "name", "") if self.embedder else "",
+                "embedding_model": getattr(self._active_embedder, "name", "") or "",
                 "metadata": dict(metadata or {}),
                 "stats": {"sources": 0, "units": 0, "parents": 0, "chunks": 0, "bytes": 0},
                 "created_at": now,
@@ -1568,9 +1693,10 @@ class MemoryBank:
         return [child for child in children if child.text]
 
     def _embed_children(self, pack_id: str, children: List[_Child]) -> str:
-        if not self.embedder:
+        embedder = self._active_embedder
+        if embedder is None:
             return ""
-        signature = getattr(self.embedder, "name", self.embedder.__class__.__name__)
+        signature = getattr(embedder, "name", embedder.__class__.__name__)
         manifest = self._load_manifest(pack_id)
         configured = manifest.get("embedding_model", "")
         if configured and configured != signature:
@@ -1582,7 +1708,7 @@ class MemoryBank:
         expected_dim: Optional[int] = None
         for start in range(0, len(children), self.config.embedding_batch_size):
             batch = children[start : start + self.config.embedding_batch_size]
-            vectors = self.embedder.embed_documents([child.text for child in batch])
+            vectors = embedder.embed_documents([child.text for child in batch])
             if len(vectors) != len(batch):
                 raise MemoryBankError("EMBEDDING_FAILED", "Embedder returned the wrong vector count", status=500)
             for child, vector in zip(batch, vectors):
@@ -1983,7 +2109,8 @@ class MemoryBank:
     def _dense_rankings(
         self, pack_id: str, queries: Sequence[str], filters: Mapping[str, Any], limit: int
     ) -> List[List[str]]:
-        if not self.embedder:
+        embedder = self._active_embedder
+        if embedder is None:
             return [[] for _ in queries]
         try:
             import numpy as np
@@ -2019,7 +2146,7 @@ class MemoryBank:
             if not ids:
                 rankings.append([])
                 continue
-            vector = np.asarray(_normalize_vector(self.embedder.embed_query(query)), dtype=np.float32)
+            vector = np.asarray(_normalize_vector(embedder.embed_query(query)), dtype=np.float32)
             if vector.shape[0] != matrix.shape[1]:
                 raise MemoryBankError(
                     "EMBEDDING_MODEL_MISMATCH", "Query and stored vector dimensions differ", status=409
@@ -2191,7 +2318,7 @@ class MemoryBank:
     def query(self, pack_id: str, query: str, *, top_k: int = 5, **kwargs: Any) -> Dict[str, Any]:
         started = time.perf_counter()
         hits = self.retrieve(pack_id, query, top_k=top_k, **kwargs)
-        dense_used = bool(self.embedder) and any(
+        dense_used = bool(self._active_embedder) and any(
             "vector" in hit["retrieval_channels"] for hit in hits
         )
         return {

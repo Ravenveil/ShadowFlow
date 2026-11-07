@@ -1,4 +1,4 @@
-import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -13,6 +13,7 @@ import {
   GitBranch,
   LayoutGrid,
   Link2,
+  LogOut,
   Menu,
   MessageSquare,
   MoreHorizontal,
@@ -24,6 +25,8 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Upload,
+  UserRound,
   Users,
   WalletCards,
   X,
@@ -37,6 +40,9 @@ import {
   Square,
 } from "lucide-react";
 import "./product-app.css";
+import AuthModal from "./src/AuthModal";
+import EmbeddingSection from "./src/EmbeddingSection";
+import { authLogout, displayNameOf, initialsOf, useAuthState } from "./src/auth";
 
 /** 人物头像（DiceBear micah —— 现代扁平插画，比 Lorelei 线稿更精致；
     按 agent accent 色铺底，加载失败回落字母头像。键 = AgentAvatar label）。 */
@@ -228,6 +234,29 @@ export default function ProductApp() {
   const [message, setMessage] = useState("");
   const [sentMap, setSentMap] = useState<Record<string, string[]>>({});
   const [detailOpen, setDetailOpen] = useState(true);
+  const auth = useAuthState();
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement | null>(null);
+
+  function openAuth(mode: "login" | "register") {
+    setAuthMode(mode);
+    setAuthOpen(true);
+    setAccountMenuOpen(false);
+  }
+
+  // 点击账号区外部时收起「三个点」菜单
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [accountMenuOpen]);
 
   const chatStatusText =
     activeConversation.thread === "ceo"
@@ -365,14 +394,53 @@ export default function ProductApp() {
             <Settings size={16} />
             <span>设置</span>
           </button>
-          <div className="sf-account">
-            <span>YL</span>
-            <div>
-              <strong>Yuki Lin</strong>
-              <small>Personal workspace</small>
+          {auth.user ? (
+            <div className="sf-account sf-account--user" ref={accountRef}>
+              <button
+                className="sf-account-main"
+                onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                aria-expanded={accountMenuOpen}
+              >
+                <span>{initialsOf(auth.user)}</span>
+                <div>
+                  <strong>{displayNameOf(auth.user)}</strong>
+                  <small>{auth.user.email || auth.user.address || "已登录"}</small>
+                </div>
+              </button>
+              <button
+                className="sf-account-dots"
+                onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                aria-label="账号菜单"
+              >
+                <MoreHorizontal size={15} />
+              </button>
+              {accountMenuOpen && (
+                <div className="sf-account-menu" role="menu">
+                  <p>{auth.user.email || auth.user.address}</p>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      void authLogout();
+                    }}
+                  >
+                    <LogOut size={13} /> 退出登录
+                  </button>
+                </div>
+              )}
             </div>
-            <MoreHorizontal size={15} />
-          </div>
+          ) : (
+            <button className="sf-account sf-account--guest" onClick={() => openAuth("login")}>
+              <span>
+                <UserRound size={15} />
+              </span>
+              <div>
+                <strong>登录 / 注册</strong>
+                <small>当前为演示模式</small>
+              </div>
+              <ChevronRight size={15} />
+            </button>
+          )}
         </div>
       </aside>
 
@@ -600,6 +668,7 @@ export default function ProductApp() {
         {view === "schedules" && <SchedulesView />}
         {view === "settings" && <SettingsView />}
       </main>
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialMode={authMode} />
     </div>
   );
 }
@@ -674,7 +743,15 @@ type ApprovalItem = {
   summary: string;
   when: string;
   state: "pending" | "approved" | "rejected";
+  /** 驳回原因（可选） */
   reason?: string;
+  /** 通过时附带的补充命令 / 说明（可选） */
+  note?: string;
+  /** 审批对象 —— 明确「到底在审批什么」 */
+  kind: string;
+  target: string;
+  detail: string;
+  impact: string;
 };
 
 const RUN_APPROVALS: ApprovalItem[] = [
@@ -686,6 +763,11 @@ const RUN_APPROVALS: ApprovalItem[] = [
     summary: "Atlas 品牌主张 v2 定稿（含 slogan 3 选 1）",
     when: "已等待 8 分钟",
     state: "pending",
+    kind: "产出物定稿",
+    target: "atlas-brand-proposal.yaml · v2",
+    detail:
+      "定位语「一个人的营销公司」+ slogan 三选一（「让专业交付，不再靠堆人」为推荐项），引用了 12 份竞品与用户访谈来源。",
+    impact: "通过后锁定为最终品牌主张，内容创意组据此产出全部对外物料；驳回则退回品牌策略师修改后重新提交。",
   },
   {
     id: "ap0",
@@ -695,6 +777,10 @@ const RUN_APPROVALS: ApprovalItem[] = [
     summary: "竞品研究口径与数据源确认",
     when: "12 分钟前",
     state: "approved",
+    kind: "研究口径确认",
+    target: "competitor-brief.md · 数据源清单",
+    detail: "竞品对比采用公开定价页 + 官网功能文档口径，剔除第三方评测二手数据。",
+    impact: "确认后市场研究员按该口径完成竞品简报。",
   },
   {
     id: "ap-1",
@@ -705,6 +791,10 @@ const RUN_APPROVALS: ApprovalItem[] = [
     when: "26 分钟前",
     state: "rejected",
     reason: "预算超限，请拆分到下季度再提",
+    kind: "预算支出",
+    target: "Q2 渠道投放预算 · +¥50,000",
+    detail: "申请在既有 Q2 渠道预算外追加 5 万元用于信息流加投，占季度总预算 18%。",
+    impact: "通过后触发财务记账并开启加投；驳回则加投计划搁置。",
   },
 ];
 
@@ -771,8 +861,7 @@ function RunPanel({ onClose }: { onClose: () => void }) {
   const [artifacts, setArtifacts] = useState<ArtifactItem[]>(RUN_ARTIFACTS);
   const [dagOpen, setDagOpen] = useState(false);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
-  const [reasonFor, setReasonFor] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
+  const [opinions, setOpinions] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (runState !== "running") return;
@@ -808,6 +897,7 @@ function RunPanel({ onClose }: { onClose: () => void }) {
   };
 
   const resolveApproval = (id: string, state: "approved" | "rejected") => {
+    const comment = (opinions[id] ?? "").trim();
     setApprovals((all) =>
       all.map((x) =>
         x.id === id
@@ -815,13 +905,18 @@ function RunPanel({ onClose }: { onClose: () => void }) {
               ...x,
               state,
               when: "刚刚",
-              reason: state === "rejected" ? reason.trim() || "需要补充依据后再提交" : undefined,
+              // 通过时意见 = 补充命令/说明；驳回时意见 = 说明原因
+              note: state === "approved" ? comment || undefined : undefined,
+              reason: state === "rejected" ? comment || undefined : undefined,
             }
           : x,
       ),
     );
-    setReasonFor(null);
-    setReason("");
+    setOpinions((all) => {
+      const next = { ...all };
+      delete next[id];
+      return next;
+    });
   };
 
   return (
@@ -979,6 +1074,9 @@ function RunPanel({ onClose }: { onClose: () => void }) {
             <span>人工审批门</span>
             <button>{pendingCount} 项待审批</button>
           </div>
+          <p className="sf-appr-hint">
+            每张卡片写明正在等待审批的具体对象与影响。可直接通过 / 驳回，也可以在意见框里补充命令或说明原因。
+          </p>
           {approvals.map((ap) => (
             <div className={`sf-appr-card ${ap.state}`} key={ap.id}>
               <div className="sf-appr-head">
@@ -990,33 +1088,40 @@ function RunPanel({ onClose }: { onClose: () => void }) {
                   </small>
                 </div>
               </div>
+              <div className="sf-appr-target">
+                <p>
+                  <em>审批对象</em>
+                  <b>{ap.kind}</b>
+                </p>
+                <strong>{ap.target}</strong>
+                <small>{ap.detail}</small>
+                <small className="sf-appr-impact">通过后：{ap.impact}</small>
+              </div>
               {ap.state === "pending" ? (
                 <>
+                  <textarea
+                    className="sf-appr-opinion"
+                    rows={2}
+                    value={opinions[ap.id] ?? ""}
+                    onChange={(e: FormEvent<HTMLTextAreaElement>) =>
+                      setOpinions((all) => ({ ...all, [ap.id]: e.currentTarget.value }))
+                    }
+                    placeholder="意见（可选）：留空可直接通过 / 驳回；通过时可补充命令，驳回时请说明原因"
+                  />
                   <div className="sf-appr-actions">
                     <button className="ok" onClick={() => resolveApproval(ap.id, "approved")}>
-                      <Check size={9} /> 批准
+                      <Check size={9} /> {(opinions[ap.id] ?? "").trim() ? "通过并附意见" : "通过"}
                     </button>
-                    <button className="no" onClick={() => setReasonFor(reasonFor === ap.id ? null : ap.id)}>
-                      <X size={9} /> 驳回
+                    <button className="no" onClick={() => resolveApproval(ap.id, "rejected")}>
+                      <X size={9} /> {(opinions[ap.id] ?? "").trim() ? "驳回并说明" : "驳回"}
                     </button>
                   </div>
-                  {reasonFor === ap.id && (
-                    <div className="sf-appr-reason">
-                      <input
-                        value={reason}
-                        onChange={(e: FormEvent<HTMLInputElement>) => setReason(e.currentTarget.value)}
-                        placeholder="驳回理由（可选）"
-                      />
-                      <button className="no" onClick={() => resolveApproval(ap.id, "rejected")}>
-                        确认驳回
-                      </button>
-                    </div>
-                  )}
                 </>
               ) : (
                 <div className="sf-appr-log">
                   {ap.state === "approved" ? "✅ 已批准" : "❌ 已驳回"}
-                  {ap.reason ? ` · ${ap.reason}` : ""}
+                  {ap.note ? ` · 补充命令：${ap.note}` : ""}
+                  {ap.reason ? ` · 原因：${ap.reason}` : ""}
                 </div>
               )}
             </div>
@@ -1948,12 +2053,122 @@ function AgentsView() {
 
 type SfPackCard = { pack_id?: string; name?: string; title?: string; description?: string; source_count?: number };
 
+/** 新建知识包弹窗：POST /api/memory-bank/packs + 可选上传来源文件。 */
+function PackCreateModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+      setFiles([]);
+      setError(null);
+      setBusy(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const pack = await sfFetch<{ pack_id?: string }>("/api/memory-bank/packs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+      });
+      const packId = pack?.pack_id;
+      if (packId) {
+        for (const file of files) {
+          const form = new FormData();
+          form.append("upload", file);
+          await sfFetch(`/api/memory-bank/packs/${packId}/files`, { method: "POST", body: form });
+        }
+      }
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "创建失败，请确认后端已连接");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" onMouseDown={onClose}>
+      <div className="contact-modal sf-auth-modal" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="关闭">
+          <X />
+        </button>
+        <p className="kicker">NEW KNOWLEDGE PACK</p>
+        <h2>新建知识包</h2>
+        <p>知识包是团队共享的知识单元；创建后可继续添加文档、网页与文本来源。</p>
+        <form onSubmit={submit}>
+          <label>
+            名称
+            <input
+              required
+              value={name}
+              onChange={(e: FormEvent<HTMLInputElement>) => setName(e.currentTarget.value)}
+              placeholder="例如：品牌空间 / 新品发布研究"
+              maxLength={200}
+            />
+          </label>
+          <label>
+            描述
+            <input
+              value={description}
+              onChange={(e: FormEvent<HTMLInputElement>) => setDescription(e.currentTarget.value)}
+              placeholder="这个知识包包含什么？（可选）"
+            />
+          </label>
+          <label>
+            上传来源文件（可选）
+            <input
+              type="file"
+              multiple
+              onChange={(e: FormEvent<HTMLInputElement>) =>
+                setFiles(Array.from(e.currentTarget.files ?? []))
+              }
+            />
+          </label>
+          {files.length > 0 && <p className="sf-embed-result ok">已选择 {files.length} 个文件，创建后自动摄入</p>}
+          {error && <p className="sf-auth-error">{error}</p>}
+          <button className="button-primary" type="submit" disabled={busy}>
+            {busy ? "创建中…" : "创建知识包"}
+            {!busy && <Plus size={16} />}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function KnowledgeView() {
   const [packs, setPacks] = useState<SfPackCard[] | null>(null);
-  useEffect(() => {
+  const [createOpen, setCreateOpen] = useState(false);
+  const reload = () => {
     sfFetch<{ packs?: SfPackCard[] }>("/api/memory-bank/packs")
       .then((d) => setPacks(Array.isArray(d?.packs) ? d.packs : []))
       .catch(() => setPacks(null));
+  };
+  useEffect(() => {
+    reload();
   }, []);
   const cards: Array<[string, string, string, string]> =
     packs === null || packs.length === 0
@@ -1976,7 +2191,7 @@ function KnowledgeView() {
           <h1>团队知识库</h1>
           <span>让每位 Agent 都基于同一份可靠信息工作。</span>
         </div>
-        <button>
+        <button onClick={() => setCreateOpen(true)}>
           <Plus size={15} /> 添加知识
         </button>
       </div>
@@ -2051,6 +2266,7 @@ function KnowledgeView() {
           </div>
         ))}
       </div>
+      <PackCreateModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={reload} />
     </section>
   );
 }
@@ -3163,7 +3379,7 @@ function SettingsView() {
   const groups: Array<[string, string[]]> = [
     ["账户", ["个人资料"]],
     ["外观", ["主题与显示", "语言"]],
-    ["集成", ["Skills", "模型与密钥", "工具提供商", "连接器", "MCP 集成"]],
+    ["集成", ["Skills", "模型与密钥", "向量模型", "工具提供商", "连接器", "MCP 集成"]],
     ["记忆", ["记忆条目", "Agent 画像", "交接与写回"]],
     ["数据", ["通知", "高级设置"]],
   ];
@@ -3181,6 +3397,8 @@ function SettingsView() {
               >
                 {item === "模型与密钥" ? (
                   <Server size={15} />
+                ) : item === "向量模型" ? (
+                  <Zap size={15} />
                 ) : item === "个人资料" ? (
                   <Users size={15} />
                 ) : item.includes("记忆") ? (
@@ -3199,6 +3417,8 @@ function SettingsView() {
         <h1>{section}</h1>
         {section === "模型与密钥" ? (
           <ModelKeysSection />
+        ) : section === "向量模型" ? (
+          <EmbeddingSection />
         ) : section === "Skills" ? (
           <SkillsSettingsList />
         ) : section === "工具提供商" ? (

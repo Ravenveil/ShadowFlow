@@ -3332,3 +3332,402 @@
   font-size: 10.5px;
   color: #7c5cff;
 }
+
+/* ===== 登录/注册弹窗（沿袭介绍页 contact-modal 视觉语言） ===== */
+.sf-auth-modal {
+  width: min(100%, 460px);
+}
+.sf-auth-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 20px;
+}
+.sf-auth-tabs button {
+  flex: 1;
+  padding: 9px 0;
+  border: 1px solid #c9c5bd;
+  border-radius: 6px;
+  background: #fff;
+  color: #77737d;
+  font-size: 11px;
+  font-weight: 700;
+}
+.sf-auth-tabs button.on {
+  border-color: #17162d;
+  background: #17162d;
+  color: #fff;
+}
+.sf-auth-error {
+  margin: 2px 0 0;
+  padding: 9px 11px;
+  border: 1px solid #f3d3c8;
+  border-radius: 6px;
+  background: #fdefeb;
+  color: #e2542f;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.sf-auth-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  align-items: center;
+  margin-top: 18px;
+}
+.sf-auth-switch {
+  border: 0;
+  background: none;
+  color: #17162d;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sf-auth-demo {
+  border: 0;
+  background: none;
+  color: #77737d;
+  font-size: 10px;
+}
+.sf-auth-demo:hover {
+  color: #ff5e3a;
+}
+
+/* ===== 左下角账号区（登录态三点菜单 / 未登录整块可点） ===== */
+.sf-account--user,
+.sf-account--guest {
+  position: relative;
+  grid-template-columns: 1fr 18px;
+}
+.sf-account-main {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.sf-account-main > span,
+.sf-account--guest > span {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #17162d;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+}
+.sf-account--guest > span svg {
+  color: #fff;
+}
+.sf-account-main > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sf-account-main strong,
+.sf-account--guest strong {
+  font-size: 9px;
+}
+.sf-account-main small,
+.sf-account--guest small {
+  overflow: hidden;
+  color: #999;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-account-dots {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #999;
+}
+.sf-account-dots:hover {
+  background: #e5e5e2;
+  color: #17162d;
+}
+.sf-account--guest {
+  width: 100%;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.sf-account--guest:hover strong {
+  color: #ff5e3a;
+}
+.sf-account-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 60;
+  width: 100%;
+  min-width: 150px;
+  border: 1px solid var(--sf-line, #d9d4ca);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(23, 22, 45, 0.14);
+  padding: 7px;
+}
+.sf-account-menu p {
+  margin: 0 0 6px;
+  padding: 3px 5px;
+  overflow: hidden;
+  color: #999;
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-account-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #e2542f;
+  font-size: 8.5px;
+  font-weight: 700;
+}
+.sf-account-menu button:hover {
+  background: #fdefeb;
+}
+
+/* ===== 审批面板：审批对象说明 + 意见框 ===== */
+.sf-appr-hint {
+  margin: 8px 0 10px;
+  padding: 6px 8px;
+  border: 1px dashed #dddad4;
+  border-radius: 7px;
+  background: #fbfaf7;
+  color: #8a8a86;
+  font-size: 6.5px;
+  line-height: 1.6;
+}
+.sf-appr-target {
+  margin-top: 7px;
+  border: 1px solid #e8e6e1;
+  border-radius: 7px;
+  background: #f8f7f4;
+  padding: 6px 7px;
+}
+.sf-appr-target > p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
+}
+.sf-appr-target > p em {
+  font-style: normal;
+  color: #8a8a86;
+  font-size: 6px;
+  letter-spacing: 0.08em;
+}
+.sf-appr-target > p b {
+  border-radius: 4px;
+  background: #17162d;
+  color: #fff;
+  font-size: 6px;
+  font-weight: 700;
+  padding: 1px 5px;
+}
+.sf-appr-target > strong {
+  display: block;
+  font-size: 7.5px;
+  line-height: 1.35;
+}
+.sf-appr-target > small {
+  display: block;
+  margin-top: 3px;
+  color: #999;
+  font-size: 6.5px;
+  line-height: 1.5;
+}
+.sf-appr-target > small.sf-appr-impact {
+  color: #2c9a73;
+}
+.sf-appr-opinion {
+  width: 100%;
+  margin-top: 7px;
+  padding: 6px 7px;
+  border: 1px solid #e2e2e0;
+  border-radius: 7px;
+  background: #fff;
+  color: var(--sf-text, #17162d);
+  font-size: 6.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.sf-appr-opinion:focus {
+  outline: none;
+  border-color: #c9c1f7;
+}
+.sf-appr-opinion::placeholder {
+  color: #b3a897;
+}
+
+/* ===== 设置：向量模型（EmbeddingSection） ===== */
+.sf-embed {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sf-embed-intro {
+  margin: 0;
+  color: var(--sf-muted, #77737d);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+.sf-embed-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--sf-line, #d9d4ca);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.sf-embed-switch input {
+  margin-top: 2px;
+  accent-color: #ff5e3a;
+}
+.sf-embed-switch span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sf-embed-switch strong {
+  font-size: 12px;
+}
+.sf-embed-switch small {
+  color: var(--sf-muted, #77737d);
+  font-size: 10.5px;
+}
+.sf-embed-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.sf-embed-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  color: #57536b;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.sf-embed-field--wide {
+  grid-column: 1 / -1;
+}
+.sf-embed-field select,
+.sf-embed-field input {
+  border: 1px solid var(--sf-line, #d9d4ca);
+  border-radius: 10px;
+  background: #faf8f3;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--sf-text, #17162d);
+  outline: none;
+}
+.sf-embed-field select {
+  cursor: pointer;
+}
+.sf-embed-field select:focus,
+.sf-embed-field input:focus {
+  border-color: #c9c1f7;
+  background: #fff;
+}
+.sf-embed-field small {
+  color: var(--sf-muted, #77737d);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+.sf-embed-key {
+  display: flex;
+  gap: 8px;
+}
+.sf-embed-key input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+}
+.sf-embed-key button {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--sf-line, #d9d4ca);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0 12px;
+  color: var(--sf-muted, #77737d);
+  cursor: pointer;
+}
+.sf-embed-key button:hover {
+  color: #ff5e3a;
+}
+.sf-embed-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sf-embed-primary,
+.sf-embed-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sf-embed-primary {
+  border: 1px solid #17162d;
+  background: #17162d;
+  color: #fff;
+}
+.sf-embed-primary:hover {
+  background: #26244a;
+}
+.sf-embed-primary:disabled,
+.sf-embed-ghost:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.sf-embed-ghost {
+  border: 1px solid var(--sf-line, #d9d4ca);
+  background: #fff;
+  color: var(--sf-text, #17162d);
+}
+.sf-embed-ghost:hover {
+  border-color: #c9c1f7;
+}
+.sf-embed-result {
+  margin: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+}
+.sf-embed-result.ok {
+  background: #eaf6f1;
+  color: #2c9a73;
+  border: 1px solid #cbe7db;
+}
+.sf-embed-result.failed {
+  background: #fdefeb;
+  color: #e2542f;
+  border: 1px solid #f3d3c8;
+}

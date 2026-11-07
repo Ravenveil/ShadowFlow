@@ -35,6 +35,11 @@ import {
   setSetting,
   deleteSetting,
 } from '../../storage/settings';
+import {
+  EmbeddingConfig,
+  loadEmbeddingConfig,
+  saveEmbeddingConfig,
+} from '../../storage/embedding';
 
 const router = Router();
 
@@ -1184,6 +1189,153 @@ router.put('/appearance', (req: Request, res: Response) => {
   } catch (e: unknown) {
     const code = e instanceof Error ? e.message : 'UNKNOWN';
     return res.status(500).json({ error: { code: 'INTERNAL', message: code } });
+  }
+});
+
+// ── Embedding model config (knowledge-base vectorization, 2026-11-07) ────────
+//
+// Mirrors the BYOK boundary: stored server-side in
+// .shadowflow/embedding-config.json and consumed by the Python MemoryBank
+// (SettingsBackedEmbedder) for BM25+vector hybrid retrieval. Defaults are
+// qwen (DashScope OpenAI-compatible) with the latest qwen embedding model;
+// API keys are never baked in — the key field starts empty.
+
+const EMBEDDING_VALID_PROVIDERS = new Set(['qwen', 'openai', 'zhipu', 'mimo', 'deepseek', 'custom']);
+
+function embeddingPublicView(config: EmbeddingConfig) {
+  return {
+    enabled: config.enabled,
+    provider: config.provider,
+    model: config.model,
+    baseUrl: config.baseUrl,
+    hasKey: Boolean(config.apiKey),
+    apiKeyMasked: maskApiKey(config.apiKey),
+    updatedAt: config.updatedAt ?? null,
+  };
+}
+
+// GET /api/settings/embedding → masked config (+ product defaults when unset)
+router.get('/embedding', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(embeddingPublicView(loadEmbeddingConfig()));
+});
+
+// PUT /api/settings/embedding { enabled?, provider?, model?, baseUrl?, apiKey? }
+//   partial merge — omitted fields are preserved. apiKey: '' clears the key.
+router.put('/embedding', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as {
+    enabled?: unknown;
+    provider?: unknown;
+    model?: unknown;
+    baseUrl?: unknown;
+    apiKey?: unknown;
+  };
+  const current = loadEmbeddingConfig();
+  const next: EmbeddingConfig = { ...current };
+
+  if (body.enabled !== undefined) {
+    if (typeof body.enabled !== 'boolean') {
+      return res.status(400).json({ error: { code: 'INVALID_FIELD', field: 'enabled', message: 'enabled must be boolean' } });
+    }
+    next.enabled = body.enabled;
+  }
+  if (body.provider !== undefined) {
+    if (typeof body.provider !== 'string' || !EMBEDDING_VALID_PROVIDERS.has(body.provider)) {
+      return res.status(400).json({ error: { code: 'INVALID_FIELD', field: 'provider', message: `provider must be one of ${[...EMBEDDING_VALID_PROVIDERS].join(' | ')}` } });
+    }
+    next.provider = body.provider;
+  }
+  if (body.model !== undefined) {
+    if (typeof body.model !== 'string' || !body.model.trim()) {
+      return res.status(400).json({ error: { code: 'INVALID_FIELD', field: 'model', message: 'model must be a non-empty string' } });
+    }
+    next.model = body.model.trim();
+  }
+  if (body.baseUrl !== undefined) {
+    if (typeof body.baseUrl !== 'string' || !body.baseUrl.trim()) {
+      return res.status(400).json({ error: { code: 'INVALID_FIELD', field: 'baseUrl', message: 'baseUrl must be a non-empty string' } });
+    }
+    next.baseUrl = body.baseUrl.trim().replace(/\/+$/, '');
+  }
+  if (body.apiKey !== undefined) {
+    if (typeof body.apiKey !== 'string') {
+      return res.status(400).json({ error: { code: 'INVALID_FIELD', field: 'apiKey', message: 'apiKey must be a string' } });
+    }
+    next.apiKey = body.apiKey.trim();
+  }
+
+  next.updatedAt = new Date().toISOString();
+  try {
+    saveEmbeddingConfig(next);
+  } catch (err) {
+    return res.status(500).json({ error: { code: 'INTERNAL', message: err instanceof Error ? err.message : String(err) } });
+  }
+  res.json(embeddingPublicView(next));
+});
+
+// GET /api/settings/embedding/reveal → { apiKey: <plaintext> } (eye-toggle)
+router.get('/embedding/reveal', (_req: Request, res: Response) => {
+  const config = loadEmbeddingConfig();
+  if (!config.apiKey) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'embedding api key not configured' } });
+  }
+  res.json({ apiKey: config.apiKey });
+});
+
+// POST /api/settings/embedding/check
+//   Live connectivity probe: POST {baseUrl}/embeddings with one short input.
+//   body may override { model?, baseUrl?, apiKey? } so the UI can test drafts
+//   before saving; omitted fields fall back to the stored config.
+router.post('/embedding/check', async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as { model?: unknown; baseUrl?: unknown; apiKey?: unknown };
+  const stored = loadEmbeddingConfig();
+  const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : stored.model;
+  const baseUrl = (typeof body.baseUrl === 'string' && body.baseUrl.trim() ? body.baseUrl.trim() : stored.baseUrl).replace(/\/+$/, '');
+  const apiKey = typeof body.apiKey === 'string' && body.apiKey.trim() ? body.apiKey.trim() : stored.apiKey;
+
+  if (!apiKey) {
+    return res.status(400).json({
+      error: { code: 'NOT_CONFIGURED', message: '尚未配置 Embedding API Key' },
+    });
+  }
+
+  const startTime = Date.now();
+  try {
+    const upstream = await fetch(`${baseUrl}/embeddings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model, input: ['连通测试'] }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const latencyMs = Date.now() - startTime;
+    if (!upstream.ok) {
+      const detail = await upstream.text().catch(() => '');
+      return res.json({
+        overall: 'failed',
+        model,
+        baseUrl,
+        latencyMs,
+        statusCode: upstream.status,
+        error:
+          upstream.status === 401 || upstream.status === 403
+            ? '鉴权失败（可能是密钥错误或额度耗尽）'
+            : `HTTP ${upstream.status} ${detail.slice(0, 200)}`.trim(),
+      });
+    }
+    const data = (await upstream.json()) as { data?: Array<{ embedding?: number[] }> };
+    const dims = Array.isArray(data?.data) && data.data[0]?.embedding ? data.data[0].embedding.length : 0;
+    return res.json({ overall: 'ok', model, baseUrl, latencyMs, dims, statusCode: upstream.status });
+  } catch (err) {
+    return res.json({
+      overall: 'failed',
+      model,
+      baseUrl,
+      latencyMs: Date.now() - startTime,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 

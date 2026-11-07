@@ -11,6 +11,11 @@
  *   POST /api/auth/guest          — issue a guest session token
  *   GET  /api/auth/nonce          — generate a fresh SIWE nonce
  *   POST /api/auth/verify         — verify SIWE signature → session token
+ *   POST /api/auth/register       — email + password registration → session
+ *   POST /api/auth/login          — email + password login → session
+ *   POST /api/auth/logout         — revoke the current session
+ *   POST /api/auth/profile        — update display_name (wallet/email)
+ *   POST /api/auth/subscribe      — landing-page lead capture (no account)
  *   GET  /api/auth/me             — validate Bearer token, return profile
  */
 
@@ -23,8 +28,13 @@ import {
   useNonce,
   createSession,
   getSessionByTokenHash,
+  deleteSession,
   upsertProfile,
   getProfile,
+  createEmailUser,
+  getEmailUser,
+  updateEmailUserDisplayName,
+  addLead,
 } from '../../storage/auth';
 
 const router = Router();
@@ -52,8 +62,60 @@ function extractBearer(req: Request): string | null {
 const WALLET_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Session TTL for guest logins: 24 hours */
 const GUEST_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+/** Session TTL for email logins: 7 days */
+const EMAIL_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Nonce TTL: 5 minutes */
 const NONCE_TTL_MS = 5 * 60 * 1000;
+
+// ── Password hashing (scrypt — built-in, no native deps) ─────────────────────
+
+const SCRYPT_KEYLEN = 32;
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 } as const;
+
+/** hashPassword → 'scrypt$<salt_hex>$<hash_hex>' */
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, SCRYPT_PARAMS);
+  return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
+}
+
+/** verifyPassword — timing-safe comparison against the stored digest. */
+function verifyPassword(password: string, stored: string): boolean {
+  const parts = stored.split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  const salt = Buffer.from(parts[1], 'hex');
+  const expected = Buffer.from(parts[2], 'hex');
+  if (salt.length === 0 || expected.length === 0) return false;
+  const actual = crypto.scryptSync(password, salt, expected.length, SCRYPT_PARAMS);
+  return crypto.timingSafeEqual(actual, expected);
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LEN = 8;
+
+interface EmailAuthBody {
+  email?: unknown;
+  password?: unknown;
+  name?: unknown;
+}
+
+/** Validate {email, password} shape; returns an error string or null. */
+function validateCredentials(body: EmailAuthBody, { requirePassword = true } = {}): string | null {
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  if (!email || !EMAIL_RE.test(email) || email.length > 254) {
+    return 'Valid email required';
+  }
+  if (requirePassword) {
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (password.length < MIN_PASSWORD_LEN) {
+      return `Password must be at least ${MIN_PASSWORD_LEN} characters`;
+    }
+    if (password.length > 256) {
+      return 'Password too long';
+    }
+  }
+  return null;
+}
 
 // ── POST /api/auth/guest ──────────────────────────────────────────────────────
 
@@ -171,6 +233,152 @@ router.post('/verify', async (req: Request, res: Response) => {
   });
 });
 
+// ── POST /api/auth/register (email + password) ───────────────────────────────
+
+router.post('/register', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as EmailAuthBody;
+  const invalid = validateCredentials(body);
+  if (invalid) {
+    return res.status(400).json({ error: invalid });
+  }
+  const email = (body.email as string).trim().toLowerCase();
+  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : null;
+
+  if (getEmailUser(email)) {
+    return res.status(409).json({ error: 'Email already registered' });
+  }
+
+  try {
+    createEmailUser(email, hashPassword(body.password as string), name);
+    const rawToken = randomHex(32);
+    const expiresAt = new Date(Date.now() + EMAIL_SESSION_TTL_MS).toISOString();
+    createSession(sha256(rawToken), email, 'email', expiresAt);
+    res.status(201).json({
+      token: rawToken,
+      user: {
+        address: email,
+        email,
+        display_name: name,
+        auth_type: 'email',
+      },
+    });
+  } catch (err) {
+    console.error('[auth] register error:', err);
+    res.status(500).json({ error: 'Failed to register account' });
+  }
+});
+
+// ── POST /api/auth/login (email + password) ──────────────────────────────────
+
+router.post('/login', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as EmailAuthBody;
+  const invalid = validateCredentials(body);
+  if (invalid) {
+    return res.status(400).json({ error: invalid });
+  }
+  const email = (body.email as string).trim().toLowerCase();
+
+  const user = getEmailUser(email);
+  // Same error for unknown email and wrong password — no account enumeration.
+  if (!user || !verifyPassword(body.password as string, user.password_hash)) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+
+  try {
+    const rawToken = randomHex(32);
+    const expiresAt = new Date(Date.now() + EMAIL_SESSION_TTL_MS).toISOString();
+    createSession(sha256(rawToken), email, 'email', expiresAt);
+    res.json({
+      token: rawToken,
+      user: {
+        address: email,
+        email,
+        display_name: user.display_name,
+        auth_type: 'email',
+      },
+    });
+  } catch (err) {
+    console.error('[auth] login error:', err);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+// ── POST /api/auth/logout ────────────────────────────────────────────────────
+
+router.post('/logout', (req: Request, res: Response) => {
+  const rawToken = extractBearer(req);
+  if (rawToken) {
+    try {
+      deleteSession(sha256(rawToken));
+    } catch (err) {
+      console.error('[auth] logout error:', err);
+    }
+  }
+  res.status(204).send();
+});
+
+// ── POST /api/auth/profile { display_name } ──────────────────────────────────
+// Self-service display-name edit for both wallet and email accounts.
+
+router.post('/profile', (req: Request, res: Response) => {
+  const rawToken = extractBearer(req);
+  if (!rawToken) {
+    return res.status(401).json({ error: 'Authorization: Bearer <token> required' });
+  }
+  const session = getSessionByTokenHash(sha256(rawToken));
+  if (!session) {
+    return res.status(401).json({ error: 'Invalid or expired session token' });
+  }
+  const body = (req.body ?? {}) as { display_name?: unknown };
+  const displayName = typeof body.display_name === 'string' ? body.display_name.trim().slice(0, 80) : '';
+  if (!displayName) {
+    return res.status(400).json({ error: 'display_name required' });
+  }
+
+  try {
+    if (session.auth_type === 'email') {
+      updateEmailUserDisplayName(session.address, displayName);
+    } else if (session.auth_type === 'wallet') {
+      upsertProfile(session.address, `did:0g:${session.address}`, displayName);
+    } else {
+      return res.status(400).json({ error: 'Guest sessions have no profile' });
+    }
+    res.json({ ok: true, display_name: displayName });
+  } catch (err) {
+    console.error('[auth] profile error:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// ── POST /api/auth/subscribe { email, name?, source?, note? } ────────────────
+// Landing-page lead capture (订阅产品进展 / 申请内测 / 预约演示 / 申请套餐).
+// Idempotent per submit; no account is created here — the success UI links to
+// registration so the same email can become a real account.
+
+router.post('/subscribe', (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as {
+    email?: unknown;
+    name?: unknown;
+    source?: unknown;
+    note?: unknown;
+  };
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  if (!email || !EMAIL_RE.test(email) || email.length > 254) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+  const source = typeof body.source === 'string' ? body.source.trim().slice(0, 40) : null;
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : null;
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 2000) : null;
+
+  try {
+    const lead = addLead(email, { name, source, note });
+    res.json({ ok: true, lead_id: lead.id });
+  } catch (err) {
+    console.error('[auth] subscribe error:', err);
+    res.status(500).json({ error: 'Failed to save subscription' });
+  }
+});
+
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 
 router.get('/me', (req: Request, res: Response) => {
@@ -191,6 +399,20 @@ router.get('/me', (req: Request, res: Response) => {
       address: 'guest',
       display_name: 'Guest',
       auth_type: 'guest',
+    });
+  }
+
+  // Email + password accounts live in auth_email_users
+  if (session.auth_type === 'email') {
+    const user = getEmailUser(session.address);
+    if (!user) {
+      return res.status(401).json({ error: 'Profile not found' });
+    }
+    return res.json({
+      address: user.email,
+      email: user.email,
+      display_name: user.display_name,
+      auth_type: 'email',
     });
   }
 
