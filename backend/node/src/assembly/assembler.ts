@@ -669,6 +669,9 @@ export async function* runSkillAssembler(
       maxTokens: opts.max_tokens,
       temperature: opts.temperature,
       sessionId: session_id,
+      // T12/BE-07 成本归属：组装期即一轮 run（run_id=session_id）；团队路径
+      // 的 per-node agent 归属由 executor 的 turn usageCtx 覆盖。
+      usageCtx: { session_id: session_id ?? '', run_id: session_id ?? '' },
       // CLI/ACP/MCP cwd:用户在对话框选的目录优先,否则回退到 session 产物目录。
       workspace,
     });
