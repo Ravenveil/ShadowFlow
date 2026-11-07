@@ -83,6 +83,9 @@ export async function uploadPendingAttachments(
 /** 回收附件本地预览 URL（removeAttachment / 提交成功 / 卸载时调用）。 */
 export function revokeAttachmentPreviews(attachments: AttachedFile[]): void {
   for (const a of attachments) {
-    if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    // 环境守卫：jsdom 等无 URL.revokeObjectURL（卸载清理时序无关，防御性跳过）。
+    if (a.previewUrl && typeof URL.revokeObjectURL === 'function') {
+      URL.revokeObjectURL(a.previewUrl);
+    }
   }
 }
