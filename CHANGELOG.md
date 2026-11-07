@@ -3,6 +3,36 @@
 All notable changes to ShadowFlow are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — 2026-11-07（WorkBuddy 平台能力补齐：平台工具层 + 能力技能）
+
+### Added — 8 个平台内置工具（`server/src/lib/tools/builtin/`）
+- 沿用 `web_search` 的「env 选 provider + 未配置返回结构化 stub」契约（新增共享
+  `provider-http.ts`：30s 超时、AbortSignal 合并、JSON 解析）：
+  - **send_email**（默认 prompt）：Resend（`RESEND_API_KEY` + `SF_MAIL_FROM`）或通用
+    邮件桥（`SF_MAIL_API_BASE`），支持 base64 附件。
+  - **im_read**（allow）/ **im_send**（prompt）：通用 IM 桥（`SF_IM_API_BASE`，契约
+    `GET /conversations`、`GET /conversations/{id}/messages`、`POST /messages`），
+    企微/飞书/钉钉等在桥侧适配。
+  - **github_request**（allow，仅 GET）/ **github_write**（prompt，需 `GITHUB_TOKEN`）：
+    api.github.com REST 直通，路径安全校验防 SSRF，403 附限流提示。
+  - **image_generate**（allow）：OpenAI 兼容 `/images/generations`
+    （`SF_IMAGE_API_BASE` 等）。
+  - **video_generate** / **generate_3d**（均 prompt，昂贵）：`SF_VIDEO_API_BASE` /
+    `SF_3D_API_BASE`，异步 provider 返回 job 句柄透传。
+- `web_search` 增强（向后兼容）：`recency`（day/week/month/year → SerpAPI tbs=qdr:*、
+  Tavily days）+ `source: 'wechat'` 微信公众号搜索（SerpAPI engine=wechat；Tavily
+  无此引擎时降级 web 并附 note）。
+- `shadowflow/runtime/tool_registry.py` BUILTIN_TOOLS 目录镜像上述 8 工具
+  （5 → 13 条，命名与 Node 侧一致）。
+- 9 个能力/生成技能（`server/skills/`，skill-loader 零错误加载）：`media-generation`
+  （图/视频/3D 生成）、`image-processing`（去水印/修复/抠图/美化）、`office-suite`
+  （Word/Excel/PPT + 表格分析 + 文档美化）、`pdf-reader`、`browser-automation`
+  （Playwright）、`messaging`（IM + 邮件）、`github-ops`、`knowledge-search`
+  （知识库 + 网页检索）、`app-deploy`（网站/小程序部署发布）。allowed-tools 均与
+  ToolSpec.name 逐字节匹配；写类副作用工具经 `promptDefaultsForTools` 保持审批门。
+- 测试：`server/src/__tests__/platform-tools.test.ts` 27 例（注册表完整性、stub 契约、
+  provider 请求映射、入参校验、微信/时间过滤映射），server 全量 231 例通过。
+
 ## [Unreleased] — 2026-11-06～07
 
 ### Added — 功能登记补记（此前 PR 未登记，2026-11-06～07 已合并）
@@ -18,6 +48,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - 前端构建：`d683f41` 引用未导出的 `ensureGroupTeam` 致 `vite build` 失败，由 #25 补齐实现恢复。
+
+## [Unreleased] — 2026-11-06（根目录结构合并：按功能归箱，tracked 文件夹 15 → 12）
 
 ### Changed — 目录合并（`git mv` 保留历史）
 - **backend-poc/ → examples/backend-poc/**：OPC OS 独立原型后端归入示例区

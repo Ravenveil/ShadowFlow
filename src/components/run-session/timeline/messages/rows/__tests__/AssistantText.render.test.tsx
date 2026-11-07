@@ -65,6 +65,26 @@ describe('AssistantText (Round 2.5 chip rendering)', () => {
     expect(container.textContent).toContain('detail');
   });
 
+  it('renders a GFM pipe table as a real <table> (not raw pipe text)', () => {
+    const msg = mk(
+      [
+        '进度：',
+        '',
+        '| 环节 | 状态 |',
+        '|---|---|',
+        '| 需求梳理 | ✅ 完成 |',
+        '| 验证复盘 | ⏸️ 等上游 |',
+      ].join('\n'),
+    );
+    const { container } = render(<AssistantText msg={msg} />);
+    const table = container.querySelector('table');
+    expect(table).not.toBeNull();
+    expect(table!.querySelectorAll('th')).toHaveLength(2);
+    expect(table!.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(container.textContent).toContain('需求梳理');
+    expect(container.textContent).not.toContain('|---|');
+  });
+
   it('produces multiple distinct chip + text DOM nodes (not one opaque block)', () => {
     const msg = mk(
       [

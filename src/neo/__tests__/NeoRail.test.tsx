@@ -22,11 +22,8 @@ vi.mock('../../api/groupApi', () => ({
   resolveDmConversation: vi.fn().mockResolvedValue(null),
   resolveTeamGroup: vi.fn().mockResolvedValue('g-team-1'),
 }));
-vi.mock('../../api/knowledge', () => ({
+vi.mock('../../api/memoryBank', () => ({
   listPacks: vi.fn().mockResolvedValue({ data: { packs: [] } }),
-}));
-vi.mock('../../api/knowledgeVaults', () => ({
-  listVaults: vi.fn().mockResolvedValue({ data: { vaults: [] } }),
 }));
 vi.mock('../../core/auth/AuthContext', () => ({
   useAuth: () => ({ user: null }),

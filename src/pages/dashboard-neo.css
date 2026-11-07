@@ -50,7 +50,7 @@
 /* ── 区块 ─────────────────────────────────────────────────────────────── */
 .neo-db-section { margin-bottom: 22px; max-width: 960px; }
 .neo-db-section-title { margin: 0 0 10px; font-size: 13px; font-weight: 650; }
-.neo-db-panel { border: 1px solid var(--t-line); border-radius: 14px; background: var(--t-card, var(--t-bg)); padding: 16px; }
+.neo-db-panel { border: 1px solid color-mix(in srgb, var(--t-line) 70%, var(--t-fg-3)); border-radius: 14px; background: var(--t-card, var(--t-bg)); padding: 16px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
 
 /* ── 趋势图（SVG 折线）────────────────────────────────────────────────── */
 .neo-db-chart-wrap { display: flex; gap: 6px; margin-bottom: 10px; }
@@ -83,3 +83,104 @@
 
 /* ── embedded 变体（NeoApp 中栏内嵌：rail 常驻，紧凑填充）───────────────── */
 .neo-db.embedded { min-height: 100%; padding: 20px 24px; }
+
+/* ===== 产品盈利看板（2026-11-07 重构，neo-dash-*）=====
+   复用 neo-db-* 基础件（tabs/panel/table/status），只补盈利专属件。
+   分段色为图表惯例固定色（不随主题翻转）；红=赚钱、绿=亏钱（涨红跌绿）。
+   数据源：GET/POST /api/craft-profit/*。 */
+
+/* 概览五卡：第一张「赚了」放大强调 */
+.neo-dash-hero-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.neo-dash-hero-cards .neo-db-card { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); border-color: color-mix(in srgb, var(--t-line) 70%, var(--t-fg-3)); }
+.neo-dash-card--hero { grid-column: span 2; background: color-mix(in srgb, #D62828 5%, var(--t-card, var(--t-bg))) !important; }
+@media (max-width: 720px) { .neo-dash-card--hero { grid-column: span 1; } }
+.neo-dash-hero-value { font-size: 30px; font-weight: 750; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; color: #D62828; }
+.neo-dash-hero-value.neg { color: #15803D; }
+.neo-dash-hero-value.zero { color: var(--t-fg-3); }
+
+/* 数据看板双列网格：宽屏两列，窄屏折行 */
+.neo-dash-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; align-items: start; }
+.neo-dash-grid2 > .neo-db-section { margin-bottom: 16px; min-width: 0; }
+
+/* 面板头部：标题 + 右侧小注（数据看板感的统一头部） */
+.neo-dash-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--t-line); }
+.neo-dash-panel-title { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: -0.005em; }
+.neo-dash-panel-note { font-size: 11px; color: var(--t-fg-4); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* 每卖 100 元去向：堆叠分段条 + 图例 */
+.neo-dash-per100 { display: flex; flex-direction: column; gap: 10px; }
+.neo-dash-per100-track { display: flex; height: 18px; border-radius: 999px; overflow: hidden; background: var(--t-accent-tint); }
+.neo-dash-per100-track.empty { background: repeating-linear-gradient(135deg, var(--t-accent-tint), var(--t-accent-tint) 6px, transparent 6px, transparent 12px); border: 1px dashed var(--t-line); }
+.neo-dash-seg { display: block; height: 100%; min-width: 0; transition: width 0.2s ease; }
+.neo-dash-seg.seg-artisan { background: #8B5CF6; }
+.neo-dash-seg.seg-shipping { background: #3B82F6; }
+.neo-dash-seg.seg-marketing { background: #14B8A6; }
+.neo-dash-seg.seg-profit { background: #D62828; }
+.neo-dash-per100-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--t-fg-3); font-variant-numeric: tabular-nums; }
+.neo-dash-dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 6px; vertical-align: 0; }
+.neo-dash-dot.seg-artisan { background: #8B5CF6; }
+.neo-dash-dot.seg-shipping { background: #3B82F6; }
+.neo-dash-dot.seg-marketing { background: #14B8A6; }
+.neo-dash-dot.seg-profit { background: #D62828; }
+.neo-dash-dot.seg-neg { background: #22C55E; }
+
+/* 每日盈利柱状图：赚钱红柱、亏钱绿柱，零轴参考线 */
+.neo-dash-bar.up { fill: #D62828; }
+.neo-dash-bar.down { fill: #22C55E; }
+.neo-dash-bar-zero { stroke: var(--t-line); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* 累计盈利曲线：蓝色折线 + 淡面积 + 末点 */
+.neo-dash-curve-line { fill: none; stroke: #2563EB; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.neo-dash-curve-area { fill: rgba(37, 99, 235, 0.12); stroke: none; }
+.neo-dash-curve-dot { fill: #2563EB; stroke: var(--t-card, var(--t-bg)); stroke-width: 1.5; }
+
+/* 智能体运营：操作行 + 动态流水 */
+.neo-dash-agent-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.neo-dash-submit--inline { width: auto; padding: 0 18px; }
+.neo-dash-agent-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--t-fg-3); max-height: 170px; overflow-y: auto; }
+.neo-dash-agent-feed li { display: flex; align-items: baseline; gap: 0; line-height: 1.5; }
+.neo-dash-feed-ts { color: var(--t-fg-4); font-variant-numeric: tabular-nums; margin-right: 8px; white-space: nowrap; }
+.neo-dash-dot.kind-marketing { background: #8B5CF6; }
+.neo-dash-dot.kind-order { background: #D62828; }
+.neo-dash-dot.kind-shipping { background: #3B82F6; }
+.neo-dash-dot.seg-off { background: var(--t-fg-4); }
+
+/* 空态：紧凑一行 / 图表虚线占位（不做大片留白） */
+.neo-dash-empty { margin: 0; padding: 12px 4px; font-size: 12px; color: var(--t-fg-4); }
+.neo-dash-empty-inline { margin: 0; font-size: 12px; color: var(--t-fg-4); }
+.neo-dash-empty-chart { position: relative; height: 110px; display: flex; align-items: center; justify-content: center; }
+.neo-dash-empty-chart::after { content: ''; position: absolute; left: 4px; right: 4px; top: 50%; border-top: 1px dashed var(--t-line); }
+.neo-dash-empty-chart p { position: relative; margin: 0; padding: 0 12px; background: var(--t-card, var(--t-bg)); font-size: 12px; color: var(--t-fg-4); }
+
+/* 录入区：双表单并排，窄屏折行 */
+.neo-dash-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; max-width: 960px; }
+@media (max-width: 860px) { .neo-dash-form-grid { grid-template-columns: 1fr; } }
+.neo-dash-form { display: flex; flex-direction: column; gap: 10px; }
+.neo-dash-form-title { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
+.neo-dash-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--t-fg-3); }
+.neo-dash-field input, .neo-dash-field select {
+  width: 100%; box-sizing: border-box;
+  height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--t-line);
+  background: var(--t-bg); color: var(--t-fg); font-size: 13px; font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.neo-dash-field input:focus, .neo-dash-field select:focus { outline: none; border-color: var(--t-accent); }
+.neo-dash-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.neo-dash-preview { margin: 0; font-size: 11px; color: var(--t-fg-4); font-variant-numeric: tabular-nums; min-height: 16px; line-height: 1.5; }
+.neo-dash-preview .neg { color: #15803D; font-weight: 600; }
+.neo-dash-submit {
+  width: 100%;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid #2563EB;
+  background: #2563EB; color: #FFFFFF;
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer; transition: all 0.15s ease;
+}
+.neo-dash-submit:hover { background: #1D4ED8; border-color: #1D4ED8; }
+.neo-dash-submit:disabled { opacity: 0.5; cursor: default; }
+
+/* 演示数据一行 */
+.neo-dash-demo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.neo-dash-demo-hint { font-size: 11px; color: var(--t-fg-4); }

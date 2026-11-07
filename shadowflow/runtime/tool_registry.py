@@ -78,6 +78,83 @@ BUILTIN_TOOLS: List[Dict[str, Any]] = [
         "credentials_required": False,
         "boss_only": True,
     },
+    # --- WorkBuddy 平台能力镜像 (2026-11-07) ---
+    # Names match the Node ConversationRuntime builtins 1:1
+    # (server/src/lib/tools/builtin/). credentials_required reflects whether a
+    # real provider call needs env credentials; tools still return a
+    # structured stub when unconfigured.
+    {
+        "tool_id": "builtin:send_email",
+        "name": "send_email",
+        "type": "builtin",
+        "description": "Send an email via Resend or a generic mail bridge (RESEND_API_KEY / SF_MAIL_API_BASE).",
+        "version": "1.0",
+        "icon": "✉️",
+        "credentials_required": True,
+    },
+    {
+        "tool_id": "builtin:im_read",
+        "name": "im_read",
+        "type": "builtin",
+        "description": "Read chat/messaging data via the IM bridge (SF_IM_API_BASE): list conversations, read history.",
+        "version": "1.0",
+        "icon": "💬",
+        "credentials_required": True,
+    },
+    {
+        "tool_id": "builtin:im_send",
+        "name": "im_send",
+        "type": "builtin",
+        "description": "Send a chat message via the IM bridge (SF_IM_API_BASE).",
+        "version": "1.0",
+        "icon": "📨",
+        "credentials_required": True,
+    },
+    {
+        "tool_id": "builtin:github_request",
+        "name": "github_request",
+        "type": "builtin",
+        "description": "Read from the GitHub REST API (GET): repos, issues, pull requests, search.",
+        "version": "1.0",
+        "icon": "🐙",
+        "credentials_required": False,
+    },
+    {
+        "tool_id": "builtin:github_write",
+        "name": "github_write",
+        "type": "builtin",
+        "description": "Write to the GitHub REST API (POST/PUT/PATCH/DELETE): issues, comments, PRs. Requires GITHUB_TOKEN.",
+        "version": "1.0",
+        "icon": "✍️",
+        "credentials_required": True,
+    },
+    {
+        "tool_id": "builtin:image_generate",
+        "name": "image_generate",
+        "type": "builtin",
+        "description": "Generate images from a text prompt (SF_IMAGE_API_BASE, OpenAI-compatible).",
+        "version": "1.0",
+        "icon": "🎨",
+        "credentials_required": True,
+    },
+    {
+        "tool_id": "builtin:video_generate",
+        "name": "video_generate",
+        "type": "builtin",
+        "description": "Generate a short video from a text prompt (SF_VIDEO_API_BASE).",
+        "version": "1.0",
+        "icon": "🎬",
+        "credentials_required": True,
+    },
+    {
+        "tool_id": "builtin:generate_3d",
+        "name": "generate_3d",
+        "type": "builtin",
+        "description": "Generate a 3D model from a text prompt (SF_3D_API_BASE).",
+        "version": "1.0",
+        "icon": "🧊",
+        "credentials_required": True,
+    },
 ]
 
 

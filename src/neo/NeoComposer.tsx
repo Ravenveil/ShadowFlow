@@ -60,6 +60,7 @@ import {
   ExternalLink,
   PawPrint,
   Search,
+  Mic,
 } from 'lucide-react';
 import { getApiBase } from '../api/_base';
 import { listDetectedClis, type DetectedCli } from '../api/cli';
@@ -77,6 +78,9 @@ import {
 } from '../api/skillIngest';
 import { listSkills, type SkillInfo } from '../api/skills';
 import { fsHome, fsList, fsPickNative, type FsEntry } from '../api/fsBrowse';
+// 语音输入（2026-11-07）：MediaRecorder 录音 + /api/asr/transcribe 转写。
+import { transcribeAudio } from '../api/asr';
+import { useVoiceRecorder } from './useVoiceRecorder';
 import { parseSkillToken } from '../lib/skillToken';
 import {
   fetchPickerCliItems,
@@ -334,6 +338,13 @@ function NeoCommandMenu({
       </div>
     </div>
   );
+}
+
+/** 录音计时 mm:ss（语音输入红点条）。 */
+function fmtRecTime(s: number): string {
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${mm}:${ss.toString().padStart(2, '0')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -1358,6 +1369,45 @@ export function NeoComposer({
   const [toast, setToast] = useState<string | null>(null);
   const knowledgeRef = useRef<HTMLDivElement | null>(null);
 
+  // 语音输入（2026-11-07）：录音 → /api/asr/transcribe 转写 → 文本接进草稿。
+  const [voiceTranscribing, setVoiceTranscribing] = useState(false);
+  const recorder = useVoiceRecorder({
+    onDone: (blob) => {
+      void (async () => {
+        setVoiceTranscribing(true);
+        try {
+          const text = (
+            await transcribeAudio(blob, {
+              language: 'zh',
+              filename: blob.type.includes('mp4') ? 'recording.m4a' : 'recording.webm',
+            })
+          ).trim();
+          if (text) {
+            // 追加到草稿末尾（有内容时空格衔接），不动用户已有文本。
+            setComposer((prev) => (prev ? prev + (/\s$/.test(prev) ? '' : ' ') + text : text));
+          } else {
+            setToast(t('neo.composer.voiceEmpty', { defaultValue: '没有识别到语音内容' }));
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setToast(t('neo.composer.voiceFailed', { defaultValue: `语音转写失败：${msg}` }));
+        } finally {
+          setVoiceTranscribing(false);
+        }
+      })();
+    },
+    onError: (err) => {
+      const denied = err.name === 'NotAllowedError';
+      setToast(
+        denied
+          ? t('neo.composer.voiceMicDenied', {
+              defaultValue: '无法访问麦克风，请检查麦克风权限',
+            })
+          : t('neo.composer.voiceFailed', { defaultValue: `语音转写失败：${err.message}` }),
+      );
+    },
+  });
+
   // 点外关闭（knowledge 弹层）。
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -1715,6 +1765,15 @@ export function NeoComposer({
     if (knowledgePacks === null && !knowledgePacksLoading) loadKnowledgePacks();
   }
 
+  // 知识库管理页入口（管理知识库/新建知识包）：NeoApp 壳内是中栏内部视图
+  // （view:'knowledge'，NeoRail 侧边栏常驻）——走 NeoApp 透传的 onNavigate；
+  // 独立路由页无 NeoApp 壳时回落 react-router（原 navigate('/knowledge') 行为）。
+  function goToKnowledgePage() {
+    setKnowledgeOpen(false);
+    if (onNavigate) onNavigate({ view: 'knowledge' });
+    else navigate('/knowledge');
+  }
+
   const hasText = composer.trim().length > 0;
 
   return (
@@ -2004,7 +2063,7 @@ export function NeoComposer({
                     })}
                     <button
                       type="button"
-                      onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
+                      onClick={goToKnowledgePage}
                       className="neo-cp-pop-row neo-cp-pop-row--footer"
                       data-testid="start-knowledge-manage"
                     >
@@ -2017,7 +2076,7 @@ export function NeoComposer({
                     <p className="neo-cp-pop-empty-text">{t('start.knowledgeEmpty')}</p>
                     <button
                       type="button"
-                      onClick={() => { setKnowledgeOpen(false); navigate('/knowledge'); }}
+                      onClick={goToKnowledgePage}
                       className="neo-cp-pop-empty-link"
                       data-testid="start-knowledge-create"
                     >
@@ -2029,6 +2088,60 @@ export function NeoComposer({
               </div>
             )}
           </div>
+
+          {/* 语音输入（2026-11-07）：麦克风 chip；录音中同位变红点计时 +
+              完成/取消；转写中 glyph 变 spinner。不支持录音的环境不渲染。 */}
+          {recorder.supported &&
+            (recorder.status === 'recording' ? (
+              <div className="neo-cp-rec" data-testid="voice-rec-bar">
+                <span className="neo-cp-rec-pill">
+                  <span aria-hidden className="neo-cp-rec-dot" />
+                  <span className="neo-cp-rec-time" data-testid="voice-rec-timer">
+                    {fmtRecTime(recorder.seconds)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => recorder.stop()}
+                  className="neo-cp-rec-btn neo-cp-rec-btn--stop sf-press sf-focus-ring"
+                  data-testid="voice-rec-stop"
+                  aria-label={t('neo.composer.voiceStop', { defaultValue: '完成录音' })}
+                  title={t('neo.composer.voiceStop', { defaultValue: '完成录音' })}
+                >
+                  <Check size={14} strokeWidth={2} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => recorder.cancel()}
+                  className="neo-cp-rec-btn sf-press sf-focus-ring"
+                  data-testid="voice-rec-cancel"
+                  aria-label={t('neo.composer.voiceCancel', { defaultValue: '取消录音' })}
+                  title={t('neo.composer.voiceCancel', { defaultValue: '取消录音' })}
+                >
+                  <X size={14} strokeWidth={2} aria-hidden />
+                </button>
+              </div>
+            ) : (
+              <NeoChipBtn
+                glyph={
+                  voiceTranscribing ? (
+                    <Loader2 size={16} className="neo-cp-spin" />
+                  ) : (
+                    <Mic size={16} strokeWidth={1.75} />
+                  )
+                }
+                onClick={() => {
+                  if (voiceTranscribing) return;
+                  void recorder.start();
+                }}
+                testId="start-chip-voice"
+                title={
+                  voiceTranscribing
+                    ? t('neo.composer.voiceTranscribing', { defaultValue: '正在转写语音…' })
+                    : t('neo.composer.voiceStart', { defaultValue: '语音输入' })
+                }
+              />
+            ))}
 
           <div className="neo-cp-bar-spacer" />
           {streaming ? (

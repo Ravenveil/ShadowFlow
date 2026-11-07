@@ -1228,20 +1228,21 @@ class ApiExecutor(BaseExecutor):
 class RagExecutor(BaseExecutor):
     """Knowledge-grounded retrieval executor (kind="rag").
 
-    Bridges the LightRAG KnowledgePack index into the workflow/loop execution
-    flow: place a ``rag`` node before an LLM node and wire its
-    ``raw_output.answer`` into the next node's prompt (state writeback works
-    like any other node).
+    Bridges the multi-modal MemoryBank knowledge packs (same storage as
+    ``/api/memory-bank``, rooted at SHADOWFLOW_KNOWLEDGE_DIR) into the
+    workflow/loop execution flow: place a ``rag`` node before an LLM node and
+    wire its ``raw_output.answer`` into the next node's prompt (state writeback
+    works like any other node).
 
     Config:
-        pack_id:   KnowledgePack id to query (or taken from payload.pack_id)
+        pack_id:   MemoryBank pack id to query (or taken from payload.pack_id)
         query:     retrieval question (or payload.prompt / payload.query)
-        mode:      naive | local | global | hybrid (default LIGHTRAG_QUERY_MODE)
-        required:  when true, a disabled/unavailable RAG backend fails the node;
-                   default false → degrade to empty context with a note.
+        top_k:     number of parent chunks to retrieve (default 5)
+        required:  when true, a missing pack or failed retrieval fails the
+                   node; default false → degrade to empty context with a note.
 
-    Degradation contract: LIGHTRAG_ENABLED≠true or lightrag-hku missing →
-    returns ``{"rag_backend": "stub", "answer": "", "note": ...}`` so graphs
+    Degradation contract: pack missing / retrieval error →
+    returns ``{"answer": "", "contexts": [], "note": ...}`` so graphs
     stay runnable in dev/test environments.
     """
 
@@ -1258,27 +1259,34 @@ class RagExecutor(BaseExecutor):
         )
         if not pack_id or not str(query).strip():
             raise ValueError("rag node requires pack_id and a non-empty query/prompt")
+        try:
+            top_k = max(1, int(config.get("top_k") or 5))
+        except (TypeError, ValueError):
+            top_k = 5
 
-        from shadowflow.runtime import lightrag_adapter
+        from shadowflow.memory.memory_bank import MemoryBank, MemoryBankError
 
         output: Dict[str, Any] = {
-            "executor": {"kind": "rag", "pack_id": pack_id, "backend": lightrag_adapter.backend_label()},
+            "executor": {"kind": "rag", "pack_id": pack_id, "backend": "memory-bank"},
         }
 
-        if not lightrag_adapter.is_enabled():
-            note = "LightRAG disabled (LIGHTRAG_ENABLED != true); returning empty context"
-            if required:
-                raise RuntimeError(note)
-            logger.warning("RagExecutor: %s", note)
-            output.update({"answer": "", "contexts": [], "note": note})
-            return output
-
         try:
-            answer = lightrag_adapter.query(pack_id, str(query), mode=config.get("mode"))
-            output.update({"answer": answer, "contexts": [answer]})
-        except (ImportError, lightrag_adapter.LightRagConfigError, lightrag_adapter.LightRagQueryError) as exc:
+            root = Path(os.getenv("SHADOWFLOW_KNOWLEDGE_DIR", ".shadowflow/knowledge"))
+            bank = MemoryBank(root=root)
+            result = await asyncio.to_thread(bank.query, pack_id, str(query), top_k=top_k)
+        except (MemoryBankError, ImportError, OSError) as exc:
             if required:
                 raise
             logger.warning("RagExecutor query failed for pack %s (%s); degrading", pack_id, exc)
             output.update({"answer": "", "contexts": [], "note": f"rag query failed: {exc}"})
+            return output
+
+        hits = result["data"]["hits"]
+        contexts = [str(hit.get("text") or "") for hit in hits]
+        output.update({
+            "answer": "\n\n".join(text for text in contexts if text),
+            "contexts": contexts,
+            "hits": hits,
+            "rag_backend": result.get("meta", {}).get("rag_backend", ""),
+        })
         return output

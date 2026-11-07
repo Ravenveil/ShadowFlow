@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import shadowflow.api.catalog as catalog_api
+import shadowflow.api.projects.catalog as catalog_api
 import shadowflow.runtime.catalog_service as catalog_service
 from shadowflow.runtime.catalog_service import (
     CatalogService,

@@ -131,6 +131,25 @@ export interface MemoryBankIngestResult {
   [key: string]: unknown;
 }
 
+export interface MemoryBankFolderFileResult {
+  file: string;
+  status: 'ingested' | 'deduplicated' | 'skipped' | 'failed';
+  code?: string;
+  message?: string;
+  source_id?: string;
+}
+
+export interface MemoryBankFolderIngestResult {
+  folder: string;
+  recursive: boolean;
+  total: number;
+  ingested: number;
+  deduplicated: number;
+  skipped: number;
+  failed: number;
+  files: MemoryBankFolderFileResult[];
+}
+
 // ---------------------------------------------------------------------------
 // Packs
 // ---------------------------------------------------------------------------
@@ -196,6 +215,30 @@ export async function ingestFile(
     `${API_BASE_URL}/api/memory-bank/` +
       `packs/${encodeURIComponent(packId)}/files`,
     { method: 'POST', body: fd },
+  );
+  return _handleResponse(res);
+}
+
+/**
+ * 目录批量摄入：服务端遍历本地文件夹，逐文件走同一条摄入链路
+ * （checksum 幂等去重），返回逐文件 ingested/deduplicated/skipped/failed 明细。
+ */
+export async function ingestFolder(
+  packId: string,
+  payload: {
+    path: string;
+    recursive?: boolean;
+    metadata?: Record<string, unknown>;
+    deduplicate?: boolean;
+  },
+): Promise<{ data: MemoryBankFolderIngestResult; meta: Record<string, unknown> }> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/memory-bank/packs/${encodeURIComponent(packId)}/folders`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
   );
   return _handleResponse(res);
 }

@@ -351,3 +351,36 @@
     transform: rotate(360deg);
   }
 }
+
+/* ── 详情模式（2026-11-07 知识库统一批：包列表归 KnowledgePage 左栏，
+   面板只渲染单包详情，去掉左栏占宽）────────────────────────────── */
+.mbk--detail {
+  display: block;
+  overflow: auto;
+}
+
+.mbk-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mbk-detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--neo-text, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mbk-btn--danger {
+  color: #dc2626;
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+.mbk-btn--danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+}

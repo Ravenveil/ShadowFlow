@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import shadowflow.api.schedules as schedules_api
+import shadowflow.api.runs.schedules as schedules_api
 from shadowflow.server import app
 
 client = TestClient(app)

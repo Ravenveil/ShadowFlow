@@ -426,8 +426,10 @@
   flex-shrink: 0;
 }
 
-/* ---- 发送 / 停止钮（复刻 .send：30px 正圆，无投影；空态黑圆降透明度） ---- */
-.neo-cp-submit {
+/* ---- 发送 / 停止钮（复刻 .send：30px 正圆，无投影；空态黑圆降透明度） ----
+   作用域锁死在 .neo-cp-bar 下：同名类（如历史 dashboard 撞车）只要不在工具栏
+   行内就不会再污染发送钮形状；正圆是唯一事实来源，勿在别处加 !important 圆角。 */
+.neo-cp-bar .neo-cp-submit {
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -441,15 +443,15 @@
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
-.neo-cp-submit.is-empty {
+.neo-cp-bar .neo-cp-submit.is-empty {
   background: var(--t-accent);
   opacity: 0.45;
   cursor: not-allowed;
 }
-.neo-cp-submit:disabled:not(.is-empty) {
+.neo-cp-bar .neo-cp-submit:disabled:not(.is-empty) {
   cursor: wait;
 }
-.neo-cp-stop {
+.neo-cp-bar .neo-cp-stop {
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -462,7 +464,7 @@
   color: #fff;
   background: var(--t-err, #dc3545);
 }
-.neo-cp-stop-square {
+.neo-cp-bar .neo-cp-stop-square {
   width: 11px;
   height: 11px;
   border-radius: 2.5px;
@@ -1171,4 +1173,59 @@
 }
 .neo-cp-spin {
   animation: neo-cp-rotate 1s linear infinite;
+}
+
+/* ---- 语音输入（2026-11-07）：录音红点计时条 + 停止/取消钮 ---- */
+.neo-cp-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.neo-cp-rec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+.neo-cp-rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: neo-cp-rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes neo-cp-rec-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+.neo-cp-rec-time {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--t-fg-2);
+  min-width: 32px;
+  text-align: center;
+}
+.neo-cp-rec-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--t-border);
+  background: var(--t-panel);
+  color: var(--t-fg-2);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.neo-cp-rec-btn:hover {
+  background: var(--t-panel-2);
+  color: var(--t-fg);
+}
+.neo-cp-rec-btn--stop {
+  color: #ef4444;
 }

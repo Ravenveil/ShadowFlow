@@ -79,10 +79,9 @@ const turnPrompts: Array<{ agentId: string; prompt: string }> = [];
 vi.mock('../../transport/dispatcher', () => ({
   resolveCallable: (_executor: string) => ({
     turn: async function* (args: { system: string; prompt: string }) {
-      // soul 形如 soul-<id> → 反查 agentId（测试观测用）。前缀匹配：2026-11-07
-      // 起 system = soul + 过经验块（chatLessonsBlock），不能再整串精确相等。
+      // soul 形如 soul-<id> → 反查 agentId（测试观测用）。
       const agentId = Object.entries(agentRecords).find(
-        ([, a]) => a.soul && args.system.startsWith(a.soul),
+        ([, a]) => a.soul === args.system,
       )?.[0] ?? 'unknown';
       turnPrompts.push({ agentId, prompt: args.prompt });
       yield { type: 'text-delta', value: `${agentId} 收到` };
@@ -112,7 +111,7 @@ vi.mock('../../lib/worktree-manager', () => ({
   commitWorktree: vi.fn(async () => null),
 }));
 
-import { runFanoutAsync } from '../groups/groups-chat';
+import { runFanoutAsync, isCasualChat } from '../groups/groups-chat';
 
 function postedContents(): string[] {
   return postedMessages.map((m) => m.content);
@@ -165,21 +164,6 @@ describe('runFanout — @ 提及定向派活（DAG 路径）', () => {
     expect(turnPrompts.map((t) => t.agentId)).toEqual(['arch']);
     expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
   });
-
-  it('CJK 无空格直连点名（@码农鸡修一下）→ 定向派发 + prompt 剔 @ 噪音（2026-11-07 边界收口）', async () => {
-    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@码农鸡修一下登录');
-    expect(turnPrompts.map((t) => t.agentId)).toEqual(['dev']);
-    expect(turnPrompts[0].prompt).toBe('修一下登录');
-    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
-  });
-
-  it('粘连双点名（@策划喵@码农鸡）→ 两人都跑，不发 [mention] 提示', async () => {
-    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@策划喵@码农鸡 一起看下需求');
-    const ran = turnPrompts.map((t) => t.agentId).sort();
-    expect(ran).toEqual(['dev', 'pm']);
-    expect(turnPrompts.map((t) => t.prompt)).toEqual(['一起看下需求', '一起看下需求']);
-    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
-  });
 });
 
 describe('runFanout — @ 提及定向派活（串行降级路径）', () => {
@@ -199,5 +183,61 @@ describe('runFanout — @ 提及定向派活（串行降级路径）', () => {
     (teamShape as { members: string[] }).members = ['pm', 'arch', 'dev'];
     await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@不存在 嗨');
     expect(turnPrompts).toHaveLength(3);
+  });
+});
+
+// ── 寒暄路由（2026-11-07 用户反馈：「hi 后所有 agent 都回复」不合理）────────
+
+describe('isCasualChat — 寒暄判定（纯函数）', () => {
+  it('寒暄/应答 → true', () => {
+    for (const t of ['hi', 'Hello!', '你好', '你好呀', '早上好', '谢谢', '收到', '晚安~', '嗯']) {
+      expect(isCasualChat(t)).toBe(true);
+    }
+  });
+
+  it('任务/点名/多行/超长 → false（零回归）', () => {
+    for (const t of [
+      '大家好，开始干活',
+      '帮我查一下订单',
+      '@架构汪 在吗',
+      'hi\n帮我做件事',
+      '这是一条比较长的消息，超过寒暄的长度上限就应当走常规派发流程没问题吧',
+    ]) {
+      expect(isCasualChat(t)).toBe(false);
+    }
+  });
+});
+
+describe('runFanout — 寒暄路由：hi 不再全员广播', () => {
+  beforeEach(() => {
+    (teamShape as { members: string[] }).members = ['pm', 'arch', 'dev'];
+    groupRecord.team_id = 't-default';
+  });
+
+  it('「hi」→ 只派成员首位单人接话，不全员广播', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, 'hi');
+    expect(turnPrompts.map((t) => t.agentId)).toEqual(['pm']);
+    expect(postedContents().some((c) => c.startsWith('[mention]'))).toBe(false);
+  });
+
+  it('寒暄不进 DAG：团队绑定（DAG 可用）时同样单人接话', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '你好！');
+    expect(turnPrompts.map((t) => t.agentId)).toEqual(['pm']);
+  });
+
+  it('无团队串行群同样收缩：寒暄只回一条', async () => {
+    (teamShape as { members: string[] }).members = [];
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '谢谢');
+    expect(turnPrompts.map((t) => t.agentId)).toEqual(['pm']);
+  });
+
+  it('任务消息零回归：全员照跑', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '大家好，开始干活');
+    expect(turnPrompts).toHaveLength(3);
+  });
+
+  it('寒暄 + @ 点名 → 点名优先，不收缩', async () => {
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@架构汪 在吗');
+    expect(turnPrompts.map((t) => t.agentId)).toEqual(['arch']);
   });
 });

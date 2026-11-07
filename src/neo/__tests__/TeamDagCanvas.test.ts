@@ -56,6 +56,70 @@ describe('computeTeamDagColumns — 最长路径分层', () => {
     expect(cols.get('x')).toBe(0);
     expect(cols.get('y')).toBe(0);
   });
+
+  it('「驳回回炉」回边（conditional 且 target 是顺序上游）不抬列（2026-11-07）', () => {
+    // 用户真实数据形状：strategist→reviewer 送审 + reviewer→strategist 驳回回炉。
+    // 修复前回边会把 strategist 顶到列 2（与 verifier 挤同列、列 1 后留空隙），
+    // 画布上就是截图里「Matcher/Reviewer 之间一大段空隙」+ 边穿节点。
+    const rework: TeamWorkflow = {
+      nodes: [
+        { id: 'strategist', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 's', name: '策略', soul: '' } },
+        { id: 'reviewer', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 'r', name: '审核', soul: '' } },
+        { id: 'verifier', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 'v', name: '验证', soul: '' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'strategist', target: 'reviewer', data: { mode: 'direct' } },
+        { id: 'e2', source: 'reviewer', target: 'verifier', data: { mode: 'approve' } },
+        { id: 'e3', source: 'reviewer', target: 'strategist', data: { mode: 'conditional' } },
+      ],
+    };
+    const cols = computeTeamDagColumns(rework);
+    expect(cols.get('strategist')).toBe(0);
+    expect(cols.get('reviewer')).toBe(1);
+    expect(cols.get('verifier')).toBe(2);
+  });
+});
+
+describe('computeTeamDagSeedLayout — 种子布局决策（2026-11-07「DAG 太乱」修复）', () => {
+  it('退化竖列（全 x 同窄带且有边）→ 分层展开成左→右流水线', () => {
+    // chain 的 4 个节点全在 (0,0)（老数据竖列的极端形态），必须展开
+    const pos = computeTeamDagSeedLayout(chain);
+    expect(pos.get('n1')).toEqual({ x: 0, y: 0 });
+    expect(pos.get('n2')).toEqual({ x: 180, y: 0 });
+    expect(pos.get('n3')).toEqual({ x: 360, y: 0 });
+    expect(pos.get('n4')).toEqual({ x: 540, y: 0 });
+  });
+
+  it('缺坐标的老数据 → 同样分层展开（不再 x=0 竖列种子）', () => {
+    const noPos: TeamWorkflow = {
+      nodes: chain.nodes.map((n) => ({ ...n, position: undefined })),
+      edges: chain.edges,
+    };
+    const pos = computeTeamDagSeedLayout(noPos);
+    expect(pos.get('n2')).toEqual({ x: 180, y: 0 });
+    expect(pos.get('n4')).toEqual({ x: 540, y: 0 });
+  });
+
+  it('真实横向布局 → 原样保留（只做坐标取整）', () => {
+    const laid: TeamWorkflow = {
+      nodes: chain.nodes.map((n, i) => ({ ...n, position: { x: i * 200 + 5.4, y: i * 50 + 0.6 } })),
+      edges: chain.edges,
+    };
+    const pos = computeTeamDagSeedLayout(laid);
+    expect(pos.get('n1')).toEqual({ x: 5, y: 1 });
+    expect(pos.get('n2')).toEqual({ x: 205, y: 51 });
+    expect(pos.get('n4')).toEqual({ x: 605, y: 151 });
+  });
+
+  it('同列孤立点（无边）→ 保留存量坐标（没有边可绕圈，不动用户摆位）', () => {
+    const column: TeamWorkflow = {
+      nodes: chain.nodes.slice(0, 2).map((n, i) => ({ ...n, position: { x: 0, y: i * 106 } })),
+      edges: [],
+    };
+    const pos = computeTeamDagSeedLayout(column);
+    expect(pos.get('n1')).toEqual({ x: 0, y: 0 });
+    expect(pos.get('n2')).toEqual({ x: 0, y: 106 });
+  });
 });
 
 describe('computeTeamDagSeedLayout — 种子布局决策（2026-11-07「DAG 太乱」修复）', () => {

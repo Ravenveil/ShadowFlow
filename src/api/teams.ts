@@ -172,7 +172,12 @@ export interface TeamWorkflowEdge {
   id: string;
   source: string;
   target: string;
-  data?: { mode: 'direct' | 'approve' };
+  /**
+   * 边模式（后端 team_validation._map_mode 对齐）：direct/approve 归为
+   * sequential（参与环检测），conditional（驳回回炉/条件回边）与 parallel
+   * 不参与 —— 存量数据里 conditional 是真实存在的，不能收窄成 direct。
+   */
+  data?: { mode: 'direct' | 'approve' | 'conditional' | 'parallel' };
   label?: string;
 }
 

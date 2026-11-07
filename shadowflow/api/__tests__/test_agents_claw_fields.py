@@ -20,7 +20,7 @@ from shadowflow.server import app
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import shadowflow.api.agents as agents_mod
+    import shadowflow.api.agents.agents as agents_mod
 
     monkeypatch.setattr(agents_mod, "_AGENTS_DIR", tmp_path / "agents")
     return TestClient(app)
@@ -163,7 +163,7 @@ class TestPatchClawFields:
 class TestLegacyRecordsDegradation:
     def test_legacy_record_without_fields_loads_and_patches(self, client, tmp_path):
         """老 JSON 记录缺三个新 key → GET/PATCH 不报错，PATCH 后补齐。"""
-        import shadowflow.api.agents as agents_mod
+        import shadowflow.api.agents.agents as agents_mod
 
         legacy = {
             "agent_id": "agent-legacy01",

@@ -19,7 +19,7 @@ from shadowflow.server import app
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import shadowflow.api.workspaces as ws_mod
+    import shadowflow.api.projects.workspaces as ws_mod
 
     monkeypatch.setattr(ws_mod, "_WORKSPACES_DIR", tmp_path / "workspaces")
     monkeypatch.setattr(ws_mod, "_AGENTS_DIR", tmp_path / "agents")

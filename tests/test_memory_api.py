@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-import shadowflow.api.memory as memory_api
+import shadowflow.api.memory.memory as memory_api
 from shadowflow.server import app
 
 client = TestClient(app)

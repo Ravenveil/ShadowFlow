@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from shadowflow.api.policy_observability import PolicyObsAggregator, set_aggregator
+from shadowflow.api.quality.policy_observability import PolicyObsAggregator, set_aggregator
 from shadowflow.runtime.events import RunEventBus
 from shadowflow.server import app
 

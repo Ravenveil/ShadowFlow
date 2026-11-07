@@ -9,8 +9,10 @@
  *   2. 禁止自环（source === target）
  *   3. 边两端必须指向已知节点 id
  *   4. 顺序边不成环 —— 后端 `_map_mode` 把 'conditional'/'parallel' 之外的
- *      mode（'direct'/'approve'/缺省）全部归为 sequential，team workflow
- *      的边模式只有 direct/approve，因此这里所有边都参与环检测。
+ *      mode（'direct'/'approve'/缺省）全部归为 sequential；环检测只覆盖
+ *      sequential 边（conditional/parallel 豁免 —— conditional 是「驳回回炉」
+ *      合法回边）。2026-11-07 修复：此前前端把所有边都塞进环检测，导致
+ *      「送审 + 驳回回炉」互逆边对根本存不下去，口径对齐后端。
  *
  * approve 边规则核对（2026-08-22，读 team_validation.py 确认）：后端对 approve
  * 没有额外的 D1/D2 结构约束 —— 它经 `_map_mode` 归为 sequential，唯一语义是
@@ -22,15 +24,24 @@
 import type { TeamWorkflow } from '../../api/teams';
 
 /** team workflow 边模式（与 TeamWorkflowEdge['data']['mode'] 对齐）。 */
-export type TeamEdgeMode = 'direct' | 'approve';
+export type TeamEdgeMode = 'direct' | 'approve' | 'conditional' | 'parallel';
 
 /**
- * 归一化边 mode：只有严格等于 'approve' 才算审批边，其余（含 undefined、
- * 未知字符串）一律按 'direct' 落库。后端 `_map_mode` 对 direct/approve 都映射
- * 为 sequential，所以未知值收敛到 direct 不改变校验语义。
+ * 归一化边 mode：approve/conditional/parallel 是后端 `_map_mode` 认识的
+ * 显式模式，原样保留（round-trip 不丢语义 —— 存量「驳回回炉」conditional
+ * 边此前会被压成 direct，保存即语义降级）；其余（含 undefined、未知字符串）
+ * 一律按 'direct' 落库。
  */
 export function normalizeEdgeMode(mode: unknown): TeamEdgeMode {
-  return mode === 'approve' ? 'approve' : 'direct';
+  return mode === 'approve' || mode === 'conditional' || mode === 'parallel' ? mode : 'direct';
+}
+
+/**
+ * 是否参与顺序语义（环检测 / 最长路径分层）：conditional（驳回回炉回边）
+ * 与 parallel（并行汇入）豁免，对齐后端 `_map_mode` 的 sequential 归类。
+ */
+export function isSequentialEdgeMode(mode: unknown): boolean {
+  return mode !== 'conditional' && mode !== 'parallel';
 }
 
 /**
@@ -98,7 +109,7 @@ export function validateTeamWorkflowGraph(workflow: TeamWorkflow): string[] {
   const nodeIds = workflow.nodes.map((n) => n.id);
   const nodeSet = new Set(nodeIds);
 
-  const cleanEdges: Array<{ source: string; target: string }> = [];
+  const cleanEdges: Array<{ source: string; target: string; mode: unknown }> = [];
   for (const e of workflow.edges) {
     if (typeof e.source !== 'string' || typeof e.target !== 'string' || !e.source || !e.target) {
       errors.push(`边 ${e.id || '(无 id)'} 缺少有效的 source/target`);
@@ -114,10 +125,13 @@ export function validateTeamWorkflowGraph(workflow: TeamWorkflow): string[] {
     if (!nodeSet.has(e.target)) {
       errors.push(`边「${e.source} → ${e.target}」：节点 ${e.target} 不在图中`);
     }
-    cleanEdges.push({ source: e.source, target: e.target });
+    cleanEdges.push({ source: e.source, target: e.target, mode: e.data?.mode });
   }
 
-  const cycle = findCycle(nodeIds, cleanEdges);
+  // 环检测只看 sequential 边（对齐后端 _map_mode）：conditional/parallel
+  // 是合法回边/并行边，「送审 + 驳回回炉」互逆边对不能因此被拒
+  const seqEdges = cleanEdges.filter((e) => isSequentialEdgeMode(e.mode));
+  const cycle = findCycle(nodeIds, seqEdges);
   if (cycle) {
     errors.push(`检测到顺序边环路：${cycle.join(' → ')}`);
   }

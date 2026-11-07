@@ -3,7 +3,7 @@
 The runtime executor for these schemas lives Node-side (see
 `server/src/workflow/validation-hook-types.ts` and the runner shipped in
 N1/003). Python only owns the schema definition and the team-record CRUD
-endpoints in `shadowflow.api.teams`.
+endpoints in `shadowflow.api.agents.teams`.
 """
 
 from shadowflow.runtime.validation_hooks.schema import (

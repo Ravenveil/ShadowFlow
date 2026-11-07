@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Literal, Optional
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from shadowflow.api._limiter import limiter
+from shadowflow.api.system._limiter import limiter
 
 from shadowflow.runtime.errors import ShadowflowError
 from shadowflow.runtime.health import (
@@ -201,34 +201,33 @@ else:
 # Epic 4 observability routers (Stories 4.7 / 4.8 / 4.9)
 # --------------------------------------------------------------------
 
-from shadowflow.api import ops as _ops_api
-from shadowflow.api import archive as _archive_api
-from shadowflow.api import policy_observability as _policy_obs_api
-from shadowflow.api import inbox as _inbox_api
-from shadowflow.api import groups as _groups_api
-from shadowflow.api import approvals as _approvals_api
-from shadowflow.api import builder as _builder_api
-from shadowflow.api import catalog as _catalog_api
-from shadowflow.api import tools as _tools_api
-from shadowflow.api import knowledge as _knowledge_api
-from shadowflow.api import citations as _citations_api
-from shadowflow.api import memory as _memory_api
-from shadowflow.api import state as _state_api
-from shadowflow.api import evals as _evals_api
-from shadowflow.api import agents as _agents_api
-from shadowflow.api import teams as _teams_api
-from shadowflow.api import registry as _registry_api
-from shadowflow.api import acp_server as _acp_server_api
-from shadowflow.api import sessions as _sessions_api
-from shadowflow.api import workspaces as _workspaces_api
-from shadowflow.api import chat as _chat_api
-from shadowflow.api import a2a_bridge as _a2a_bridge_api
-from shadowflow.api import schedules as _schedules_api
-from shadowflow.api import settings as _settings_api
-from shadowflow.api import wallet as _wallet_api
-from shadowflow.api import runs as _runs_api
-from shadowflow.api import artifacts as _artifacts_api
-from shadowflow.api import opc as _opc_api
+from shadowflow.api.dashboard import ops as _ops_api
+from shadowflow.api.runs import archive as _archive_api
+from shadowflow.api.quality import policy_observability as _policy_obs_api
+from shadowflow.api.groups import inbox as _inbox_api
+from shadowflow.api.groups import groups as _groups_api
+from shadowflow.api.runs import approvals as _approvals_api
+from shadowflow.api.agents import builder as _builder_api
+from shadowflow.api.projects import catalog as _catalog_api
+from shadowflow.api.agents import tools as _tools_api
+from shadowflow.api.runs import citations as _citations_api
+from shadowflow.api.memory import memory as _memory_api
+from shadowflow.api.agents import state as _state_api
+from shadowflow.api.quality import evals as _evals_api
+from shadowflow.api.agents import agents as _agents_api
+from shadowflow.api.agents import teams as _teams_api
+from shadowflow.api.agents import registry as _registry_api
+from shadowflow.api.system import acp_server as _acp_server_api
+from shadowflow.api.runs import sessions as _sessions_api
+from shadowflow.api.projects import workspaces as _workspaces_api
+from shadowflow.api.groups import chat as _chat_api
+from shadowflow.api.system import a2a_bridge as _a2a_bridge_api
+from shadowflow.api.runs import schedules as _schedules_api
+from shadowflow.api.system import settings as _settings_api
+from shadowflow.api.system import wallet as _wallet_api
+from shadowflow.api.runs import runs as _runs_api
+from shadowflow.api.runs import artifacts as _artifacts_api
+from shadowflow.api.opc import opc as _opc_api
 
 # 多模态记忆库（PR #7 设计移植）：单文件 RAG 后端，BM25+向量混合检索。
 # 挂 /api/memory-bank 前缀，与 /api/knowledge、/api/memory 互不冲突；
@@ -265,7 +264,8 @@ app.include_router(_catalog_api.router)
 # /api 前缀），同一 router 再挂一份 /api/catalog 别名；原 /catalog 路径保持不变。
 app.include_router(_catalog_api.router, prefix="/api")
 app.include_router(_tools_api.router)
-app.include_router(_knowledge_api.router)
+# 2026-11-07 知识库统一批：/api/knowledge（旧 KnowledgePack）下线，知识库唯一
+# 实现 = 多模态记忆库 /api/memory-bank（create_memory_router 挂载见上）。
 app.include_router(_citations_api.router)
 app.include_router(_memory_api.router)
 app.include_router(_state_api.router)
@@ -283,7 +283,7 @@ if _a2a_bridge_api.A2A_BRIDGE_ENABLED:
     logger.info("A2A bridge enabled: GET /.well-known/agent.json  POST /a2a/")
 else:
     logger.debug("A2A bridge disabled (set A2A_BRIDGE_ENABLED=true to enable)")
-from shadowflow.api.regression import router as _regression_router
+from shadowflow.api.quality.regression import router as _regression_router
 app.include_router(_regression_router)
 app.include_router(_schedules_api.router)
 app.include_router(_settings_api.router)
@@ -424,7 +424,7 @@ async def _start_scheduler() -> None:
     try:
         from datetime import datetime, timezone
         from shadowflow.services.scheduler import start_scheduler
-        from shadowflow.api.schedules import _list_schedules, _schedule_job
+        from shadowflow.api.runs.schedules import _list_schedules, _schedule_job
         from apscheduler.triggers.cron import CronTrigger
         from apscheduler.triggers.date import DateTrigger
     except ImportError:
@@ -686,7 +686,7 @@ async def import_sfagent(request: Request):
     except Exception as exc:
         raise _client_error(400, exc, "BAD_REQUEST")
 
-    import shadowflow.api.agents as _agents_mod
+    import shadowflow.api.agents.agents as _agents_mod
 
     try:
         record = import_sfagent_zip(zip_bytes, _agents_mod._AGENTS_DIR)

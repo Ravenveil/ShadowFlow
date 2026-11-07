@@ -22,7 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from shadowflow.api.builder import PromoteFromAgentRequest
+from shadowflow.api.agents.builder import PromoteFromAgentRequest
 from shadowflow.runtime.catalog_service import (
     CatalogAppDetail,
     CatalogService,

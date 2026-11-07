@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from shadowflow.api.archive import ArchiveService, set_service
+from shadowflow.api.runs.archive import ArchiveService, set_service
 from shadowflow.server import app
 
 

@@ -1,6 +1,6 @@
 """D1+D2 — Team write-time validation unit tests.
 
-Pure-function tests for `shadowflow.api.team_validation`:
+Pure-function tests for `shadowflow.api.agents.team_validation`:
   D1: DAG structural validation (cycle, dangling endpoints, self-loop),
       semantics mirror Node `server/src/lib/team-yaml.ts:validateDag()`.
   D2: agent_id existence check against the Python agent store.
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from shadowflow.api import team_validation as tv
+from shadowflow.api.agents import team_validation as tv
 
 
 # ---------------------------------------------------------------------------

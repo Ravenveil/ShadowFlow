@@ -78,10 +78,7 @@ import {
 import { moveGroupConversationToProject } from '../api/conversations';
 import { fsPickNative } from '../api/fsBrowse';
 import type { AgentDMItem, GroupItem } from '../common/types/inbox';
-import { listPacks } from '../api/knowledge';
-import type { KnowledgePack } from '../common/types/knowledge';
-import { listVaults } from '../api/knowledgeVaults';
-import type { KnowledgeVault } from '../common/types/knowledgeVault';
+import { listPacks as listMemoryPacks, type MemoryBankPack } from '../api/memoryBank';
 import { listSchedules, type ScheduleRecord } from '../api/schedules';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { GroupStackAvatar } from '../components/agent/GroupStackAvatar';
@@ -284,8 +281,7 @@ export function NeoRail({
     setTeamsSettled(false);
   }, [workspaceId]);
   // 知识源（统一:本地仓库 + 知识分包）/ 记忆条目（左栏分区列表;进入对应分区才拉取）
-  const [packs, setPacks] = useState<KnowledgePack[] | null>(null);
-  const [vaults, setVaults] = useState<KnowledgeVault[] | null>(null);
+  const [packs, setPacks] = useState<MemoryBankPack[] | null>(null);
   const [packsState, setPacksState] = useState<LoadState>('loading');
   // 定时任务（2026-11-06 /routines 对齐）：进入 schedules 分区拉全量计划
   const [schedules, setSchedules] = useState<ScheduleRecord[] | null>(null);
@@ -359,26 +355,21 @@ export function NeoRail({
     };
   }, [workspaceId, reloadTick]);
 
-  // 统一知识源（2026-08-19 知识库合并批）:进入 knowledge 分区同时拉
-  // Python 侧知识包 + Node 侧本地仓库;行点击带 sourceId 深链预选中栏。
+  // 统一知识源（2026-11-07 知识库统一批）:知识库唯一实现 = 多模态记忆库,
+  // 进入 knowledge 分区拉记忆库知识包;行点击带 sourceId 深链预选中栏。
   useEffect(() => {
     if (section !== 'knowledge') return;
     let alive = true;
     setPacksState('loading');
-    Promise.all([
-      listPacks({ limit: 50 }).catch(() => ({ data: { packs: [] as KnowledgePack[] } })),
-      listVaults().catch(() => ({ data: { vaults: [] as KnowledgeVault[] } })),
-    ])
-      .then(([packRes, vaultRes]) => {
+    listMemoryPacks()
+      .then((res) => {
         if (!alive) return;
-        setPacks(packRes.data.packs);
-        setVaults(vaultRes.data.vaults);
+        setPacks(res.data.packs);
         setPacksState('ready');
       })
       .catch(() => {
         if (!alive) return;
         setPacks([]);
-        setVaults([]);
         setPacksState('error');
       });
     return () => {
@@ -1593,7 +1584,7 @@ export function NeoRail({
         </button>
         {/* 记忆入口已折叠进设置（2026-11-06 折叠批）：记忆条目 / 画像 / 交接
             统一在「设置 → 记忆」下管理，左栏不再占一级导航行。 */}
-        {/* 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）：nav 常驻行。
+        {/* 产品盈利看板（2026-11-07 由「数据看板」重构）：nav 常驻行。
             列表区保持当前内容（dashboard 是内容阅读态，不占列表区）。 */}
         <button
           type="button"
@@ -1604,7 +1595,7 @@ export function NeoRail({
         >
           <BarChart3 size={15} strokeWidth={1.75} aria-hidden />
           <span className="neo-nav-row-name">
-            {t('neo.dashboard', { defaultValue: language === 'zh' ? '数据看板' : 'Dashboard' })}
+            {t('neo.dashboard', { defaultValue: language === 'zh' ? '产品盈利' : 'Product Profit' })}
           </span>
         </button>
         {/* 定时任务（2026-11-06，GrokBot 教程「定时任务」章节 + OpenBot /routines
@@ -1841,7 +1832,7 @@ export function NeoRail({
           </>
         )}
 
-        {/* 统一知识源列表（2026-08-19 合并批）：本地仓库 + 知识包混排，
+        {/* 统一知识源列表（2026-11-07 知识库统一批）：记忆库知识包，
             点行 → 中栏知识页并预选该源（sourceId 深链，rail 常驻）。
             2026-11-07 用户反馈「知识库左侧边栏要保持成员显示」：知识库导航
             不再切分区（SECTION_BY_NAV 出表，列表保持 home 成员/会话列表，
@@ -1874,28 +1865,13 @@ export function NeoRail({
               </div>
             )}
             {packsState === 'ready' &&
-              (vaults?.length ?? 0) + (packs?.length ?? 0) === 0 && (
+              (packs?.length ?? 0) === 0 && (
                 <div className="neo-list-note">
                   {t('neo.knowledgeEmpty', {
                     defaultValue: language === 'zh' ? '还没有知识源' : 'No sources yet',
                   })}
                 </div>
               )}
-            {packsState === 'ready' &&
-              (vaults ?? []).map((v) => (
-                <button
-                  key={v.vault_id}
-                  type="button"
-                  className={`neo-row${isSourceOn(`vault:${v.vault_id}`) ? ' on' : ''}`}
-                  onClick={() => onNavigate({ view: 'knowledge', sourceId: `vault:${v.vault_id}` })}
-                  data-testid="neo-vault-row"
-                  title={v.path}
-                >
-                  <Folder size={15} strokeWidth={1.75} aria-hidden />
-                  <span className="neo-row-name">{v.name}</span>
-                  {v.health !== 'active' && <span className="neo-row-meta">missing</span>}
-                </button>
-              ))}
             {packsState === 'ready' &&
               (packs ?? []).map((p) => (
                 <button

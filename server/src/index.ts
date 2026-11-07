@@ -30,12 +30,11 @@ import { groupsChatRouter } from './routes/groups/groups-chat';
 import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/system/fs-browse';
-// 2026-08-19 — 本地仓库知识库(注册表 + 扫描 + 安全读取,Obsidian vault 模式)
-import { knowledgeVaultsRouter } from './routes/knowledge/knowledge-vaults';
 // Story 15.14 — POST /api/artifacts/lint
 import artifactsRouter from './routes/system/artifacts';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
+import asrRouter from './routes/system/asr';
 import { detectAll } from './detectors/cli-detector';
 import { detectAcpAgents } from './detectors/acp-detector';
 import projectsRouter from './routes/projects/projects';
@@ -48,6 +47,8 @@ import dashboardRouter from './routes/dashboard/dashboard';
 import memoryHandoffRouter from './routes/memory/memory-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
 import merchantBoardRouter from './routes/dashboard/merchant-board';
+// 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 给手艺人 − 快递 − 营销
+import craftProfitRouter from './routes/dashboard/craft-profit';
 // 社交发布（2026-11-07）— 社交平台直连发布：账号/营销帖/发布回执 + 平台适配器
 // （mock/real 双模）。外接模块，自带幂等建表，不改既有逻辑。
 import socialPublishRouter from './routes/social/social-publish';
@@ -159,6 +160,8 @@ app.use('/api/memory/handoff', memoryHandoffRouter);
 app.use('/api/dashboard', dashboardRouter);
 // 功能线① 商家商业化数据（订单分时 / 客流 / 第一单链路），挂 proxyFallback 之前
 app.use('/api/merchant', merchantBoardRouter);
+// 产品盈利看板（2026-11-07）：/api/craft-profit/*，挂 proxyFallback 之前
+app.use('/api/craft-profit', craftProfitRouter);
 // 社交发布（营销帖直发六大平台），挂 proxyFallback 之前
 app.use('/api/social-publish', socialPublishRouter);
 // 代运营全流程（分发编排 + 快递履约），挂 proxyFallback 之前
@@ -183,16 +186,18 @@ if (process.env.SF_GROUPS_BACKEND === 'node') {
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
 // 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
 app.use('/api/fs', fsBrowseRouter);
-// 2026-08-19 — 本地仓库知识库(Obsidian vault 模式,注册表移植自 Shadow):
-// 注册/浏览/阅读本地文件夹,只读用户文件。同样必须挂在 proxyFallback 之前。
-app.use('/api/knowledge-vaults', knowledgeVaultsRouter);
+// 2026-11-07 知识库统一批：本地仓库 vaults（/api/knowledge-vaults）下线，
+// 本地文件夹语义并入多模态记忆库目录摄入（/api/memory-bank/packs/{id}/folders）。
 // Part D — LLM protocol entrypoints. MUST be mounted BEFORE proxyFallback
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
+// 语音输入转写（2026-11-07）：POST /api/asr/transcribe，Node 直调 OpenAI 兼容
+// /audio/transcriptions（whisper-1 等）。同须挂 proxyFallback 之前。
+app.use('/api/asr', asrRouter);
 
 // /api/groups — formerly a placeholder stub that returned synthetic IDs and
 // empty arrays. Removed 2026-05-19 so groups requests fall through to the
-// Python FastAPI backend (shadowflow/api/groups.py), which persists groups
+// Python FastAPI backend (shadowflow/api/groups/groups.py), which persists groups
 // + messages under .shadowflow/groups/*.json. The stub was masking real
 // data: `createGroup` succeeded with a fake id, but the group never existed
 // in any storage so `/chat` always rendered "暂无群组". See Step 4 of the

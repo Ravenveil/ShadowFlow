@@ -35,7 +35,7 @@ import ClawHubPage from '../pages/clawhub/ClawHubPage';
 import { useI18n } from '../common/i18n';
 import { usePythonBackendStatus } from '../core/hooks/usePythonBackendStatus';
 import { useInboxStore } from '../core/store/useInboxStore';
-import { ensureGroupTeam, getGroup, postGroupMessage, resolveDmConversation } from '../api/groupApi';
+import { ensureGroupTeam, getGroup, postGroupMessage, resolveDmConversation, resolveTeamGroup } from '../api/groupApi';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { SECRETARY_AGENT_ID } from './secretary';
 import { NeoOnboardingModal, ONBOARDING_DONE_KEY } from './NeoOnboardingModal';
@@ -322,55 +322,107 @@ export function NeoApp() {
     [railWidth],
   );
 
-  // 「+ 新任务」：回 home hero 并清掉当前 run 关联（左栏列表切回会话）。
-  const handleNewTask = useCallback(() => {
-    navigate({ view: 'home' });
-    setRunId(null);
-  }, [navigate]);
-
-  // ── 默认落地 = 秘书的会话（2026-11-06 用户反馈：不显示首页 hero）──────────
-  // 每次启动：无恢复的 run（URL ?run= / localStorage）时 find-or-create 秘书的
-  // DM 并直接进入——打开产品即与秘书对话。后端对新 DM 预置欢迎语问候。
-  // 有 run 恢复则保持原行为（回到上次运行现场，不被拽走）。
-  // resolve 失败（Python 未起等）有限重试自愈（2026-11-06 用户反馈「拉 main 后
-  // 依旧显示首页」——只试一次时页面开着就永远停首页）；3 次后放弃留 home。
-  const navViewRef = useRef(nav.view);
-  navViewRef.current = nav.view;
-  useEffect(() => {
-    if (runId) return; // 有恢复的 run → 不抢
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let attempts = 0;
-    const scheduleRetry = () => {
-      // 后端未起/瞬时失败：1.5s/3s/4.5s 有限重试；3 次后仍失败才放弃，
-      // 留 home，下次启动再试。
-      if (attempts >= 3) return;
-      attempts += 1;
-      timer = setTimeout(tryLand, 1500 * attempts);
-    };
+  // ── 落地秘书会话（常驻重试）──────────────────────────────────────────────
+  // find-or-create 秘书的 DM 并直接进入——打开产品即与秘书对话，不再显示首页
+  // hero（2026-11-07 用户反馈「这个首页不要再显示了」）。resolve 失败（Python
+  // 未起等）常驻重试自愈：3s 间隔不封顶（有限重试 3 次放弃会把用户永远留在
+  // 首页），直到落地成功或用户自行离开 home（不抢屏纪律 2026-11-06）；
+  // 组件卸载即停。
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  const landingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const landSecretary = useCallback(() => {
+    if (landingTimerRef.current) {
+      clearTimeout(landingTimerRef.current);
+      landingTimerRef.current = null;
+    }
     function tryLand() {
       resolveDmConversation(SECRETARY_AGENT_ID, useWorkspaceStore.getState().currentId)
         .then((gid) => {
-          if (!alive) return;
-          // 用户已自行导航（知识库/会话等）就不抢屏（2026-11-06「不抢」纪律）。
-          if (gid && navViewRef.current === 'home') {
-            navigate({ view: 'conversation', groupId: gid });
-          } else if (!gid) {
+          if (!gid) {
             scheduleRetry();
+            return;
+          }
+          // 用户已自行导航（知识库/会话等）就不抢屏（2026-11-06「不抢」纪律），
+          // 也不再重试；仍停在 home 才落进会话。
+          if (navRef.current.view === 'home') {
+            navigate({ view: 'conversation', groupId: gid });
           }
         })
-        .catch(() => {
-          if (alive) scheduleRetry();
-        });
+        .catch(() => scheduleRetry());
+    }
+    function scheduleRetry() {
+      landingTimerRef.current = setTimeout(tryLand, 3000);
     }
     tryLand();
+  }, [navigate]);
+
+  // 「+ 新任务」/ Ctrl+K：清掉当前 run 关联并落进秘书的会话（2026-11-07 起
+  // 不再回 home hero；后端未起时留聊天化空态，落地重试自愈）。
+  const handleNewTask = useCallback(() => {
+    navigate({ view: 'home' });
+    setRunId(null);
+    landSecretary();
+  }, [navigate, landSecretary]);
+
+  // ── 启动落地：无恢复的 run（URL ?run= / localStorage）时直接进秘书会话 ────
+  // 有 run 恢复则保持原行为（回到上次运行现场，不被拽走）。
+  useEffect(() => {
+    if (runId) return; // 有恢复的 run → 不抢
+    landSecretary();
     return () => {
-      alive = false;
-      if (timer) clearTimeout(timer);
+      if (landingTimerRef.current) clearTimeout(landingTimerRef.current);
+      landingTimerRef.current = null;
     };
     // 故意只跑一次（挂载时）；依赖数组留空。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── 兜底目标态自动升级进会话（2026-11-07 用户反馈「怎么不出聊天框」）────────
+  // NeoRail 点 agent/团队 resolve 失败（后端未起）落 agent-target/team-target
+  // 兜底态后，这里常驻重试 resolve（3s）——用户点 agent 就是要进单聊，不应卡在
+  // 目标态空壳（之前该态渲染 hero，即用户看到的「首页」）。不抢屏：仍是同一
+  // 目标态才切换，用户切走即停。
+  useEffect(() => {
+    const cur = nav;
+    if (cur.view !== 'agent-target' && cur.view !== 'team-target') return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tryUpgrade = () => {
+      const wsId = useWorkspaceStore.getState().currentId;
+      const p =
+        cur.view === 'agent-target'
+          ? resolveDmConversation(cur.agentId, wsId)
+          : resolveTeamGroup({ team_id: cur.teamId, name: cur.name }, wsId);
+      p.then((gid) => {
+        if (!alive) return;
+        const now = navRef.current;
+        const same =
+          (cur.view === 'agent-target' &&
+            now.view === 'agent-target' &&
+            now.agentId === cur.agentId) ||
+          (cur.view === 'team-target' &&
+            now.view === 'team-target' &&
+            now.teamId === cur.teamId);
+        if (gid && same) {
+          navigate({ view: 'conversation', groupId: gid });
+          if (cur.view === 'team-target') {
+            // 首次建群后刷新 inbox，群聊现场列表即时出新群（与 openTeamChat 同款）
+            void useInboxStore.getState().fetchWorkspaceInbox(wsId);
+          }
+        } else if (!gid) {
+          timer = setTimeout(tryUpgrade, 3000);
+        }
+      }).catch(() => {
+        if (alive) timer = setTimeout(tryUpgrade, 3000);
+      });
+    };
+    tryUpgrade();
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [nav, navigate]);
 
   // ── 首访入职问卷（2026-11-06，模仿 ZCode/Codex 对话框弹出形式）────────────
   // 时序（用户反馈 2026-11-06 15:23）：先进秘书的会话 → 欢迎语渲染出来 → 问卷

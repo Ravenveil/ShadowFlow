@@ -13,8 +13,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-import shadowflow.api.agents as agents_mod
-import shadowflow.api.groups as groups_mod
+import shadowflow.api.agents.agents as agents_mod
+import shadowflow.api.groups.groups as groups_mod
 from shadowflow.server import app
 
 

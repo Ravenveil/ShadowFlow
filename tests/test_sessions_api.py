@@ -22,7 +22,7 @@ from shadowflow.runtime.workspace_context import (
     WorkspaceContextStore,
     get_store,
 )
-from shadowflow.api.sessions import set_report
+from shadowflow.api.runs.sessions import set_report
 from shadowflow.server import app
 
 client = TestClient(app)
@@ -41,7 +41,7 @@ def _fresh_store(monkeypatch):
     from collections import OrderedDict
     fresh = WorkspaceContextStore()
     import shadowflow.runtime.workspace_context as _wc_mod
-    import shadowflow.api.sessions as _sessions_mod
+    import shadowflow.api.runs.sessions as _sessions_mod
     monkeypatch.setattr(_wc_mod, "_store", fresh)
     monkeypatch.setattr(_sessions_mod, "_report_cache", OrderedDict())
     yield fresh

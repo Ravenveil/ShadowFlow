@@ -21,13 +21,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from shadowflow.server import app
-from shadowflow.api import team_validation as tv  # noqa: F401  (ensures import OK)
+from shadowflow.api.agents import team_validation as tv# noqa: F401  (ensures import OK)
 
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    import shadowflow.api.teams as teams_mod
-    import shadowflow.api.agents as agents_mod
+    import shadowflow.api.agents.teams as teams_mod
+    import shadowflow.api.agents.agents as agents_mod
 
     teams_dir = tmp_path / "teams"
     agents_dir = tmp_path / "agents"
@@ -54,13 +54,13 @@ def env(tmp_path, monkeypatch):
 
 class TestNormalizeHelper:
     def test_missing_becomes_unassigned(self):
-        from shadowflow.api.teams import normalize_workspace_id, UNASSIGNED_WORKSPACE
+        from shadowflow.api.agents.teams import normalize_workspace_id, UNASSIGNED_WORKSPACE
         assert normalize_workspace_id(None) == UNASSIGNED_WORKSPACE
         assert normalize_workspace_id("") == UNASSIGNED_WORKSPACE
         assert normalize_workspace_id("   ") == UNASSIGNED_WORKSPACE
 
     def test_explicit_preserved(self):
-        from shadowflow.api.teams import normalize_workspace_id
+        from shadowflow.api.agents.teams import normalize_workspace_id
         assert normalize_workspace_id("ws-abc") == "ws-abc"
         assert normalize_workspace_id("default") == "default"
 

@@ -53,7 +53,7 @@ def test_read_bundle_rejects_non_bundle_zip(tmp_path):
 
 
 def test_http_import_endpoint(tmp_path, monkeypatch):
-    import shadowflow.api.agents as agents_mod
+    import shadowflow.api.agents.agents as agents_mod
 
     agents_dir = tmp_path / "agents"
     monkeypatch.setattr(agents_mod, "_AGENTS_DIR", agents_dir)

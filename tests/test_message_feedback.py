@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from shadowflow.server import app
-from shadowflow.api import groups
+from shadowflow.api.groups import groups
 
 
 @pytest.fixture

@@ -8,9 +8,12 @@
  *   - 节点增删：工具条下拉**选中即添加**（落画布视口中心，级联偏移防堆叠）；
  *     或拖拽连线松手到画布空白处，浮出「连接到…」浮层选成员 —— 建节点 +
  *     连线一步完成（n8n 式 drop-to-connect）
- *   - 连线增删：ConnectionMode.Loose（任意手柄都能拉线/接线，方向自动归一），
- *     圆角 smoothstep 边；删除：选中后 Delete/Backspace 或「删除选中」
- *     （连带清掉相连的边）
+ *   - 连线增删：ConnectionMode.Loose（任意手柄都能拉线/接线），方向 =
+ *     交接语义（拖拽方向，起手在入口手柄时按 n8n 语义调换；2026-11-07 起
+ *     不再按 x 坐标翻转 —— 翻转让「驳回回炉」回边永远画不对），圆角
+ *     smoothstep 边；逆向回边走上方 U 形回弧（teamDagGeometry），
+ *     不再穿节点身体/与顺向边叠线；删除：选中后 Delete/Backspace 或
+ *     「删除选中」（连带清掉相连的边）
  *   - 自动排列：工具条「自动排列」图标钮 —— 最长路径分层（复用
  *     TeamDagCanvas.computeTeamDagColumns）×列内行序重排 + fitView
  *   - 边 mode 编辑：选中一条边后右上角属性面板可切换 direct/approve
@@ -68,7 +71,6 @@ import {
   ConnectionLineType,
   BaseEdge,
   EdgeLabelRenderer,
-  getSmoothStepPath,
   type Connection,
   type Node,
   type Edge,
@@ -97,6 +99,7 @@ import {
 import type { AgentRecord } from '../../api/agents';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode, type TeamEdgeMode } from './teamDagValidation';
+import { computeTeamDagEdgePath, resolveConnectDirection } from './teamDagGeometry';
 import { computeTeamDagColumns, computeTeamDagSeedLayout } from './TeamDagCanvas';
 import { dagDraftToWorkflow } from './teamDagDraft';
 import { POLICY_COLOR, edgeVisualFor, lookupPairPolicy, type EdgeVisual } from './teamPolicyVisual';
@@ -168,21 +171,24 @@ export const TeamDagActionCtx = createContext<TeamDagActions | null>(null);
  * 自定义 smoothstep 边（2026-11-07「DAG 太乱/不好删」修复），注册为全局
  * smoothstep 类型 —— makeTeamEdge/onConnect/onReconnect 建的边全部走这里：
  *   - BaseEdge interactionWidth=28：线细难点中，加宽隐形命中区，点选容易
+ *   - 路径几何走 teamDagGeometry.computeTeamDagEdgePath：逆向回边（送审/
+ *     驳回回炉互逆边对里的反向那条）走上方 U 形回弧，不再退化成穿过节点
+ *     身体的水平直线、不再与顺向边叠线（叠线时两颗「×」药丸同点堆叠，
+ *     删一条还剩一条 = 「删除后边还在」）
  *   - EdgeLabelRenderer 药丸：label 文字 + 「×」一键删边（nodrag/nopan，
  *     不触发节点拖拽/画布平移）；无 label 的审批边补「审批」二字，直接边
  *     只留 × 圆钮；选中时药丸高亮
- *   - 虚线/approve 与策略染色仍走 edge.className/style（CSS 钩子不变）
+ *   - 虚线/approve、conditional 强调虚线与策略染色仍走 edge.className/style
  */
 export function TeamDagEdge(props: EdgeProps) {
   const actions = useContext(TeamDagActionCtx);
-  const [path, labelX, labelY] = getSmoothStepPath({
+  const { path, labelX, labelY } = computeTeamDagEdgePath({
     sourceX: props.sourceX,
     sourceY: props.sourceY,
     sourcePosition: props.sourcePosition,
     targetX: props.targetX,
     targetY: props.targetY,
     targetPosition: props.targetPosition,
-    borderRadius: 14,
   });
   const mode = normalizeEdgeMode((props.data as { mode?: unknown } | undefined)?.mode);
   const label = typeof props.label === 'string' && props.label ? props.label : mode === 'approve' ? '审批' : '';
@@ -221,14 +227,16 @@ const TEAM_EDGE_TYPES: EdgeTypes = { smoothstep: TeamDagEdge };
 
 /** approve 边的虚线 CSS 标记（颜色由 edge.style.stroke 控制，箭头色随动）。 */
 const APPROVE_EDGE_CLASS = 'neo-team-dag-edge--approve';
+/** conditional（驳回回炉/条件回边）的强调虚线 CSS 标记（与只读画布同语义）。 */
+const CONDITIONAL_EDGE_CLASS = 'neo-team-dag-edge--conditional';
 
 /**
  * 按 mode × 成员对策略生成边的展示属性（2026-11-06 策略联动）：
- * 策略色优先（允许绿/警告琥珀/拒绝红加粗），approve 虚线形态保留；
- * 无策略时沿用 mode 视觉（approve 警示虚线，direct 默认实线）。
+ * 策略色优先（允许绿/警告琥珀/拒绝红加粗），approve/conditional 虚线形态保留；
+ * 无策略时沿用 mode 视觉（approve 警示虚线 / conditional 强调虚线，direct 默认实线）。
  */
 function edgeVisual(mode: TeamEdgeMode, policy?: PolicyCellState | null): EdgeVisual {
-  return edgeVisualFor(mode, policy, APPROVE_EDGE_CLASS);
+  return edgeVisualFor(mode, policy, APPROVE_EDGE_CLASS, CONDITIONAL_EDGE_CLASS);
 }
 
 /**
@@ -279,7 +287,9 @@ export function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: stri
       title={`${data.name || data.agentId} · ${data.agentId}`}
       data-testid={`team-dag-node-${id ?? data.agentId}`}
     >
-      <Handle type="target" position={Position.Left} className="neo-team-dag-handle" />
+      {/* 手柄 id（2026-11-07）：'in'/'out' 供 resolveConnectDirection 识别
+          拖拽语义方向（从入口手柄起手 = 在画反向边） */}
+      <Handle type="target" position={Position.Left} id="in" className="neo-team-dag-handle" />
       {/* 节点角「×」（2026-11-07）：hover 显现，一键删节点（连带清边），nodrag 防误拖 */}
       {actions && (
         <button
@@ -308,7 +318,7 @@ export function TeamAgentNode({ data, id }: { data: TeamAgentNodeData; id?: stri
       <span className="neo-team-dag-node-label" title={data.name}>
         {data.name || data.agentId}
       </span>
-      <Handle type="source" position={Position.Right} className="neo-team-dag-handle" />
+      <Handle type="source" position={Position.Right} id="out" className="neo-team-dag-handle" />
     </div>
   );
 }
@@ -902,28 +912,17 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   // 由 seedNodes 直接铺成孤立点，无需再挑人添加。
 
   /**
-   * 方向归一（n8n 画布语义）：目标节点应在其上游的右侧 → x 小者为 source；
-   * 同 x 保持调用方给的方向。onConnect / onReconnect / drop-connect 共用。
-   */
-  const normalizeDirection = useCallback(
-    (a: string, b: string): [string, string] => {
-      const ax = rfNodes.find((n) => n.id === a)?.position.x ?? 0;
-      const bx = rfNodes.find((n) => n.id === b)?.position.x ?? 0;
-      return ax <= bx ? [a, b] : [b, a];
-    },
-    [rfNodes],
-  );
-
-  /**
-   * Loose 模式连线（2026-11-05）：任意手柄可起步/落地，方向按「画布语义」
-   * 归一 —— 目标节点应在其上游的右侧，故按两节点 x 坐标定方向（x 小者为
-   * source）；同 x 时保持用户拖拽方向。拒自环/重复边。
+   * 连线方向（2026-11-07「边连接还是奇怪」修复）：边方向 = 交接语义
+   * （source 产出交给 target），走 teamDagGeometry.resolveConnectDirection
+   * —— 拖拽方向即语义方向，只在「从入口手柄起手、落到出口手柄」时调换。
+   * 此前按 x 坐标翻转：「驳回回炉」这类逆向边永远画不出来（方向被静默
+   * 改写成顺向、撞重复边被丢弃），互逆边对也被压成同向重复。
    */
   const onConnect = useCallback(
     (rawConn: Connection) => {
-      const { source, target } = rawConn;
+      const { source, target, sourceHandle, targetHandle } = rawConn;
       if (!source || !target || source === target) return;
-      const [from, to] = normalizeDirection(source, target);
+      const [from, to] = resolveConnectDirection(source, target, sourceHandle, targetHandle);
       pushHistory();
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
@@ -931,30 +930,30 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       });
       setErrors([]);
     },
-    [setRfEdges, normalizeDirection, pushHistory, edgePolicy],
+    [setRfEdges, pushHistory, edgePolicy],
   );
 
   /**
    * 改接已有边（2026-11-05 四轮，n8n 式）：直接抓一条边的任一端点拖到
    * 另一个手柄松手 → 替换该端点（改 source 或 target 视抓的是哪头）。
-   * 方向仍按 x 归一；自环/与既有边重复时忽略本次改接（边保持原样）。
+   * 2026-11-07 起保持边的语义方向（source 侧仍是 source 侧），不做 x 翻转；
+   * 自环/与既有同向边重复时忽略本次改接（边保持原样）。
    * id 保留原值（mode/label 随边保留）—— 只换拓扑不改属性。
    */
   const onReconnect = useCallback(
     (oldEdge: Edge, newConn: Connection) => {
       const { source, target } = newConn;
       if (!source || !target || source === target) return;
-      const [from, to] = normalizeDirection(source, target);
-      // 与其它既有边重复（排除自身）→ 改接后会出现两条同向边，拒
-      const dup = rfEdges.some((e) => e.id !== oldEdge.id && e.source === from && e.target === to);
+      // 与其它既有同向边重复（排除自身）→ 改接后出现两条同源同宿边，拒
+      const dup = rfEdges.some((e) => e.id !== oldEdge.id && e.source === source && e.target === target);
       if (dup) return;
       pushHistory();
       setRfEdges((eds) =>
-        eds.map((e) => (e.id === oldEdge.id ? { ...e, source: from, target: to } : e)),
+        eds.map((e) => (e.id === oldEdge.id ? { ...e, source, target } : e)),
       );
       setErrors([]);
     },
-    [rfEdges, normalizeDirection, setRfEdges, pushHistory],
+    [rfEdges, setRfEdges, pushHistory],
   );
 
   /**
@@ -1002,14 +1001,16 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
   /**
    * drop-to-connect 浮层（2026-11-05 四轮语义升级）：全员已在画布上，
    * 松手到空白 → 浮层选的是**画布上已有的节点**，点选即连线（不再建新节点）。
-   * 方向按两节点 x 归一；拒自环/重复边。
+   * 方向 = 拖拽语义（从哪只手柄拉出 = 上游，2026-11-07 起不做 x 翻转）；
+   * 拒自环/同向重复边（反向边合法：送审/驳回回炉互逆边对）。
    */
   const connectDroppedToAgent = useCallback(
     (agentId: string) => {
       if (!pendingConnection) return;
       const targetNode = rfNodes.find((n) => n.data.agentId === agentId);
       if (!targetNode || targetNode.id === pendingConnection.source) return;
-      const [from, to] = normalizeDirection(pendingConnection.source, targetNode.id);
+      const from = pendingConnection.source;
+      const to = targetNode.id;
       pushHistory();
       setRfEdges((eds) => {
         if (eds.some((e) => e.source === from && e.target === to)) return eds;
@@ -1018,7 +1019,7 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
       setPendingConnection(null);
       setErrors([]);
     },
-    [pendingConnection, rfNodes, normalizeDirection, setRfEdges, pushHistory, edgePolicy],
+    [pendingConnection, rfNodes, setRfEdges, pushHistory, edgePolicy],
   );
 
   const selectedNodes = rfNodes.filter((n) => n.selected);
@@ -1568,15 +1569,27 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
                 >
                   {t('neo.host.teamDagEdgeModeApprove', { defaultValue: '人工审批' })}
                 </button>
+                <button
+                  type="button"
+                  className={`neo-team-dag-edge-mode-btn neo-team-dag-edge-mode-btn--conditional${activeEdgeMode === 'conditional' ? ' is-active' : ''}`}
+                  onClick={() => setEdgeMode(activeEdge.id, 'conditional')}
+                  data-testid="team-dag-edge-mode-conditional"
+                >
+                  {t('neo.host.teamDagEdgeModeConditional', { defaultValue: '条件回流' })}
+                </button>
               </div>
               <div className="neo-team-dag-edge-hint">
                 {activeEdgeMode === 'approve'
                   ? t('neo.host.teamDagEdgeApproveHint', {
                       defaultValue: '审批边：结果流转前需人工确认（L6 审批门）',
                     })
-                  : t('neo.host.teamDagEdgeDirectHint', {
-                      defaultValue: '直接边：上游完成后自动流转到下游',
-                    })}
+                  : activeEdgeMode === 'conditional'
+                    ? t('neo.host.teamDagEdgeConditionalHint', {
+                        defaultValue: '条件边（驳回回炉）：按条件退回上游重做，不参与顺序环检测',
+                      })
+                    : t('neo.host.teamDagEdgeDirectHint', {
+                        defaultValue: '直接边：上游完成后自动流转到下游',
+                      })}
               </div>
               <button
                 type="button"
@@ -1624,10 +1637,10 @@ function TeamDagEditorInner({ teamId, workflow, agents, onSaved, onCancel, polic
                 {rfNodes
                   .filter((n) => n.id !== pendingConnection.source)
                   .map((n) => {
+                    // 同向已有边才禁选（2026-11-07）：反向边合法（送审/驳回
+                    // 回炉互逆边对），不能把「连到上游」的回边入口堵死
                     const already = rfEdges.some(
-                      (e) =>
-                        (e.source === pendingConnection.source && e.target === n.id) ||
-                        (e.source === n.id && e.target === pendingConnection.source),
+                      (e) => e.source === pendingConnection.source && e.target === n.id,
                     );
                     return (
                       <button

@@ -31,6 +31,7 @@ import { Handle, Position, type Edge, type Node, type NodeTypes } from 'reactflo
 import SfReactFlowBase from '../../core/components/Canvas/SfReactFlowBase';
 import { AgentAvatar } from '../../components/agent/AgentAvatar';
 import type { TeamWorkflow, TeamWorkflowEdge, PolicyCellState } from '../../api/teams';
+import { isSequentialEdgeMode } from './teamDagValidation';
 import { POLICY_COLOR, edgeVisualFor, lookupPairPolicy, type EdgeVisual } from './teamPolicyVisual';
 
 const COL_GAP = 140;
@@ -73,17 +74,47 @@ function GmTeamNode({ data }: { data: TeamDagNodeData }) {
   );
 }
 
-/** 最长路径分层（与 ProcessDagCanvas.computeColumns 同构；环安全=guard 限步）。 */
+/** 最长路径分层（与 ProcessDagCanvas.computeColumns 同构；环安全=guard 限步）。
+ *
+ * 2026-11-07「DAG 太乱」修复：「驳回回炉」类回边不参与分层 —— conditional/
+ * parallel 边且 target 是 source 的顺序上游（存在 sequential 路径 target→…→
+ * source）时视作回边，直接跳过。此前回边会把上游节点一路往右顶（6 节点图能
+ * 留出整列空隙），是截图里「Matcher/Reviewer 之间一大段空隙」的直接原因。
+ * 与 teamDagDraft.computeLayers「conditional 边不参与分层」同语义。
+ */
 export function computeTeamDagColumns(workflow: TeamWorkflow): Map<string, number> {
   const incoming: Record<string, string[]> = {};
   const outgoing: Record<string, string[]> = {};
+  const seqOut: Record<string, string[]> = {};
   for (const n of workflow.nodes) {
     incoming[n.id] = [];
     outgoing[n.id] = [];
+    seqOut[n.id] = [];
   }
   for (const e of workflow.edges) {
-    if (incoming[e.target]) incoming[e.target].push(e.source);
-    if (outgoing[e.source]) outgoing[e.source].push(e.target);
+    if (seqOut[e.source] && seqOut[e.target]) seqOut[e.source].push(e.target);
+  }
+  // target 能沿 sequential 边走到 source ⇒ 该边是「驳回回炉」回边
+  const isSequentialAncestor = (from: string, to: string): boolean => {
+    const seen = new Set<string>([from]);
+    const stack = [from];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (cur === to && cur !== from) return true;
+      for (const nx of seqOut[cur] ?? []) {
+        if (!seen.has(nx)) {
+          seen.add(nx);
+          stack.push(nx);
+        }
+      }
+    }
+    return false;
+  };
+  for (const e of workflow.edges) {
+    if (!incoming[e.target] || !outgoing[e.source]) continue;
+    if (!isSequentialEdgeMode(e.data?.mode) && isSequentialAncestor(e.target, e.source)) continue;
+    incoming[e.target].push(e.source);
+    outgoing[e.source].push(e.target);
   }
   const col = new Map<string, number>();
   const queue: string[] = [];

@@ -37,7 +37,7 @@ def client() -> TestClient:
 def _write_agent_record(agent_id: str, name: str = "Test Agent", soul: str = "You are helpful.") -> Path:
     """Write an agent JSON record into the project's .shadowflow/agents/ dir
     and return the path. Tests are responsible for cleanup (use unique ids)."""
-    from shadowflow.api.agents import _agents_dir
+    from shadowflow.api.agents.agents import _agents_dir
 
     agents_dir = _agents_dir()
     p = agents_dir / f"{agent_id}.json"
@@ -175,7 +175,7 @@ class TestDispatchHappyPath:
 
         # Now run the dispatch directly (BackgroundTasks would have triggered
         # this; calling it ourselves makes the test deterministic).
-        from shadowflow.api._chat_bridge import dispatch_agent_reply
+        from shadowflow.api.groups._chat_bridge import dispatch_agent_reply
 
         asyncio.run(dispatch_agent_reply(group_id))
 
@@ -207,7 +207,7 @@ class TestDispatchFailureModes:
             json={"content": "hello", "sender_name": "alice", "sender_kind": "user"},
         )
 
-        from shadowflow.api._chat_bridge import dispatch_agent_reply
+        from shadowflow.api.groups._chat_bridge import dispatch_agent_reply
 
         asyncio.run(dispatch_agent_reply(group_id))
 
@@ -227,7 +227,7 @@ class TestDispatchFailureModes:
             json={"content": "hello", "sender_name": "alice", "sender_kind": "user"},
         )
 
-        from shadowflow.api._chat_bridge import dispatch_agent_reply
+        from shadowflow.api.groups._chat_bridge import dispatch_agent_reply
 
         asyncio.run(dispatch_agent_reply(group_id))
 
@@ -249,7 +249,7 @@ class TestDispatchFailureModes:
             json={"content": "hello", "sender_name": "alice", "sender_kind": "user"},
         )
 
-        from shadowflow.api._chat_bridge import dispatch_agent_reply
+        from shadowflow.api.groups._chat_bridge import dispatch_agent_reply
 
         asyncio.run(dispatch_agent_reply(group_id))
 
@@ -279,7 +279,7 @@ class TestDispatchFailureModes:
 
         monkeypatch.setattr(llm_mod, "create_provider", lambda _p, _c: _BoomProvider())
 
-        from shadowflow.api._chat_bridge import dispatch_agent_reply
+        from shadowflow.api.groups._chat_bridge import dispatch_agent_reply
 
         # Must NOT raise
         asyncio.run(dispatch_agent_reply(group_id))
@@ -359,7 +359,7 @@ class TestHttpIntegration:
 
 class TestRoleMapping:
     def test_role_mapping_skips_system_and_maps_agent_to_assistant(self):
-        from shadowflow.api._chat_bridge import _build_messages_payload
+        from shadowflow.api.groups._chat_bridge import _build_messages_payload
 
         history = [
             {"sender_kind": "user", "content": "Q1"},
@@ -380,7 +380,7 @@ class TestRoleMapping:
         assert roles == ["user", "assistant", "user"]
 
     def test_role_mapping_with_no_soul_omits_system_message(self):
-        from shadowflow.api._chat_bridge import _build_messages_payload
+        from shadowflow.api.groups._chat_bridge import _build_messages_payload
 
         history = [{"sender_kind": "user", "content": "hello"}]
         msgs = _build_messages_payload(history, soul="")

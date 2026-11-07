@@ -29,9 +29,9 @@
  * 入口：NeoRail 群列表行 / NeoChat 顶栏「群聊现场」跳转（session ↔ group
  * 经 B1 互链反查）。样式全部在 neo-group.css（--t-* token，day/night 安全）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Plus, UserPlus, UsersRound } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronRight, Plus, UserPlus, UsersRound } from 'lucide-react';
 import { useGroupTimeline } from '../core/hooks/useGroupTimeline';
 import {
   addGroupMembers,
@@ -128,6 +128,9 @@ export type StreamSeg =
   | { type: 'process'; key: string; messages: TimelineMessage[] }
   | { type: 'dispatch'; key: string; msg: IntentMessage }
   | { type: 'user' | 'agent' | 'system'; key: string; msg: TimelineMessage };
+
+/** 后台过程折叠行只收 process/dispatch 两段（收窄后 dispatch 段的 msg 即 IntentMessage）。 */
+export type BackstageSeg = Extract<StreamSeg, { type: 'process' | 'dispatch' }>;
 
 /**
  * 把一个 turn 的消息切成渲染段：
@@ -264,6 +267,74 @@ export function agentHasReply(
   return messages.some(
     (m) =>
       (m.kind === 'assistant_text' || m.kind === 'raw') && m.agent_id === agentId,
+  );
+}
+
+/* ── 后台过程折叠（2026-11-07 用户反馈：「这些后台流程不在前端显示」）────────
+   OpenBot 范式：transcript 只讲对话，执行过程收进记录/等待行，不刷屏。群聊
+   时间线里 thinking/tool_call/plan_card/hop_card/raw/msg_foot/派发卡等过程面
+   全部收进每回合一个折叠行（默认收起），聊天流只剩用户发言 + agent 回复；
+   过程细节点开折叠行或进 Agent 检查器看。有流式中的帧时折叠行显示「进行中」。 */
+
+/** 过程帧是否还在跑（thinking 流式 / 工具运行中 / msg_foot 未收口）。 */
+function segIsActive(m: TimelineMessage): boolean {
+  return (
+    (m.kind === 'thinking' && m.status === 'streaming') ||
+    (m.kind === 'tool_call' && m.status === 'running') ||
+    (m.kind === 'msg_foot' && m.status === 'running')
+  );
+}
+
+function NeoTurnBackstage({
+  segs,
+  renderMsgActions,
+}: {
+  /** 本回合的过程段（process）与派发卡段（dispatch），保持原有先后顺序。 */
+  segs: BackstageSeg[];
+  renderMsgActions?: (msg: TimelineMessage) => ReactNode;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const count = segs.reduce((n, s) => n + (s.type === 'process' ? s.messages.length : 1), 0);
+  const active = segs.some((s) => s.type === 'process' && s.messages.some(segIsActive));
+  return (
+    <div className="neo-gc-backstage" data-testid="neo-gc-backstage" data-open={open || undefined}>
+      <button
+        type="button"
+        className="neo-gc-backstage-head"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        data-testid="neo-gc-backstage-toggle"
+      >
+        <ChevronRight
+          size={12}
+          className="neo-gc-backstage-chev"
+          data-open={open || undefined}
+          aria-hidden
+        />
+        <span className="neo-gc-backstage-label">
+          {t('neo.group.backstage', { defaultValue: '后台过程' })}
+        </span>
+        <span className="neo-gc-backstage-count">
+          {active
+            ? t('neo.group.backstageActive', { defaultValue: '进行中' })
+            : t('neo.group.backstageCount', { defaultValue: '{{count}} 项', count })}
+        </span>
+      </button>
+      {open && (
+        <div className="neo-gc-backstage-body">
+          {segs.map((s) =>
+            s.type === 'process' ? (
+              <div className="neo-gc-proc" key={s.key}>
+                <NeoTimeline messages={s.messages} renderMsgActions={renderMsgActions} />
+              </div>
+            ) : (
+              <NeoDispatchCard key={s.key} msg={s.msg} />
+            ),
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1020,21 +1091,22 @@ export function NeoGroupChat({
                     <div className="neo-gc-day-divider" role="separator">
                       <span className="neo-gc-day-label">{dayLabel(seg.ts)}</span>
                     </div>
-                    {seg.turns.map((turn) => (
+                    {seg.turns.map((turn) => {
+                      // 2026-11-07 简洁展示（用户反馈：「简单点，直接看到回复，
+                      // 后台流程不在前端显示」）：过程段/派发卡从聊天流摘出，收进
+                      // 回合尾部的「后台过程」折叠行（默认收起）；聊天流只讲对话。
+                      const segs = segmentTurn(turn.messages);
+                      const chatSegs = segs.filter(
+                        (s): s is Extract<StreamSeg, { type: 'user' | 'agent' | 'system' }> =>
+                          s.type === 'user' || s.type === 'agent' || s.type === 'system',
+                      );
+                      const backSegs = segs.filter(
+                        (s): s is BackstageSeg =>
+                          s.type === 'process' || s.type === 'dispatch',
+                      );
+                      return (
                       <section className="neo-gc-turn" key={turn.turnId}>
-                        {segmentTurn(turn.messages).map((s) => {
-                          if (s.type === 'process') {
-                            // run 过程卡：整段仍由 NeoTimeline 渲染，嵌在本 turn 下
-                            return (
-                              <div className="neo-gc-proc" key={s.key}>
-                                <NeoTimeline messages={s.messages} renderMsgActions={renderMsgActions} />
-                              </div>
-                            );
-                          }
-                          if (s.type === 'dispatch') {
-                            // 派发决策卡（intent 帧）：意图 → 派给谁 + 理由
-                            return <NeoDispatchCard key={s.key} msg={s.msg} />;
-                          }
+                        {chatSegs.map((s) => {
                           if (s.type === 'system') {
                             // 系统/事件消息：居中弱化条
                             return (
@@ -1154,13 +1226,18 @@ export function NeoGroupChat({
                             </div>
                           );
                         })}
+                        {/* 后台过程折叠：派发卡 + 过程卡整段收起（默认不显示） */}
+                        {backSegs.length > 0 && (
+                          <NeoTurnBackstage segs={backSegs} renderMsgActions={renderMsgActions} />
+                        )}
                         {turn.ts > 0 && (
                           <span className="neo-gc-turn-time" aria-hidden>
                             {relTime(turn.ts)}
                           </span>
                         )}
                       </section>
-                    ))}
+                      );
+                    })}
                   </div>
                 ))}
                 {/* 交付卡：run 完成态在消息流尾部汇总本轮产物（无产物不渲染） */}

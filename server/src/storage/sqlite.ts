@@ -95,7 +95,7 @@ export function getDb(): Database.Database {
   CREATE INDEX IF NOT EXISTS idx_run_index_conversation ON run_index(conversation_id);`);
 
   // 后端合一·阶段1a（2026-06-12）— Node 侧群存储（storage/groups-store.ts），
-  // 与 Python shadowflow/api/groups.py 的 JSON-file 群记录逐字段等价。1a 只产数据层，
+  // 与 Python shadowflow/api/groups/groups.py 的 JSON-file 群记录逐字段等价。1a 只产数据层，
   // 路由/开关由 1b 接入。蛇形列名对齐 Python record，list/dict 字段以 TEXT(JSON) 存。
   //   groups：群/DM 会话头（kind='group'|'dm'）。archived INTEGER(0/1)；
   //           agent_ids/member_emails/policy_matrix/user_settings 存 JSON 文本。
@@ -136,18 +136,8 @@ export function getDb(): Database.Database {
   );
   CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, timestamp);`);
 
-  // 本地仓库注册表（2026-08-19，移植自 Shadow vault_registry）— 把任意本地文件夹
-  // 注册为知识库仓库（Obsidian vault 模式）。path UNIQUE：同路径重复注册幂等
-  // upsert；status 是注册级标记（active/archived），磁盘存活探测不落库。
-  // 铁律（Shadow REG-1）：remove 只删注册行，永不触碰磁盘用户文件。
-  db.exec(`CREATE TABLE IF NOT EXISTS knowledge_vaults (
-    vault_id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    path TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL,
-    last_opened_at TEXT,
-    status TEXT NOT NULL DEFAULT 'active'
-  );`);
+  // 2026-11-07 知识库统一批：本地仓库注册表（knowledge_vaults）随 vaults 全线
+  // 下线（本地文件夹语义并入多模态记忆库目录摄入）。不再建新表；旧库残留表无害。
 
   // 经验记忆（2026-11-05，移植自 OPC-OS PR#3 memory.py 设计）— 跨任务长期记忆：
   // run 结束时从已有事实自动提炼（失败→教训、中断→偏好），零 LLM 调用。

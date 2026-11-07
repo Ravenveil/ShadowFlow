@@ -1,7 +1,7 @@
 /**
  * groups-event-bus.ts — 后端合一·阶段1b（2026-06-12）：Node 侧群 SSE 内存总线。
  *
- * 对齐 Python shadowflow/api/_group_events.py 的 per-group in-process pub/sub。
+ * 对齐 Python shadowflow/api/groups/_group_events.py 的 per-group in-process pub/sub。
  * SF_GROUPS_BACKEND==='node' 时，groups-node.ts 的 GET /:id/events 订阅本总线；
  * groups-chat.ts 网关在 node 模式下把 agent 回复 / system 通知 publish 到这里，
  * 浏览器即可实时看到（取代 Python SSE bus）。

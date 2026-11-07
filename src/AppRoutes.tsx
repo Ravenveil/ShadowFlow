@@ -6,7 +6,7 @@ import { ErrorBoundary } from './core/components/common/ErrorBoundary';
 // 旧页面体系（Landing/Start/ChatHome/Agents/Teams/Runs/...）全部下架，
 // 主体验 = NeoApp 三栏（左导航 · 中聊天+任务执行 · 右 Agent 的主机）。
 // /settings 保留（BYOK/外观等真实配置，NeoRail 齿轮进入）。
-// /knowledge /knowledge/graph /memory 保留全页模式（可深链；Neo 侧栏点入走
+// /knowledge /memory 保留全页模式（可深链；Neo 侧栏点入走
 // 中栏内嵌变体，rail 常驻——2026-08-19 导航架构统一批）。
 // /loop-engine 已下线（迭代环是 DAG 执行图的一部分，并入右栏「过程」tab，
 // 见 NeoHost processContent）：旧链接 redirect 进 Neo 壳。
@@ -15,10 +15,9 @@ const NeoApp = lazy(() => import('./neo/NeoApp'));
 const NeoGroupChat = lazy(() => import('./neo/NeoGroupChat'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
-// 2026-08-19 河流记忆 / 知识图谱：记忆 = 条目式沉淀（/api/memory-entries）；
-// 图谱 = KnowledgePack 的 LightRAG 实体关系可视化（从 Shadow 搬迁，去 Tauri 化）。
+// 2026-08-19 河流记忆：记忆 = 条目式沉淀（/api/memory-entries）。
 // 2026-11-06 折叠批：记忆页整体并入「设置 → 记忆」，/memory 旧链改重定向。
-const KnowledgeGraphPage = lazy(() => import('./pages/KnowledgeGraphPage'));
+// 2026-11-07 知识库统一批：知识图谱页随旧 KnowledgePack/vaults 一并下线。
 // 数据看板（2026-11-05，整合 OPC-OS PR#3 看板设计）：token/成本/run 统计 + 每日简报。
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 // ClawHub（2026-06）— Claw 集合平台目录页（浏览/安装/详情）。
@@ -51,8 +50,8 @@ export function AppRoutes() {
           <Route path="/loop-engine" element={<LoopEngineRedirect />} />
           <Route path="/loop-engine/:runId" element={<LoopEngineRedirect />} />
           <Route path="/knowledge" element={<KnowledgePage />} />
-          {/* 知识图谱（从 Shadow 搬迁）：?pack=<id> 选 pack，数据 LightRAG GraphML */}
-          <Route path="/knowledge/graph" element={<KnowledgeGraphPage />} />
+          {/* 知识图谱旧链：图谱已随旧 KnowledgePack 下线，回知识库页。 */}
+          <Route path="/knowledge/graph" element={<Navigate to="/knowledge" replace />} />
           {/* 河流记忆（River Memory）：已并入「设置 → 记忆」，旧链重定向。 */}
           <Route path="/memory" element={<MemoryRedirect />} />
           {/* 数据看板（2026-11-05）：侧边栏「数据看板」入口的全页深链变体 */}

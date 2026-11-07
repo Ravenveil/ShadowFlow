@@ -10,7 +10,7 @@
  *   - 交付卡（NeoDeliveryCard）：run succeeded 且有产物 → 尾部出卡；
  *     仍在跑 / 无产物 → 不渲染（不编造）。
  */
-import { render, screen, waitFor } from '../../test/utils';
+import { render, screen, waitFor, fireEvent } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
@@ -96,12 +96,16 @@ describe('segmentTurn — intent 帧分段', () => {
 });
 
 describe('NeoGroupChat — 派发卡', () => {
-  it('有 intent 帧 → 用户发言下方出派发卡（意图→团队+理由+明细）', async () => {
+  it('有 intent 帧 → 收进「后台过程」折叠（默认收起），点开出派发卡（意图→团队+理由+明细）', async () => {
     timelineState.messages = [
       { id: 'chat_m1', kind: 'user_turn', text: '帮我读这篇论文', turn_id: 't1', ts: now - 1000 },
       intentMsg,
     ] as TimelineMessage[];
     renderChat();
+    // 2026-11-07 简洁展示：派发卡不再直接刷在聊天流，默认收进后台过程折叠。
+    await screen.findByTestId('neo-gc-backstage');
+    expect(screen.queryByTestId('neo-gc-dispatch')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('neo-gc-backstage-toggle'));
     const card = await screen.findByTestId('neo-gc-dispatch');
     expect(card).toHaveTextContent('帮我读这篇论文');
     expect(card).toHaveTextContent('团队 论文深读小队');
@@ -125,6 +129,7 @@ describe('NeoGroupChat — 派发卡', () => {
       },
     ] as TimelineMessage[];
     renderChat();
+    fireEvent.click(await screen.findByTestId('neo-gc-backstage-toggle'));
     const card = await screen.findByTestId('neo-gc-dispatch');
     expect(card).toHaveTextContent('员工 读读');
     expect(card).toHaveTextContent('群未绑定团队');

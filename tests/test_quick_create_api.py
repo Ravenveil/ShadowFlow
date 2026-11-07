@@ -24,7 +24,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def _isolated_agents_dir(tmp_path: Path, monkeypatch):
-    import shadowflow.api.agents as _mod
+    import shadowflow.api.agents.agents as _mod
     monkeypatch.setattr(_mod, "_AGENTS_DIR", tmp_path / "agents")
     yield
 

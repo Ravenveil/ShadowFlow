@@ -27,6 +27,7 @@ import { extractRows } from './rows/extractRows';
 import { BashChip } from './rows/BashChip';
 import { BashInline } from './rows/BashInline';
 import { CodeBlockRow } from './rows/CodeBlockRow';
+import { TableRow } from './rows/TableRow';
 import { TextRow } from './rows/TextRow';
 import { SectionHeader } from './SectionHeader';
 
@@ -170,6 +171,8 @@ export const AssistantText = memo(function AssistantText({ msg, onEdit }: Props)
                 return <CodeBlockRow key={key} lang={row.lang} body={row.body} />;
               case 'section-header':
                 return <SectionHeader key={key} label={row.title} />;
+              case 'table':
+                return <TableRow key={key} header={row.header} rows={row.rows} />;
               case 'text':
                 return (
                   <TextRow

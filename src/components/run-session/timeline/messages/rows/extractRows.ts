@@ -27,6 +27,12 @@ export type Row =
   | { kind: 'bash-inline'; cmd: string }
   /** Markdown `## heading` line — renders as SectionHeader standalone divider. */
   | { kind: 'section-header'; title: string }
+  /**
+   * GFM pipe table (header + `---` delimiter + data rows) — renders as a
+   * semantic `<table>`. 2026-11-07: group-chat replies with markdown tables
+   * were leaking raw `|` pipes into prose; the whole block is carved out here.
+   */
+  | { kind: 'table'; header: string[]; rows: string[][] }
   /** Free-form prose paragraph. */
   | { kind: 'text'; body: string };
 
@@ -62,6 +68,77 @@ const DOLLAR_LINE_RE = /^[ \t]*\$ (.+)$/gm;
  * don't want to grab the user's emphasized first line.
  */
 const HEADING_LINE_RE = /^[ \t]*(#{2,3})[ \t]+(.+?)[ \t]*#*[ \t]*$/gm;
+
+/**
+ * 2026-11-07 — GFM pipe 表格（header + `---` 分隔行 + 数据行）。
+ *
+ * 群聊消息实测：LLM 回复里的 markdown 表格此前整块漏成带竖线的纯文本
+ * （`|---|` 分隔行原样露出）。识别口径与 NeoMarkdown 的 pipe 表格一致：
+ * 行首（trim 后）`|`，次行 delimiter（`|---|:---:|` 形态、至少一个 `-`），
+ * 数据行同样以 `|` 起头。delimiter 行本身不产出行。
+ */
+const TABLE_DELIM_RE = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
+
+/** 表格行（header/数据行）：trim 后以 `|` 起头——正文里的散竖线不误判。 */
+function isTableRowLine(line: string): boolean {
+  return line.trim().startsWith('|');
+}
+
+/** `| a | b |` → `['a', 'b']`（容忍首尾竖线与单元格空格，同 NeoMarkdown）。 */
+function splitTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map((c) => c.trim());
+}
+
+/** prose 扫描 token：单行（heading / `$ cmd`）或多行（表格块）结构单元。 */
+type Tok = { start: number; end: number; row: Row };
+
+/**
+ * 在散文切片里找表格块（多行），返回切片内偏移的 token 列表。
+ * 表格块 = header 行 + delimiter 行 + 连续数据行；end 收在末行行尾
+ * （不吞换行，留给后面的 gap 文本走 pushText 清理）。
+ */
+function findTableToks(slice: string): Tok[] {
+  const toks: Tok[] = [];
+  const lines = slice.split('\n');
+  const lineStart: number[] = [];
+  let off = 0;
+  for (const l of lines) {
+    lineStart.push(off);
+    off += l.length + 1;
+  }
+  let i = 0;
+  while (i < lines.length) {
+    const next = lines[i + 1];
+    if (
+      isTableRowLine(lines[i] ?? '') &&
+      next !== undefined &&
+      TABLE_DELIM_RE.test(next) &&
+      next.includes('-')
+    ) {
+      const header = splitTableRow(lines[i] ?? '');
+      let j = i + 2;
+      const data: string[][] = [];
+      while (j < lines.length && isTableRowLine(lines[j] ?? '')) {
+        data.push(splitTableRow(lines[j] ?? ''));
+        j += 1;
+      }
+      const lastIdx = j - 1;
+      toks.push({
+        start: lineStart[i] ?? 0,
+        end: (lineStart[lastIdx] ?? 0) + (lines[lastIdx] ?? '').length,
+        row: { kind: 'table', header, rows: data },
+      });
+      i = j;
+    } else {
+      i += 1;
+    }
+  }
+  return toks;
+}
 
 /**
  * 2026-11-05 — `<sf:thinking>` / `<sf-thinking>` 思考段剥离（前端兜底）。
@@ -177,9 +254,9 @@ function scanProseRange(rows: Row[], body: string, start: number, end: number): 
   const slice = body.slice(start, end);
   if (!slice.trim()) return;
 
-  // Collect all line-level matches.
-  type Tok = { start: number; end: number; row: Row };
-  const toks: Tok[] = [];
+  // Collect all line-level matches（表格块多行优先，heading/dollar 与表格重叠则丢弃）。
+  const tableToks = findTableToks(slice);
+  const toks: Tok[] = [...tableToks];
 
   HEADING_LINE_RE.lastIndex = 0;
   let hm: RegExpExecArray | null;
@@ -201,16 +278,21 @@ function scanProseRange(rows: Row[], body: string, start: number, end: number): 
     });
   }
 
-  if (toks.length === 0) {
+  // 表格行内不可能命中 heading/dollar（行首是 `|`），但防御性去重叠。
+  const overlapsTable = (t: Tok) => tableToks.some((tb) => t.start < tb.end && tb.start < t.end);
+  const ordered = toks
+    .filter((t) => t.row.kind === 'table' || !overlapsTable(t))
+    .sort((a, b) => a.start - b.start);
+
+  if (ordered.length === 0) {
     // No structural tokens — whole slice is one text row.
     pushText(rows, slice, 0, slice.length);
     return;
   }
 
   // Walk in document order, emitting text gaps + structural rows.
-  toks.sort((a, b) => a.start - b.start);
   let lastEnd = 0;
-  for (const t of toks) {
+  for (const t of ordered) {
     if (t.start > lastEnd) pushText(rows, slice, lastEnd, t.start);
     rows.push(t.row);
     lastEnd = t.end;

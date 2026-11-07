@@ -1,12 +1,14 @@
 /**
- * MemoryBankPanel.test.tsx — 多模态记忆库面板契约测试（PR #7 设计移植批）。
+ * MemoryBankPanel.test.tsx — 记忆库「包详情」面板契约测试（2026-11-07 知识库
+ * 统一批：面板改受控详情，包列表/建包/目录导入归 KnowledgePage）。
  *
- * Vitest + RTL：mock api/memoryBank 层控制响应形状（对齐 KnowledgePage.test 模式）。
- * 覆盖主链路：建包 → 上传文件 → 来源列表 → 检索命中 → 删除（NeoConfirmModal 二次确认）。
+ * Vitest + RTL：mock api/memoryBank 层控制响应形状。覆盖主链路：
+ * 受控 packId → 来源列表 → 上传文件 → 检索命中 → 删除来源/删除包
+ * （NeoConfirmModal 二次确认）。
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryBankApiError, createPack, deletePack, deleteSource, ingestFile, listPacks, listSources, queryPack } from '../../api/memoryBank';
+import { MemoryBankApiError, deletePack, deleteSource, ingestFile, listSources, queryPack } from '../../api/memoryBank';
 import MemoryBankPanel from './MemoryBankPanel';
 
 vi.mock('../../api/memoryBank', () => ({
@@ -27,6 +29,7 @@ vi.mock('../../api/memoryBank', () => ({
   deletePack: vi.fn(),
   ingestText: vi.fn(),
   ingestFile: vi.fn(),
+  ingestFolder: vi.fn(),
   listSources: vi.fn(),
   deleteSource: vi.fn(),
   queryPack: vi.fn(),
@@ -57,65 +60,54 @@ vi.mock('../../neo/NeoConfirmModal', () => ({
   ),
 }));
 
-const mockedCreatePack = vi.mocked(createPack);
-const mockedListPacks = vi.mocked(listPacks);
 const mockedListSources = vi.mocked(listSources);
 const mockedIngestFile = vi.mocked(ingestFile);
 const mockedQueryPack = vi.mocked(queryPack);
 const mockedDeletePack = vi.mocked(deletePack);
 const mockedDeleteSource = vi.mocked(deleteSource);
 
-function setup() {
-  return render(
-    <MemoryBankPanel />,
-  );
+function setup(props: { packId?: string | null; packName?: string; reloadKey?: number; onPackDeleted?: () => void } = {}) {
+  return render(<MemoryBankPanel packId="p1" packName="销售知识库" {...props} />);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedListPacks.mockResolvedValue({
-    data: { packs: [{ pack_id: 'p1', name: '销售知识库', description: '' }] },
-    meta: {},
-  });
   mockedListSources.mockResolvedValue({ data: { sources: [] }, meta: {} });
 });
 
 describe('MemoryBankPanel', () => {
-  it('挂载即加载知识包列表并默认选中第一个', async () => {
-    setup();
-    expect(await screen.findByText('销售知识库')).toBeTruthy();
-    expect(mockedListPacks).toHaveBeenCalledTimes(1);
-    // listSources 在 activePackId effect 链里异步触发，用 waitFor 等待
-    await waitFor(() => expect(mockedListSources).toHaveBeenCalledWith('p1'));
-  });
+  it('无 packId → 空态；有 packId → 拉来源列表并显示包名', async () => {
+    render(<MemoryBankPanel packId={null} />);
+    expect(screen.getByTestId('mbk-empty')).toBeTruthy();
 
-  it('建包：输入名称回车创建并选中新包', async () => {
-    mockedCreatePack.mockResolvedValue({
-      data: { pack_id: 'p2', name: '新包', description: '' },
-      meta: {},
-    });
-    mockedListPacks.mockResolvedValueOnce({
-      data: { packs: [{ pack_id: 'p1', name: '销售知识库', description: '' }] },
-      meta: {},
-    });
-    setup();
-    const input = await screen.findByPlaceholderText('新知识包名称');
-    fireEvent.change(input, { target: { value: '新包' } });
-    fireEvent.click(screen.getByTestId('mbk-create-pack'));
-    await waitFor(() => expect(mockedCreatePack).toHaveBeenCalledWith({ name: '新包' }));
-  });
-
-  it('上传文件走 ingestFile 并刷新来源列表', async () => {
-    mockedIngestFile.mockResolvedValue({ data: { source_id: 's1' }, meta: {} });
     mockedListSources.mockResolvedValue({
       data: { sources: [{ source_id: 's1', filename: '合同.pdf', status: 'done' }] },
       meta: {},
     });
     setup();
-    const btn = await screen.findByTestId('mbk-upload-btn');
-    // 真实文件选择器在 jsdom 不可用：直接校验按钮存在且触发 input.click 链路，
-    // ingestFile 的调用路径由 handleUpload 单元断言（见下）。
-    expect(btn).toBeTruthy();
+    expect(await screen.findByText('销售知识库')).toBeTruthy();
+    await waitFor(() => expect(mockedListSources).toHaveBeenCalledWith('p1'));
+    expect(await screen.findByText('合同.pdf')).toBeTruthy();
+  });
+
+  it('reloadKey 递增触发来源列表刷新（目录导入等批量摄入后）', async () => {
+    const { rerender } = setup();
+    await waitFor(() => expect(mockedListSources).toHaveBeenCalledTimes(1));
+    rerender(<MemoryBankPanel packId="p1" packName="销售知识库" reloadKey={1} />);
+    await waitFor(() => expect(mockedListSources).toHaveBeenCalledTimes(2));
+  });
+
+  it('上传文件走 ingestFile 并刷新来源列表', async () => {
+    mockedIngestFile.mockResolvedValue({ data: { source_id: 's2' }, meta: {} });
+    setup();
+    await screen.findByTestId('mbk-upload-btn');
+    const input = screen.getByTestId('mbk-file-input') as HTMLInputElement;
+    const file = new File(['hello'], 'a.md', { type: 'text/markdown' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() =>
+      expect(mockedIngestFile).toHaveBeenCalledWith('p1', expect.objectContaining({ name: 'a.md' })),
+    );
+    await waitFor(() => expect(mockedListSources).toHaveBeenCalledTimes(2));
   });
 
   it('检索：输入查询词返回命中并展示 rag_backend', async () => {
@@ -142,18 +134,18 @@ describe('MemoryBankPanel', () => {
     expect(mockedQueryPack).toHaveBeenCalledWith('p1', { query: '华东续费率', top_k: 5 });
   });
 
-  it('删除知识包：走 NeoConfirmModal 二次确认', async () => {
+  it('删除知识包：NeoConfirmModal 二次确认后回调 onPackDeleted', async () => {
+    const onPackDeleted = vi.fn();
     mockedDeletePack.mockResolvedValue({ deleted: true, pack_id: 'p1' });
-    setup();
-    fireEvent.click(await screen.findByRole('button', { name: '删除知识包 销售知识库' }));
+    setup({ onPackDeleted });
+    fireEvent.click(await screen.findByTestId('mbk-delete-pack'));
     expect(screen.getByTestId('confirm-modal')).toBeTruthy();
     fireEvent.click(screen.getByTestId('confirm-ok'));
     await waitFor(() => expect(mockedDeletePack).toHaveBeenCalledWith('p1'));
-    // 删除后包列表清空 → 空态
-    expect(await screen.findByTestId('mbk-empty')).toBeTruthy();
+    expect(onPackDeleted).toHaveBeenCalledTimes(1);
   });
 
-  it('删除来源：走 NeoConfirmModal 二次确认并刷新列表', async () => {
+  it('删除来源：NeoConfirmModal 二次确认并刷新列表', async () => {
     mockedListSources.mockResolvedValue({
       data: { sources: [{ source_id: 's1', filename: '合同.pdf', status: 'done' }] },
       meta: {},
