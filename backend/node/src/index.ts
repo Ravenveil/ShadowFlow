@@ -264,7 +264,22 @@ const webDist = webDistCandidates.find((p) => fs.existsSync(path.join(p, 'index.
 if (webDist) {
   app.use(express.static(webDist, { index: false, maxAge: '1h' }));
   app.get(/^\/(?!api\/|projects\/).*/, (_req, res) => {
-    res.sendFile(path.join(webDist, 'index.html'));
+    const indexPath = path.join(webDist, 'index.html');
+    if ((process.env.SF_DEMO_PUBLIC ?? '').trim() === '1') {
+      // 演示模式加固（2026-11-08「没连上前端」排查）：
+      // ① 清浏览器 localStorage 残留的后端地址（sf_backend_url / sf_secrets 会把
+      //    同源接口劫持到访问者本机 localhost——页面渲染正常但数据全挂，正是
+      //    「都没连上前端」的形态）；
+      // ② 根路径直达演示大屏 /dashboard（query 保留，sharecode 门不受影响）。
+      let html = fs.readFileSync(indexPath, 'utf8');
+      html = html.replace(
+        '</head>',
+        '<script>try{localStorage.removeItem("sf_backend_url");localStorage.removeItem("sf_secrets");localStorage.setItem("sf_secrets_migrated_v1","1")}catch(e){};if(location.pathname==="/"){location.replace("/dashboard"+location.search)}</script></head>',
+      );
+      res.type('html').send(html);
+      return;
+    }
+    res.sendFile(indexPath);
   });
   console.log(`[index] static SPA → ${webDist}`);
 }
