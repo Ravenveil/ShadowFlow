@@ -621,8 +621,11 @@ a.neo-row-link {
   }
 }
 
-/* 第一层：窄入口面板 */
-.neo-plus-menu {
+/* 第一层：窄入口面板。
+   ⚠️ 类名必须避开 neo.css 里 NeoRail「+新建」菜单的 .neo-plus-menu
+   （position:absolute 规则会级联覆盖这里，导致弹层错位/被裁切 —— 2026-11-07
+   「显示不全」事故根因），故命名 .neo-plus-lead。 */
+.neo-plus-lead {
   width: 232px;
   padding: 6px;
   border-radius: 14px;
@@ -781,6 +784,23 @@ a.neo-row-link {
   display: inline-flex;
   align-items: center;
   color: var(--t-ink-3, #6b7280);
+}
+
+/* 技能行 monogram（WorkBuddy 形态）：彩色圆角块 + 首字母/前两字母 */
+.neo-plus-item-mono {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  user-select: none;
 }
 
 .neo-plus-item-chev {

@@ -3,7 +3,8 @@
  * 连接器 两入口，WorkBuddy 形态）。锁住：
  *   - Layer 1 只有「技能 / 连接器」两行，ClawHub 行不复存在
  *   - 连接器面板：列表渲染 + 状态点 + 多选 toggle 回调 + 选中 ✓
- *   - 技能面板：选 skill 回调 + 关闭
+ *   - 技能面板：全量目录（GET /api/skills）卡片（monogram + 描述）、停用过滤、
+ *     选 skill 回调 + 关闭、底部「从本地添加技能 / 管理技能」
  *   - Esc 关闭、底部「管理连接器」动作
  */
 import { render, screen, fireEvent } from '../../test/utils';
@@ -56,7 +57,36 @@ vi.mock('../../api/memoryBank', () => ({
   listPacks: vi.fn().mockResolvedValue({ data: { packs: [] } }),
 }));
 vi.mock('../../api/skills', () => ({
-  listSkills: vi.fn().mockResolvedValue([]),
+  // 技能面板数据源 = GET /api/skills 全量目录（内置能力技能 + 用户技能）。
+  listSkills: vi.fn().mockResolvedValue([
+    {
+      skill_id: 'bmad-method',
+      name: 'BMAD 方法',
+      description: 'BMAD 需求拆解流水线',
+      mode: 'blueprint',
+      preview_type: 'yaml',
+      source: 'builtin',
+      enabled: true,
+    },
+    {
+      skill_id: 'media-generation',
+      name: '媒体生成',
+      description: '文生图 / 文生视频 / 3D 生成能力技能',
+      mode: 'blueprint',
+      preview_type: 'yaml',
+      source: 'builtin',
+      enabled: true,
+    },
+    {
+      skill_id: 'off-skill',
+      name: '停用技能',
+      description: '已停用不可选',
+      mode: 'blueprint',
+      preview_type: 'yaml',
+      source: 'user',
+      enabled: false,
+    },
+  ]),
 }));
 vi.mock('../../api/fsBrowse', () => ({
   fsHome: vi.fn(),
@@ -144,6 +174,38 @@ describe('NeoPlusMenu（2026-11-07 重做：技能 / 连接器）', () => {
     expect(onPickSkill).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'bmad-method', name: 'BMAD 方法' }),
     );
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('技能面板与后端目录对齐：内置能力技能可见，卡片含 monogram + 描述', async () => {
+    setup();
+    fireEvent.click(screen.getByTestId('neo-plus-row-skill'));
+    const row = await screen.findByTestId('neo-plus-skill-media-generation');
+    expect(row.textContent).toContain('媒体生成');
+    expect(row.textContent).toContain('文生图');
+    // WorkBuddy 形态卡片：monogram 色块
+    expect(row.querySelector('.neo-plus-item-mono')).not.toBeNull();
+  });
+
+  it('已停用技能不进选取列表', async () => {
+    setup();
+    fireEvent.click(screen.getByTestId('neo-plus-row-skill'));
+    await screen.findByTestId('neo-plus-skill-bmad-method');
+    expect(screen.queryByTestId('neo-plus-skill-off-skill')).toBeNull();
+  });
+
+  it('底部「从本地添加技能」→ 打开 SkillPicker + 关闭', async () => {
+    const { onOpenSkillPicker, onClose } = setup();
+    fireEvent.click(screen.getByTestId('neo-plus-row-skill'));
+    fireEvent.click(await screen.findByTestId('neo-plus-skill-add-local'));
+    expect(onOpenSkillPicker).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('底部「管理技能」→ 关闭菜单', async () => {
+    const { onClose } = setup();
+    fireEvent.click(screen.getByTestId('neo-plus-row-skill'));
+    fireEvent.click(await screen.findByTestId('neo-plus-skill-manage'));
     expect(onClose).toHaveBeenCalled();
   });
 
