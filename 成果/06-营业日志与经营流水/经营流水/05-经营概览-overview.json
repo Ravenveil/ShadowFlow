@@ -1,0 +1,21 @@
+{
+  "range": {
+    "from": null,
+    "to": null
+  },
+  "revenue_cents": 493400,
+  "cost_cents": 213800,
+  "gross_profit_cents": 279600,
+  "gross_margin_pct": 56.7,
+  "orders_total": 54,
+  "paid_orders": 39,
+  "refunded_orders": 8,
+  "transacted_orders": 47,
+  "avg_order_cents": 12651,
+  "first_order": {
+    "id": "a0e29134-7387-4f1c-8b40-8f04d1babb9c",
+    "trace_id": "",
+    "paid_at": 1794055184649
+  },
+  "comparison": null
+}

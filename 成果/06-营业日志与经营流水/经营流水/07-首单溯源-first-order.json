@@ -1,0 +1,27 @@
+{
+  "complete": true,
+  "trace_id": "",
+  "order_id": "a0e29134-7387-4f1c-8b40-8f04d1babb9c",
+  "steps": [
+    {
+      "step": "visit_landed",
+      "ok": true
+    },
+    {
+      "step": "order_created",
+      "ok": true
+    },
+    {
+      "step": "order_paid",
+      "ok": true
+    },
+    {
+      "step": "ledger_income",
+      "ok": true
+    },
+    {
+      "step": "dashboard_visible",
+      "ok": true
+    }
+  ]
+}
