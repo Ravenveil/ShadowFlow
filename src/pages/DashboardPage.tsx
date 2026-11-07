@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useI18n } from '../common/i18n';
 import MerchantBoardPanel from './MerchantBoardPanel';
+import OpsPanel from './OpsPanel';
 import {
   fetchDashboardOverview,
   fetchDashboardTimeseries,
@@ -372,6 +373,10 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
       {/* 功能线① 商家数据看板：独立数据源（/api/merchant）与独立口径，
           不与上面这组 AI 用量指标混算。挂在页尾，失败只降级成一条提示。 */}
       <MerchantBoardPanel />
+
+      {/* 代运营看板（缺口审计 P1）：四步进度 + 一键分发 + 运单履约，
+          数据走 /api/ops（overview 直出）。失败只降级，不拖垮整页。 */}
+      <OpsPanel />
     </div>
   );
 }
