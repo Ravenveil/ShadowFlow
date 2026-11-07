@@ -40,7 +40,7 @@ import {
 import "./product-app.css";
 import AuthModal from "./src/AuthModal";
 import EmbeddingSection from "./src/EmbeddingSection";
-import { authLogout, displayNameOf, initialsOf, useAuthState } from "./src/auth";
+import { authGuest, authLogout, displayNameOf, initialsOf, useAuthState } from "./src/auth";
 import {
   ApiError,
   apiFetch,
@@ -549,6 +549,7 @@ export default function ProductApp() {
               <strong>请先登录以使用真实工作台数据</strong>
               <small>当前为演示模式 —— 界面可浏览，数据将在登录后与后端打通</small>
             </div>
+            <button onClick={() => void authGuest()}>游客体验</button>
             <button onClick={() => openAuth("login")}>登录</button>
             <button className="ghost" onClick={() => openAuth("register")}>
               注册

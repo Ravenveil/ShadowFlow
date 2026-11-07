@@ -79,9 +79,10 @@ export function useAuthState(): AuthState {
 
 async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...((init?.headers as Record<string, string>) ?? {}),
   };
+  // 仅带 body 时补 JSON 头（guest 等无 body 端点不发 Content-Type）
+  if (init?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   const token = state.token;
   if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${SF_API_BASE}${path}`, { ...init, headers });
@@ -123,6 +124,19 @@ export async function authLogin(email: string, password: string): Promise<AuthUs
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
+  writeToken(data.token);
+  setState({ user: data.user, token: data.token, ready: true });
+  return data.user;
+}
+
+/**
+ * 游客一键体验：POST /api/auth/guest（无 body）。
+ * 语义（方案 B · token 持久化复用）：token 存 localStorage，24h TTL 内刷新页面
+ * 经 /me 校验后续上同一个游客身份与数据；过期/401 后再签是全新 guest_<hex>
+ * 身份（游客间数据互不可见），旧数据留在旧 user_id 下。
+ */
+export async function authGuest(): Promise<AuthUser> {
+  const data = await authFetch<TokenResponse>("/api/auth/guest", { method: "POST" });
   writeToken(data.token);
   setState({ user: data.user, token: data.token, ready: true });
   return data.user;

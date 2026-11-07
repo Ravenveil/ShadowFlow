@@ -7,7 +7,7 @@
  */
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, Check, X } from "lucide-react";
-import { authLogin, authRegister } from "./auth";
+import { authGuest, authLogin, authRegister } from "./auth";
 
 type Mode = "login" | "register";
 
@@ -63,6 +63,22 @@ export default function AuthModal({ open, onClose, initialMode = "login", prefil
       window.setTimeout(onClose, 650);
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败，请稍后再试");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** 游客一键体验：签发独立 guest 身份（token 持久化，24h 内续上数据）。 */
+  const guest = async () => {
+    if (busy) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await authGuest();
+      setDone(true);
+      window.setTimeout(onClose, 650);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "游客登录失败，请稍后再试");
     } finally {
       setBusy(false);
     }
@@ -178,6 +194,9 @@ export default function AuthModal({ open, onClose, initialMode = "login", prefil
                 }}
               >
                 {mode === "login" ? "还没有账号？立即注册" : "已有账号？去登录"}
+              </button>
+              <button className="sf-auth-demo" onClick={() => void guest()} disabled={busy}>
+                游客一键体验
               </button>
               <button className="sf-auth-demo" onClick={onClose}>
                 先以演示模式浏览
