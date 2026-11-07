@@ -185,7 +185,9 @@ describe('DAG 路径（team 群）— callAgent 同款注入', () => {
     groupRecord.kind = 'group';
     groupRecord.team_id = 't1';
     groupRecord.agent_ids = ['pm', 'arch'];
-    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '一起复盘昨天的投放');
+    // @ 点名定向派活保证 DAG 双节点都派发（策略矩阵下泛提示词会收敛单专家；
+    // 本用例测的是 system 经验注入，不测路由宽度）。
+    await runFanoutAsync('g1', 'cli:claude', undefined, {}, '@pm @arch 一起复盘昨天的投放');
     expect(turnCalls).toHaveLength(2);
     const pmSys = turnCalls.find((c) => c.system.startsWith('soul-pm'))!.system;
     const archSys = turnCalls.find((c) => c.system.startsWith('soul-arch'))!.system;
