@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 
-from shadowflow.api._limiter import limiter
+from shadowflow.api.system._limiter import limiter
 from shadowflow.runtime.artifact_pins import toggle_pin
 
 router = APIRouter(tags=["artifacts"])

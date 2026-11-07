@@ -1132,7 +1132,7 @@ router.put('/preferences', (req: Request, res: Response) => {
   }
 });
 
-// Legacy Python-era contract (shadowflow/api/settings.py used to serve this):
+// Legacy Python-era contract (shadowflow/api/system/settings.py used to serve this):
 // theme-only view. Kept so old clients / docs don't 404; new code should use
 // /preferences. GET defaults to 'dark' to match the old API's response shape.
 router.get('/appearance', (_req: Request, res: Response) => {

@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from shadowflow.server import app
-from shadowflow.api import approvals as _approvals_api
+from shadowflow.api.runs import approvals as _approvals_api
 
 
 @pytest.fixture(scope="module")

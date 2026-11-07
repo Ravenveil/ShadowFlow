@@ -436,7 +436,7 @@ async def list_agents(workspace_id: Optional[str] = Query(None, max_length=200))
         # D3: normalize missing/blank workspace_id to the UNASSIGNED sentinel so
         # legacy agents surface under ?workspace_id=unassigned (and never leak
         # into an arbitrary workspace's view). Mirrors teams._list_teams.
-        from shadowflow.api.teams import normalize_workspace_id
+        from shadowflow.api.agents.teams import normalize_workspace_id
         records = [
             r for r in records
             if normalize_workspace_id(r.get("workspace_id")) == workspace_id
@@ -688,7 +688,7 @@ async def agent_chat_edit(
             detail={"error": {"code": "UNKNOWN_PROVIDER", "message": f"Unknown provider: {provider_name}"}},
         )
 
-    from shadowflow.api.chat import DEFAULT_MODELS
+    from shadowflow.api.groups.chat import DEFAULT_MODELS
     model = x_llm_model or DEFAULT_MODELS.get(provider_name, "")
     if not model:
         raise HTTPException(

@@ -1,7 +1,7 @@
 /**
  * groups-store.ts — 后端合一·阶段1a（2026-06-12）：Node SQLite 侧群存储。
  *
- * 目标：在 Node 侧实现与 Python `shadowflow/api/groups.py`（JSON-file 群记录）
+ * 目标：在 Node 侧实现与 Python `shadowflow/api/groups/groups.py`（JSON-file 群记录）
  * 逐字段等价的数据层，供 1b 的路由消费。**1a 只产 record 对象，不碰路由/信封/开关。**
  *
  * 形状对齐约定（关键）：

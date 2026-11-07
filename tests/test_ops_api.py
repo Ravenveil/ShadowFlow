@@ -7,7 +7,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from shadowflow.api.ops import OpsAggregator, set_aggregator
+from shadowflow.api.dashboard.ops import OpsAggregator, set_aggregator
 from shadowflow.runtime.events import RunEventBus
 from shadowflow.server import app
 

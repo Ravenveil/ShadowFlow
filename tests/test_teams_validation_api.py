@@ -21,8 +21,8 @@ from shadowflow.server import app
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    import shadowflow.api.teams as teams_mod
-    import shadowflow.api.agents as agents_mod
+    import shadowflow.api.agents.teams as teams_mod
+    import shadowflow.api.agents.agents as agents_mod
 
     teams_dir = tmp_path / "teams"
     agents_dir = tmp_path / "agents"

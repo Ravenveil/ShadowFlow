@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import shadowflow.api.agents as agents_api
-import shadowflow.api.teams as teams_api
+import shadowflow.api.agents.agents as agents_api
+import shadowflow.api.agents.teams as teams_api
 import shadowflow.runtime.catalog_service as catalog_service
 from shadowflow.runtime.catalog_service import (
     CatalogService,

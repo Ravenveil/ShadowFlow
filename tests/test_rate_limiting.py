@@ -21,7 +21,7 @@ def reset_limiter():
     slowapi 的 Limiter.reset() 内部调用 MemoryStorage.reset()，
     清空 storage.storage / storage.expirations 两个内存字典。
     """
-    from shadowflow.api._limiter import limiter
+    from shadowflow.api.system._limiter import limiter
 
     limiter.reset()
     yield

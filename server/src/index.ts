@@ -179,7 +179,7 @@ app.use('/api/llm', llmRouter);
 
 // /api/groups — formerly a placeholder stub that returned synthetic IDs and
 // empty arrays. Removed 2026-05-19 so groups requests fall through to the
-// Python FastAPI backend (shadowflow/api/groups.py), which persists groups
+// Python FastAPI backend (shadowflow/api/groups/groups.py), which persists groups
 // + messages under .shadowflow/groups/*.json. The stub was masking real
 // data: `createGroup` succeeded with a fake id, but the group never existed
 // in any storage so `/chat` always rendered "暂无群组". See Step 4 of the

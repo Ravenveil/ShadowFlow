@@ -29,8 +29,8 @@ _SEEDED_AGENT_IDS = [
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import shadowflow.api.teams as teams_mod
-    import shadowflow.api.agents as agents_mod
+    import shadowflow.api.agents.teams as teams_mod
+    import shadowflow.api.agents.agents as agents_mod
 
     monkeypatch.setattr(teams_mod, "_TEAMS_DIR", tmp_path / "teams")
     # Isolate + seed the agent store so D2 existence checks pass for the ids

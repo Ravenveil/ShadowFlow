@@ -190,7 +190,7 @@ async def get_workspace_inbox(
     by run-session auto-save). Falls back to empty result when the groups
     directory is missing or contains no matching records.
     """
-    from shadowflow.api.groups import list_groups  # local import avoids cycles
+    from shadowflow.api.groups.groups import list_groups  # local import avoids cycles
 
     records = list_groups(workspace_id)
 
@@ -198,7 +198,7 @@ async def get_workspace_inbox(
     # agent_dms 的头像都从这里取，一次请求带回全部头像/成员数据）。
     agents_by_id: Dict[str, Dict[str, Any]] = {}
     try:
-        from shadowflow.api.agents import _list_agents  # local import avoids cycles
+        from shadowflow.api.agents.agents import _list_agents  # local import avoids cycles
 
         for arec in _list_agents():
             rec_ws = arec.get("workspace_id")
@@ -272,8 +272,8 @@ async def get_workspace_inbox(
     # 这样用户重命名后 fetchWorkspaceInbox 重拉也能持久保留新名字。
     agent_dms: List[AgentDMItem] = []
     try:
-        from shadowflow.api.agents import _list_agents  # local import avoids cycles
-        from shadowflow.api.groups import _list_groups_records  # local import avoids cycles
+        from shadowflow.api.agents.agents import _list_agents  # local import avoids cycles
+        from shadowflow.api.groups.groups import _list_groups_records  # local import avoids cycles
 
         # 预建 agent_id → 最新 DM group name 映射（按 created_at 取最新，name 为已改名）。
         dm_name_by_agent: Dict[str, str] = {}

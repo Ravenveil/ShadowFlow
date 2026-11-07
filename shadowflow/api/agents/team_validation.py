@@ -1,6 +1,6 @@
 """Team write-time validation — D1+D2.
 
-Pure-function validators used by `shadowflow.api.teams` when a client writes a
+Pure-function validators used by `shadowflow.api.agents.teams` when a client writes a
 team's workflow / membership. Kept dependency-free (no FastAPI, no filesystem)
 so they are trivially unit-testable.
 
@@ -227,13 +227,13 @@ def validate_agent_ids(
 def agent_exists_in_store(agent_id: str) -> bool:
     """Default agent-existence probe against the Python agent store.
 
-    Reads through the live `shadowflow.api.agents._AGENTS_DIR` module attribute
+    Reads through the live `shadowflow.api.agents.agents._AGENTS_DIR` module attribute
     so that test monkeypatching of `_AGENTS_DIR` is honoured (the value is
     looked up at call time, not import time).
     """
     # Imported lazily and read via attribute access so monkeypatch on the
     # module attribute takes effect (don't bind the path at import time).
-    from shadowflow.api import agents as _agents_mod
+    from shadowflow.api.agents import agents as _agents_mod
 
     agents_dir = _agents_mod._AGENTS_DIR
     try:

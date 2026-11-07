@@ -37,7 +37,7 @@ from shadowflow.runtime.approval.service import (  # noqa: F401
     set_runtime_service,
 )
 
-logger = logging.getLogger("shadowflow.api.approvals")
+logger = logging.getLogger("shadowflow.api.runs.approvals")
 
 router = APIRouter(tags=["approvals"])
 

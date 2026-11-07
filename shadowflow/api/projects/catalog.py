@@ -65,9 +65,9 @@ def _materialize_team_fork(
     # 但保持一致风格，且方便测试 monkeypatch 模块属性后生效）。
     from datetime import datetime, timezone
 
-    from shadowflow.api import agents as agents_api
-    from shadowflow.api import teams as teams_api
-    from shadowflow.api import team_validation as _tv
+    from shadowflow.api.agents import agents as agents_api
+    from shadowflow.api.agents import teams as teams_api
+    from shadowflow.api.agents import team_validation as _tv
     from shadowflow.runtime.catalog_service import CatalogBlueprintInvalid
 
     ws = (workspace_id or "").strip() or "default"

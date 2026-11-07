@@ -144,7 +144,7 @@ def _escape_fmt_str(s: str) -> str:
 # Write-time validation (D1+D2)
 # ---------------------------------------------------------------------------
 
-from shadowflow.api import team_validation as _tv  # noqa: E402
+from shadowflow.api.agents import team_validation as _tv# noqa: E402
 from shadowflow.runtime import team_workflow_versions as _wf_versions  # noqa: E402
 
 
@@ -631,7 +631,7 @@ async def team_chat_edit(
             detail={"error": {"code": "UNKNOWN_PROVIDER", "message": f"Unknown provider: {provider_name}"}},
         )
 
-    from shadowflow.api.chat import DEFAULT_MODELS
+    from shadowflow.api.groups.chat import DEFAULT_MODELS
     model = x_llm_model or DEFAULT_MODELS.get(provider_name, "")
     if not model:
         raise HTTPException(

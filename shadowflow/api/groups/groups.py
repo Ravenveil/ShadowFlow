@@ -36,7 +36,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from shadowflow.api._limiter import limiter
+from shadowflow.api.system._limiter import limiter
 from shadowflow.services.secretary_seed import (
     SECRETARY_AGENT_ID,
     SECRETARY_GREETING,
@@ -146,7 +146,7 @@ def list_groups(
     workspace_id: Optional[str] = None,
     kinds: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Public helper used by shadowflow.api.inbox to aggregate groups into
+    """Public helper used by shadowflow.api.groups.inbox to aggregate groups into
     the chat inbox view. Returns raw records — callers can reshape.
     Default excludes DM conversations (kind='dm')."""
     return _list_groups_records(workspace_id, kinds)
@@ -353,7 +353,7 @@ async def resolve_dm_conversation(
     # 没有就建一条。name 取 agent 名（拿不到就用 id），方便 header 显示。
     agent_name = agent_id
     try:
-        from shadowflow.api._chat_bridge import _load_agent_record  # noqa: PLC0415
+        from shadowflow.api.groups._chat_bridge import _load_agent_record  # noqa: PLC0415
 
         arec = _load_agent_record(agent_id)
         if arec and arec.get("name"):
@@ -575,7 +575,7 @@ async def post_group_message(
     # sender renders them optimistically; publishing would duplicate).
     if body.sender_kind in ("agent", "system"):
         try:
-            from shadowflow.api._group_events import publish_group_event  # noqa: PLC0415
+            from shadowflow.api.groups._group_events import publish_group_event  # noqa: PLC0415
 
             event_type = "system.notice" if body.sender_kind == "system" else "agent.message"
             publish_group_event(group_id, {"type": event_type, "data": msg})
@@ -586,7 +586,7 @@ async def post_group_message(
     # system messages should never trigger another agent reply (would loop).
     # Skipped when X-SF-No-Dispatch is set — the Node gateway owns the reply.
     if body.sender_kind == "user" and rec.get("agent_ids") and not x_sf_no_dispatch:
-        from shadowflow.api._chat_bridge import (  # noqa: PLC0415
+        from shadowflow.api.groups._chat_bridge import (  # noqa: PLC0415
             build_byok_override,
             dispatch_agent_reply,
         )
@@ -618,7 +618,7 @@ async def stream_group_events(group_id: str, request: Request) -> StreamingRespo
     if _load_group(group_id) is None:
         raise HTTPException(status_code=404, detail=f"Group not found: {group_id}")
 
-    from shadowflow.api._group_events import subscribe, unsubscribe  # noqa: PLC0415
+    from shadowflow.api.groups._group_events import subscribe, unsubscribe  # noqa: PLC0415
 
     async def _generate():
         q = subscribe(group_id)

@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 import shadowflow.runtime.acp.server as _server_module
 import shadowflow.runtime.acp.registry as _registry_module
-from shadowflow.api.acp_server import router as acp_router
+from shadowflow.api.system.acp_server import router as acp_router
 from shadowflow.runtime.acp.registry import AgentCapabilityManifest, AgentRegistry
 from shadowflow.runtime.acp.server import ACPConnectionManager, AgentSession
 
@@ -491,7 +491,7 @@ class TestACPRestEndpoints:
         from shadowflow.runtime.acp.registry import AgentRegistry
         fresh_registry = AgentRegistry()
         with (
-            patch("shadowflow.api.acp_server.get_registry", return_value=fresh_registry),
+            patch("shadowflow.api.system.acp_server.get_registry", return_value=fresh_registry),
             patch("shadowflow.runtime.acp.server.get_registry", return_value=fresh_registry),
         ):
             yield

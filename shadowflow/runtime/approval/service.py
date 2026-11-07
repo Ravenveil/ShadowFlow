@@ -1,4 +1,4 @@
-"""Approval REST business logic (extracted from shadowflow.api.approvals).
+"""Approval REST business logic (extracted from shadowflow.api.runs.approvals).
 
 This module holds the framework-agnostic core for the approvals REST surface:
   - In-memory approval registry (approval_id <-> (run_id, gate_id))
@@ -7,7 +7,7 @@ This module holds the framework-agnostic core for the approvals REST surface:
   - Group-run resolution helpers
   - SSE generator factory for /api/approvals/events
 
-The FastAPI router in shadowflow.api.approvals is a thin wrapper that only
+The FastAPI router in shadowflow.api.runs.approvals is a thin wrapper that only
 handles HTTP concerns (decorators, request parsing, response models) and
 delegates everything else here. Module-level state (registries, singleton)
 is re-exported by the wrapper for backward compatibility (tests reach into
@@ -25,7 +25,7 @@ from uuid import uuid4
 
 from shadowflow.runtime.events import _redact_sse_payload
 
-logger = logging.getLogger("shadowflow.api.approvals")
+logger = logging.getLogger("shadowflow.api.runs.approvals")
 
 # ---------------------------------------------------------------------------
 # Registry: approval_id → (run_id, node_id) + metadata

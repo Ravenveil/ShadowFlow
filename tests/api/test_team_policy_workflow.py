@@ -20,8 +20,8 @@ from shadowflow.server import app
 def client(tmp_path, monkeypatch):
     import json
 
-    import shadowflow.api.agents as agents_mod
-    import shadowflow.api.teams as teams_mod
+    import shadowflow.api.agents.agents as agents_mod
+    import shadowflow.api.agents.teams as teams_mod
 
     monkeypatch.setattr(teams_mod, "_TEAMS_DIR", tmp_path / "teams")
     # D2 write-time validation rejects teams referencing non-existent agents —

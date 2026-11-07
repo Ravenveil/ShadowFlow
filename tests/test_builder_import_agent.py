@@ -294,7 +294,7 @@ class TestImportAgentRoleIdUniqueness:
         ids: set[str] = set()
         # Freeze time.time() so int(time.time()) is identical for both calls,
         # which would have produced a collision under the pre-fix algorithm.
-        with patch("shadowflow.api.builder.time.time", return_value=1714377600.0):
+        with patch("shadowflow.api.agents.builder.time.time", return_value=1714377600.0):
             for _ in range(5):
                 resp = client.post(
                     f"/builder/blueprints/bp-x/import-agent",

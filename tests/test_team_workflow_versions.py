@@ -35,8 +35,8 @@ def _workflow(agent_id: str, edge_mode: str = "direct") -> dict:
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import shadowflow.api.teams as teams_mod
-    import shadowflow.api.agents as agents_mod
+    import shadowflow.api.agents.teams as teams_mod
+    import shadowflow.api.agents.agents as agents_mod
     from shadowflow.runtime import team_workflow_versions as versions_mod
 
     monkeypatch.setattr(teams_mod, "_TEAMS_DIR", tmp_path / "teams")

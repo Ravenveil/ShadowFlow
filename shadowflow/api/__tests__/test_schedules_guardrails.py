@@ -18,7 +18,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-import shadowflow.api.schedules as schedules_mod
+import shadowflow.api.runs.schedules as schedules_mod
 from shadowflow.server import app
 
 

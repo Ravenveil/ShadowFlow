@@ -103,7 +103,7 @@ def _load_agent_record(agent_id: str) -> Optional[Dict[str, Any]]:
     (the registry is for ACP-handshaked agents; quick-hire agents are
     file-only). Returns None if missing or invalid."""
     # Lazy import to avoid circulars
-    from shadowflow.api.agents import _agent_path, _validate_agent_id  # noqa: PLC0415
+    from shadowflow.api.agents.agents import _agent_path, _validate_agent_id  # noqa: PLC0415
 
     try:
         _validate_agent_id(agent_id)
@@ -152,7 +152,7 @@ def _append_message_to_group(group_id: str, msg: Dict[str, Any]) -> bool:
     and never fails the append.
     """
     # Lazy import to avoid circulars (groups imports this module)
-    from shadowflow.api.groups import _load_group, _save_group  # noqa: PLC0415
+    from shadowflow.api.groups.groups import _load_group, _save_group  # noqa: PLC0415
 
     rec = _load_group(group_id)
     if rec is None:
@@ -170,7 +170,7 @@ def _append_message_to_group(group_id: str, msg: Dict[str, Any]) -> bool:
     # Real-time push (best-effort). Event type from sender_kind so the frontend
     # can route agent bubbles vs. system rows.
     try:
-        from shadowflow.api._group_events import publish_group_event  # noqa: PLC0415
+        from shadowflow.api.groups._group_events import publish_group_event  # noqa: PLC0415
 
         kind = msg.get("sender_kind", "agent")
         event_type = "system.notice" if kind == "system" else "agent.message"
@@ -214,7 +214,7 @@ async def _reply_for_one_agent(
     `sender_kind='system'` notices and never raised — so one bad agent doesn't
     abort the rest of the fan-out.
     """
-    from shadowflow.api.groups import _load_group  # noqa: PLC0415
+    from shadowflow.api.groups.groups import _load_group  # noqa: PLC0415
 
     agent_rec = _load_agent_record(agent_id)
     if agent_rec is None:
@@ -309,7 +309,7 @@ async def dispatch_agent_reply(
     """
     # ----- Lazy imports (avoid circulars / heavy import at module load) ----
     try:
-        from shadowflow.api.groups import _load_group  # noqa: PLC0415
+        from shadowflow.api.groups.groups import _load_group  # noqa: PLC0415
     except Exception as exc:
         logger.exception("chat-bridge: import failure: %s", exc)
         return

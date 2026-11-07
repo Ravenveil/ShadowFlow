@@ -184,7 +184,7 @@ export function replayTimeline(events: ReplayableEvent[]): TimelineMessage[] {
 }
 
 /**
- * Python group MessageItem subset (shadowflow/api/groups.py `MessageItem`).
+ * Python group MessageItem subset (shadowflow/api/groups/groups.py `MessageItem`).
  * `message_id` exists on records written since 2026-05; legacy records without
  * it fall back to a positional id (stable as long as history is append-only,
  * which the Python store guarantees).

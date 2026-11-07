@@ -95,7 +95,7 @@ export function getDb(): Database.Database {
   CREATE INDEX IF NOT EXISTS idx_run_index_conversation ON run_index(conversation_id);`);
 
   // 后端合一·阶段1a（2026-06-12）— Node 侧群存储（storage/groups-store.ts），
-  // 与 Python shadowflow/api/groups.py 的 JSON-file 群记录逐字段等价。1a 只产数据层，
+  // 与 Python shadowflow/api/groups/groups.py 的 JSON-file 群记录逐字段等价。1a 只产数据层，
   // 路由/开关由 1b 接入。蛇形列名对齐 Python record，list/dict 字段以 TEXT(JSON) 存。
   //   groups：群/DM 会话头（kind='group'|'dm'）。archived INTEGER(0/1)；
   //           agent_ids/member_emails/policy_matrix/user_settings 存 JSON 文本。

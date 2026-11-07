@@ -19,9 +19,9 @@ from typing import Any, Dict, List
 
 import pytest
 
-from shadowflow.api import _chat_bridge, _group_events
-from shadowflow.api import agents as agents_mod
-from shadowflow.api import groups as groups_mod
+from shadowflow.api.groups import _chat_bridge, _group_events
+from shadowflow.api.agents import agents as agents_mod
+from shadowflow.api.groups import groups as groups_mod
 
 
 # ---------------------------------------------------------------------------

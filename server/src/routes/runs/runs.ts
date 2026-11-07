@@ -3,7 +3,7 @@
  *
  * Projection endpoints (/runs/:runId/graph, /task-tree) are served locally for
  * Node-daemon runs (see L6 block below) and proxied to Python FastAPI
- * (shadowflow/api/runs.py, RuntimeService export_*) for Python-runtime runs.
+ * (shadowflow/api/runs/runs.py, RuntimeService export_*) for Python-runtime runs.
  *
  * Contract (2026-05-10 review B2 — 守 Story 15.1 决议)：返回 raw array `RunRecord[]`，
  * 与前端 `listRuns(): Promise<RunRecord[]>` (src/api/runs.ts:295) 直接对齐。
@@ -74,10 +74,10 @@ router.delete('/:runId', (req: Request, res: Response) => {
 
 // Remaining projection endpoints are still proxied to Python (daemon runs have
 // no lineage/memory/checkpoint/training data server-side):
-// - GET /runs/:runId/artifact-lineage → shadowflow/api/runs.py:get_artifact_lineage
-// - GET /runs/:runId/memory-graph → shadowflow/api/runs.py:get_memory_graph
-// - GET /runs/:runId/checkpoint-lineage → shadowflow/api/runs.py:get_checkpoint_lineage
-// - GET /runs/:runId/training-dataset → shadowflow/api/runs.py:get_training_dataset
+// - GET /runs/:runId/artifact-lineage → shadowflow/api/runs/runs.py:get_artifact_lineage
+// - GET /runs/:runId/memory-graph → shadowflow/api/runs/runs.py:get_memory_graph
+// - GET /runs/:runId/checkpoint-lineage → shadowflow/api/runs/runs.py:get_checkpoint_lineage
+// - GET /runs/:runId/training-dataset → shadowflow/api/runs/runs.py:get_training_dataset
 //
 // The proxy-fallback middleware handles these by forwarding to the Python backend.
 

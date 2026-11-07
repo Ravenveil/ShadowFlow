@@ -26,7 +26,7 @@ def isolated_regression_service(tmp_path: Path) -> Generator[RegressionService, 
     # Patch the module-level singleton to use tmp baselines dir
     _reg_mod.regression_service = RegressionService()
     # Also patch the regression api module so it picks up the new singleton
-    import shadowflow.api.regression as _api_mod
+    import shadowflow.api.quality.regression as _api_mod
     _api_mod.regression_service = _reg_mod.regression_service
     yield _reg_mod.regression_service
     _reg_mod._BASELINES_DIR = original_dir

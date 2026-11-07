@@ -26,7 +26,7 @@ import pytest
 # ---------------------------------------------------------------------------
 os.environ.setdefault("A2A_BRIDGE_ENABLED", "true")
 
-from shadowflow.api.a2a_bridge import (  # noqa: E402
+from shadowflow.api.system.a2a_bridge import (  # noqa: E402
     A2AClient,
     A2AClientError,
     A2AMessage,
@@ -60,7 +60,7 @@ def client(monkeypatch):
     """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    import shadowflow.api.a2a_bridge as bridge_mod
+    import shadowflow.api.system.a2a_bridge as bridge_mod
 
     monkeypatch.setattr(bridge_mod, "A2A_BRIDGE_ENABLED", True)
     app = FastAPI()
@@ -333,7 +333,7 @@ class TestAuthGuard:
     def test_no_auth_when_disabled(self, client):
         """When A2A_REQUIRE_AUTH is not set, requests pass through."""
         with patch.dict(os.environ, {"A2A_REQUIRE_AUTH": "false", "A2A_API_KEY": ""}):
-            from shadowflow.api import a2a_bridge
+            from shadowflow.api.system import a2a_bridge
             original = a2a_bridge._A2A_REQUIRE_AUTH
             a2a_bridge._A2A_REQUIRE_AUTH = False
             try:
@@ -345,7 +345,7 @@ class TestAuthGuard:
 
     def test_auth_required_no_token_rejected(self, client):
         """When auth is required and no token provided, 401 is returned."""
-        from shadowflow.api import a2a_bridge
+        from shadowflow.api.system import a2a_bridge
         orig_auth = a2a_bridge._A2A_REQUIRE_AUTH
         orig_key = a2a_bridge._A2A_API_KEY
         a2a_bridge._A2A_REQUIRE_AUTH = True
@@ -360,7 +360,7 @@ class TestAuthGuard:
 
     def test_auth_required_valid_bearer_accepted(self, client):
         """When auth is required and a valid Bearer token is provided, request passes."""
-        from shadowflow.api import a2a_bridge
+        from shadowflow.api.system import a2a_bridge
         orig_auth = a2a_bridge._A2A_REQUIRE_AUTH
         orig_key = a2a_bridge._A2A_API_KEY
         a2a_bridge._A2A_REQUIRE_AUTH = True
@@ -393,7 +393,7 @@ class TestAgentCardBuilder:
 
     def test_card_url_uses_sf_base_url(self):
         with patch.dict(os.environ, {"SF_BASE_URL": "https://example.com"}):
-            from shadowflow.api import a2a_bridge
+            from shadowflow.api.system import a2a_bridge
             orig = a2a_bridge._SF_BASE_URL
             a2a_bridge._SF_BASE_URL = "https://example.com"
             try:
@@ -408,7 +408,7 @@ class TestAgentCardBuilder:
         assert card.security is None
 
     def test_security_added_when_auth_enabled(self):
-        from shadowflow.api import a2a_bridge
+        from shadowflow.api.system import a2a_bridge
         orig_auth = a2a_bridge._A2A_REQUIRE_AUTH
         orig_key = a2a_bridge._A2A_API_KEY
         a2a_bridge._A2A_REQUIRE_AUTH = True

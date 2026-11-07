@@ -2,7 +2,7 @@
  * groups-node.ts — 后端合一·阶段1b（2026-06-12）：Node 自服务 /api/groups。
  *
  * 把 1a 的 storage/groups-store.ts（Node SQLite，蛇形 key 与 Python record 等价）
- * 接进请求路径，实现 shadowflow/api/groups.py 的核心端点——**响应信封/字段/状态码
+ * 接进请求路径，实现 shadowflow/api/groups/groups.py 的核心端点——**响应信封/字段/状态码
  * 逐字对齐 Python**，使 SF_GROUPS_BACKEND==='node' 时前端无需任何改动即可换源。
  *
  * 挂载（index.ts）：仅当 SF_GROUPS_BACKEND==='node' 时把本 router 挂在 proxyFallback

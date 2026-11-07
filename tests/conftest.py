@@ -11,13 +11,13 @@ def _reset_rate_limiter():
     防止跨测试文件的限速状态积累导致非限速测试误收 429。
     """
     try:
-        from shadowflow.api._limiter import limiter
+        from shadowflow.api.system._limiter import limiter
         limiter.reset()
     except Exception:
         pass
     yield
     try:
-        from shadowflow.api._limiter import limiter
+        from shadowflow.api.system._limiter import limiter
         limiter.reset()
     except Exception:
         pass
@@ -42,7 +42,9 @@ def _isolate_shadowflow_data(tmp_path_factory):
     mp = MonkeyPatch()
     root = tmp_path_factory.mktemp("shadowflow_data")
     try:
-        from shadowflow.api import agents, groups, schedules, teams
+        from shadowflow.api.agents import agents, teams
+        from shadowflow.api.groups import groups
+        from shadowflow.api.runs import schedules
 
         mp.setattr(groups, "_GROUPS_DIR", root / "groups", raising=False)
         mp.setattr(agents, "_AGENTS_DIR", root / "agents", raising=False)
