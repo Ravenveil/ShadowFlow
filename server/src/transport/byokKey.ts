@@ -23,6 +23,11 @@
 import { getSetting } from '../storage/settings';
 import { PROVIDER_ENV_VAR, type ProviderId } from './api-clients';
 
+// 2026-11-07 模型链路断点全清：baseUrl 解析/归一独立成 providerBaseUrl.ts
+// （api-clients 的 callProvider 也要用，避免 transport↔api-clients 循环依赖），
+// 此处 re-export 保持 byokKey 作为"settings/byok 解析"的统一入口。
+export { resolveProviderBaseUrl, normalizeSdkBaseUrl } from './providerBaseUrl';
+
 /** Lower-cased request header carrying each provider's key (per-request override). */
 export const HEADER_BY_PROVIDER: Record<ProviderId, string> = {
   anthropic: 'x-anthropic-key',
@@ -63,13 +68,18 @@ function normalizeChatProvider(name: string): string {
  * Resolve the API key for `provider`. `headers` is the incoming request's
  * headers map (lower-cased keys, as Express provides). Returns undefined when
  * no key is found in any source (CLI executors don't need one).
+ *
+ * 2026-11-07：参数放宽到 string —— settings/byok 允许用户自定义 provider
+ * （custom-*），其 key 同样走本函数的"头 → 通用头 → settings → env"四级
+ * 优先（custom-* 无 per-provider 头名/env 名，仅走 settings 与通用头）。
  */
 export function resolveProviderKey(
-  provider: ProviderId,
+  provider: ProviderId | string,
   headers: Record<string, string | string[] | undefined> = {},
 ): string | undefined {
-  // 1) per-provider 头(最具体,最高优先)。
-  const specific = pickHeader(headers, HEADER_BY_PROVIDER[provider]);
+  // 1) per-provider 头(最具体,最高优先)。custom-* 无对应头名，跳过。
+  const specificName = (HEADER_BY_PROVIDER as Record<string, string | undefined>)[provider];
+  const specific = specificName ? pickHeader(headers, specificName) : undefined;
   if (specific) return specific;
 
   // 2) 通用 X-LLM-* 头(DEBT-1 统一,2026-06-04):浏览器把 localStorage 里配的 key 经
@@ -93,33 +103,28 @@ export function resolveProviderKey(
     /* settings unavailable — fall through to env */
   }
 
-  // 4) 环境变量(最后兜底)。
-  const envVal = process.env[PROVIDER_ENV_VAR[provider]];
+  // 4) 环境变量(最后兜底)。custom-* 无对应 env 名，跳过。
+  const envName = (PROVIDER_ENV_VAR as Record<string, string | undefined>)[provider];
+  const envVal = envName ? process.env[envName] : undefined;
   return typeof envVal === 'string' && envVal.trim() ? envVal.trim() : undefined;
 }
 
 /**
- * 解析 provider 的 BYOK 自定义 baseUrl（2026-11-07 Day1 打通修复）。
+ * 该 provider 是否已在 settings/byok 注册（2026-11-07）。
  *
- * 与 `resolveProviderKey` 同一 store（settings/byok）：BYOK 设置页里用户为
- * provider 配置的自定义 API 地址（本地网关 / 私有部署 / OpenAI 兼容中转）。
- * 返回 undefined 表示未配置——调用方回退到各 client 的内置默认地址。
- *
- * 背景：此前 `resolveCallable('byok:<provider>')` 只传 key 不传 baseUrl，
- * OpenAiCompatApiClient 回退到 `https://api.openai.com/v1` 等默认地址，
- * 自定义网关/本地端点场景全部打偏（表现为 SDK "Request timed out."）。
+ * 用途：模型选择器会把用户自定义 provider（custom-*，前端 ByokSection 创建）
+ * 以 `byok:custom-…` executor 提交到 run-sessions；provider 校验不能只认
+ * `PROVIDER_IDS` 白名单（那是内置目录），还要认 settings 里注册过的自定义
+ * provider。仅"注册过"即放行——key/baseUrl 缺失时由下游 client 大声报错。
  */
-export function resolveProviderBaseUrl(
-  provider: ProviderId | string,
-): string | undefined {
+export function isSettingsRegisteredProvider(provider: string): boolean {
   try {
     const cfg = getSetting('byok') as
-      | { providers?: Record<string, { baseUrl?: string }> }
+      | { providers?: Record<string, unknown> }
       | undefined;
-    const u = cfg?.providers?.[provider]?.baseUrl;
-    if (typeof u === 'string' && u.trim()) return u.trim();
+    return Boolean(cfg?.providers && provider in cfg.providers);
   } catch {
-    /* settings unavailable — fall through */
+    return false;
   }
-  return undefined;
 }
+

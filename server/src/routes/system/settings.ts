@@ -363,8 +363,16 @@ export function formatApiHost(
 export function normalizeProviderBaseUrl(providerId: string, rawBaseUrl?: string | null): string {
   const raw = rawBaseUrl?.trim() || PROVIDER_DEFAULT_BASE[providerId] || '';
   if (!raw) return '';
-  // 'custom' provider: respect user input verbatim (no version inference)
-  if (providerId === 'custom') return stripTrailingSharp(stripTrailingSlash(raw));
+  // 'custom' / 'custom-*' 自定义 provider：尊重用户输入原样（不做版本推断）。
+  // 设置页弹窗写明「Base URL（OpenAI 兼容）」——输入即完整 base。此前只匹配
+  // 字面 'custom'，而前端实际生成的是 custom-<slug>-<rand> id，该分支从未生效
+  // （2026-11-07 修复，与调用链侧 providerBaseUrl.normalizeSdkBaseUrl 同口径）。
+  if (providerId === 'custom' || providerId.startsWith('custom-')) {
+    return stripTrailingSharp(stripTrailingSlash(raw));
+  }
+  // azure：部署级地址（…/openai/deployments/<name>）不含 /v1 版本段，推断会
+  // 拼坏；query（?api-version=）原样保留（探针/调用链各自消费，2026-11-07）。
+  if (providerId === 'azure') return stripTrailingSharp(stripTrailingSlash(raw));
   // Gemini insists on /v1beta — handle via fetcher, just normalize trailing slash here
   if (providerId === 'google' || providerId === 'gemini') {
     return stripTrailingSharp(stripTrailingSlash(raw));
@@ -441,12 +449,32 @@ function buildOllamaProbe(apiKey: string, effectiveBase: string): ProbeRequest {
   };
 }
 
+function buildAzureProbe(apiKey: string, effectiveBase: string): ProbeRequest {
+  // Azure 的模型目录是资源级接口：{resource}/openai/models?api-version=…。
+  // 用户配置的多为部署级地址（…/openai/deployments/<name>），先退回资源根
+  // 再探（2026-11-07 模型链路断点全清；此前套 OpenAI 探针打
+  // …/deployments/<name>/models，必 404）。鉴权除 Bearer/X-Api-Key 双发外
+  // 补 Azure 门户的 api-key 头。
+  const root = stripTrailingSlash(
+    effectiveBase.replace(/\/openai\/deployments\/[^/]+.*$/i, ''),
+  );
+  return {
+    url: `${root}/openai/models?api-version=2024-06-01`,
+    headers: {
+      'Accept': 'application/json',
+      'api-key': apiKey,
+      ...dualKeyHeaders(apiKey),
+    },
+    effectiveBase: root,
+  };
+}
+
 function buildProbeRequest(type: EndpointType, apiKey: string, effectiveBase: string): ProbeRequest {
   switch (type) {
     case 'anthropic':    return buildAnthropicProbe(apiKey, effectiveBase);
     case 'gemini':       return buildGeminiProbe(apiKey, effectiveBase);
     case 'ollama':       return buildOllamaProbe(apiKey, effectiveBase);
-    case 'azure-openai':
+    case 'azure-openai': return buildAzureProbe(apiKey, effectiveBase);
     case 'openai':
     default:             return buildOpenAIProbe(apiKey, effectiveBase);
   }
