@@ -36,9 +36,9 @@ from pydantic import BaseModel, Field
 # Storage paths
 # ---------------------------------------------------------------------------
 
-_WORKSPACES_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "workspaces"
-_AGENTS_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "agents"
-_TEAMS_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "teams"
+_WORKSPACES_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "workspaces"
+_AGENTS_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "agents"
+_TEAMS_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "teams"
 _WS_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 

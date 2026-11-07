@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
-_SCHEDULES_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "schedules"
+_SCHEDULES_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "schedules"
 _SCHEDULE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 MAX_RUNS_STORED = 20

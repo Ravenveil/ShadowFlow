@@ -104,7 +104,7 @@ async def chat_completions(
             # Validate agent_id to prevent path traversal attacks
             if not _AGENT_ID_RE.match(body.agent_id):
                 raise ValueError(f"Invalid agent_id format: {body.agent_id!r}")
-            agents_dir = pathlib.Path(__file__).resolve().parents[2] / ".shadowflow" / "agents"
+            agents_dir = pathlib.Path(__file__).resolve().parents[3] / ".shadowflow" / "agents"
             agent_file = agents_dir / f"{body.agent_id}.json"
             if agent_file.exists():
                 agent_data = json.loads(agent_file.read_text(encoding="utf-8"))

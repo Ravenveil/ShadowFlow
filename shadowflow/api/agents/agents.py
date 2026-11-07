@@ -56,8 +56,8 @@ from shadowflow.runtime.defaults import (
 # Quick Create storage
 # ---------------------------------------------------------------------------
 
-# Anchored to project root (shadowflow/api/agents.py → parents[2] = project root)
-_AGENTS_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "agents"
+# Anchored to project root (shadowflow/api/agents/agents.py（域归位后深一层）→ parents[3] = project root)
+_AGENTS_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "agents"
 
 # Allowlist: agent_id must be alphanumeric, hyphens, underscores only
 _AGENT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")

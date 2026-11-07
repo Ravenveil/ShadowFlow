@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 # Storage
 # ---------------------------------------------------------------------------
 
-_TEAMS_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "teams"
+_TEAMS_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "teams"
 _TEAM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 # D3: sentinel workspace for records that predate the workspace concept (no

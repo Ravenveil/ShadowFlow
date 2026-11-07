@@ -50,7 +50,7 @@ router = APIRouter()
 # Storage layer — mirrors teams.py for consistency
 # ---------------------------------------------------------------------------
 
-_GROUPS_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "groups"
+_GROUPS_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "groups"
 _GROUP_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
@@ -738,7 +738,7 @@ async def pin_message(
 # 所以反馈落一个按 message_id 索引的独立 JSON 仓，两种消息统一可用。
 # ---------------------------------------------------------------------------
 
-_FEEDBACK_DIR = Path(__file__).resolve().parents[2] / ".shadowflow" / "feedback"
+_FEEDBACK_DIR = Path(__file__).resolve().parents[3] / ".shadowflow" / "feedback"
 _FEEDBACK_FILE_NAME = "message_feedback.json"
 _MESSAGE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
 
