@@ -105,24 +105,35 @@ function runOne(file) {
           shell: process.platform === 'win32',
         });
     let out = '';
-    let timedOut = false;
+    let settled = false;
+    // 超时必须直接 settle：被测脚本若拉起孙进程（chromium 等），
+    // SIGKILL 直接子进程后 stdio 管道仍被孙进程占着，'close' 永不触发，
+    // 只等 close 会让 promise 永挂——这正是 CI 拖垮 job 的根因。
     const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGKILL');
+      if (settled) return;
+      settled = true;
+      try { child.kill('SIGKILL'); } catch { /* 已退出 */ }
+      done({
+        file,
+        ok: false,
+        code: -9,
+        ms: Date.now() - started,
+        tail: `超时 ${TIMEOUT_S}s，子进程已杀（挂起点排查：单独跑此文件复现）`,
+      });
     }, TIMEOUT_S * 1000);
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
     child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       const lines = out.split('\n').filter((l) => l.trim());
       done({
         file,
-        ok: !timedOut && code === 0,
-        code: timedOut ? -9 : (code ?? -1),
+        ok: code === 0,
+        code: code ?? -1,
         ms: Date.now() - started,
-        tail: timedOut
-          ? `超时 ${TIMEOUT_S}s，子进程已杀（挂起点排查：单独跑此文件复现）`
-          : lines.slice(-3).join('\n').replace(/\x1b\[[0-9;]*m/g, ''),
+        tail: lines.slice(-3).join('\n').replace(/\x1b\[[0-9;]*m/g, ''),
       });
     });
   });
