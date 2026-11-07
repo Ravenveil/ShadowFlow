@@ -4,10 +4,11 @@
  * 布局：
  *   顶部条  「当前选中：{target.name}」 + 群聊现场入口
  *           （「新任务」按钮已删 2026-08-19 用户要求——左栏导航与 Ctrl+K
- *            已有同款入口；纯首页空态整条隐藏，hero 即全部内容）
+ *            已有同款入口；纯空态整条隐藏）
  *   消息流  run 活跃 → NeoRunInline（用户灰气泡 / 操作列表 / agent 回复 /
- *           状态 pill）；无 run → hero 问候 → 分类 tabs + 模板卡网格 →
- *           composer 沉底（clawsgo 首页态 tmp29A7）
+ *           状态 pill）；无 run → 聊天化空态（首页 hero 已下线 2026-11-07
+ *           用户反馈「这个首页不要再显示了」：无问候/版本 pill/模板卡，
+ *           一行轻提示 + composer 钉底）
  *   底部    NeoComposer（run 活跃时沉底）
  *
  * 数据通路完全复用 chat-home 现有实现（不另造数据流）：
@@ -29,24 +30,12 @@ import { createGroup } from '../api/groupApi';
 import { getApiBase, authHeaders } from '../api/_base';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useInboxStore } from '../core/store/useInboxStore';
-import { useAuth } from '../core/auth/AuthContext';
 import { useI18n } from '../common/i18n';
 import { NeoComposer, type UnifiedComposerSubmitPayload } from './NeoComposer';
 import { NeoRunInline } from './NeoRunInline';
 import { NeoTeamSavedCard } from './NeoTeamSavedCard';
 import { KnowledgeCitations } from '../components/knowledge/KnowledgeCitations';
-import { StartGallery } from '../pages/chat-home/StartGallery';
-import pkg from '../../package.json';
 import './neo-chat.css';
-
-/** clawsgo 式时段问候（对齐 StartLanding）。i18n key + 中文 defaultValue。 */
-function greetingKeyByHour(h: number): { key: string; fallback: string } {
-  if (h < 5) return { key: 'neo.greeting.latenight', fallback: '夜深了' };
-  if (h < 11) return { key: 'neo.greeting.morning', fallback: '早上好' };
-  if (h < 14) return { key: 'neo.greeting.noon', fallback: '中午好' };
-  if (h < 18) return { key: 'neo.greeting.afternoon', fallback: '下午好' };
-  return { key: 'neo.greeting.evening', fallback: '晚上好' };
-}
 
 /** SSE error 帧 6 桶分类（server classify-error）→ 错误卡标题。i18n key + 中文兜底。 */
 function errorTitleByCode(code: ErrorCode): { key: string; fallback: string } {
@@ -60,51 +49,12 @@ function errorTitleByCode(code: ErrorCode): { key: string; fallback: string } {
   }
 }
 
-/* ── A9 hero 动词轮播（ClawsGO a_001/a_003/a_004：深度调研→论文复现→数据分析）──
-   4s 间隔交叉淡入淡出（CSS 堆叠 span opacity 过渡），纯前端；页面隐藏
-   （document.hidden）时跳过推进，恢复可见后按原节奏继续。 */
-const HERO_VERBS = [
-  { key: 'neo.chat.heroVerb.research', zh: '深度调研', en: 'deep research' },
-  { key: 'neo.chat.heroVerb.paper', zh: '论文复现', en: 'paper reproduction' },
-  { key: 'neo.chat.heroVerb.data', zh: '数据分析', en: 'data analysis' },
-  { key: 'neo.chat.heroVerb.market', zh: '市场调研', en: 'market research' },
-] as const;
-
-const HERO_VERB_INTERVAL_MS = 4000;
-
-function HeroVerbCarousel() {
-  const { t, language } = useI18n();
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      // 页面隐藏时暂停轮播计时（对齐 usePythonBackendStatus 的可见性策略）
-      if (typeof document !== 'undefined' && document.hidden) return;
-      setIdx((i) => (i + 1) % HERO_VERBS.length);
-    }, HERO_VERB_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <span className="neo-verb-carousel" data-testid="neo-hero-verbs">
-      {HERO_VERBS.map((v, i) => (
-        <span
-          key={v.key}
-          className={`neo-verb${i === idx ? ' on' : ''}`}
-          aria-hidden={i !== idx}
-        >
-          {t(v.key, { defaultValue: language === 'zh' ? v.zh : v.en })}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps) {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const workspaceId = useWorkspaceStore((s) => s.currentId);
-  const { user } = useAuth();
 
   // ── ClawHub（2026-06，FR-03/04）：当前 Claw 聊天 target ──────────────────
-  // 选中已安装 Claw（StartGallery 分区 / ClawHub 「对话」桥）后：提交时注入
+  // 选中已安装 Claw（ClawHub 「对话」桥）后：提交时注入
   // executor:'cli:<id>'（Claw 完全接管对话；多轮接力 POST /:id/messages 继承
   // source session.executor，见架构文档 D6）。
   const [clawTarget, setClawTarget] = useState<{ cliId: string; name: string } | null>(null);
@@ -230,10 +180,7 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
     session.teamSaved,
   ]);
 
-  // 模板画廊点选 → 预填 `@<skill_id> ` 进 hero composer（StartGallery 同一
-  // 通路，UnifiedComposer parseSkillToken 自动选中该 skill）。state 而非
-  // ref：initialText 受控下发，同一卡片重复点选也能再次触发聚焦。
-  const [prefill, setPrefill] = useState<string | undefined>(undefined);
+  // 模板画廊已随首页 hero 下线（2026-11-07）：prefill 通路一并移除。
 
   /**
    * 提交链路（与 NewTaskComposer.handleSubmit 同一通路）：
@@ -338,9 +285,6 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
     }
   }
 
-  const greeting = greetingKeyByHour(new Date().getHours());
-  const greetingText = `${t(greeting.key, { defaultValue: greeting.fallback })}${user?.display_name ? `, ${user.display_name}` : ''}`;
-
   // ── 错误卡（SSE 命名 error 帧 6 桶 / watchdog 15min 超时承接 UI）──────────
   // NeoRunInline 内的 .neo-run-error 条只展示文本；本卡补分类标题 + 操作：
   //   重试 = 重发最后一条用户消息，走真实 POST /:id/messages（不假按钮）；
@@ -376,8 +320,8 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
   return (
     <div className="neo-chat">
       {/* 顶部条：页面标题 + 群聊现场入口（←/→/折叠 导航簇已移至左栏顶部；
-          「新任务」按钮已删，新任务走左栏导航 / Ctrl+K）。纯首页空态
-          （无 run 无 target）不渲染，hero 问候即整屏内容。 */}
+          「新任务」按钮已删，新任务走左栏导航 / Ctrl+K）。纯空态
+          （无 run 无 target）不渲染。 */}
       {(runId || target || clawTarget) && (
         <header className="neo-chat-topbar">
           <span className="neo-chat-topbar-title">
@@ -516,31 +460,24 @@ export function NeoChat({ target, runId, onRunChange, onNavigate }: NeoChatProps
           </div>
         </>
       ) : (
-        /* 空态（clawsgo 首页态 tmp29A7）：hero 问候 → 分类 tabs + 模板卡网格，
-           composer 钉在列底（滚动区之外），卡片再多也不被顶出视口。
-           hero 块用上下 auto margin 在剩余空间居中，内容超高时滚动区自滚。 */
+        /* 空态（首页 hero 已下线 2026-11-07 用户反馈「这个首页不要再显示了」）：
+           直接落聊天框——一行轻提示 + composer 钉列底，无问候/版本 pill/轮播/
+           模板卡。agent-target 兜底态由 NeoApp 常驻重试自动升级进真会话，
+           此态多为后端未起时的过渡。 */
         <>
           <div className="neo-empty">
-            <div className="neo-empty-hero">
-              {/* 版本 pill（ClawsGO a_001「v1.0 正式上线」形态）：hairline + 灰字小胶囊 */}
-              <span className="neo-version-pill">ShadowFlow v{pkg.version}</span>
-              <h1 className="neo-empty-title">{greetingText}</h1>
-              {/* A9 hero 动词轮播（ClawsGO「让 ClawsGO 帮你 深度调研→论文复现→
-                  数据分析」形态）：固定前缀 + 4s 交叉淡入淡出短句，页面隐藏暂停。 */}
-              <p className="neo-empty-sub" aria-live="polite">
-                {t('neo.chat.heroHelpPrefix', {
-                  defaultValue: language === 'zh' ? '让 Agent 帮你 ' : 'Let Agent help you with ',
-                })}
-                <HeroVerbCarousel />
-              </p>
-              <StartGallery onPick={setPrefill} />
+            <div className="neo-empty-hint">
+              {target
+                ? t('neo.chat.emptyTarget', { defaultValue: `与 ${target.name} 对话` })
+                : t('neo.chat.emptyHint', {
+                    defaultValue: '发消息即开始对话 · 试试 @ 提及 Skill 或 / 命令',
+                  })}
             </div>
           </div>
           <div className="neo-empty-composer">
             <NeoComposer
               variant="hero"
               onSubmit={handleSubmit}
-              initialText={prefill}
               onNavigate={onNavigate}
               clawTarget={clawTarget}
               onClearClawTarget={() => setClawTarget(null)}

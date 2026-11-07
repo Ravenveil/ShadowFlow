@@ -522,19 +522,9 @@
 .neo-empty .sg-chip:active { transform: translateY(0); box-shadow: none; }
 .neo-empty .sg-chip:focus-visible { outline: 2px solid var(--t-accent); outline-offset: 2px; }
 
-/* ---- 空态：hero 问候 → 分类 tabs + 模板卡网格 → composer 沉底（clawsgo 首页态
-   tmp29A7 / home.html）。hero 块上下 auto margin 在剩余空间居中；内容超高时
-   auto margin 归零，整列可滚，composer 始终沉在列尾。 ---- */
-.neo-version-pill {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--t-fg-4);
-  padding: 3px 10px;
-  border: 1px solid var(--t-border);
-  border-radius: 999px;
-  background: var(--t-panel);
-  margin-bottom: 14px;
-}
+/* ---- 空态（首页 hero 已下线 2026-11-07「这个首页不要再显示了」：问候/版本
+   pill/动词轮播/模板卡全部移除，直接落聊天框）：滚动区居中一行轻提示，
+   composer 钉列底。 ---- */
 .neo-empty {
   flex: 1;
   min-height: 0;
@@ -545,53 +535,12 @@
   padding: 0 20px 20px;
   animation: neo-fade var(--dur-3) var(--ease-out);
 }
-.neo-empty-hero {
-  flex: none;
-  width: 100%;
+.neo-empty-hint {
   margin: auto 0;
-  padding: 32px 0 28px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.neo-empty-title {
-  margin: 0 0 8px;
-  font-size: 30px;
-  /* 复刻 home.html .hello 实测 30/500/+.2px（非 600/-0.01em） */
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  color: var(--t-fg);
-  text-align: center;
-}
-.neo-empty-sub {
-  margin: 0 0 30px;
-  /* 设计规格 §2「副标题 13px 灰」（复刻页无副标题，本行为规格增量） */
+  padding: 32px 0;
   font-size: 13px;
   color: var(--t-fg-4);
   text-align: center;
-}
-
-/* A9 hero 动词轮播（ClawsGO a_001/a_003/a_004）：堆叠 span 交叉淡入淡出，
-   非激活项绝对定位不占布局，激活项相对定位撑高；切换节奏由 JS 4s 计时控制。 */
-.neo-verb-carousel {
-  position: relative;
-  display: inline-block;
-  vertical-align: bottom;
-}
-.neo-verb {
-  position: absolute;
-  left: 0;
-  top: 0;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 600ms var(--ease-out);
-}
-.neo-verb.on {
-  position: relative;
-  opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .neo-verb { transition: none; }
 }
 .neo-empty .sg-wrap {
   margin: 0;

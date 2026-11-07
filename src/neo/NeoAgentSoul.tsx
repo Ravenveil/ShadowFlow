@@ -36,6 +36,7 @@ import { AvatarStylePicker, type AvatarConfigValue } from '../components/agent/A
 import { useI18n } from '../common/i18n';
 import { useInboxStore } from '../core/store/useInboxStore';
 import { NeoConfirmModal } from './NeoConfirmModal';
+import { friendlyErrorText } from './friendlyError';
 // ClawHub（2026-06）：Claw 绑定编辑 + 头像重配样式（增量引入）
 import '../pages/clawhub/clawhub.css';
 
@@ -43,7 +44,8 @@ export interface NeoAgentSoulProps {
   agentId: string;
 }
 
-/** 从 AgentApiError 的 detail 里提取后端真实 message（与 NeoCreateAgentModal 同款）。 */
+/** 从 AgentApiError 的 detail 里提取后端真实 message（与 NeoCreateAgentModal 同款）；
+    网络层错误（TypeError "Failed to fetch" 等）经 friendlyErrorText 中文化。 */
 function errorMessageOf(err: unknown): string {
   if (err instanceof AgentApiError) {
     const d = err.detail;
@@ -55,7 +57,7 @@ function errorMessageOf(err: unknown): string {
       }
     }
   }
-  return err instanceof Error ? err.message : String(err);
+  return friendlyErrorText(err);
 }
 
 export function NeoAgentSoul({ agentId }: NeoAgentSoulProps) {

@@ -94,6 +94,7 @@ import { LoopVerdicts } from './projections/LoopVerdicts';
 import { EvidencePanel } from './projections/EvidencePanel';
 import { TeamPanel } from './projections/TeamPanel';
 import { NeoAgentSoul } from './NeoAgentSoul';
+import { friendlyErrorText } from './friendlyError';
 import { NeoAgentInspector } from './NeoAgentInspector';
 import { AgentSchedulesPanel } from './AgentSchedulesPanel';
 import type { NeoHostProps } from './types';
@@ -381,7 +382,7 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
       setNewFileOpen(false);
       refreshTree();
     } catch (e) {
-      setNewFileError(e instanceof Error ? e.message : String(e));
+      setNewFileError(friendlyErrorText(e));
     } finally {
       setNewFileBusy(false);
     }
@@ -396,7 +397,7 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
       await uploadFile(rootPath, rootPath, file);
       refreshTree();
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err));
+      setUploadError(friendlyErrorText(err));
     }
   };
 
@@ -609,7 +610,7 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
         applySteps(r.loops);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoopsError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setLoopsError(friendlyErrorText(e));
       });
     // loops 专属 SSE（流式期间实时刷新；端点不可用时上面的一次性拉取即回落，
     // 不另加轮询——过程 tab 的 ProcessView 已有自己的 5s 轮询节奏）。
