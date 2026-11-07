@@ -82,3 +82,37 @@ describe('parseCraftMarkers — 标记识别与剥除', () => {
     expect(r.cleaned).toBe('');
   });
 });
+
+describe('parseCraftMarkers — build-team / dispatch（总经理主控）', () => {
+  it('[build-team] {} → 建团队动作并剥标记', () => {
+    const r = parseCraftMarkers('我来搭建团队。\n[build-team] {}\n搭好了。');
+    expect(r.markers[0]).toMatchObject({ tag: 'build-team', ok: true });
+    expect(r.actions[0]).toEqual({ kind: 'build-team' });
+    expect(r.cleaned).toBe('我来搭建团队。\n搭好了。');
+  });
+
+  it('[dispatch] to 字符串（、分隔）→ 成员名数组；@ 前缀剥掉', () => {
+    const r = parseCraftMarkers(
+      '[dispatch] {"to":"@营销专员、订单管家","text":"发帖推广并盯单"}',
+    );
+    expect(r.actions[0]).toEqual({
+      kind: 'dispatch',
+      to: ['营销专员', '订单管家'],
+      text: '发帖推广并盯单',
+    });
+    expect(r.cleaned).toBe('');
+  });
+
+  it('[dispatch] to 数组同样合法；缺 to/text 报错并剥标记', () => {
+    const ok = parseCraftMarkers('[dispatch] {"to":["快递联络员"],"text":"上门取件"}');
+    expect(ok.actions[0]).toEqual({ kind: 'dispatch', to: ['快递联络员'], text: '上门取件' });
+    const noTo = parseCraftMarkers('[dispatch] {"text":"没有对象"}\n正文');
+    expect(noTo.markers[0]).toMatchObject({ tag: 'dispatch', ok: false });
+    expect(noTo.markers[0].error).toMatch(/to/);
+    const noText = parseCraftMarkers('[dispatch] {"to":"营销专员"}\n正文');
+    expect(noText.markers[0]).toMatchObject({ tag: 'dispatch', ok: false });
+    expect(noText.markers[0].error).toMatch(/text/);
+    expect(noTo.cleaned).toBe('正文');
+    expect(noText.cleaned).toBe('正文');
+  });
+});

@@ -4,9 +4,11 @@
  * 两件事：
  *   ① applyCraftMarkers —— 把 agent 输出协议标记（lib/craft-markers 解析）
  *      落到产品盈利库：[intake] 上架商品、[order] 记销售、[post]/[link] 营销
- *      动态、[ship] 快递动态、[report] 盈利汇报（只剥标记）。作用域：只有
- *      「代卖团队」绑的群才生效（isCraftGroup，settings craft_profit.team），
- *      其他群 agent 引用协议标记不剥不落库。
+ *      动态、[ship] 快递动态、[report] 盈利汇报（只剥标记）；[build-team]/
+ *      [dispatch] 是流程动作（建团队/向工作群派活），本层只剥标记并把动作
+ *      透传给调用方（groups-chat 挂钩点发 HTTP 执行）。作用域（isCraftGroup）：
+ *      代卖团队绑的群 + 「总经理」的 DM（主控对话，团队未建时 [build-team]
+ *      也要生效），其他群 agent 引用协议标记不剥不落库。
  *   ② ingestProductMaterial —— 用户发来的产品资料（文字介绍/图片/文档文本）
  *      自动同步到记忆库「手工艺品资料」pack（PYTHON /api/memory-bank），
  *      并把 pack id 交给 knowledgeBlock 检索注入（groups-chat 挂钩点调用）。
@@ -47,7 +49,10 @@ export interface AppliedAction {
   error?: string;
 }
 
-// ── 作用域：只有代卖团队绑的群走本协议 ──────────────────────────────────────
+// ── 作用域：代卖团队绑的群 + 总经理 DM（主控对话）走本协议 ─────────────────
+
+/** 内置「总经理」agent id（services/secretary_seed.py 同值）。 */
+export const SECRETARY_AGENT_ID = 'agent-shadow-secretary';
 
 export function readCraftTeamRef(): CraftTeamRef | null {
   const raw = getSetting(CRAFT_TEAM_KEY) as CraftTeamRef | undefined;
@@ -55,7 +60,17 @@ export function readCraftTeamRef(): CraftTeamRef | null {
   return raw;
 }
 
-export function isCraftGroup(group: { group_id?: string; team_id?: string | null }): boolean {
+export function isCraftGroup(group: {
+  group_id?: string;
+  team_id?: string | null;
+  kind?: string;
+  agent_ids?: string[];
+}): boolean {
+  // 总经理 DM 恒定作用域：主控对话。团队可能还没建（[build-team] 就是在
+  // 这里发出的），所以不依赖 settings 引用。
+  if (group.kind === 'dm' && (group.agent_ids ?? []).includes(SECRETARY_AGENT_ID)) {
+    return true;
+  }
   const ref = readCraftTeamRef();
   if (!ref) return false;
   if (ref.group_id && group.group_id && ref.group_id === group.group_id) return true;
@@ -122,6 +137,11 @@ function applyOne(action: CraftAction): AppliedAction {
       case 'report':
         // 盈利汇报是聊天内容本身（财务官发给用户的报告），无库侧动作。
         return { tag: 'report', ok: true, detail: '盈利汇报已输出' };
+      case 'build-team':
+        // 流程动作：真正搭建在 groups-chat 挂钩点执行（要发 HTTP 建 agent/群）。
+        return { tag: 'build-team', ok: true, detail: '搭建代卖团队（挂钩点执行）' };
+      case 'dispatch':
+        return { tag: 'dispatch', ok: true, detail: `派活给 ${action.to.join('、')}` };
       default:
         return { tag: 'report', ok: false, error: '未知动作' };
     }
@@ -132,21 +152,27 @@ function applyOne(action: CraftAction): AppliedAction {
 }
 
 /**
- * 解析并落业务动作；返回剥掉标记后的展示文本。
- * scoped=false（非代卖群）→ 原文原样返回、零副作用。
+ * 解析并落业务动作；返回剥掉标记后的展示文本与 ok 动作清单
+ * （build-team/dispatch 由调用方在挂钩点执行）。
+ * scoped=false（非代卖作用域）→ 原文原样返回、零副作用。
  */
 export function applyCraftMarkers(
   text: string,
   opts: { scoped: boolean },
-): { applied: AppliedAction[]; cleaned: string } {
-  if (!opts.scoped) return { applied: [], cleaned: text };
+): { applied: AppliedAction[]; cleaned: string; actions: CraftAction[] } {
+  if (!opts.scoped) return { applied: [], cleaned: text, actions: [] };
   const { markers, cleaned } = parseCraftMarkers(text);
-  const applied = markers.map((m) =>
-    m.ok && m.action
-      ? applyOne(m.action)
-      : { tag: m.tag, ok: false, error: m.error ?? '标记解析失败' },
-  );
-  return { applied, cleaned };
+  const applied: AppliedAction[] = [];
+  const actions: CraftAction[] = [];
+  for (const m of markers) {
+    if (m.ok && m.action) {
+      actions.push(m.action);
+      applied.push(applyOne(m.action));
+    } else {
+      applied.push({ tag: m.tag, ok: false, error: m.error ?? '标记解析失败' });
+    }
+  }
+  return { applied, cleaned, actions };
 }
 
 // ── ② 产品资料自动同步记忆库（fail-soft）────────────────────────────────────

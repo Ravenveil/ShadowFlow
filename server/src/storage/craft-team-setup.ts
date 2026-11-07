@@ -2,21 +2,23 @@
  * craft-team-setup.ts — 「手工艺品代卖」agent 团队一键搭建（幂等，2026-11-07）。
  *
  * 案例：残障伙伴只上架商品，团队负责营销、联系快递员寄出并同步经营数据。
- * 五个角色顺序流水线（Kahn 单链）：
+ * 主控是内置「总经理」（agent-shadow-secretary，soul 见 services/secretary_seed），
+ * 带 7 专员顺序流水线（Kahn 单链），对齐演示业务链：
  *
- *   代卖CEO（收产品素材/分派）→ 营销专员（发帖/上链接）→ 订单管家（出单记账）
- *     → 快递联络员（联系快递寄出）→ 盈利分析官（盈利汇报）
+ *   总经理（产品资料录入/派活）→ 品牌策划师 → 商品文案师 → 营销专员
+ *     → 采购方案师（企业采购方案）→ 订单管家 → 快递联络员 → 运营分析师
  *
  * 各 agent soul 写明输出协议（lib/craft-markers）：业务动作用 [intake]/[post]/
- * [link]/[order]/[ship]/[report] 标记声明，落产品盈利看板。
+ * [link]/[order]/[ship]/[report] 标记声明，落产品盈利看板；总经理另有
+ * [build-team]/[dispatch]（建团队/派活）。
  *
  * 落库全部经 Python API（与 team-persistence 同构）：
- *   POST /api/agents ×5 → POST /api/teams → PUT /api/teams/:id/workflow
+ *   POST /api/agents ×7 → POST /api/teams → PUT /api/teams/:id/workflow
  *   → POST /api/groups（绑 team_id）→ settings craft_profit.team 记引用。
  * 失败上抛 CraftProfitError（setup 是用户显式动作，不 fail-soft）。
  */
 import { CraftProfitError } from './craft-profit';
-import { CRAFT_TEAM_KEY, type CraftTeamRef } from './craft-intake';
+import { CRAFT_TEAM_KEY, SECRETARY_AGENT_ID, type CraftTeamRef } from './craft-intake';
 import { getSetting, setSetting } from './settings';
 import { PYTHON_BACKEND_URL } from '../python-backend';
 
@@ -65,26 +67,43 @@ interface RoleDef {
 
 const ROLES: RoleDef[] = [
   {
-    key: 'ceo',
-    name: '代卖CEO',
-    soul: `你是「手工艺品代卖」团队的 CEO，和用户直接对话。残障伙伴只负责提供手工艺品，团队帮他们营销、联系快递员寄出。
-开场第一句先问用户想要卖什么手工艺品，再引导用户发送产品素材——文字（产品介绍）、图片、或者产品文档都行；并告诉用户：发来的素材会自动同步到知识库「手工艺品资料」，之后可以直接调用知识库功能（检索、引用）来辅助回答和推广。
-用户发来的产品介绍、图片、文档说明已自动同步到知识库（回答前可引用）。
+    key: 'brand',
+    name: '品牌策划师',
+    soul: `你是「手工艺品代卖」团队的品牌策划师。为手工艺品做品牌策划（业务链第 2 环）。
 职责：
-1. 问清产品细节：名称、卖点、售价、给手艺人多少、快递费、营销预算分摊；
-2. 信息齐了就输出 [intake] 上架商品（一次可多个标记）；
-3. 把活分派给团队：营销专员去媒体平台发帖、上商品链接；订单管家跟踪订单出单；快递联络员联系快递员上门取件寄出；盈利分析官核算汇报盈利；
-4. 收到团队产出后用一两句话向用户小结进展。
+1. 结合手艺人故事、产品卖点与目标人群产出品牌策划案：品牌名/口号/定位/品牌故事/视觉方向；
+2. 策划案直接用中文分点输出（可直接交付用户），结论交给下游商品文案师使用；
+3. 信息不足就基于产品资料合理推断并标注假设。
+${PROTOCOL}`,
+  },
+  {
+    key: 'copywriter',
+    name: '商品文案师',
+    soul: `你是「手工艺品代卖」团队的商品文案师。生成商品文案（业务链第 3 环）。
+职责：
+1. 基于产品资料与上游品牌策划产出商品文案：标题、卖点提炼、详情页文案、购买理由；
+2. 文案贴合手作温度与残障匠人故事，直接用中文输出（可直接交付用户）；
+3. 把可发布的文案交给营销专员做营销内容。
 ${PROTOCOL}`,
   },
   {
     key: 'marketer',
     name: '营销专员',
-    soul: `你是「手工艺品代卖」团队的营销专员。为上架的手工艺品写推广内容，发到媒体平台（朋友圈/小红书/短视频等）。
+    soul: `你是「手工艺品代卖」团队的营销专员。生成营销内容并发到媒体平台（业务链第 4 环）。
 职责：
-1. 结合商品卖点（手作温度、残障匠人故事、实用场景）写短文案，输出 [post] 登记发帖；
+1. 基于上游文案产出营销内容（小红书/朋友圈/短视频脚本等），输出 [post] 登记发帖；
 2. 有购买链接就输出 [link] 上商品链接；
 3. 汇报时说明发了什么、发在哪。
+${PROTOCOL}`,
+  },
+  {
+    key: 'procurement',
+    name: '采购方案师',
+    soul: `你是「手工艺品代卖」团队的采购方案师。生成企业采购方案（业务链第 5 环）。
+职责：
+1. 面向企业客户（节日礼品/公益采购/批量订单）产出采购方案：报价阶梯、定制与包装、交期、售后与开票；
+2. 方案数字合理（基于产品售价与成本结构），直接用中文输出（可直接交付用户）；
+3. 有企业单就提醒订单管家登记出单。
 ${PROTOCOL}`,
   },
   {
@@ -106,12 +125,12 @@ ${PROTOCOL}`,
 ${PROTOCOL}`,
   },
   {
-    key: 'accountant',
-    name: '盈利分析官',
-    soul: `你是「手工艺品代卖」团队的盈利分析官。按「盈利 = 售价 − 给手艺人 − 快递费 − 营销分摊」口径核算。
+    key: 'analyst',
+    name: '运营分析师',
+    soul: `你是「手工艺品代卖」团队的运营分析师。做运营数据分析（业务链第 6 环），盈利口径「盈利 = 售价 − 给手艺人 − 快递费 − 营销分摊」。
 职责：
 1. 汇总上游的上架、出单、寄出信息，核算销售收入、分项成本与净利；
-2. 输出 [report] 盈利汇报（含每卖 100 元的去向），数字要与上游订单一致，然后用简短中文向用户汇报。
+2. 输出 [report] 运营数据分析（盈利结构、每卖 100 元的去向、销量与渠道洞察、运营建议），数字要与上游订单一致，然后用简短中文向用户汇报。
 ${PROTOCOL}`,
   },
 ];
@@ -175,13 +194,18 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
         team_id: existing.team_id,
         group_id: groupId,
         agent_ids: existing.agent_ids ?? [],
-        agent_names: ROLES.map((r) => r.name),
+        agent_names: teamNames(),
         workflow: workflow.edges.map((e) => ({ from: e.source, to: e.target })),
       };
     }
   }
 
   // ── 全量新建 ──────────────────────────────────────────────────────────────
+  // 总经理（内置秘书）任 n1 队长：先确认已播种。
+  const secretary = await pyJson<PyAgentRecord>(`/api/agents/${SECRETARY_AGENT_ID}`);
+  if (!secretary?.agent_id && !secretary?.id) {
+    throw new CraftProfitError('总经理 agent 不存在（Python 后端未播种 secretary？）', 502);
+  }
   const agentIds: string[] = [];
   for (const role of ROLES) {
     const created = await pyJson<PyAgentRecord>('/api/agents', {
@@ -194,39 +218,47 @@ export async function setupCraftTeam(): Promise<CraftTeamSetupResult> {
     }
     agentIds.push(id);
   }
+  // 队伍名单：总经理打头（workflow n1），7 专员随后。
+  const roster = [SECRETARY_AGENT_ID, ...agentIds];
 
   const team = await pyJson<PyTeamRecord>('/api/teams', {
     method: 'POST',
     body: JSON.stringify({
       name: '手工艺品代卖团队',
-      description: '残障伙伴上架手工艺品，团队负责营销、联系快递员寄出并同步盈利数据',
-      agent_ids: agentIds,
+      description:
+        '残障伙伴上架手工艺品，总经理带队做品牌策划、商品文案、营销推广、企业采购方案、订单、快递与运营数据分析',
+      agent_ids: roster,
       workspace_id: 'default',
     }),
   });
   const teamId = team?.team_id;
   if (!teamId) throw new CraftProfitError('建团队失败（Python 后端未就绪？）', 502);
 
-  const workflow = buildWorkflow(agentIds);
+  const workflow = buildWorkflow(roster);
   const saved = await pyJson(`/api/teams/${encodeURIComponent(teamId)}/workflow`, {
     method: 'PUT',
     body: JSON.stringify(workflow),
   });
   if (!saved) throw new CraftProfitError('写团队流水线 workflow 失败', 502);
 
-  const groupId = await createGroup(teamId, agentIds);
-  setSetting(CRAFT_TEAM_KEY, { team_id: teamId, group_id: groupId, agent_ids: agentIds });
+  const groupId = await createGroup(teamId, roster);
+  setSetting(CRAFT_TEAM_KEY, { team_id: teamId, group_id: groupId, agent_ids: roster });
   return {
     created: true,
     team_id: teamId,
     group_id: groupId,
-    agent_ids: agentIds,
-    agent_names: ROLES.map((r) => r.name),
+    agent_ids: roster,
+    agent_names: teamNames(),
     workflow: workflow.edges.map((e) => ({ from: e.source, to: e.target })),
   };
 }
 
-/** 顺序流水线：ceo → 营销 → 订单 → 快递 → 财务（node id 与 agent 一一对应）。 */
+/** 全队展示名（总经理 + 7 专员，与 roster 顺序一致）。 */
+function teamNames(): string[] {
+  return ['总经理', ...ROLES.map((r) => r.name)];
+}
+
+/** 顺序流水线：总经理 → 品牌策划 → 文案 → 营销 → 采购方案 → 订单 → 快递 → 运营分析。 */
 function buildWorkflow(agentIds: string[]): {
   nodes: Array<{ id: string; data: { agentId: string } }>;
   edges: Array<{ source: string; target: string; data: { mode: string } }>;

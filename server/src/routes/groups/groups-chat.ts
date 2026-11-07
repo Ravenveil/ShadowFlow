@@ -283,7 +283,14 @@ export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
 // 让 runFanout / timeline 等调用点零改动。agent 读取仍走 Python HTTP（pyGetAgent）。
 
 import { PYTHON_BACKEND_URL } from '../../python-backend';
-import { applyCraftMarkers, ingestProductMaterial, isCraftGroup } from '../../storage/craft-intake';
+import {
+  applyCraftMarkers,
+  ingestProductMaterial,
+  isCraftGroup,
+  readCraftTeamRef,
+} from '../../storage/craft-intake';
+import { setupCraftTeam } from '../../storage/craft-team-setup';
+import type { CraftAction } from '../../lib/craft-markers';
 
 /** 读一个群（经群后端抽象）。返回蛇形 record（含 messages）或 null。 */
 async function pyGet<T>(path: string): Promise<T | null> {
@@ -763,6 +770,60 @@ async function integrateAndReport(
 export { isCasualChat };
 
 /**
+ * [build-team]/[dispatch] 流程动作执行（2026-11-07 总经理主控）。fail-soft：
+ * 单个动作失败落系统消息，不打断聊天主链路。
+ *
+ *   build-team —— 幂等搭建代卖团队（setupCraftTeam），落系统消息报结果；
+ *   dispatch —— 向代卖工作群下发任务（@提及成员 + sender=user 触发新一轮
+ *     fan-out）。**只在总经理 DM 里执行**：工作群里派活靠 DAG 交接，群里
+ *     再落 dispatch 会双重派发（且可能自我循环）。
+ */
+async function runCraftFlowActions(
+  srcGroup: GroupRecord,
+  actions: CraftAction[],
+  ctx: { executor: string; model: string | undefined; headers: Request['headers'] },
+): Promise<void> {
+  const notice = (content: string) =>
+    pyPostMessage(srcGroup.group_id, {
+      content,
+      sender_name: 'system',
+      sender_kind: 'system',
+    }).catch(() => {});
+  for (const a of actions) {
+    if (a.kind === 'build-team') {
+      try {
+        const r = await setupCraftTeam();
+        await notice(
+          `[team] 代卖团队已就绪（${r.agent_names.join('、')}）${r.created ? '（新建）' : '（复用）'}`,
+        );
+      } catch (e) {
+        await notice(`[team] 建团队失败：${(e as Error).message}`);
+      }
+    } else if (a.kind === 'dispatch') {
+      if (srcGroup.kind !== 'dm') continue; // 群里派活走 DAG 交接，不重复下发
+      const target = readCraftTeamRef()?.group_id;
+      if (!target) {
+        await notice('[dispatch] 还没有代卖工作群，先让我建团队（[build-team]）再派活。');
+        continue;
+      }
+      const content = `${a.to.map((n) => `@${n}`).join(' ')} ${a.text}`;
+      try {
+        // sender_kind=user + noDispatch：消息进群但 Python 侧不自动应答，
+        // 由我们自己发起 fan-out（@提及会定向派给被点名的成员）。
+        await pyPostMessage(
+          target,
+          { content, sender_name: '总经理', sender_kind: 'user' },
+          { noDispatch: true },
+        );
+        void runFanout(target, ctx.executor, ctx.model, ctx.headers, content).catch(() => {});
+      } catch (e) {
+        await notice(`[dispatch] 派活失败：${(e as Error).message}`);
+      }
+    }
+  }
+}
+
+/**
  * Background fan-out: generate + persist one reply per group agent.
  * Never throws to the caller (errors become sender_kind='system' notices).
  * @param latestUserText 最新用户消息原文（mention 解析用；调用方从持久化记录
@@ -1200,11 +1261,12 @@ async function runFanout(
             }
             // 2026-11-04 思考剥离 — 与串行路径同款：<sf:thinking> 段不进最终回复。
             // 2026-11-07 代卖协议标记 — 成功回复里的 [intake]/[order]/[ship] 等
-            // 标记落产品盈利看板并从聊天文本剥掉（非代卖群 no-op）。
-            const outText = errMsg
-              ? stripThinking(buf)
-              : applyCraftMarkers(stripThinking(buf), { scoped: craftScoped }).cleaned;
-            return { text: outText, error: errMsg || undefined };
+            // 标记落产品盈利看板并从聊天文本剥掉（非代卖群 no-op）；[build-team]/
+            // [dispatch] 流程动作在挂钩点执行（总经理主控）。
+            if (errMsg) return { text: stripThinking(buf), error: errMsg };
+            const appliedDag = applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
+            await runCraftFlowActions(group, appliedDag.actions, { executor, model, headers });
+            return { text: appliedDag.cleaned, error: undefined };
           },
           postMessage: async (m) => {
             await pyPostMessage(groupId, {
@@ -1468,8 +1530,11 @@ async function runFanout(
       }
       // 2026-11-04 思考剥离 — 最终聊天回复不含 <sf:thinking> 思考段
       // （思考已在过程卡实时流式展示）；全剥空 → 当空回复收口。
-      // 2026-11-07 代卖协议标记 — 串行路径同款：落业务动作 + 剥标记。
-      const reply = applyCraftMarkers(stripThinking(buf), { scoped: craftScoped }).cleaned.trim();
+      // 2026-11-07 代卖协议标记 — 串行路径同款：落业务动作 + 剥标记，
+      // [build-team]/[dispatch] 流程动作在挂钩点执行（总经理主控）。
+      const appliedSerial = applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
+      await runCraftFlowActions(group, appliedSerial.actions, { executor, model, headers });
+      const reply = appliedSerial.cleaned.trim();
       if (!reply) {
         await pyPostMessage(groupId, {
           content: `[chat] ${agentName} 返回空回复。`,

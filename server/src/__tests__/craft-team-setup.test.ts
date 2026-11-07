@@ -2,8 +2,9 @@
  * craft-team-setup.test.ts — 代卖 agent 团队搭建契约测试（2026-11-07）。
  *
  * 覆盖：
- *   - 5 个角色建齐（soul 含输出协议标记说明）→ team → 顺序流水线 workflow
- *     （ceo→营销→订单→快递→财务，direct=串行）→ 绑 team 的工作群；
+ *   - 总经理 n1 + 7 专员建齐（soul 含输出协议标记说明）→ team → 顺序流水线
+ *     workflow（总经理→品牌策划→文案→营销→采购方案→订单→快递→运营分析，
+ *     direct=串行）→ 绑 team 的工作群；
  *   - settings 持久化 team/group 引用；
  *   - 幂等：二次 setup 不重复建 agent/群，复用并刷新 soul + 重刷 workflow；
  *   - Python 后端不可达 → CraftProfitError 上抛（不静默）。
@@ -31,9 +32,11 @@ interface Call {
   body: Record<string, unknown> | null;
 }
 
-/** 假 Python：agents/teams/groups 记忆化创建，GET 回读。 */
+/** 假 Python：agents/teams/groups 记忆化创建，GET 回读。预置内置「总经理」。 */
 function stubPy(calls: Call[], opts: { failAgents?: boolean } = {}) {
-  const agents: Array<{ agent_id: string; name: string; soul: string }> = [];
+  const agents: Array<{ agent_id: string; name: string; soul: string }> = [
+    { agent_id: 'agent-shadow-secretary', name: '总经理', soul: '主控（内置秘书）' },
+  ];
   const teams = new Map<string, Record<string, unknown>>();
   const groups = new Map<string, Record<string, unknown>>();
   vi.stubGlobal(
@@ -123,18 +126,28 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('setupCraftTeam — 代卖团队搭建', () => {
-  it('5 agent（soul 含输出协议）→ team → 顺序流水线 → 绑 team 群 → settings 引用', async () => {
+describe('setupCraftTeam — 代卖团队搭建（总经理带队）', () => {
+  it('总经理 n1 + 7 专员（soul 含输出协议）→ team → 顺序流水线 → 绑 team 群 → settings 引用', async () => {
     const calls: Call[] = [];
     stubPy(calls);
     const r = await setupMod.setupCraftTeam();
     expect(r.created).toBe(true);
-    expect(r.agent_ids).toHaveLength(5);
-    expect(r.agent_names).toEqual(['代卖CEO', '营销专员', '订单管家', '快递联络员', '盈利分析官']);
+    expect(r.agent_ids).toHaveLength(8);
+    expect(r.agent_ids[0]).toBe('agent-shadow-secretary');
+    expect(r.agent_names).toEqual([
+      '总经理',
+      '品牌策划师',
+      '商品文案师',
+      '营销专员',
+      '采购方案师',
+      '订单管家',
+      '快递联络员',
+      '运营分析师',
+    ]);
 
-    // 5 个 agent soul 都写明输出协议标记
+    // 7 个专员 soul 都写明输出协议标记
     const agentPosts = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/api/agents'));
-    expect(agentPosts).toHaveLength(5);
+    expect(agentPosts).toHaveLength(7);
     for (const c of agentPosts) {
       const soul = String(c.body?.soul ?? '');
       expect(soul).toContain('[intake]');
@@ -142,16 +155,15 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
       expect(soul).toContain('[ship]');
       expect(soul).toContain('[report]');
     }
-    // CEO 的 soul：开场引导（问卖什么 + 文字/图片/产品文档 + 自动同步知识库）+ 分派职责
-    const ceoSoul = String(agentPosts[0].body?.soul ?? '');
-    expect(ceoSoul).toContain('知识库');
-    expect(ceoSoul).toContain('分派');
-    expect(ceoSoul).toContain('想要卖什么');
-    expect(ceoSoul).toContain('图片');
-    expect(ceoSoul).toContain('产品文档');
-    expect(ceoSoul).toContain('自动同步');
+    // 业务链各环节的 soul 关键词（对齐演示链：品牌策划→文案→营销→采购方案→订单→快递→运营分析）
+    const souls = agentPosts.map((c) => String(c.body?.soul ?? ''));
+    expect(souls[0]).toContain('品牌策划'); // 品牌策划师
+    expect(souls[1]).toContain('商品文案'); // 商品文案师
+    expect(souls[2]).toContain('营销内容'); // 营销专员
+    expect(souls[3]).toContain('企业采购'); // 采购方案师
+    expect(souls[6]).toContain('运营数据分析'); // 运营分析师
 
-    // 顺序流水线：4 条 direct 边串成 n1→…→n5
+    // 顺序流水线：7 条 direct 边串成 n1（总经理）→…→n8
     const wfCall = calls.find((c) => c.method === 'PUT' && /\/workflow$/.test(c.url));
     const wf = wfCall?.body as { nodes: Array<{ id: string; data: { agentId: string } }>; edges: Array<{ source: string; target: string; data: { mode: string } }> };
     expect(wf.nodes.map((n) => n.data.agentId)).toEqual(r.agent_ids);
@@ -160,6 +172,9 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
       { source: 'n2', target: 'n3', data: { mode: 'direct' } },
       { source: 'n3', target: 'n4', data: { mode: 'direct' } },
       { source: 'n4', target: 'n5', data: { mode: 'direct' } },
+      { source: 'n5', target: 'n6', data: { mode: 'direct' } },
+      { source: 'n6', target: 'n7', data: { mode: 'direct' } },
+      { source: 'n7', target: 'n8', data: { mode: 'direct' } },
     ]);
 
     // 工作群绑 team_id 与全 roster
@@ -187,9 +202,9 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
     expect(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/api/groups'))).toHaveLength(0);
     // workflow 仍重刷（幂等 PUT）
     expect(calls.filter((c) => c.method === 'PUT' && /\/workflow$/.test(c.url))).toHaveLength(1);
-    // soul 刷新：5 个 agent 各 PATCH 一次最新话术（按名字对齐）
+    // soul 刷新：7 个专员各 PATCH 一次最新话术（按名字对齐；总经理不碰）
     const soulPatches = calls.filter((c) => c.method === 'PATCH' && /\/api\/agents\//.test(c.url));
-    expect(soulPatches).toHaveLength(5);
+    expect(soulPatches).toHaveLength(7);
     for (const c of soulPatches) {
       expect(String(c.body?.soul ?? '')).toContain('[intake]');
     }
@@ -198,7 +213,7 @@ describe('setupCraftTeam — 代卖团队搭建', () => {
   it('Python 不可达 → CraftProfitError 上抛（setup 是显式动作不 fail-soft）', async () => {
     stubPy([], { failAgents: true });
     await expect(setupMod.setupCraftTeam()).rejects.toMatchObject({
-      message: expect.stringContaining('代卖CEO'),
+      message: expect.stringContaining('品牌策划师'),
       status: 502,
     });
   });

@@ -145,6 +145,48 @@ describe('isCraftGroup — 代卖群作用域', () => {
     expect(intake.isCraftGroup({ team_id: 'team-2', group_id: 'g2' })).toBe(false);
     expect(intake.isCraftGroup({ team_id: null, group_id: 'g2' })).toBe(false);
   });
+
+  it('总经理 DM 恒定作用域（团队未建时 [build-team] 也要能发）', () => {
+    settings.deleteSetting(intake.CRAFT_TEAM_KEY);
+    expect(
+      intake.isCraftGroup({ kind: 'dm', agent_ids: ['agent-shadow-secretary'] }),
+    ).toBe(true);
+    // 非总经理 DM 不命中
+    expect(intake.isCraftGroup({ kind: 'dm', agent_ids: ['agent-x'] })).toBe(false);
+    // 群聊不能只靠 secretary 在 roster 命中（要走 settings 引用）
+    expect(
+      intake.isCraftGroup({ kind: 'group', agent_ids: ['agent-shadow-secretary'] }),
+    ).toBe(false);
+  });
+});
+
+describe('applyCraftMarkers — 流程动作透传（build-team/dispatch）', () => {
+  it('[build-team]/[dispatch] 剥标记并透传 actions（标记须行首）', () => {
+    const r = intake.applyCraftMarkers(
+      '[build-team] {}\n好的\n[dispatch] {"to":"商品文案师","text":"写详情页"}\n已派出',
+      { scoped: true },
+    );
+    expect(r.actions).toEqual([
+      { kind: 'build-team' },
+      { kind: 'dispatch', to: ['商品文案师'], text: '写详情页' },
+    ]);
+    expect(r.cleaned).toBe('好的\n已派出');
+    expect(r.applied.map((a) => a.tag)).toEqual(['build-team', 'dispatch']);
+    expect(r.applied.every((a) => a.ok)).toBe(true);
+  });
+
+  it('dispatch 缺 to/text → ok=false 可见失败，动作不透传', () => {
+    const r = intake.applyCraftMarkers('[dispatch] {"to":"商品文案师"}', { scoped: true });
+    expect(r.applied[0]).toMatchObject({ tag: 'dispatch', ok: false });
+    expect(r.applied[0].error).toMatch(/缺 to|缺 text|缺少/);
+    expect(r.actions).toEqual([]);
+    expect(r.cleaned).toBe('');
+  });
+
+  it('既有业务动作（intake 等）照旧透传 actions（顺序保留）', () => {
+    const r = intake.applyCraftMarkers('[intake] {"name":"杯垫","price":28}', { scoped: true });
+    expect(r.actions).toEqual([expect.objectContaining({ kind: 'intake', name: '杯垫', price_cents: 2800 })]);
+  });
 });
 
 describe('ingestProductMaterial — 产品资料自动同步知识库', () => {

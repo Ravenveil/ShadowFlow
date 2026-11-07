@@ -10,6 +10,9 @@
  *   [order]  {"product":"苗绣杯垫","qty":2}
  *   [ship]   {"product":"苗绣杯垫","qty":2,"tracking":"SF123"}
  *   [report] {"summary":"本周净利 ¥320…"}
+ *   [build-team] {} ——搭建代卖团队（幂等；总经理专用）
+ *   [dispatch] {"to":"营销专员、订单管家","text":"任务说明"} ——派活给团队
+ *     （to 可以是字符串（、/，分隔）或数组；总经理向工作群下发任务用）
  *
  * 约定（写进各 agent soul）：
  *   - 标记独占一行（行首，前面只能有空白）；`[craft:xxx]` 是等价别名。
@@ -20,7 +23,7 @@
 /** 运营动态分类（与 storage/craft-profit 的 AgentEvent.kind 对齐）。 */
 export type CraftEventKind = 'marketing' | 'order' | 'shipping';
 
-export type CraftTag = 'intake' | 'post' | 'link' | 'order' | 'ship' | 'report';
+export type CraftTag = 'intake' | 'post' | 'link' | 'order' | 'ship' | 'report' | 'build-team' | 'dispatch';
 
 export type CraftAction =
   | {
@@ -35,9 +38,13 @@ export type CraftAction =
   | { kind: 'link'; product: string; url: string }
   | { kind: 'order'; product: string; qty: number }
   | { kind: 'ship'; product: string; qty: number; tracking: string }
-  | { kind: 'report'; summary: string };
+  | { kind: 'report'; summary: string }
+  /** 搭建代卖团队（幂等）——执行在 groups-chat 挂钩点（要发 HTTP）。 */
+  | { kind: 'build-team' }
+  /** 向工作群派活：to 成员名列表（转 @提及）、text 任务说明。 */
+  | { kind: 'dispatch'; to: string[]; text: string };
 
-/** 标记 → 运营动态分类（post/link 都算营销）。 */
+/** 标记 → 运营动态分类（post/link 都算营销；build-team/dispatch 是流程动作）。 */
 export const TAG_EVENT_KIND: Record<CraftTag, CraftEventKind | null> = {
   intake: null,
   post: 'marketing',
@@ -45,6 +52,8 @@ export const TAG_EVENT_KIND: Record<CraftTag, CraftEventKind | null> = {
   order: 'order',
   ship: 'shipping',
   report: null,
+  'build-team': null,
+  dispatch: null,
 };
 
 export interface ParsedMarker {
@@ -64,7 +73,7 @@ export interface CraftParseResult {
   cleaned: string;
 }
 
-const TAG_RE = /\[(?:craft:)?(intake|post|link|order|ship|report)\]/gi;
+const TAG_RE = /\[(?:craft:)?(intake|post|link|order|ship|report|build-team|dispatch)\]/gi;
 
 /** 「元」→「分」；直接给 *_cents 时原样取整。非法（负/NaN）返回 null。 */
 function money(obj: Record<string, unknown>, key: string): number | null {
@@ -145,6 +154,22 @@ function buildAction(tag: CraftTag, obj: Record<string, unknown>): CraftAction |
     }
     case 'report':
       return { kind: 'report', summary: str(obj.summary).slice(0, 2000) };
+    case 'build-team':
+      return { kind: 'build-team' };
+    case 'dispatch': {
+      // to：字符串（、/，/; 分隔）或数组；text 是任务说明。
+      const rawTo = obj.to;
+      let names: string[] = [];
+      if (Array.isArray(rawTo)) names = rawTo.map((v) => str(v));
+      else if (typeof rawTo === 'string') {
+        names = rawTo.split(/[、，,;；/]+/).map((s) => s.trim());
+      }
+      names = names.filter(Boolean).map((n) => n.replace(/^@/, '').slice(0, 40));
+      if (names.length === 0) return 'dispatch 缺 to（成员名，、分隔或数组）';
+      const text = str(obj.text);
+      if (!text) return 'dispatch 缺 text（任务说明）';
+      return { kind: 'dispatch', to: names.slice(0, 20), text: text.slice(0, 2000) };
+    }
     default:
       return `未知标记 ${String(tag)}`;
   }
