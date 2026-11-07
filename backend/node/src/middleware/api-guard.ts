@@ -45,6 +45,14 @@ function bearer(req: Request): string {
  */
 export function apiGuard(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction): void => {
+    // 演示公网部署开关（2026-11-07）：显式 SF_DEMO_PUBLIC=1 时放行远程访问。
+    // 使用场景：公网演示链接（沙箱单端口 + 反代），演示库 / mock 数据，
+    // 无真实资金与画像风险。默认（不设）安全策略完全不变：token 或回环。
+    if ((process.env.SF_DEMO_PUBLIC ?? '').trim() === '1') {
+      next();
+      return;
+    }
+
     const expected = (process.env.SF_API_TOKEN ?? '').trim();
 
     if (expected) {
