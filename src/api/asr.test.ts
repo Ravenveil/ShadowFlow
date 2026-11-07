@@ -80,4 +80,54 @@ describe('transcribeAudio', () => {
     });
     await expect(transcribeAudio(new Blob(['x']))).rejects.toThrow('network down');
   });
+
+  it('有 mimo key → 优先小米（provider=mimo + mimo-v2.5-asr）', async () => {
+    localStorage.setItem('sf_mimo_key', 'sk-mimo-1');
+    const mock = fetchMockOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { text: '你好' } }),
+    }));
+
+    await transcribeAudio(new Blob(['x'], { type: 'audio/webm' }));
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const h = init.headers as Record<string, string>;
+    expect(h['X-LLM-Provider']).toBe('mimo');
+    expect(h['X-LLM-Key']).toBe('sk-mimo-1');
+    expect(h['X-ASR-Model']).toBe('mimo-v2.5-asr');
+  });
+
+  it('sf.asrProvider=openai 强制走 whisper 形态（即使有 mimo key）', async () => {
+    localStorage.setItem('sf_mimo_key', 'sk-mimo-1');
+    localStorage.setItem('sf_openai_key', 'sk-oai-1');
+    localStorage.setItem('sf.asrProvider', 'openai');
+    const mock = fetchMockOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { text: 'hi' } }),
+    }));
+
+    await transcribeAudio(new Blob(['x'], { type: 'audio/webm' }));
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const h = init.headers as Record<string, string>;
+    expect(h['X-LLM-Provider']).toBe('openai');
+    expect(h['X-LLM-Key']).toBe('sk-oai-1');
+    expect(h['X-ASR-Model']).toBe('whisper-1');
+  });
+
+  it('opts.model 显式 mimo-* → key/provider 切到 mimo', async () => {
+    localStorage.setItem('sf_openai_key', 'sk-oai-1');
+    localStorage.setItem('sf_mimo_key', 'sk-mimo-1');
+    const mock = fetchMockOnce(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { text: 'ok' } }),
+    }));
+
+    await transcribeAudio(new Blob(['x'], { type: 'audio/webm' }), { model: 'mimo-v2.5-asr' });
+    const [, init] = mock.mock.calls[0] as [string, RequestInit];
+    const h = init.headers as Record<string, string>;
+    expect(h['X-LLM-Provider']).toBe('mimo');
+    expect(h['X-ASR-Model']).toBe('mimo-v2.5-asr');
+  });
 });

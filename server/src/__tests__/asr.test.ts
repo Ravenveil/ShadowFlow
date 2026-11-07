@@ -188,6 +188,83 @@ describe('POST /api/asr/transcribe', () => {
   });
 });
 
+describe('POST /api/asr/transcribe — chat-audio（小米 MiMo）', () => {
+  it('mimo 模型自动走 chat-audio：/chat/completions + input_audio data URL', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: '今天天气不错' } }] }),
+    })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await postAudio(Buffer.from('fake-wav-bytes'), {
+      'Content-Type': 'audio/wav',
+      'X-LLM-Key': 'sk-mimo',
+      'X-ASR-Model': 'mimo-v2.5-asr',
+      'X-ASR-Language': 'zh',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body?.data?.text).toBe('今天天气不错');
+    expect(res.body?.data?.model).toBe('mimo-v2.5-asr');
+
+    const [url, init] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe('https://api.xiaomimimo.com/v1/chat/completions');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-mimo');
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+
+    const body = JSON.parse(String(init.body)) as {
+      model: string;
+      messages: Array<{
+        role: string;
+        content: Array<{ type: string; input_audio?: { data: string; format: string } }>;
+      }>;
+      asr_options?: { language: string };
+    };
+    expect(body.model).toBe('mimo-v2.5-asr');
+    expect(body.asr_options?.language).toBe('zh');
+    expect(body.messages[0].role).toBe('user');
+    const part = body.messages[0].content[0];
+    expect(part.type).toBe('input_audio');
+    expect(part.input_audio?.format).toBe('wav');
+    expect(part.input_audio?.data.startsWith('data:audio/wav;base64,')).toBe(true);
+    const b64 = (part.input_audio?.data ?? '').split(',')[1];
+    expect(Buffer.from(b64, 'base64').toString()).toBe('fake-wav-bytes');
+  });
+
+  it('chat-audio 非 mp3/wav → 400 UNSUPPORTED_FORMAT', async () => {
+    const res = await postAudio(Buffer.from('fake-webm'), {
+      'Content-Type': 'audio/webm',
+      'X-LLM-Key': 'sk-mimo',
+      'X-ASR-Model': 'mimo-v2.5-asr',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body?.error?.code).toBe('UNSUPPORTED_FORMAT');
+  });
+
+  it('X-ASR-Style 显式覆盖形态判定 + X-ASR-Base-Url 指 relay', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ choices: [{ message: { content: 'hi' } }] }),
+    })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await postAudio(Buffer.from('fake-wav'), {
+      'Content-Type': 'audio/wav',
+      'X-LLM-Key': 'sk-x',
+      'X-ASR-Model': 'whisper-1',
+      'X-ASR-Style': 'chat-audio',
+      'X-ASR-Base-Url': 'https://relay.example.com/v1',
+    });
+    expect(res.status).toBe(200);
+    const [url] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+    expect(url).toBe('https://relay.example.com/v1/chat/completions');
+  });
+});
+
 function okFastFetch() {
   return vi.fn(async () => ({
     ok: true,
