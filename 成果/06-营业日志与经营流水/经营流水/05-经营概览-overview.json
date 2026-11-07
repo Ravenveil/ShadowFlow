@@ -3,19 +3,19 @@
     "from": null,
     "to": null
   },
-  "revenue_cents": 34400,
-  "cost_cents": 15800,
-  "gross_profit_cents": 18600,
-  "gross_margin_pct": 54.1,
-  "orders_total": 4,
-  "paid_orders": 3,
-  "refunded_orders": 1,
-  "transacted_orders": 4,
-  "avg_order_cents": 11467,
+  "revenue_cents": 142400,
+  "cost_cents": 64400,
+  "gross_profit_cents": 78000,
+  "gross_margin_pct": 54.8,
+  "orders_total": 12,
+  "paid_orders": 9,
+  "refunded_orders": 2,
+  "transacted_orders": 11,
+  "avg_order_cents": 15822,
   "first_order": {
-    "id": "d6cddaf9-ce9d-4f88-b757-3251b72f833d",
+    "id": "a0e29134-7387-4f1c-8b40-8f04d1babb9c",
     "trace_id": "",
-    "paid_at": 1794053639587
+    "paid_at": 1794055184649
   },
   "comparison": null
 }
