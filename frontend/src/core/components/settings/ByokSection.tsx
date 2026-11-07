@@ -5,6 +5,7 @@
  * Layout: 300px provider rail | 1fr detail panel (no tab strip)
  * Data: GET /api/settings/byok · GET /api/settings/byok/models · PUT/DELETE /api/settings/byok/:id
  */
+import { getApiBase } from '../../../api/_base';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../../common/i18n';
 // 2026-11-06 美化批：官方品牌 logo（首字母 monogram 太丑，用户反馈）
@@ -12,7 +13,7 @@ import { BrandGlyph } from '../../../common/icons/brandIcons';
 
 const RECOMMENDED_TEMP = 0.2;
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+const API_BASE = getApiBase();
 
 // ── Brand registry ────────────────────────────────────────────────────────────
 

@@ -186,6 +186,12 @@ export class AnthropicApiClient implements ApiClient {
     tools: ToolSpec[];
     signal: AbortSignal;
   }): AsyncIterable<AssistantEvent> {
+    // 公网稳定性（2026-11-07 排查症状二之①）— 默认总超时防网络抖动无限挂起；
+    // 外部 signal 正常透传，上限 SF_LLM_TIMEOUT_MS 可覆盖（默认 5 分钟）。
+    args.signal = AbortSignal.any([
+      args.signal,
+      AbortSignal.timeout(Number(process.env.SF_LLM_TIMEOUT_MS ?? 300_000)),
+    ]);
     const apiKey = this.opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       // The runtime's error policy expects ApiClient throws to surface as

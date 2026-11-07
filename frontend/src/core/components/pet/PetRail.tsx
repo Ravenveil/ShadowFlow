@@ -11,6 +11,7 @@
  * 位置/吸附状态持久化到 localStorage
  */
 
+import { getApiBase } from '../../../api/_base';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PetSpriteFace from './PetSpriteFace';
 import { getBuiltinPet, isBuiltinPet } from './builtinPets';
@@ -27,7 +28,7 @@ interface ApiResponse {
   pets: PetInfo[];
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const API_BASE = getApiBase();
 const LS_POS   = 'sf.petPos';
 const LS_DOCK  = 'sf.petDock';
 const PET_SIZE  = 80;   // px

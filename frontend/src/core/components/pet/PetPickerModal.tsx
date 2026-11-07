@@ -8,6 +8,7 @@
  * 自定义 tab：当前用户已保存的自定义宠物（localStorage）。
  */
 
+import { getApiBase } from '../../../api/_base';
 import React, { useCallback, useEffect, useState } from 'react';
 import { usePetStore } from './usePetStore';
 import { BUILTIN_PETS } from './builtinPets';
@@ -43,7 +44,7 @@ const IconGrip: React.FC<{ size?: number }> = ({ size = 14 }) => (
 
 import PetSpriteFace from './PetSpriteFace';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const API_BASE = getApiBase();
 
 // ── Favorites persistence ─────────────────────────────────────────────────
 
