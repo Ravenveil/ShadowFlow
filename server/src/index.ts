@@ -48,6 +48,9 @@ import dashboardRouter from './routes/dashboard/dashboard';
 import memoryHandoffRouter from './routes/memory/memory-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
 import merchantBoardRouter from './routes/dashboard/merchant-board';
+// 社交发布（2026-11-07）— 社交平台直连发布：账号/营销帖/发布回执 + 平台适配器
+// （mock/real 双模）。外接模块，自带幂等建表，不改既有逻辑。
+import socialPublishRouter from './routes/social/social-publish';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/projects/conversations';
@@ -153,6 +156,8 @@ app.use('/api/memory/handoff', memoryHandoffRouter);
 app.use('/api/dashboard', dashboardRouter);
 // 功能线① 商家商业化数据（订单分时 / 客流 / 第一单链路），挂 proxyFallback 之前
 app.use('/api/merchant', merchantBoardRouter);
+// 社交发布（营销帖直发六大平台），挂 proxyFallback 之前
+app.use('/api/social-publish', socialPublishRouter);
 app.use('/api/conversations', conversationsRouter);
 // Chat/DM/群聊 发消息网关 — 拦下 POST /api/groups/:id/messages 用 Node dispatcher
 // 生成回复（CLI + API 都真生效）。其余 /api/groups/* 不在此定义 → next() →
