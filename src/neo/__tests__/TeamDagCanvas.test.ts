@@ -56,6 +56,28 @@ describe('computeTeamDagColumns — 最长路径分层', () => {
     expect(cols.get('x')).toBe(0);
     expect(cols.get('y')).toBe(0);
   });
+
+  it('「驳回回炉」回边（conditional 且 target 是顺序上游）不抬列（2026-11-07）', () => {
+    // 用户真实数据形状：strategist→reviewer 送审 + reviewer→strategist 驳回回炉。
+    // 修复前回边会把 strategist 顶到列 2（与 verifier 挤同列、列 1 后留空隙），
+    // 画布上就是截图里「Matcher/Reviewer 之间一大段空隙」+ 边穿节点。
+    const rework: TeamWorkflow = {
+      nodes: [
+        { id: 'strategist', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 's', name: '策略', soul: '' } },
+        { id: 'reviewer', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 'r', name: '审核', soul: '' } },
+        { id: 'verifier', type: 'agentTask', position: { x: 0, y: 0 }, data: { agentId: 'v', name: '验证', soul: '' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'strategist', target: 'reviewer', data: { mode: 'direct' } },
+        { id: 'e2', source: 'reviewer', target: 'verifier', data: { mode: 'approve' } },
+        { id: 'e3', source: 'reviewer', target: 'strategist', data: { mode: 'conditional' } },
+      ],
+    };
+    const cols = computeTeamDagColumns(rework);
+    expect(cols.get('strategist')).toBe(0);
+    expect(cols.get('reviewer')).toBe(1);
+    expect(cols.get('verifier')).toBe(2);
+  });
 });
 
 describe('computeTeamDagSeedLayout — 种子布局决策（2026-11-07「DAG 太乱」修复）', () => {

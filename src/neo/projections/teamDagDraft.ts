@@ -5,9 +5,10 @@
  * 转成 TeamDagEditor 画布使用的 TeamWorkflow 形状：
  *   - agentId 只对 roster 内成员生效（roster 外的引用/LLM 新角色落空 agentId，
  *     展示 name；与编辑器「data.agentId 为空占位」的旧节点语义一致）；
- *   - 边 mode 走 normalizeEdgeMode：approve 保留，conditional/未知 → direct
- *     （编辑器目前只有 direct/approve 两种边 mode，conditional 的「回边」
- *     语义在画布上收敛为 direct，用户可再手动调整）；
+ *   - 边 mode 走 normalizeEdgeMode：approve/conditional/parallel 原样保留
+ *     （2026-11-07 起 conditional 不再压成 direct —— 它是「驳回回炉」合法
+ *     回边，压扁会让保存校验把「送审+驳回回炉」互逆边对当环拒掉），未知
+ *     值 → direct；
  *   - 坐标给一个简单的分层布局（按 direct/approve 边做最长路径分层，
  *     conditional 边不参与分层，同层纵向排开），避免全部叠在 (0,0)。
  *

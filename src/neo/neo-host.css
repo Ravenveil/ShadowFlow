@@ -2234,8 +2234,9 @@
   gap: 6px;
 }
 
-/* approve 边：虚线（颜色由 edge.style.stroke 给到警示色，箭头随动） */
-.neo-team-dag .react-flow__edge.neo-team-dag-edge--approve .react-flow__edge-path {
+/* approve / conditional 边：虚线（颜色由 edge.style.stroke 给到警示/强调色，箭头随动） */
+.neo-team-dag .react-flow__edge.neo-team-dag-edge--approve .react-flow__edge-path,
+.neo-team-dag .react-flow__edge.neo-team-dag-edge--conditional .react-flow__edge-path {
   stroke-dasharray: 7 4;
 }
 

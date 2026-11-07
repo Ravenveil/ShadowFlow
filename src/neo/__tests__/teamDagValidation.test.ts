@@ -1,15 +1,21 @@
 /**
  * teamDagValidation 纯函数测试 — Team DAG 编辑器保存前 preflight（GAP B28）。
  * 语义对齐后端 shadowflow/api/team_validation.py:validate_workflow：
- * 自环 / 悬空端点 / 顺序边成环（direct/approve 均按 sequential 参与环检测）。
+ * 自环 / 悬空端点 / 顺序边成环（direct/approve 按 sequential 参与环检测，
+ * conditional/parallel 豁免 —— 「驳回回炉」互逆边对合法）。
  */
 import { describe, expect, it } from 'vitest';
-import { validateTeamWorkflowGraph, normalizeEdgeMode, applyEdgeMode } from '../projections/teamDagValidation';
+import {
+  validateTeamWorkflowGraph,
+  normalizeEdgeMode,
+  isSequentialEdgeMode,
+  applyEdgeMode,
+} from '../projections/teamDagValidation';
 import type { TeamWorkflow } from '../../api/teams';
 
 function wf(
   nodeIds: string[],
-  edges: Array<{ id: string; source: string; target: string; mode?: 'direct' | 'approve' }>,
+  edges: Array<{ id: string; source: string; target: string; mode?: 'direct' | 'approve' | 'conditional' | 'parallel' }>,
 ): TeamWorkflow {
   return {
     nodes: nodeIds.map((id) => ({
@@ -94,12 +100,64 @@ describe('validateTeamWorkflowGraph', () => {
 });
 
 describe('normalizeEdgeMode', () => {
-  it('只有严格 approve 才算审批边，其余（含 undefined/未知值）归一为 direct', () => {
+  it('后端认识的显式模式（approve/conditional/parallel）原样保留，未知值归一为 direct', () => {
     expect(normalizeEdgeMode('approve')).toBe('approve');
+    expect(normalizeEdgeMode('conditional')).toBe('conditional');
+    expect(normalizeEdgeMode('parallel')).toBe('parallel');
     expect(normalizeEdgeMode('direct')).toBe('direct');
     expect(normalizeEdgeMode(undefined)).toBe('direct');
-    expect(normalizeEdgeMode('conditional')).toBe('direct');
+    // 2026-11-07 修复：conditional 是「驳回回炉」合法回边，round-trip 不得
+    // 压成 direct（压扁后互逆边对会被环检拒掉，图根本存不下去）
     expect(normalizeEdgeMode(42)).toBe('direct');
+    expect(normalizeEdgeMode('weird')).toBe('direct');
+  });
+});
+
+describe('isSequentialEdgeMode — 环检测/分层口径', () => {
+  it('direct/approve 是 sequential；conditional/parallel 豁免', () => {
+    expect(isSequentialEdgeMode('direct')).toBe(true);
+    expect(isSequentialEdgeMode('approve')).toBe(true);
+    expect(isSequentialEdgeMode(undefined)).toBe(true);
+    expect(isSequentialEdgeMode('conditional')).toBe(false);
+    expect(isSequentialEdgeMode('parallel')).toBe(false);
+  });
+});
+
+describe('conditional 回边豁免环检测（2026-11-07 用户数据复盘）', () => {
+  it('送审 direct + 驳回回炉 conditional 互逆边对 → 合法（此前被误判环路）', () => {
+    // 真实工作流形状：strategist→reviewer 送审、reviewer→strategist 驳回回炉
+    const errs = validateTeamWorkflowGraph(
+      wf(['strategist', 'reviewer'], [
+        { id: 'e-review', source: 'strategist', target: 'reviewer', mode: 'direct' },
+        { id: 'e-rework', source: 'reviewer', target: 'strategist', mode: 'conditional', },
+      ]),
+    );
+    expect(errs).toEqual([]);
+  });
+
+  it('parallel 边同样豁免；纯 sequential 互逆对仍被拒', () => {
+    expect(
+      validateTeamWorkflowGraph(
+        wf(['a', 'b'], [
+          { id: 'e1', source: 'a', target: 'b', mode: 'direct' },
+          { id: 'e2', source: 'b', target: 'a', mode: 'parallel' },
+        ]),
+      ),
+    ).toEqual([]);
+    const errs = validateTeamWorkflowGraph(
+      wf(['a', 'b'], [
+        { id: 'e1', source: 'a', target: 'b', mode: 'direct' },
+        { id: 'e2', source: 'b', target: 'a', mode: 'approve' },
+      ]),
+    );
+    expect(errs.some((e) => e.includes('环路'))).toBe(true);
+  });
+
+  it('conditional 边上的悬空端点/自环仍照常报错（豁免只针对环检测）', () => {
+    const errs = validateTeamWorkflowGraph(
+      wf(['a'], [{ id: 'e1', source: 'a', target: 'ghost', mode: 'conditional' }]),
+    );
+    expect(errs.some((e) => e.includes('ghost'))).toBe(true);
   });
 });
 
