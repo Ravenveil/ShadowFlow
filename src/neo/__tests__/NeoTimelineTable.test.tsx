@@ -32,7 +32,7 @@ const TABLE_MD = [
 describe('NeoTimeline — GFM pipe 表格渲染', () => {
   it('表格渲成语义 <table>，不再是裸竖线文本', () => {
     render(<NeoTimeline messages={[mkAssistant(TABLE_MD)]} />);
-    const table = document.querySelector('.neo-tl-table');
+    const table = document.querySelector('.neo-tl-md-table');
     expect(table).not.toBeNull();
     expect(table!.querySelectorAll('th')).toHaveLength(3);
     expect(table!.querySelectorAll('tbody tr')).toHaveLength(2);
@@ -43,7 +43,7 @@ describe('NeoTimeline — GFM pipe 表格渲染', () => {
 
   it('cell 内行内 markdown 照常渲染（**bold** → strong）', () => {
     render(<NeoTimeline messages={[mkAssistant(TABLE_MD)]} />);
-    const table = document.querySelector('.neo-tl-table');
+    const table = document.querySelector('.neo-tl-md-table');
     const strong = table!.querySelector('td strong');
     expect(strong).not.toBeNull();
     expect(strong!.textContent).toBe('等上游');

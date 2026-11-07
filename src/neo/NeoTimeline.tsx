@@ -517,6 +517,42 @@ const NeoTextRow = memo(function NeoTextRow({
   );
 });
 
+/**
+ * pipe 表格（GFM，2026-11-07）：此前漏成带竖线纯文本。cell 走 renderInline
+ * （bold/code/path/徽章同正文），外层横向滚动防窄屏挤压。
+ * 类名 neo-tl-md-table*（富卡 table_panel 已占用 .neo-tl-table）。
+ */
+const NeoMdTable = memo(function NeoMdTable({
+  header,
+  rows,
+}: {
+  header: string[];
+  rows: string[][];
+}) {
+  return (
+    <div className="neo-tl-md-table-wrap">
+      <table className="neo-tl-md-table">
+        <thead>
+          <tr>
+            {header.map((c, j) => (
+              <th key={j}>{renderInline(c, `th${j}`)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => (
+            <tr key={ri}>
+              {r.map((c, ci) => (
+                <td key={ci}>{renderInline(c, `td${ri}-${ci}`)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+});
+
 const NeoBashChip = memo(function NeoBashChip({
   label,
   cmd,
@@ -694,6 +730,8 @@ const NeoAssistantText = memo(function NeoAssistantText({
                 return <NeoCodeBlock key={key} lang={row.lang} body={row.body} />;
               case 'section-header':
                 return <NeoSectionRow key={key} label={row.title} />;
+              case 'table':
+                return <NeoMdTable key={key} header={row.header} rows={row.rows} />;
               case 'text':
                 return (
                   <NeoTextRow

@@ -15,8 +15,8 @@ interface Props {
 
 export const TableRow = memo(function TableRow({ header, rows }: Props) {
   return (
-    <div className={styles.tableWrap}>
-      <table className={styles.table}>
+    <div className={styles.mdTableWrap}>
+      <table className={styles.mdTable}>
         <thead>
           <tr>
             {header.map((c, j) => (

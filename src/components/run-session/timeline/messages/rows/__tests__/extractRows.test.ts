@@ -193,4 +193,66 @@ describe('extractRows', () => {
     expect(rows[0]).toEqual({ kind: 'section-header', title: '结论' });
     expect(rows[1]).toEqual({ kind: 'text', body: '正文内容' });
   });
+
+  // ── 2026-11-07 GFM pipe 表格（群聊回复漏成裸竖线文本的修复）────────
+  it('carves a GFM pipe table into a table row with header + data rows', () => {
+    const body = [
+      '| 环节 | 状态 | 谁负责 |',
+      '|---|---|---|',
+      '| 需求梳理 | ✅ 完成 | 小米 |',
+      '| 验证复盘 | ⏸️ **等上游** | 我在这一环 |',
+    ].join('\n');
+    const rows = extractRows(body);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({
+      kind: 'table',
+      header: ['环节', '状态', '谁负责'],
+      rows: [
+        ['需求梳理', '✅ 完成', '小米'],
+        ['验证复盘', '⏸️ **等上游**', '我在这一环'],
+      ],
+    });
+  });
+
+  it('keeps prose before/after a table as separate text rows', () => {
+    const body = [
+      '进度如下：',
+      '',
+      '| 任务 | 状态 |',
+      '|:---|---:|',
+      '| A | ✅ |',
+      '',
+      '继续推进。',
+    ].join('\n');
+    const rows = extractRows(body);
+    expect(rows.map((r) => r.kind)).toEqual(['text', 'table', 'text']);
+    expect(rows[0]).toEqual({ kind: 'text', body: '进度如下：' });
+    expect(rows[1]).toMatchObject({
+      header: ['任务', '状态'],
+      rows: [['A', '✅']],
+    });
+    expect(rows[2]).toEqual({ kind: 'text', body: '继续推进。' });
+  });
+
+  it('leaves pipe-y prose without a delimiter row as plain text', () => {
+    const rows = extractRows('a | b\nc | d');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.kind).toBe('text');
+  });
+
+  it('carves two adjacent tables independently', () => {
+    const body = [
+      '| a |',
+      '|---|',
+      '| 1 |',
+      '',
+      '| b |',
+      '|---|',
+      '| 2 |',
+    ].join('\n');
+    const rows = extractRows(body);
+    expect(rows.map((r) => r.kind)).toEqual(['table', 'table']);
+    expect(rows[0]).toMatchObject({ rows: [['1']] });
+    expect(rows[1]).toMatchObject({ rows: [['2']] });
+  });
 });

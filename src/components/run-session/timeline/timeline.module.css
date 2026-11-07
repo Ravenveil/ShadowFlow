@@ -249,6 +249,32 @@
   line-height: 1.55;
 }
 .text pre code { padding: 0; background: transparent; }
+/* GFM pipe 表格（2026-11-07）：table 行型渲染，此前漏成带竖线纯文本。
+   类名 mdTable*——富卡 table_panel 已占用 .table（见下方 tablePanel 区）。 */
+.mdTableWrap {
+  margin: 4px 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.mdTable {
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg-1);
+}
+.mdTable th,
+.mdTable td {
+  padding: 3px 12px 3px 8px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mdTable th {
+  font-weight: 600;
+  border-bottom-width: 2px;
+}
 .textCaret {
   display: inline-block;
   width: 7px;

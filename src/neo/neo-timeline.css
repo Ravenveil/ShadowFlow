@@ -292,6 +292,32 @@ button.neo-tl-op[data-status="running"]:hover { background: none; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* pipe 表格（GFM，2026-11-07）：此前漏成带竖线纯文本；hairline 行线同 .neo-md-table 口径。
+   类名 neo-tl-md-table*——富卡 table_panel 已占用 .neo-tl-table（见下方 table_panel 区）。 */
+.neo-tl-md-table-wrap {
+  margin: 4px 0 6px;
+  overflow-x: auto;
+}
+.neo-tl-md-table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--t-fg-2);
+}
+.neo-tl-md-table th,
+.neo-tl-md-table td {
+  padding: 3px 12px 3px 8px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid var(--t-border);
+}
+.neo-tl-md-table th {
+  font-weight: 600;
+  color: var(--t-fg);
+  border-bottom: 1px solid var(--t-border-2);
+}
+.neo-tl-md-table strong { font-weight: 600; color: var(--t-fg); }
 .neo-tl-caret {
   display: inline-block;
   width: 7px;
