@@ -426,8 +426,10 @@
   flex-shrink: 0;
 }
 
-/* ---- 发送 / 停止钮（复刻 .send：30px 正圆，无投影；空态黑圆降透明度） ---- */
-.neo-cp-submit {
+/* ---- 发送 / 停止钮（复刻 .send：30px 正圆，无投影；空态黑圆降透明度） ----
+   作用域锁死在 .neo-cp-bar 下：同名类（如历史 dashboard 撞车）只要不在工具栏
+   行内就不会再污染发送钮形状；正圆是唯一事实来源，勿在别处加 !important 圆角。 */
+.neo-cp-bar .neo-cp-submit {
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -441,15 +443,15 @@
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out), opacity var(--dur-1) var(--ease-out);
 }
-.neo-cp-submit.is-empty {
+.neo-cp-bar .neo-cp-submit.is-empty {
   background: var(--t-accent);
   opacity: 0.45;
   cursor: not-allowed;
 }
-.neo-cp-submit:disabled:not(.is-empty) {
+.neo-cp-bar .neo-cp-submit:disabled:not(.is-empty) {
   cursor: wait;
 }
-.neo-cp-stop {
+.neo-cp-bar .neo-cp-stop {
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -462,7 +464,7 @@
   color: #fff;
   background: var(--t-err, #dc3545);
 }
-.neo-cp-stop-square {
+.neo-cp-bar .neo-cp-stop-square {
   width: 11px;
   height: 11px;
   border-radius: 2.5px;

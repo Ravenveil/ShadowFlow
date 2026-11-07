@@ -447,12 +447,11 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.09);
 }
 
-/* 发送钮正圆化：NeoComposer（阶段 2.5 重写）发送钮 .neo-cp-submit 是 32px
-   圆角方钮，复刻 home.html 的正圆 go 钮 —— 按 data-testid 压成 50%。
-   底色 var(--t-accent) 在 neo day 作用域即近黑，night 落 accent 蓝，均不破。 */
-.neo-composer button[data-testid="start-submit"] {
-  border-radius: 50% !important;
-}
+/* 发送钮正圆：唯一事实来源是 neo-composer.css 的 `.neo-cp-bar .neo-cp-submit`
+   （border-radius: 50%，已收紧作用域）。此处曾按 data-testid 加过
+   `border-radius: 50% !important` —— 它会把任何被撞宽/撞变形的按钮压成大椭圆
+   （dashboard 撞车事故根因之一），故拆除，勿再加回。
+   UnifiedComposer 的 start-submit 是 32px 圆角方钮（内联样式），不归此形状管。 */
 
 /* 画廊分类 tabs = 复刻分段胶囊轨（home.html .tabs）：灰底全圆轨道 padding 3px，
    选中 = 白/深色胶囊 + 软阴影 + 黑粗字，其余灰字；无下划线、无滑动指示条。 */

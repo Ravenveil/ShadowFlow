@@ -84,7 +84,7 @@ function ProfitBars({ series }: { series: CraftDayPoint[] }) {
       aria-label="daily profit chart"
       data-testid="cp-bars"
     >
-      <line className="neo-cp-bar-zero" x1={PAD} y1={y0} x2={W - PAD} y2={y0} />
+      <line className="neo-dash-bar-zero" x1={PAD} y1={y0} x2={W - PAD} y2={y0} />
       {series.map((d, i) => {
         const x = PAD + i * step + (step - barW) / 2;
         const v = d.profit_cents;
@@ -93,7 +93,7 @@ function ProfitBars({ series }: { series: CraftDayPoint[] }) {
         return (
           <rect
             key={d.day}
-            className={v >= 0 ? 'neo-cp-bar up' : 'neo-cp-bar down'}
+            className={v >= 0 ? 'neo-dash-bar up' : 'neo-dash-bar down'}
             x={x}
             y={y}
             width={barW}
@@ -139,9 +139,9 @@ function ProfitCurve({ series }: { series: CraftDayPoint[] }) {
       aria-label="cumulative profit curve"
       data-testid="cp-curve"
     >
-      {area && <path className="neo-cp-curve-area" d={area} />}
-      {points.length > 1 && <path className="neo-cp-curve-line" d={path} />}
-      {last && <circle className="neo-cp-curve-dot" cx={last[0]} cy={last[1]} r={3} />}
+      {area && <path className="neo-dash-curve-area" d={area} />}
+      {points.length > 1 && <path className="neo-dash-curve-line" d={path} />}
+      {last && <circle className="neo-dash-curve-dot" cx={last[0]} cy={last[1]} r={3} />}
     </svg>
   );
 }
@@ -380,11 +380,11 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
       )}
 
       {overview && (
-        <div className="neo-cp-hero-cards" data-testid="cp-overview-cards">
-          <div className="neo-db-card neo-cp-card--hero">
+        <div className="neo-dash-hero-cards" data-testid="cp-overview-cards">
+          <div className="neo-db-card neo-dash-card--hero">
             <p className="neo-db-card-label">{L('赚了（净利）', 'Profit (net)')}</p>
             <div
-              className={`neo-cp-hero-value${
+              className={`neo-dash-hero-value${
                 overview.profit_cents > 0 ? '' : overview.profit_cents < 0 ? ' neg' : ' zero'
               }`}
             >
@@ -426,48 +426,48 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
       )}
 
       {overview && (
-        <div className="neo-cp-grid2">
+        <div className="neo-dash-grid2">
           <section className="neo-db-section">
             <div className="neo-db-panel">
-              <div className="neo-cp-panel-head">
-                <h2 className="neo-cp-panel-title">{L('每卖 100 元，钱花在哪儿', 'Where every ¥100 goes')}</h2>
-                <span className="neo-cp-panel-note">{L(`近 ${days} 天`, `Last ${days}d`)}</span>
+              <div className="neo-dash-panel-head">
+                <h2 className="neo-dash-panel-title">{L('每卖 100 元，钱花在哪儿', 'Where every ¥100 goes')}</h2>
+                <span className="neo-dash-panel-note">{L(`近 ${days} 天`, `Last ${days}d`)}</span>
               </div>
               {overview.revenue_cents > 0 ? (
-                <div className="neo-cp-per100" data-testid="cp-per100">
-                  <div className="neo-cp-per100-track">
+                <div className="neo-dash-per100" data-testid="cp-per100">
+                  <div className="neo-dash-per100-track">
                     <span
-                      className="neo-cp-seg seg-artisan"
+                      className="neo-dash-seg seg-artisan"
                       style={{ width: `${overview.per100.artisan}%` }}
                       title={`${L('给手艺人', 'Artisans')} ${overview.per100.artisan}%`}
                     />
                     <span
-                      className="neo-cp-seg seg-shipping"
+                      className="neo-dash-seg seg-shipping"
                       style={{ width: `${overview.per100.shipping}%` }}
                       title={`${L('快递', 'Shipping')} ${overview.per100.shipping}%`}
                     />
                     <span
-                      className="neo-cp-seg seg-marketing"
+                      className="neo-dash-seg seg-marketing"
                       style={{ width: `${overview.per100.marketing}%` }}
                       title={`${L('营销', 'Marketing')} ${overview.per100.marketing}%`}
                     />
                     <span
-                      className="neo-cp-seg seg-profit"
+                      className="neo-dash-seg seg-profit"
                       style={{ width: `${overview.per100.profit}%` }}
                       title={`${L('净赚', 'Profit')} ${overview.per100.profit}%`}
                     />
                   </div>
-                  <div className="neo-cp-per100-legend">
-                    <span><i className="neo-cp-dot seg-artisan" />{L('给手艺人', 'Artisans')} {overview.per100.artisan}%</span>
-                    <span><i className="neo-cp-dot seg-shipping" />{L('快递', 'Shipping')} {overview.per100.shipping}%</span>
-                    <span><i className="neo-cp-dot seg-marketing" />{L('营销', 'Marketing')} {overview.per100.marketing}%</span>
-                    <span><i className="neo-cp-dot seg-profit" />{L('净赚', 'Profit')} {overview.per100.profit}%</span>
+                  <div className="neo-dash-per100-legend">
+                    <span><i className="neo-dash-dot seg-artisan" />{L('给手艺人', 'Artisans')} {overview.per100.artisan}%</span>
+                    <span><i className="neo-dash-dot seg-shipping" />{L('快递', 'Shipping')} {overview.per100.shipping}%</span>
+                    <span><i className="neo-dash-dot seg-marketing" />{L('营销', 'Marketing')} {overview.per100.marketing}%</span>
+                    <span><i className="neo-dash-dot seg-profit" />{L('净赚', 'Profit')} {overview.per100.profit}%</span>
                   </div>
                 </div>
               ) : (
-                <div className="neo-cp-per100" data-testid="cp-per100">
-                  <div className="neo-cp-per100-track empty" />
-                  <p className="neo-cp-empty-inline">
+                <div className="neo-dash-per100" data-testid="cp-per100">
+                  <div className="neo-dash-per100-track empty" />
+                  <p className="neo-dash-empty-inline">
                     {L('还没生意。卖了第一单，这里就显示钱花在哪儿。', 'No sales yet — the first order fills this bar.')}
                   </p>
                 </div>
@@ -477,17 +477,17 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
 
           <section className="neo-db-section">
             <div className="neo-db-panel">
-              <div className="neo-cp-panel-head">
-                <h2 className="neo-cp-panel-title">{L('每天赚多少', 'Profit by day')}</h2>
-                <span className="neo-cp-panel-note">
-                  <i className="neo-cp-dot seg-profit" /> {L('赚', 'Profit')}
-                  <i className="neo-cp-dot seg-neg" style={{ marginLeft: 10 }} /> {L('亏', 'Loss')}
+              <div className="neo-dash-panel-head">
+                <h2 className="neo-dash-panel-title">{L('每天赚多少', 'Profit by day')}</h2>
+                <span className="neo-dash-panel-note">
+                  <i className="neo-dash-dot seg-profit" /> {L('赚', 'Profit')}
+                  <i className="neo-dash-dot seg-neg" style={{ marginLeft: 10 }} /> {L('亏', 'Loss')}
                 </span>
               </div>
               {series.some((d) => d.profit_cents !== 0) ? (
                 <ProfitBars series={series} />
               ) : (
-                <div className="neo-cp-empty-chart" data-testid="cp-bars-empty">
+                <div className="neo-dash-empty-chart" data-testid="cp-bars-empty">
                   <p>{L('窗口内还没生意', 'No sales in this window')}</p>
                 </div>
               )}
@@ -496,19 +496,19 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         </div>
       )}
 
-      <div className="neo-cp-grid2">
+      <div className="neo-dash-grid2">
         <section className="neo-db-section">
           <div className="neo-db-panel">
-            <div className="neo-cp-panel-head">
-              <h2 className="neo-cp-panel-title">{L('盈利曲线', 'Profit curve')}</h2>
-              <span className="neo-cp-panel-note">
+            <div className="neo-dash-panel-head">
+              <h2 className="neo-dash-panel-title">{L('盈利曲线', 'Profit curve')}</h2>
+              <span className="neo-dash-panel-note">
                 {L('累计净利', 'Cumulative')} {series.length > 0 ? fmtYuan(series.reduce((a, d) => a + d.profit_cents, 0)) : '—'}
               </span>
             </div>
             {series.some((d) => d.profit_cents !== 0) ? (
               <ProfitCurve series={series} />
             ) : (
-              <div className="neo-cp-empty-chart" data-testid="cp-curve-empty">
+              <div className="neo-dash-empty-chart" data-testid="cp-curve-empty">
                 <p>{L('还没生意，卖了第一单曲线就往上走。', 'No sales yet — the first order starts the curve.')}</p>
               </div>
             )}
@@ -517,20 +517,20 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
 
         <section className="neo-db-section">
           <div className="neo-db-panel" data-testid="cp-agent-panel">
-            <div className="neo-cp-panel-head">
-              <h2 className="neo-cp-panel-title">{L('智能体运营', 'Agent operations')}</h2>
-              <span className="neo-cp-panel-note">
-                <i className={`neo-cp-dot ${agentStatus?.enabled ? 'seg-profit' : 'seg-off'}`} />
+            <div className="neo-dash-panel-head">
+              <h2 className="neo-dash-panel-title">{L('智能体运营', 'Agent operations')}</h2>
+              <span className="neo-dash-panel-note">
+                <i className={`neo-dash-dot ${agentStatus?.enabled ? 'seg-profit' : 'seg-off'}`} />
                 {agentStatus?.enabled
                   ? L(`自动运营中 · 每 ${agentStatus.interval_min} 分钟`, `Auto · every ${agentStatus.interval_min}m`)
                   : L('手动模式', 'Manual')}
                 {agentStatus ? ` · ${L(`已跑 ${agentStatus.rounds} 轮`, `${agentStatus.rounds} rounds`)}` : ''}
               </span>
             </div>
-            <div className="neo-cp-agent-row">
+            <div className="neo-dash-agent-row">
               <button
                 type="button"
-                className="neo-cp-submit neo-cp-submit--inline"
+                className="neo-dash-submit neo-dash-submit--inline"
                 onClick={handleRunRound}
                 disabled={formBusy}
                 data-testid="cp-agent-run"
@@ -546,20 +546,20 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
               >
                 {agentStatus?.enabled ? L('暂停自动运营', 'Pause auto') : L('开启自动运营', 'Enable auto')}
               </button>
-              <span className="neo-cp-demo-hint">
+              <span className="neo-dash-demo-hint">
                 {L('智能体自动营销、出单记账、联系快递员寄出', 'The agent markets, records sales & arranges shipping')}
               </span>
             </div>
-            <ul className="neo-cp-agent-feed" data-testid="cp-agent-feed">
+            <ul className="neo-dash-agent-feed" data-testid="cp-agent-feed">
               {agentEvents.length === 0 ? (
-                <li className="neo-cp-empty">
+                <li className="neo-dash-empty">
                   {L('还没有运营动态。点「让智能体跑一轮」试试。', 'No activity yet — run one round to see it work.')}
                 </li>
               ) : (
                 agentEvents.map((ev) => (
                   <li key={ev.id}>
-                    <i className={`neo-cp-dot kind-${ev.kind}`} />
-                    <span className="neo-cp-feed-ts">{fmtTime(ev.ts)}</span>
+                    <i className={`neo-dash-dot kind-${ev.kind}`} />
+                    <span className="neo-dash-feed-ts">{fmtTime(ev.ts)}</span>
                     {ev.text}
                   </li>
                 ))
@@ -569,15 +569,15 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         </section>
       </div>
 
-      <div className="neo-cp-grid2">
+      <div className="neo-dash-grid2">
         <section className="neo-db-section">
           <div className="neo-db-panel">
-            <div className="neo-cp-panel-head">
-              <h2 className="neo-cp-panel-title">{L('哪个商品最赚钱', 'Best-selling products')}</h2>
-              <span className="neo-cp-panel-note">{L(`近 ${days} 天`, `Last ${days}d`)}</span>
+            <div className="neo-dash-panel-head">
+              <h2 className="neo-dash-panel-title">{L('哪个商品最赚钱', 'Best-selling products')}</h2>
+              <span className="neo-dash-panel-note">{L(`近 ${days} 天`, `Last ${days}d`)}</span>
             </div>
             {products.length === 0 ? (
-              <p className="neo-cp-empty">
+              <p className="neo-dash-empty">
                 {L('还没上架商品。下面「记一笔」就能上架。', 'No products yet — add one in the entry section below.')}
               </p>
             ) : (
@@ -609,12 +609,12 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
 
         <section className="neo-db-section">
           <div className="neo-db-panel">
-            <div className="neo-cp-panel-head">
-              <h2 className="neo-cp-panel-title">{L('最近的生意', 'Recent sales')}</h2>
-              <span className="neo-cp-panel-note">{L('最新 20 笔', 'Last 20')}</span>
+            <div className="neo-dash-panel-head">
+              <h2 className="neo-dash-panel-title">{L('最近的生意', 'Recent sales')}</h2>
+              <span className="neo-dash-panel-note">{L('最新 20 笔', 'Last 20')}</span>
             </div>
             {sales.length === 0 ? (
-              <p className="neo-cp-empty">{L('还没记过销售。', 'No sales recorded yet.')}</p>
+              <p className="neo-dash-empty">{L('还没记过销售。', 'No sales recorded yet.')}</p>
             ) : (
               <table className="neo-db-table" data-testid="cp-sales-table">
                 <thead>
@@ -645,21 +645,21 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
 
       {/* ── 录入区：上架商品 / 记一笔销售 / 演示数据 ───────────────────── */}
       <section className="neo-db-section">
-        <div className="neo-cp-panel-head">
-          <h2 className="neo-cp-panel-title">{L('记一笔', 'Record')}</h2>
-          <span className="neo-cp-panel-note">{L('上架商品 / 记一笔销售', 'List a product / Record a sale')}</span>
+        <div className="neo-dash-panel-head">
+          <h2 className="neo-dash-panel-title">{L('记一笔', 'Record')}</h2>
+          <span className="neo-dash-panel-note">{L('上架商品 / 记一笔销售', 'List a product / Record a sale')}</span>
         </div>
-        <div className="neo-cp-form-grid">
+        <div className="neo-dash-form-grid">
           <form
-            className="neo-db-panel neo-cp-form"
+            className="neo-db-panel neo-dash-form"
             data-testid="cp-product-form"
             onSubmit={(e) => {
               e.preventDefault();
               handleCreateProduct();
             }}
           >
-            <p className="neo-cp-form-title">{L('上架商品', 'List a product')}</p>
-            <label className="neo-cp-field">
+            <p className="neo-dash-form-title">{L('上架商品', 'List a product')}</p>
+            <label className="neo-dash-field">
               <span>{L('商品名称', 'Name')}</span>
               <input
                 value={productForm.name}
@@ -667,8 +667,8 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 placeholder={L('例：手工编织收纳篮', 'e.g. Woven storage basket')}
               />
             </label>
-            <div className="neo-cp-field-row">
-              <label className="neo-cp-field">
+            <div className="neo-dash-field-row">
+              <label className="neo-dash-field">
                 <span>{L('售价（元）', 'Price (yuan)')}</span>
                 <input
                   inputMode="decimal"
@@ -677,7 +677,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                   placeholder="89"
                 />
               </label>
-              <label className="neo-cp-field">
+              <label className="neo-dash-field">
                 <span>{L('给手艺人（元）', 'To artisan (yuan)')}</span>
                 <input
                   inputMode="decimal"
@@ -687,8 +687,8 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 />
               </label>
             </div>
-            <div className="neo-cp-field-row">
-              <label className="neo-cp-field">
+            <div className="neo-dash-field-row">
+              <label className="neo-dash-field">
                 <span>{L('快递费（元）', 'Shipping (yuan)')}</span>
                 <input
                   inputMode="decimal"
@@ -697,7 +697,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                   placeholder="8"
                 />
               </label>
-              <label className="neo-cp-field">
+              <label className="neo-dash-field">
                 <span>{L('营销分摊（元）', 'Marketing (yuan)')}</span>
                 <input
                   inputMode="decimal"
@@ -707,7 +707,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 />
               </label>
             </div>
-            <p className="neo-cp-preview" data-testid="cp-profit-preview">
+            <p className="neo-dash-preview" data-testid="cp-profit-preview">
               {profitPreview === null ? (
                 L('填好售价就能算每件赚多少', 'Fill in the price to see profit per unit')
               ) : profitPreview < 0 ? (
@@ -716,21 +716,21 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 L(`每件赚 ${fmtYuan(profitPreview)}`, `Earn ${fmtYuan(profitPreview)} per unit`)
               )}
             </p>
-            <button type="submit" className="neo-cp-submit" disabled={formBusy} data-testid="cp-product-submit">
+            <button type="submit" className="neo-dash-submit" disabled={formBusy} data-testid="cp-product-submit">
               {L('上架', 'List product')}
             </button>
           </form>
 
           <form
-            className="neo-db-panel neo-cp-form"
+            className="neo-db-panel neo-dash-form"
             data-testid="cp-sale-form"
             onSubmit={(e) => {
               e.preventDefault();
               handleCreateSale();
             }}
           >
-            <p className="neo-cp-form-title">{L('记一笔销售', 'Record a sale')}</p>
-            <label className="neo-cp-field">
+            <p className="neo-dash-form-title">{L('记一笔销售', 'Record a sale')}</p>
+            <label className="neo-dash-field">
               <span>{L('商品', 'Product')}</span>
               <select
                 value={saleProductId}
@@ -745,7 +745,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 ))}
               </select>
             </label>
-            <label className="neo-cp-field">
+            <label className="neo-dash-field">
               <span>{L('件数', 'Quantity')}</span>
               <input
                 inputMode="numeric"
@@ -754,10 +754,10 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
                 data-testid="cp-sale-qty"
               />
             </label>
-            <p className="neo-cp-preview">
+            <p className="neo-dash-preview">
               {L('按上架价记账，之后改价不影响这笔。', 'Priced at listing; later edits never rewrite history.')}
             </p>
-            <button type="submit" className="neo-cp-submit" disabled={formBusy} data-testid="cp-sale-submit">
+            <button type="submit" className="neo-dash-submit" disabled={formBusy} data-testid="cp-sale-submit">
               {L('记一笔', 'Record sale')}
             </button>
           </form>
@@ -769,7 +769,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           </p>
         )}
 
-        <div className="neo-cp-demo-row">
+        <div className="neo-dash-demo-row">
           <button
             type="button"
             className="neo-db-refresh"
@@ -779,7 +779,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
           >
             {L('填一批手工艺品演示数据', 'Load demo craft data')}
           </button>
-          <span className="neo-cp-demo-hint">
+          <span className="neo-dash-demo-hint">
             {L('8 件手工艺品 + 近 30 天的销售，方便先看效果。', '8 handmade products + ~30 days of sales to try it out.')}
           </span>
         </div>
