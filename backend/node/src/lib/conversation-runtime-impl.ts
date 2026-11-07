@@ -239,6 +239,11 @@ export class ConversationRuntime {
                 output_tokens: ev.usage.output_tokens,
                 cache_creation_input_tokens: ev.usage.cache_creation_input_tokens,
                 cache_read_input_tokens: ev.usage.cache_read_input_tokens,
+                // BE-07 — 逐轮块 = 一次模型调用的完整计量（折叠层保证），
+                // 归因字段透传给 executor 落 token_usage 流水。
+                model: ev.usage.model,
+                duration_ms: ev.usage.duration_ms,
+                cost_usd: ev.usage.cost_usd,
               },
             };
           } else if (ev.kind === 'message_stop') {
@@ -367,6 +372,8 @@ export class ConversationRuntime {
     // Final usage snapshot + done. The 'done' chunk is the orchestration
     // signal; assembler's pipeChunksToSse uses it as a flush boundary and
     // the workflow executor uses it to know when to write artifacts.
+    // BE-07 — cumulative 标记：这是多轮循环的**汇总快照**（= 逐轮块之和），
+    // 只上展示线；executor 落库时跳过它，避免与逐调用块双计。
     yield {
       type: 'usage',
       usage: {
@@ -374,6 +381,7 @@ export class ConversationRuntime {
         output_tokens: totalUsage.output_tokens,
         cache_creation_input_tokens: totalUsage.cache_creation_input_tokens,
         cache_read_input_tokens: totalUsage.cache_read_input_tokens,
+        cumulative: true,
       },
     };
     // `stopReason` is informational; we could surface it via a dedicated

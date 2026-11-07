@@ -47,6 +47,8 @@ export interface TokenUsage {
   duration_ms?: number;
   /** CLI-only: time to first token in ms. From Claude Code CLI `stream_event.message_start.ttft_ms`. */
   ttft_ms?: number;
+  /** BE-07：计量归属模型（ApiClientCallable 的 usage 折叠层补齐；计费聚合用）。 */
+  model?: string;
 }
 
 /**

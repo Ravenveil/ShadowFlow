@@ -4,6 +4,10 @@
  * 覆盖：recordUsage 落库与成本估算 / 非法输入归零 / 单价表缺失成本为 0 /
  * sumUsageBetween / usageDailyBetween 补零由路由层做、这里测窗口聚合 /
  * usageBreakdown TopN。
+ *
+ * BE-07（2026-11-08）追加：run_id/agent_id/project_id/duration_ms 新列
+ * round-trip、usageBreakdown by run_id/agent_id 维度、resolveProjectIdForSession
+ * 的 run_index→conversations 反查（含 fail-soft 空串）。
  */
 
 import fs from 'fs';
@@ -19,16 +23,18 @@ import {
   usageDailyBetween,
   usageBreakdown,
   startOfDay,
+  resolveProjectIdForSession,
 } from './token-usage';
-import { _resetForTests } from './sqlite';
+import { _resetForTests, getDb } from './sqlite';
 
 let failures = 0;
-function check(name: string, cond: boolean): void {
+function check(name: string, cond: boolean, detail?: unknown): void {
   if (cond) {
     console.log(`  ok - ${name}`);
   } else {
     failures += 1;
     console.error(`  FAIL - ${name}`);
+    if (detail !== undefined) console.error('        detail:', detail);
   }
 }
 
@@ -82,6 +88,87 @@ const now = Date.now();
   check('TopN 排序按 tokens 降序', byModel[0]?.key === 'big-model');
   const bySession = usageBreakdown(now - DAY, now + DAY, 'session_id', 10);
   check('按 session 分组正确', bySession.some((r) => r.key === 'bd-a'));
+}
+
+// ── BE-07 新列 round-trip（run_id / agent_id / project_id / duration_ms） ────
+{
+  recordUsage({
+    session_id: 'sess-run',
+    model: 'm-be07',
+    input_tokens: 100,
+    output_tokens: 20,
+    run_id: 'run-abc12345',
+    agent_id: 'agent-n1',
+    project_id: 'proj-1',
+    duration_ms: 1200,
+    ts: now,
+  });
+  const row = getDb()
+    .prepare(
+      `SELECT run_id, agent_id, project_id, duration_ms FROM token_usage
+       WHERE session_id = 'sess-run'`,
+    )
+    .get() as { run_id: string; agent_id: string; project_id: string; duration_ms: number } | undefined;
+  check('run_id 落库回读', row?.run_id === 'run-abc12345', row?.run_id);
+  check('agent_id 落库回读', row?.agent_id === 'agent-n1', row?.agent_id);
+  check('project_id 落库回读', row?.project_id === 'proj-1', row?.project_id);
+  check('duration_ms 落库回读', row?.duration_ms === 1200, row?.duration_ms);
+
+  // duration_ms 非法输入归零（与 tokens 同口径）
+  recordUsage({
+    session_id: 'sess-run',
+    model: 'm-be07',
+    input_tokens: 1,
+    output_tokens: 1,
+    duration_ms: -50,
+    ts: now,
+  });
+  const minDur = (
+    getDb()
+      .prepare(`SELECT MIN(duration_ms) AS d FROM token_usage WHERE session_id = 'sess-run'`)
+      .get() as { d: number }
+  ).d;
+  check('duration_ms 负值归零', minDur === 0, minDur);
+}
+
+// ── BE-07 usageBreakdown by run_id / agent_id 维度 ───────────────────────────
+{
+  recordUsage({ session_id: 'r1', model: 'm', input_tokens: 500, output_tokens: 50, run_id: 'run-group-a', agent_id: 'n1', ts: now });
+  recordUsage({ session_id: 'r2', model: 'm', input_tokens: 300, output_tokens: 30, run_id: 'run-group-a', agent_id: 'n2', ts: now });
+  recordUsage({ session_id: 'r3', model: 'm', input_tokens: 100, output_tokens: 10, run_id: 'run-group-b', agent_id: 'n1', ts: now });
+
+  const byRun = usageBreakdown(now - DAY, now + DAY, 'run_id', 10);
+  const runA = byRun.find((r) => r.key === 'run-group-a');
+  check('按 run 分组合并两条', runA?.calls === 2 && runA?.input_tokens === 800, runA);
+
+  const byAgent = usageBreakdown(now - DAY, now + DAY, 'agent_id', 10);
+  const n1 = byAgent.find((r) => r.key === 'n1');
+  check('按 agent 分组合并两条', n1?.calls === 2 && n1?.input_tokens === 600, n1);
+}
+
+// ── BE-07 resolveProjectIdForSession（run_index→conversations 反查） ─────────
+{
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO projects (project_id, name, workspace_path, created_at, updated_at)
+     VALUES ('proj-rx', 'rx', '/tmp/rx', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO conversations (conversation_id, project_id, title, created_at, updated_at)
+     VALUES ('conv-rx', 'proj-rx', 'main', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO run_index (session_id, conversation_id, goal, status, created_at, updated_at)
+     VALUES ('sess-rx', 'conv-rx', 'g', 'done', 1, 1)`,
+  ).run();
+
+  check(
+    'session→project 反查命中',
+    resolveProjectIdForSession('sess-rx') === 'proj-rx',
+    resolveProjectIdForSession('sess-rx'),
+  );
+  check('未登记 session 返回空串', resolveProjectIdForSession('sess-unknown') === '');
+  check('undefined 返回空串不抛', resolveProjectIdForSession(undefined) === '');
 }
 
 _resetForTests();

@@ -7,7 +7,13 @@
  *
  * 成本估算：cost_est_usd = (input×单价_in + output×单价_out)，单价来自
  * settings 的 llm.priceTable（model → {input, output} 每百万 token 美元价），
- * 表里没有的模型按 0 计（宁可少算不虚报）。写入点：routes/llm.ts 三条调用路径。
+ * 表里没有的模型按 0 计（宁可少算不虚报）。写入点：routes/llm.ts 三条调用路径
+ * + workflow/executor.ts（resolveCallable→ApiClientCallable 的 DAG/Agent 链路，
+ * BE-07 2026-11-08 补齐——此前该链路 19 次调用零落库，看板 usage 全 0）。
+ *
+ * 关联键（BE-07）：run_id/agent_id/project_id/duration_ms 随流水落库，
+ * 每次模型调用可归到「项目/run/agent」三维；project_id 由 session 反查
+ * run_index→conversations（resolveProjectIdForSession，fail-soft 空串）。
  *
  * 聚合一律现算（routes/dashboard.ts group by），不预建聚合表——数据量到
  * 日增万级流水再议。
@@ -46,6 +52,14 @@ export interface TokenUsageRecord {
   input_tokens: number;
   output_tokens: number;
   cost_est_usd: number;
+  /** BE-07：run 归属（约定 `run-${session_id.slice(0, 8)}`，与 runs 表同形）。 */
+  run_id: string;
+  /** BE-07：执行该次调用的 agent/node id。 */
+  agent_id: string;
+  /** BE-07：项目归属（session→run_index→conversations 反查；未知空串）。 */
+  project_id: string;
+  /** BE-07：该次调用耗时（毫秒）。CLI 有实测值优先，否则流式墙钟。 */
+  duration_ms: number;
 }
 
 /** 每百万 token 美元单价（settings.llm.priceTable 的条目形状）。 */
@@ -60,6 +74,11 @@ export interface UsageToRecord {
   input_tokens?: number;
   output_tokens?: number;
   ts?: number;
+  /** BE-07 关联键（全部可选，缺省空串/0——与旧调用方完全兼容）。 */
+  run_id?: string;
+  agent_id?: string;
+  project_id?: string;
+  duration_ms?: number;
 }
 
 /**
@@ -78,12 +97,46 @@ export function recordUsage(usage: UsageToRecord, priceTable?: Record<string, Mo
         : 0;
     getDb()
       .prepare(
-        `INSERT INTO token_usage (id, ts, session_id, model, input_tokens, output_tokens, cost_est_usd)
-         VALUES (?,?,?,?,?,?,?)`,
+        `INSERT INTO token_usage (id, ts, session_id, model, input_tokens, output_tokens, cost_est_usd,
+                                  run_id, agent_id, project_id, duration_ms)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       )
-      .run(randomUUID(), usage.ts ?? Date.now(), usage.session_id || '', model, input, output, cost);
+      .run(
+        randomUUID(),
+        usage.ts ?? Date.now(),
+        usage.session_id || '',
+        model,
+        input,
+        output,
+        cost,
+        usage.run_id || '',
+        usage.agent_id || '',
+        usage.project_id || '',
+        Math.max(0, Math.round(Number(usage.duration_ms) || 0)),
+      );
   } catch {
     /* best-effort — 统计流水绝不影响主链路 */
+  }
+}
+
+/**
+ * BE-07：session → project 反查（run_index→conversations 两级 join）。
+ * fail-soft：任何异常/无映射返回 ''——统计归因绝不阻塞 LLM 主链路。
+ */
+export function resolveProjectIdForSession(sessionId: string | undefined): string {
+  if (!sessionId) return '';
+  try {
+    const row = getDb()
+      .prepare(
+        `SELECT c.project_id AS project_id
+         FROM run_index r
+         JOIN conversations c ON c.conversation_id = r.conversation_id
+         WHERE r.session_id = ?`,
+      )
+      .get(sessionId) as { project_id: string } | undefined;
+    return row?.project_id ?? '';
+  } catch {
+    return '';
   }
 }
 
@@ -144,14 +197,16 @@ export function usageDailyBetween(fromTs: number, toTs: number): Array<{
     .map(([day, v]) => ({ day, ...v }));
 }
 
-/** 按维度 TopN（model / session）。 */
+/** 按维度 TopN（model / session / run / agent）。BE-07 补 run_id、agent_id 维度。 */
 export function usageBreakdown(
   fromTs: number,
   toTs: number,
-  by: 'model' | 'session_id',
+  by: 'model' | 'session_id' | 'run_id' | 'agent_id',
   limit = 10,
 ): Array<{ key: string; calls: number; input_tokens: number; output_tokens: number; cost_est_usd: number }> {
-  const col = by === 'session_id' ? 'session_id' : 'model';
+  // 白名单映射，不拼接外部输入。
+  const col =
+    by === 'session_id' ? 'session_id' : by === 'run_id' ? 'run_id' : by === 'agent_id' ? 'agent_id' : 'model';
   return getDb()
     .prepare(
       `SELECT COALESCE(${col}, '') AS key,

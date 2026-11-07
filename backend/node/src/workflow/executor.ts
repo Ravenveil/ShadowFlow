@@ -61,6 +61,10 @@ import { promptDefaultsForTools } from '../lib/tools/builtin';
 // 经验记忆召回（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）— 失败静默。
 // 2026-11-07 — 开关/条数/格式统一走 storage/memory-lessons.promptBlock。
 import { promptBlock } from '../storage/memory-lessons';
+// BE-07（2026-11-08）— 成本追踪接线：resolveCallable→ApiClientCallable 链路的
+// 每次模型调用落 token_usage 流水（此前只挂 /api/llm 老路径，DAG/Agent 链路
+// 19 次调用零落库、看板 usage 全 0——T12 未通过项）。
+import { recordUsage, resolveProjectIdForSession } from '../storage/token-usage';
 
 /** 拼该 agent 域的经验记忆块。空（无记忆/开关关）返回 ''。绝不抛错。 */
 function lessonsBlockFor(agentId: string): string {
@@ -224,6 +228,21 @@ export async function executeNode(
         collectedText.push(stamped.value);
       } else if (stamped.type === 'error' && !firstError) {
         firstError = stamped.error;
+      } else if (stamped.type === 'usage' && !stamped.usage.cumulative) {
+        // BE-07 — 一条 usage chunk = 一次模型调用的完整计量（ApiClientCallable
+        // 的折叠层保证；裸 callable 语义自负）。cumulative 块是工具循环的汇总
+        // 快照（= 逐块之和），只上展示线，跳过落库防双计。落库 best-effort，
+        // 失败静默，绝不影响节点执行。
+        recordUsage({
+          session_id: ctx.session_id ?? '',
+          run_id: ctx.session_id ? `run-${ctx.session_id.slice(0, 8)}` : '',
+          agent_id: node.id,
+          project_id: resolveProjectIdForSession(ctx.session_id),
+          model: stamped.usage.model ?? '',
+          input_tokens: stamped.usage.input_tokens,
+          output_tokens: stamped.usage.output_tokens,
+          duration_ms: stamped.usage.duration_ms,
+        });
       }
     }
   } catch (err) {

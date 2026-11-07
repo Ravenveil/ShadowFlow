@@ -130,7 +130,14 @@ router.get('/timeseries', (req: Request, res: Response) => {
 
 router.get('/breakdown', (req: Request, res: Response) => {
   const days = parseDays(req.query.days, 30);
-  const by = req.query.by === 'session' ? 'session_id' : 'model';
+  // BE-07 — 维度扩到 run/agent（白名单映射，非法值回退 model）。
+  const byMap: Record<string, 'model' | 'session_id' | 'run_id' | 'agent_id'> = {
+    session: 'session_id',
+    run: 'run_id',
+    agent: 'agent_id',
+  };
+  const byKey = typeof req.query.by === 'string' ? req.query.by : 'model';
+  const by = byMap[byKey] ?? 'model';
   const { from, to } = windowFor(days);
   const items = usageBreakdown(from, to, by).map((r) => ({
     ...r,

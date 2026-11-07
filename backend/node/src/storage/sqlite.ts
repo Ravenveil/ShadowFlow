@@ -82,6 +82,11 @@ export function getDb(): Database.Database {
   // B1 统一会话内核（2026-06-11）— 与 Python 群聊体系的显式互链：
   // conversation.group_id ↔ group.conversation_id（groups.py 同日加）。
   addColumnIfMissing(db, 'conversations', 'group_id', 'TEXT');
+  // BE-07 的 token_usage 补列在下方 CREATE TABLE 之后执行（新库表尚不存在时
+  // ALTER 会炸，必须先建表）；projects 表由 001-init.sql 提供，此处可直接补。
+  // BE-02（2026-11-08，T02 空间隔离缺口）— projects 补 workspace 维度
+  // （严格相等过滤，语义镜像 groups-store：不传=不过滤）。
+  addColumnIfMissing(db, 'projects', 'workspace_id', 'TEXT');
   // 后端合一·阶段0（2026-06-12）— 持久 run 索引（storage/run-index.ts）。
   // session↔conversation 映射不再依赖内存 sessionStore 的 TTL 生命周期。
   db.exec(`CREATE TABLE IF NOT EXISTS run_index (
@@ -186,6 +191,9 @@ export function getDb(): Database.Database {
   // llm.ts 每次调用返回 usage 时落一条（input/output tokens + 估算成本），
   // 数据看板（routes/dashboard.ts）按天/按模型聚合现算。写入 best-effort，
   // 失败静默，绝不影响 LLM 主链路。
+  // BE-07（2026-11-08，T12 成本断链修复）— 补 run_id/agent_id/project_id/duration_ms
+  // 四列：每次模型调用可关联项目/run/agent 与耗时。写入点除 llm.ts 外新增
+  // workflow/executor.ts（resolveCallable→ApiClientCallable 链路，此前零落库）。
   db.exec(`CREATE TABLE IF NOT EXISTS token_usage (
     id TEXT PRIMARY KEY,
     ts INTEGER NOT NULL,
@@ -193,10 +201,41 @@ export function getDb(): Database.Database {
     model TEXT NOT NULL DEFAULT '',
     input_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_est_usd REAL NOT NULL DEFAULT 0
+    cost_est_usd REAL NOT NULL DEFAULT 0,
+    run_id TEXT NOT NULL DEFAULT '',
+    agent_id TEXT NOT NULL DEFAULT '',
+    project_id TEXT NOT NULL DEFAULT '',
+    duration_ms INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(ts);
-  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);`);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_run ON token_usage(run_id);`);
+  // BE-07 旧库补列（新库 CREATE 已带齐、此处幂等 no-op；必须放在 CREATE 之
+  // 后——全新库此前在建表前 ALTER 直接 "no such table" 炸迁移）。
+  addColumnIfMissing(db, 'token_usage', 'run_id', 'TEXT');
+  addColumnIfMissing(db, 'token_usage', 'agent_id', 'TEXT');
+  addColumnIfMissing(db, 'token_usage', 'project_id', 'TEXT');
+  addColumnIfMissing(db, 'token_usage', 'duration_ms', 'INTEGER');
+
+  // BE-02（2026-11-08，T03 营销字段静默丢弃修复）— 营销 Brief 随项目落库
+  // （marketing_projects/craft 域口径，产品说明书阶段一「产品资料档案」的
+  // 系统承接）。7 个规范字段（customer/goals/cycle/budget/deliverables/brief/
+  // notes）各占一列，值按 JSON 文本存（字符串/结构体无损回读）；请求里
+  // 7 字段之外的未识别键整体进 extra_json 捕获袋——「静默丢弃」缺陷类
+  // 消灭：任何提交过的键回读都还在。空列默认 'null'（JSON null=未填）。
+  db.exec(`CREATE TABLE IF NOT EXISTS marketing_projects (
+    project_id TEXT PRIMARY KEY,
+    customer TEXT NOT NULL DEFAULT 'null',
+    goals TEXT NOT NULL DEFAULT 'null',
+    cycle TEXT NOT NULL DEFAULT 'null',
+    budget TEXT NOT NULL DEFAULT 'null',
+    deliverables TEXT NOT NULL DEFAULT 'null',
+    brief TEXT NOT NULL DEFAULT 'null',
+    notes TEXT NOT NULL DEFAULT 'null',
+    extra_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
+  );`);
 
   // 记忆交接 + 长期画像写回（2026-11-05，功能线③ OPC-OS PR#3 设计的另一半）—
   // 纯增量表，不动 memory_lessons / agent_hops 的既有语义。交接副本单独存

@@ -2346,8 +2346,17 @@ def create_memory_router(bank: MemoryBank, *, prefix: str = "/api/memory-bank") 
 
     @router.get("/packs")
     @errors
-    async def list_packs() -> Dict[str, Any]:
+    async def list_packs(workspace_id: str | None = Query(None)) -> Dict[str, Any]:
+        # BE-02（2026-11-08，T02 空间隔离缺口）：?workspace_id= 严格过滤
+        # metadata.workspace_id（缺省不过滤，向后兼容）。pack 建包时把空间归属
+        # 放进 metadata（PackBody.metadata 透传），此处只做发现口过滤。
         packs = await asyncio.to_thread(bank.list_packs)
+        if workspace_id is not None:
+            packs = [
+                p
+                for p in packs
+                if ((p.get("metadata") or {}).get("workspace_id") == workspace_id)
+            ]
         return envelope({"packs": packs}, count=len(packs))
 
     @router.get("/packs/{pack_id}")

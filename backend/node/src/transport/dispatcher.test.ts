@@ -73,14 +73,20 @@ describe('resolveCallable — happy path (5 schemes)', () => {
 // OpenAiCompatApiClient 回退到内置默认地址（如 https://api.openai.com/v1），
 // 自定义网关/本地端点场景请求打偏后表现为 SDK "Request timed out."。
 describe('resolveCallable — BYOK baseUrl passthrough (2026-11-07 fix)', () => {
-  const asApiClient = (c: unknown) =>
-    (
+  // getApiClient() 现在返回 BE-07 的 UsageFoldingApiClient（usage 计量归一层）；
+  // 断言目标是底层真实 client 的构造参数（baseUrl/providerId 透传），故 unwrap
+  // 一层 `.inner` 读 opts。无折叠层时（老路径）直接读 opts。
+  const asApiClient = (c: unknown) => {
+    const raw = (
       c as {
         getApiClient: () => {
-          opts: { baseURL?: string; providerId?: string };
+          inner?: { opts: { baseURL?: string; providerId?: string } };
+          opts?: { baseURL?: string; providerId?: string };
         };
       }
     ).getApiClient();
+    return (raw.inner ?? raw) as { opts: { baseURL?: string; providerId?: string } };
+  };
 
   it('byok:openai forwards opts.baseUrl into the OpenAI-compat client', () => {
     const c = resolveCallable('byok:openai', {
@@ -155,14 +161,20 @@ describe('resolveCallable — whitespace tolerance', () => {
 
 // ─── 2026-11-07 模型链路断点全清（A1/A2/A3/A4/B1）────────────────────────────
 
-const asApiClient = (c: unknown) =>
-  (
+// 同上：unwrap BE-07 折叠层读底层 client 的构造参数。
+const asApiClient = (c: unknown) => {
+  const raw = (
     c as {
       getApiClient: () => {
-        opts: { baseURL?: string; providerId?: string; apiKey?: string };
+        inner?: { opts: { baseURL?: string; providerId?: string; apiKey?: string } };
+        opts?: { baseURL?: string; providerId?: string; apiKey?: string };
       };
     }
   ).getApiClient();
+  return (raw.inner ?? raw) as {
+    opts: { baseURL?: string; providerId?: string; apiKey?: string };
+  };
+};
 
 const asCliEnv = (c: unknown) =>
   (c as { opts: { env?: Record<string, string> } }).opts.env ?? {};

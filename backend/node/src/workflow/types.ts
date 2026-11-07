@@ -51,6 +51,11 @@ export interface ToolResultPayload {
 
 /**
  * Token / cost accounting emitted at the end of a callable turn.
+ *
+ * BE-07（2026-11-08）语义契约：一条 usage chunk = 一次模型调用的完整计量
+ * （ApiClientCallable 侧已把客户端的部分块折叠成整块）。executor 据此落
+ * token_usage 流水；`cumulative: true` 的块是多轮工具循环的**汇总快照**
+ * （ConversationRuntime 末尾），只上展示线、不落库，避免与逐调用块双计。
  */
 export interface UsagePayload {
   input_tokens?: number;
@@ -59,6 +64,12 @@ export interface UsagePayload {
   cache_creation_input_tokens?: number;
   /** Optional model id for billing aggregation. */
   model?: string;
+  /** 该次调用耗时（毫秒）。CLI 实测值优先，否则流式墙钟。 */
+  duration_ms?: number;
+  /** CLI-only：该次调用的实测成本（美元）。透传，不参与 cost_est_usd 估算。 */
+  cost_usd?: number;
+  /** 多轮循环的汇总快照标记——不落 token_usage（逐调用块已各自落库）。 */
+  cumulative?: boolean;
 }
 
 /**

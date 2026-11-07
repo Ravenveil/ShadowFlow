@@ -2,6 +2,7 @@
  * projects.ts — Story 15.16 — REST API for the Project resource.
  *
  *   GET    /api/projects                    → list (newest first)
+ *   GET    /api/projects?workspace_id=ws-1  → list 按空间严格过滤（BE-02，缺省不过滤）
  *   GET    /api/projects?withSessions=1     → list + 每项附 sessions[]（项目分组会话，
  *                                             GAP A3 2026-08-22；session = conversations 行，
  *                                             group_id 互链 Python 群/DM，前端按它归组）
@@ -13,6 +14,11 @@
  *
  * Response shape mirrors the storage record verbatim — no envelope, no
  * camel/snake translation. Frontend can reflect the row directly.
+ *
+ * BE-02（2026-11-08，T03 复现项修复）：POST/PATCH 除 core 键（name/
+ * workspace_path/skill_id/design_system_id/workspace_id）外，**其余键整体
+ * 落营销 Brief**（marketing_projects：7 规范字段 + 未识别键捕获袋），回读
+ * 平铺回响应顶层——「7 字段被静默丢弃」缺陷类消灭。
  */
 
 import { Router, Request, Response } from 'express';
@@ -28,8 +34,30 @@ import { getDb } from '../../storage/sqlite';
 
 const router = Router();
 
+/** core 键（projects 主表列）；其余键全部归营销 Brief（BE-02）。 */
+const CORE_KEYS = new Set(['name', 'workspace_path', 'skill_id', 'design_system_id', 'workspace_id']);
+
+/** 提取 body 里的营销 Brief 键（core 之外的一切——含未识别键，整体捕获）。 */
+function extractMarketing(body: Record<string, unknown>): Record<string, unknown> {
+  const marketing: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (CORE_KEYS.has(k)) continue;
+    marketing[k] = v;
+  }
+  return marketing;
+}
+
 router.get('/', (req: Request, res: Response) => {
-  const projects = listProjects();
+  // BE-02 空间过滤（镜像 groups-store 语义）：?workspace_id= 传了就严格相等，
+  // 没传不过滤。多值/非串视为空串过滤（可预期、不静默放宽）。
+  const opts =
+    'workspace_id' in req.query
+      ? {
+          workspace_id:
+            typeof req.query.workspace_id === 'string' ? req.query.workspace_id : '',
+        }
+      : undefined;
+  const projects = listProjects(opts);
   // GAP A3（2026-08-22）：?withSessions=1 → 每个项目附 sessions[]（该项目下的
   // 会话行，按 updated_at 新→旧）。数据模型复用 conversations.project_id（15.16
   // 已有外键），不新增表；shape 在 verbatim record 上额外加 id 别名 + sessions。
@@ -47,20 +75,17 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 router.post('/', (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as {
-    name?: unknown;
-    workspace_path?: unknown;
-    skill_id?: unknown;
-    design_system_id?: unknown;
-  };
-  if (typeof body.name !== 'string' || body.name.trim().length === 0) {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const name = body.name;
+  if (typeof name !== 'string' || name.trim().length === 0) {
     res
       .status(400)
       .json({ error: { code: 'INVALID_NAME', message: 'name is required' } });
     return;
   }
+  const marketing = extractMarketing(body);
   const project = createProject({
-    name: body.name.trim(),
+    name: name.trim(),
     workspace_path:
       typeof body.workspace_path === 'string' && body.workspace_path.trim().length > 0
         ? body.workspace_path.trim()
@@ -68,6 +93,10 @@ router.post('/', (req: Request, res: Response) => {
     skill_id: typeof body.skill_id === 'string' ? body.skill_id : null,
     design_system_id:
       typeof body.design_system_id === 'string' ? body.design_system_id : null,
+    workspace_id: typeof body.workspace_id === 'string' ? body.workspace_id : null,
+    // BE-02：core 之外的键（营销 7 规范字段 + 任何未识别键）整体落库回读，
+    // 不再静默丢弃（T03 复现项：「客户/目标/周期/预算/交付物/Brief 全字段」）。
+    marketing,
   });
   res.status(201).json(project);
 });
@@ -94,6 +123,12 @@ router.patch('/:id', (req: Request, res: Response) => {
   if ('design_system_id' in body)
     patch.design_system_id =
       typeof body.design_system_id === 'string' ? body.design_system_id : null;
+  if ('workspace_id' in body)
+    patch.workspace_id =
+      typeof body.workspace_id === 'string' ? body.workspace_id : null;
+  // BE-02：core 之外的键整体按营销 Brief 局部更新（同键覆盖、显式 null 清除）。
+  const marketing = extractMarketing(body);
+  if (Object.keys(marketing).length > 0) patch.marketing = marketing;
 
   const updated = updateProject(req.params.id, patch);
   if (!updated) {
