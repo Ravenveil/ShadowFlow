@@ -32,29 +32,108 @@ dev.mjs          一键启动器（后端 + 前端）
 | Node 网关 | 8002 | `backend/node/`，Express API 聚合 |
 | Python FastAPI | 8000 | `backend/python/`，`shadowflow.server:app` |
 
-## 快速开始
+## 环境要求
 
-### 一键启动（推荐）
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| Node.js | ≥ 20（推荐 22 LTS） | 前端 Vite 8 + Node 网关 tsx 都跑在 Node 上 |
+| pnpm | ≥ 9（推荐，`corepack enable pnpm` 即得） | 前端锁文件是 `pnpm-lock.yaml`；用 npm 装也能跑 |
+| Python | ≥ 3.10 | FastAPI 编排核心；Windows/Linux/macOS 均可 |
+| Git | 任意近期版本 | clone 仓库 |
+
+## 安装教程（clone 即跑）
+
+### 0. 克隆仓库
+
+```bash
+git clone https://github.com/Ravenveil/shadowflow-merged.git
+cd shadowflow-merged
+```
+
+### 1. 安装依赖（三段，各装各的）
+
+```bash
+# ① 新前端（Vite + React 19 + Tailwind 4）
+cd frontend && pnpm install && cd ..
+#    没有 pnpm 就用 npm install，效果等同
+
+# ② Node 网关（Express API 聚合）
+cd backend/node && npm install && cd ..
+
+# ③ Python 编排核心（在仓库根目录执行；推荐 venv）
+python -m venv .venv
+# Windows:  .venv\Scripts\activate     Linux/macOS:  source .venv/bin/activate
+pip install -e "./backend/python[server,memory]"
+```
+
+> `server` extras = FastAPI/uvicorn 等服务端全家桶；`memory` = aiosqlite/redis 持久化。
+> 不建 venv 直接装进系统 Python 也可以（`pip install -e "./backend/python[server,memory]"`）。
+> 启动器会自动优先使用仓库根 `.venv/Scripts/python.exe`（或 `.venv/bin/python`），找不到才回落到 `python`。
+
+### 2. 一键启动（推荐）
 
 ```bash
 npm run dev                  # 起 Python(8000) + Node 网关(8002) + 新前端(8443)，自动开浏览器
-npm run dev -- --no-python   # 只起网关 + 前端
 npm run dev -- --no-open     # 不自动开浏览器
+npm run dev -- --no-python   # 只起网关 + 前端（跳过 Python）
 ```
 
-### 分步启动
+启动成功的标志：控制台打印 `[dev] 全部就绪 → http://localhost:8443/`。
+打开 **http://localhost:8443/#/app** 即进入董事长工作台，内置「AI 营销公司」7 角色组织架构即刻可用。
+
+### 3. 验证安装
 
 ```bash
-# 1) 新前端（仓库约定 pnpm-lock.yaml，推荐 pnpm；npm 亦可）
-cd frontend && pnpm install && pnpm dev      # http://localhost:8443
-
-# 2) Node 网关
-cd backend/node && npm install && npm run dev # http://localhost:8002
-
-# 3) Python FastAPI（需 Python 3.10+，在仓库根目录执行）
-cd backend/python && pip install -e .         # 或 uv sync
-cd ../.. && python -m uvicorn shadowflow.server:app --app-dir backend/python --host 127.0.0.1 --port 8000
+curl http://localhost:8002/health     # Node 网关健康检查
+curl http://localhost:8002/api/agents # 应返回 8 个内置角色（7 角色 + shadow-secretary）
+curl http://localhost:8000/docs       # Python FastAPI 文档页
 ```
+
+### 4. 可选配置
+
+- **大模型 Key（可选）**：复制 `.env.example` 为 `.env`，填 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` 任意一个；不填则走前端 BYOK 设置页（浏览器内填 Key）。
+- **重新生成内置角色种子**：`node scripts/seed-ai-marketing-org.mjs`（幂等，覆盖生成 `.shadowflow/agents/`、`.shadowflow/teams/`）。
+
+### 分步启动（不用 dev.mjs 时）
+
+```bash
+# 1) Python FastAPI（仓库根目录，端口 8000）
+python -m uvicorn shadowflow.server:app --app-dir backend/python --host 127.0.0.1 --port 8000
+
+# 2) Node 网关（端口 8002）
+cd backend/node && npm run dev
+
+# 3) 新前端（端口 8443，/api 已代理到 :8002）
+cd frontend && pnpm dev
+```
+
+### 常见问题
+
+| 现象 | 处理 |
+|---|---|
+| `端口 8xxx 已被占用` | dev.mjs 会拒绝启动，先停掉占用进程（旧的 uvicorn/tsx watch/vite）再跑 |
+| `uvicorn: command not found` / 缺 fastapi | 第 1 步的 `pip install -e "./backend/python[server,memory]"` 没装或 venv 没激活 |
+| `better-sqlite3` 编译失败 | Windows 需装 VS Build Tools（C++ 桌面开发工作负荷）后重装 |
+| 手机/局域网/隧道域名打不开 | 已配置 `allowedHosts: true`（放行所有域名）+ `host: 0.0.0.0`，直接访问 `http://<你的IP>:8443` 即可 |
+| 前端页面能开但接口 404 | 确认 Node 网关(:8002)已启动；Vite 会把 `/api`、`/projects` 代理过去 |
+
+## 依赖清单
+
+**frontend/**（`package.json` + `pnpm-lock.yaml`）
+- 运行：`react 19`、`react-dom 19`、`lucide-react`
+- 开发：`vite 8`、`@vitejs/plugin-react`、`tailwindcss 4` + `@tailwindcss/vite`、`typescript 5.7`、`oxfmt`、`@types/*`
+
+**backend/node/**（`package.json` + `package-lock.json`）
+- 运行：`express`、`http-proxy-middleware`、`cors`、`better-sqlite3`（原生模块）、`js-yaml`、`gray-matter`、`uuid`、`archiver`、`expr-eval`、`htmlparser2`、`turndown`、`ethers`、`puppeteer-core`、`@sparticuz/chromium`、`@anthropic-ai/sdk`、`openai`、`@google/generative-ai`
+- 开发：`tsx`、`typescript`、`vitest`、`supertest`、`@types/*`
+
+**backend/python/**（`pyproject.toml`，包名 `shadowflow`）
+- 核心：`pydantic 2`、`pyyaml`、`httpx`
+- `[server]`：`fastapi`、`uvicorn`、`APScheduler 3.x`、`slowapi`、`python-multipart`
+- `[memory]`：`aiosqlite`、`redis`（可选持久化）
+- 其他可选 extras：`[mcp]`、`[mcp-servers]`、`[lightrag]`、`[all]`、`[dev]`（pytest/ruff/mypy）
+
+**运行时生成（不入库）**：`.shadowflow/`（会话、技能、设计系统、SQLite）；`.env`（可选 Key）。
 
 ## 内置：AI 营销公司组织架构 + 任务 DAG
 
