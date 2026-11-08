@@ -85,15 +85,7 @@ import {
 import { useGroupChat, type GroupChat } from "./src/useGroupChat";
 import { isTerminalRunStatus } from "./src/message-patches";
 import { TimelineList } from "./src/TimelineView";
-
-/** 人物头像（DiceBear micah —— 现代扁平插画，比 Lorelei 线稿更精致；
-    按 agent accent 色铺底，加载失败回落字母头像。键 = AgentAvatar label）。 */
-function sfAvatarUrl(label: string, color: string): string {
-  const bg = color.replace("#", "");
-  return `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(
-    label,
-  )}&backgroundColor=${bg}&radius=0`;
-}
+import { AgentAvatar } from "./src/avatar";
 
 /** 数据加载三态（加载中 / 成功 / 失败）：各视图状态标签统一入口，
  *  避免把「加载中」与「加载失败」混为一态而在加载过程闪现错误提示。 */
@@ -2577,47 +2569,6 @@ function TaskStatusPanel({
         </div>
       )}
     </div>
-  );
-}
-
-function AgentAvatar({
-  label,
-  color,
-  small = false,
-  size,
-}: {
-  label: string;
-  color: string;
-  small?: boolean;
-  size?: "lg" | "xl";
-}) {
-  const [failed, setFailed] = useState(false);
-  if (failed) {
-    return (
-      <span
-        className={`sf-agent-avatar ${small ? "small" : ""} ${size ?? ""}`}
-        style={{ "--avatar-color": color } as React.CSSProperties}
-      >
-        {label.slice(0, 1)}
-        <i />
-      </span>
-    );
-  }
-  return (
-    <span
-      className={`sf-agent-avatar ${small ? "small" : ""} ${size ?? ""} has-face`}
-      style={{ "--avatar-color": color } as React.CSSProperties}
-    >
-      <img
-        className="sf-agent-avatar-face"
-        src={sfAvatarUrl(label, color)}
-        alt=""
-        aria-hidden
-        loading="lazy"
-        onError={() => setFailed(true)}
-      />
-      <i />
-    </span>
   );
 }
 
