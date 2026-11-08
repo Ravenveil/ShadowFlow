@@ -5090,3 +5090,95 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ── 侧边栏「新建」菜单（2026-11-08 做全）：对话/项目两级，沿用 sf-plus-* 弹层视觉 ── */
+.sf-new-wrap {
+  position: relative;
+}
+.sf-new-caret {
+  margin-left: 1px;
+  color: #b0aaa0;
+}
+.sf-new-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px;
+  border: 1px solid #e3e1dc;
+  border-radius: 13px;
+  background: #fffefb;
+  box-shadow: 0 20px 48px -16px rgba(22, 22, 28, 0.32);
+}
+.sf-new-menu .sf-plus-item {
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #2f2e2b;
+  font-size: 14px;
+}
+.sf-new-menu .sf-plus-item:hover:not(:disabled) {
+  background: #f4f2ec;
+  color: #2f2e2b;
+}
+.sf-new-menu .sf-plus-item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.sf-new-menu .sf-plus-item .sf-plus-chev {
+  margin-left: auto;
+  color: #b3b1ac;
+}
+.sf-new-menu .sf-plus-item.sf-plus-head {
+  height: 30px;
+  color: #8d8a83;
+  font-size: 13px;
+}
+.sf-new-form {
+  display: flex;
+  gap: 6px;
+  padding: 4px 2px 2px;
+}
+.sf-new-form input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d9d3c8;
+  border-radius: 8px;
+  background: #fffdf9;
+  color: #2f2e2b;
+  font-size: 13px;
+  outline: none;
+}
+.sf-new-form input:focus {
+  border-color: #ff8064;
+}
+.sf-new-form button[type="submit"] {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #17162d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.sf-new-form button[type="submit"]:hover:not(:disabled) {
+  background: #2f2e2b;
+}
+.sf-new-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

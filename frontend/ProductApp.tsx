@@ -146,6 +146,14 @@ function groupPreview(group: GroupRecord): string {
   return content.length > 32 ? `${content.slice(0, 32)}…` : content;
 }
 
+/** 会话「最近活跃」时间：updated_at → 末条消息时间 → created_at 三级兜底。
+ *  后端补 updated_at 之前创建的记录没有该字段，排序/时间列不能因此失真。 */
+function groupActivityIso(group: GroupRecord): string | undefined {
+  const msgs = Array.isArray(group.messages) ? group.messages : [];
+  const last = msgs.length > 0 ? msgs[msgs.length - 1].timestamp : undefined;
+  return group.updated_at || last || group.created_at;
+}
+
 /**
  * 展示口径的 6 名部门核心员工（对齐后端 .shadowflow/agents 的手工艺品代卖团队成员，
  * 由 craft-team-setup 播种；旧「AI 营销公司」seed 编制已于 2026-11-08 清理）。
@@ -274,6 +282,24 @@ interface ComposerAtt {
   error?: string;
 }
 
+/**
+ * 瞬断自动重试一次（2026-11-08）：网关 tsx watch 热重启 / Python 重载窗口期会出现
+ * 5xx 信封（如 "upstream connect failed"）或 fetch 网络层 TypeError——这类错误请求
+ * 大概率没到业务层，安全重试一次；4xx 业务错误不重试。
+ */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const retryable =
+      err instanceof TypeError ||
+      (err instanceof ApiError && err.status >= 500);
+    if (!retryable) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return await fn();
+  }
+}
+
 export default function ProductApp() {
   const [view, setView] = useState<View>("chat");
   const [panelOpen, setPanelOpen] = useState(true);
@@ -286,6 +312,15 @@ export default function ProductApp() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement | null>(null);
+
+  // ── 侧边栏「新建」菜单（2026-11-08 做全）：对话/项目都接真实后端创建 ──
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [newMenuView, setNewMenuView] = useState<"root" | "project">("root");
+  const [creatingConversation, setCreatingConversation] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   // ── 真实数据：群列表 / Agent / 项目树 ────────────────────────────────────
   const [groups, setGroups] = useState<GroupRecord[]>([]);
@@ -310,7 +345,6 @@ export default function ProductApp() {
   const dragDepthRef = useRef(0); // dragenter/leave 计数，避免经过子元素时遮罩闪烁
   const attIdRef = useRef(0);
   const sendingRef = useRef(false); // submitMessage 异步窗口防重入
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   // ── 模型选择器（2026-11-08 任务面板）：读真实 BYOK providers，发送时随消息
   //    透传 executor/model（后端「UI model picker's choice always wins」）──
@@ -344,8 +378,8 @@ export default function ProductApp() {
     try {
       const list = await listGroups("all");
       list.sort((a, b) => {
-        const ta = a.updated_at ? Date.parse(String(a.updated_at)) : 0;
-        const tb = b.updated_at ? Date.parse(String(b.updated_at)) : 0;
+        const ta = Date.parse(groupActivityIso(a) ?? "") || 0;
+        const tb = Date.parse(groupActivityIso(b) ?? "") || 0;
         return tb - ta;
       });
       setGroups(list);
@@ -385,6 +419,22 @@ export default function ProductApp() {
     void reloadGroups();
   }, [authUserId, reloadGroups]);
 
+  // 侧边栏预览/排序随消息活动刷新（2026-11-08 做全）：会话内消息变化
+  // （用户发出 / Agent 回复）后防抖重拉列表，预览与「最近」排序不再
+  // 滞后到手动刷新。用最后一条消息 ts 单调推进做信号，切换会话只记录
+  // 不刷新（切到更旧会话 ts 不推进）。
+  const lastChatActivityTsRef = useRef<number>(0);
+  useEffect(() => {
+    const msgs = chat.messages;
+    const lastTs = msgs.length > 0 ? Number(msgs[msgs.length - 1].ts) || 0 : 0;
+    if (lastTs <= lastChatActivityTsRef.current) return;
+    lastChatActivityTsRef.current = lastTs;
+    const timer = window.setTimeout(() => {
+      void reloadGroups();
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [chat.messages, reloadGroups]);
+
   // 点击账号区外部时收起「三个点」菜单
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -396,6 +446,36 @@ export default function ProductApp() {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [accountMenuOpen]);
+
+  // 点击「新建」菜单外部收起（同账号菜单惯例）
+  useEffect(() => {
+    if (!newMenuOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(event.target as Node)) {
+        setNewMenuOpen(false);
+        setNewMenuView("root");
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [newMenuOpen]);
+
+  // ⌘K / Ctrl+K 聚焦搜索框（kbd 已画在输入框上，此前没接线）
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setView("chat");
+        setPanelOpen(true);
+        window.setTimeout(() => {
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        }, 0);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const chatStatusText = !activeGroupId
     ? "选择或新建一个会话"
@@ -416,6 +496,31 @@ export default function ProductApp() {
       ),
     [groups, query],
   );
+
+  // 搜索做全（2026-11-08）：placeholder 承诺「搜索对话、项目或 Agent」，
+  // 此前只过滤对话。项目按 名称/会话标题 匹配，Agent 按 名称/ID 匹配。
+  const filteredProjects = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projectsTree;
+    return projectsTree.filter((p) => {
+      const sessions = Array.isArray(p.sessions) ? p.sessions : [];
+      const sessionHit = sessions.some((s) => {
+        const row = s as { title?: string; session_id?: string };
+        return `${row.title ?? ""}${row.session_id ?? ""}`.toLowerCase().includes(q);
+      });
+      return `${p.name ?? ""}${p.project_id ?? ""}`.toLowerCase().includes(q) || sessionHit;
+    });
+  }, [projectsTree, query]);
+
+  const filteredAgents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list =
+      agentsList.length > 0 ? displayAgents(agentsList) : (agents as unknown as AgentRecord[]);
+    if (!q) return list;
+    return list.filter((a) =>
+      `${a.name ?? ""}${a.agent_id ?? ""}`.toLowerCase().includes(q),
+    );
+  }, [agentsList, query]);
 
   function openGroup(group: GroupRecord) {
     setActiveGroupId(group.group_id);
@@ -463,24 +568,72 @@ export default function ProductApp() {
     }
   }
 
-  /** 新建对话 → POST /api/groups（真实建群）后进入。 */
+  /**
+   * 新建对话的默认成员（2026-11-08 修复「Agent 说不出话」）：此前 createGroup
+   * 不带 agent_ids → 空成员群 → 后端回「[chat] No agents are members」什么都不答。
+   * 默认全员入群（总经理 + 各部门），@点名 / 策略矩阵路由到对口的人。
+   * 上限 8 对齐后端 MAX_FANOUT_AGENTS（超编裁剪防 422）。
+   */
+  async function defaultGroupAgentIds(): Promise<string[]> {
+    const list =
+      agentsList.length > 0 ? agentsList : await listAgents().catch(() => [] as AgentRecord[]);
+    return [...new Set(list.map((a) => String(a.agent_id ?? "")).filter(Boolean))].slice(0, 8);
+  }
+
+  /** 新建对话 → POST /api/groups（真实建群）后进入。
+   *  2026-11-08 做全：创建中态 + 失败可见（不再静默吞掉，之前「点了没反应」的根因）
+   *  + 网关瞬断自动重试一次（tsx watch 热重启窗口期会 5xx/fetch 失败）+ 成功聚焦输入框接上发送。 */
   async function createConversation() {
+    if (creatingConversation) return;
+    setCreatingConversation(true);
     const name = `新对话 ${groups.length + 1}`;
     try {
-      const group = await createGroup({ name: name.slice(0, 40), kind: "group" });
+      const group = await withRetry(async () =>
+        createGroup({
+          name: name.slice(0, 40),
+          kind: "group",
+          agent_ids: await defaultGroupAgentIds(),
+        }),
+      );
       if (group?.group_id) {
         setActiveGroupId(group.group_id);
         setActiveTitle(group.name || name);
         await reloadGroups();
+        setNewMenuOpen(false);
+        setNewMenuView("root");
+        window.setTimeout(() => composerRef.current?.focus(), 0);
+        return;
       }
-    } catch {
-      // 建群失败（后端不可达/未登录）→ 本地空会话兜底（明确演示态）
-      setActiveGroupId(null);
-      setActiveTitle("新对话");
+      showNotice("创建对话失败：后端未返回会话 ID，请重试");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showNotice(`创建对话失败：${msg}（后端可达后可再次点击「新建」重试）`);
+    } finally {
+      setCreatingConversation(false);
     }
-    setView("chat");
-    setMobileRailOpen(false);
-    if (window.innerWidth <= 820) setPanelOpen(false);
+  }
+
+  /** 新建项目 → POST /api/projects，成功刷新侧边栏项目树。 */
+  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const input = event.currentTarget.elements.namedItem("newProjectName") as HTMLInputElement | null;
+    const name = input?.value.trim();
+    if (!name || creatingProject) return;
+    setCreatingProject(true);
+    try {
+      await withRetry(() => createProject(name));
+      setNewMenuOpen(false);
+      setNewMenuView("root");
+      listProjects()
+        .then(setProjectsTree)
+        .catch(() => setProjectsTree((cur) => cur));
+      showNotice(`项目「${name}」已创建`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      showNotice(`创建项目失败：${msg}`);
+    } finally {
+      setCreatingProject(false);
+    }
   }
 
   /**
@@ -496,7 +649,11 @@ export default function ProductApp() {
     if (!activeGroupId) {
       const name = text.trim().slice(0, 40) || `新对话 ${groups.length + 1}`;
       try {
-        const group = await createGroup({ name, kind: "group" });
+        const group = await createGroup({
+          name,
+          kind: "group",
+          agent_ids: await defaultGroupAgentIds(),
+        });
         if (!group?.group_id) return false;
         setActiveGroupId(group.group_id);
         setActiveTitle(group.name || name);
@@ -1048,13 +1205,84 @@ export default function ProductApp() {
                     <X size={15} />
                   </button>
                 </div>
-                <button className="sf-new-chat" onClick={() => void createConversation()}>
-                  <Plus size={12} />
-                  <span>新建</span>
-                </button>
+                <div className="sf-new-wrap" ref={newMenuRef}>
+                  <button
+                    className="sf-new-chat"
+                    onClick={() => setNewMenuOpen((v) => !v)}
+                    aria-expanded={newMenuOpen}
+                    aria-haspopup="menu"
+                  >
+                    <Plus size={12} />
+                    <span>新建</span>
+                    <ChevronDown size={12} className="sf-new-caret" />
+                  </button>
+                  {newMenuOpen && (
+                    <>
+                      <button
+                        className="sf-plus-backdrop"
+                        aria-label="关闭新建菜单"
+                        onClick={() => {
+                          setNewMenuOpen(false);
+                          setNewMenuView("root");
+                        }}
+                      />
+                      <div className="sf-new-menu" role="menu">
+                        {newMenuView === "root" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="sf-plus-item"
+                              role="menuitem"
+                              disabled={creatingConversation}
+                              onClick={() => void createConversation()}
+                            >
+                              <MessageSquare size={14} />
+                              <span>{creatingConversation ? "创建中…" : "新建对话"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="sf-plus-item"
+                              role="menuitem"
+                              onClick={() => setNewMenuView("project")}
+                            >
+                              <Folder size={14} />
+                              <span>新建项目</span>
+                              <ChevronRight size={13} className="sf-plus-chev" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="sf-plus-item sf-plus-head"
+                              onClick={() => setNewMenuView("root")}
+                            >
+                              <ChevronLeft size={13} />
+                              <span>新建项目</span>
+                            </button>
+                            <form className="sf-new-form" onSubmit={handleCreateProject}>
+                              <input
+                                autoFocus
+                                required
+                                name="newProjectName"
+                                maxLength={60}
+                                placeholder="输入项目名称"
+                                disabled={creatingProject}
+                              />
+                              <button type="submit" disabled={creatingProject}>
+                                {creatingProject ? "创建中…" : "创建"}
+                              </button>
+                            </form>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
                 <label className="sf-search">
                   <Search size={13} />
                   <input
+                    ref={searchRef}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="搜索对话、项目或 Agent"
@@ -1106,7 +1334,7 @@ export default function ProductApp() {
                         <strong>{group.name || "未命名会话"}</strong>
                         <small>{groupPreview(group)}</small>
                       </span>
-                      <time>{fmtRelativeTime(group.updated_at)}</time>
+                      <time>{fmtRelativeTime(groupActivityIso(group))}</time>
                     </button>
                   ))}
                 </div>
@@ -1115,7 +1343,13 @@ export default function ProductApp() {
                   {projectsTree.length === 0 && agentsList.length === 0 && (
                     <p className="sf-thread-hint">暂无项目与 Agent（尚未创建）</p>
                   )}
-                  {projectsTree.map((project) => {
+                  {query.trim() &&
+                    projectsTree.length + agentsList.length > 0 &&
+                    filteredProjects.length === 0 &&
+                    filteredAgents.length === 0 && (
+                      <p className="sf-thread-hint">没有匹配的项目或 Agent</p>
+                    )}
+                  {filteredProjects.map((project) => {
                     const expanded = !!expandedProjects[project.project_id];
                     const sessions = Array.isArray(project.sessions) ? project.sessions : [];
                     return (
@@ -1155,7 +1389,7 @@ export default function ProductApp() {
                       </Fragment>
                     );
                   })}
-                  {(agentsList.length > 0 ? displayAgents(agentsList) : (agents as unknown as AgentRecord[])).map((agent) => (
+                  {filteredAgents.map((agent) => (
                     <button
                       className="sf-agent-tree-row"
                       key={agent.agent_id ?? agent.name}

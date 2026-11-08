@@ -587,10 +587,13 @@ export async function listAgents(): Promise<AgentRecord[]> {
 export async function listProjects(): Promise<
   Array<{ project_id: string; name: string; sessions?: unknown[]; updated_at?: string | number | null }>
 > {
-  const json = await apiFetch<{ data?: unknown[]; projects?: unknown[] }>(
-    "/api/projects?withSessions=1",
-  );
-  const list = json?.data ?? json?.projects ?? [];
+  // GET /api/projects 返回**裸数组**（Node projects.ts res.json(projects)）；
+  // 此前只认 {data|projects} 信封 → 解包恒为 [] → 侧边栏项目树永远为空
+  //（2026-11-08 修「后端有项目、前端不显示」）。两种形状都兼容。
+  const json = await apiFetch<
+    { data?: unknown[]; projects?: unknown[] } | unknown[]
+  >("/api/projects?withSessions=1");
+  const list = Array.isArray(json) ? json : (json?.data ?? json?.projects ?? []);
   return Array.isArray(list) ? (list as Array<{ project_id: string; name: string }>) : [];
 }
 

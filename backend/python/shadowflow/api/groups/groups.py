@@ -125,6 +125,12 @@ def _list_groups_records(
             rec = json.loads(p.read_text(encoding="utf-8"))
             if (rec.get("kind") or "group") not in allow:
                 continue
+            # 2026-11-08 · 旧记录没有 updated_at → 末条消息时间 / created_at 兜底，
+            # 让「最近对话」排序与时间列不失真（仅响应层补值，不落盘）。
+            if not rec.get("updated_at"):
+                msgs = rec.get("messages") or []
+                last_ts = msgs[-1].get("timestamp") if msgs else None
+                rec["updated_at"] = last_ts or rec.get("created_at")
             if workspace_id is None:
                 records.append(rec)
             else:
@@ -307,6 +313,8 @@ async def create_group(request: Request, body: CreateGroupRequest) -> GroupRespo
         "kind": body.kind or "group",
         "conversation_id": body.conversation_id,
         "created_at": created_at,
+        # 2026-11-08 · 「最近对话」排序/时间列的真源：建群即写，此后每次发消息 bump。
+        "updated_at": created_at,
         "messages": [],
     }
     _save_group(record)
@@ -369,15 +377,17 @@ async def resolve_dm_conversation(
             # （与新建播种同款），保证「点进来就有主控消息」对老会话同样成立；
             # 已有消息绝不覆盖。
             if agent_id == SECRETARY_AGENT_ID and not (rec.get("messages") or []):
+                greeting_ts = datetime.now(timezone.utc).isoformat()
                 rec["messages"] = [
                     {
                         "sender_name": SECRETARY_NAME,
                         "sender_kind": "agent",
                         "agent_id": agent_id,
                         "content": SECRETARY_GREETING,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": greeting_ts,
                     }
                 ]
+                rec["updated_at"] = greeting_ts
                 _save_group(rec)
             return DmResolveResponse(
                 group_id=rec.get("group_id", ""), agent_id=agent_id, created=False
@@ -423,6 +433,7 @@ async def resolve_dm_conversation(
         "team_id": None,
         "kind": "dm",
         "created_at": created_at,
+        "updated_at": created_at,
         "messages": messages,
     }
     _save_group(record)
@@ -603,6 +614,8 @@ async def post_group_message(
     messages = rec.get("messages", [])
     messages.append(msg)
     rec["messages"] = messages
+    # 2026-11-08 · 发消息 bump updated_at（「最近对话」按最近活跃排序的真源）。
+    rec["updated_at"] = msg["timestamp"]
     _save_group(rec)
 
     # Push agent/system messages onto the SSE bus so subscribed browsers see

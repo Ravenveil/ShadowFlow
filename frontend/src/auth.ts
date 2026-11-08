@@ -97,7 +97,10 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
       message = e.message || e.code || message;
       if (e.code === "USER_DISABLED") message = "账号已被停用，请联系管理员";
     }
-    throw new Error(message);
+    // 附带 HTTP 状态码，供调用方区分「token 真失效(401/403)」与「瞬时故障(网络错误/5xx)」
+    const error = new Error(message) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
   }
   return body as T;
 }
@@ -168,15 +171,29 @@ export async function authLogout(): Promise<void> {
 export async function refreshAuth(): Promise<void> {
   const token = readToken();
   if (token) {
-    try {
-      const user = await authFetch<AuthUser>("/api/auth/me");
-      setState({ user, token, ready: true });
-      return;
-    } catch {
-      // 旧 token 失效 → 清除，下面重新签发游客会话
-      writeToken(null);
-      setState({ user: null, token: null });
+    // /me 校验对瞬时故障（网络错误/5xx）重试；只有 401/403 才判定 token 失效。
+    // 否则后端一次重启/抖动就会把 24h 内的合法会话清掉，造成「身份漂移」。
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const user = await authFetch<AuthUser>("/api/auth/me");
+        setState({ user, token, ready: true });
+        return;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 401 || status === 403) break; // 真失效 → 走下方重签
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+          continue; // 瞬时故障 → 退避重试
+        }
+        // 重试用尽仍不可达：保留 token（下次刷新页面再续上同一身份），
+        // 不重签游客（重签 = 全新 guest_<hex>，旧数据从此看不见）。
+        setState({ user: null, token, ready: true });
+        return;
+      }
     }
+    // 旧 token 失效（401/403）→ 清除，下面重新签发游客会话
+    writeToken(null);
+    setState({ user: null, token: null });
   }
   // 无有效会话 → 自动签发游客会话（等价于「游客体验」按钮），直连后端真实数据。
   try {
