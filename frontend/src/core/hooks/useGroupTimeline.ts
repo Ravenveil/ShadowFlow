@@ -13,7 +13,8 @@
  *             帧→TimelineMessage 的轻量适配与 server 端 chatMessagesToTimeline
  *             同语义：
  *               agent.message / agent.complete → assistant_text (+sender_name)
- *               system.notice                  → raw (source:'chat-gateway')
+ *               system.notice                  → raw (source:'chat-gateway',
+ *             +sender_name，缺省 'system' — 与 server 映射同语义，保证落到可见段)
  *             turn_id 挂到最近一条 user_turn（没有则 'chat_turn_0'）。
  *             id 用 `chat_<message_id>`，与 server 适配器的 id 规则一致 —— 同一条
  *             消息无论从 /timeline 重拉还是 SSE 推来都是同一个 id（天然去重锚点）。
@@ -144,7 +145,9 @@ export function sweepStaleProcessCards(
 /**
  * 群 SSE 帧（MessageItem 风格 payload）→ TimelineMessage。
  * 与 server/src/lib/timeline-replay.ts `chatMessagesToTimeline` 同语义：
- *   agent → assistant_text（保留 sender_name）；system.notice → raw。
+ *   agent → assistant_text（保留 sender_name）；system.notice → raw（保留
+ *   sender_name，缺省 'system' — 没有 sender_name 的 raw 会被聊天面归入
+ *   默认折叠的「过程」段而不可见）。
  * 返回 null = 该帧不产生 Timeline 行（空内容 / 不认识的事件）。
  */
 export function sseFrameToTimeline(
@@ -180,6 +183,15 @@ export function sseFrameToTimeline(
   }
 
   if (eventType === 'system.notice') {
+    // 2026-11-07 修「回复实时到达却看不见」— 与 server chatMessagesToTimeline
+    // 对齐：raw 也透传 sender_name（帧里没有则按 'system' 收，事件类型即权威）。
+    // 缺 sender_name 的 raw 会被 NeoGroupChat segmentTurn 归入「过程」段，随
+    // 后台折叠行默认收起 —— 于是系统回复（出错/空回复/审批留痕等）只有整页
+    // 刷新（server 映射带 sender_name）才出现，用户感知为「回答永远不回/超级慢」。
+    const noticeSender =
+      typeof payload.sender_name === 'string' && payload.sender_name.trim()
+        ? payload.sender_name
+        : 'system';
     return {
       id,
       kind: 'raw',
@@ -187,6 +199,7 @@ export function sseFrameToTimeline(
       ts,
       body: content,
       source: 'chat-gateway',
+      sender_name: noticeSender,
     };
   }
 

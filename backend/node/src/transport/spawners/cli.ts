@@ -153,10 +153,20 @@ export async function* runCliSpawn(
   });
 
   // Track exit so we can emit CLI_EXIT_NONZERO after parser drains.
+  // spawn error（最常见：ENOENT — CLI 没装/不在 PATH）单独留痕，收口时给
+  // 可操作的报错文案（此前统一报「<cli> 退出码 -1」，用户无从下手）。
+  let spawnErrMsg: string | null = null;
   const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
     (resolve) => {
       child.on('close', (code, sig) => resolve({ code, signal: sig }));
-      child.on('error', () => resolve({ code: -1, signal: null }));
+      child.on('error', (err) => {
+        const e = err as NodeJS.ErrnoException;
+        spawnErrMsg =
+          e.code === 'ENOENT'
+            ? `${desc.binary} 未安装或不在 PATH — 请安装 ${cliId} CLI，或改用 API 模型`
+            : `spawn ${desc.binary} 失败：${e.message}`;
+        resolve({ code: -1, signal: null });
+      });
     },
   );
 
@@ -202,7 +212,7 @@ export async function* runCliSpawn(
         code: 'CLI_EXIT_NONZERO',
         cli_id: cliId,
         exit_code: code,
-        message: `${cliId} 退出码 ${code}`,
+        message: spawnErrMsg ?? `${cliId} 退出码 ${code}`,
         stderr_tail: stderrTail.slice(-500),
       },
     };

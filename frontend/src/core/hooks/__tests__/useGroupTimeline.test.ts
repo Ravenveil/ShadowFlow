@@ -174,6 +174,9 @@ describe('useGroupTimeline (F2 灰度)', () => {
     expect(notice.kind).toBe('raw');
     expect((notice as Extract<TimelineMessage, { kind: 'raw' }>).source).toBe('chat-gateway');
     expect(notice.turn_id).toBe('chat_m1');
+    // 2026-11-07 修「回复实时到达却看不见」— raw 必须带 sender_name，否则
+    // segmentTurn 把它归入默认折叠的「过程」段（刷新才可见的根因）。
+    expect((notice as Extract<TimelineMessage, { kind: 'raw' }>).sender_name).toBe('system');
 
     // 空内容 / 不认识的事件 → 不追加
     act(() => sseInstances[0]!.onEvent('agent.message', { content: '', message_id: 'mx' }));
@@ -503,6 +506,17 @@ describe('useGroupTimeline (F2 灰度)', () => {
 
       const r = sseFrameToTimeline('system.notice', { content: 'oops', message_id: 'y' }, 't1');
       expect(r).toMatchObject({ kind: 'raw', source: 'chat-gateway' });
+      // raw 也透传 sender_name（server chatMessagesToTimeline 同语义）；帧里
+      // 没有 → 兜底 'system'。缺 sender_name 的 raw 会被 segmentTurn 归入
+      // 默认折叠的「过程」段 → 实时看不见（刷新才出现）。
+      expect(r).toMatchObject({ sender_name: 'system' });
+      expect(
+        sseFrameToTimeline(
+          'system.notice',
+          { content: 'hi', message_id: 'z', sender_name: 'system' },
+          't1',
+        ),
+      ).toMatchObject({ kind: 'raw', sender_name: 'system' });
 
       expect(sseFrameToTimeline('agent.message', { content: '' }, 't1')).toBeNull();
       expect(sseFrameToTimeline('node.started', { content: 'x' }, 't1')).toBeNull();
