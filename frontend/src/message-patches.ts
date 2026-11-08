@@ -160,3 +160,33 @@ export function isTerminalRunStatus(status: string | undefined | null): boolean 
   const s = status.toLowerCase();
   return s !== "running" && s !== "pending";
 }
+
+/**
+ * 系统提示（kind:'raw', source:'chat-gateway'）正文的审批信号分类（2026-11-09）。
+ *   'request'  = 有审批门在等人（挂起/请批准）→ 「等待你审批」
+ *   'decision' = 一次审批已收场（已批准/被拒绝/超时）→ 无挂起
+ *   null       = 与审批无关（中止提示/交接摘要/出错…）。
+ * 先判 request：「门①已批准，门②请批准」合并消息的语义是「仍有一门待批」。
+ */
+export function approvalSignalOf(body: string | undefined): "request" | "decision" | null {
+  const text = body ?? "";
+  if (!text) return null;
+  if (/等待(人工)?审批|请.{0,16}批准|回复「批准」/.test(text)) return "request";
+  if (/审批结果|已获批准|被拒绝|已拒绝|等待超时/.test(text)) return "decision";
+  return null;
+}
+
+/**
+ * 从时间线推导「是否有审批门挂起」：倒序找最近一条带审批信号的系统提示。
+ * spinner / 任务面板据此显示「等待你审批」，不再让人对着转圈猜状态。
+ */
+export function deriveWaitingApproval(messages: TimelineMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i];
+    if (m.kind !== "raw" || m.source !== "chat-gateway") continue;
+    const sig = approvalSignalOf(m.body);
+    if (sig === "request") return true;
+    if (sig === "decision") return false;
+  }
+  return false;
+}

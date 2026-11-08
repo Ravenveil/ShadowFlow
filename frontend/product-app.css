@@ -4200,6 +4200,41 @@
   font-size: 9.5px;
   font-family: "DM Mono", monospace;
 }
+/* 系统提示行（2026-11-09）— chat-gateway 系统消息可见化：审批挂起/中止/交接摘要
+   不再折叠进「原始输出」，一行看懂当前轮的状态。 */
+.sf-tl-sys {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 5px 0 5px 44px;
+  padding: 4px 8px;
+  border-left: 2px solid #d9d4cb;
+  border-radius: 0 6px 6px 0;
+  background: #f7f5ef;
+  color: #8a857c;
+  font-size: 9.5px;
+  line-height: 1.7;
+  font-family: "DM Mono", monospace;
+}
+.sf-tl-sys-tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #e8e4db;
+  color: #98928a;
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+}
+/* 审批门挂起（等待人工批/拒）— 暖色高亮，别让人错过该拍板的时刻。 */
+.sf-tl-sys-approval {
+  border-left-color: #e8a33d;
+  background: #fdf6e9;
+  color: #97752f;
+}
+.sf-tl-sys-approval .sf-tl-sys-tag {
+  background: #f5e3bd;
+  color: #97752f;
+}
 .sf-tl-rationale {
   margin: 7px 0 7px 44px;
   border-left: 2px solid #f3d9d1;

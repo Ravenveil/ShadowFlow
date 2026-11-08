@@ -12,6 +12,8 @@ import assert from "node:assert/strict";
 import {
   applyPatch,
   applyPatchToList,
+  approvalSignalOf,
+  deriveWaitingApproval,
   foldTimelineEvents,
   isTerminalRunStatus,
   upsertMessage,
@@ -169,4 +171,67 @@ test("isTerminalRunStatus 终态判定", () => {
   assert.equal(isTerminalRunStatus("canceled"), true);
   assert.equal(isTerminalRunStatus("idle"), true);
   assert.equal(isTerminalRunStatus(undefined), true);
+});
+
+// ── 2026-11-09 审批挂起可见化 — 系统提示审批信号推导 ─────────────────────────
+function sys(body: string): TimelineMessage {
+  return base(`sys_${body.length}`, "raw", { body, source: "chat-gateway" });
+}
+
+test("approvalSignalOf：挂起/请批准 → request；决定收场 → decision", () => {
+  assert.equal(
+    approvalSignalOf("[approval] 内容策划师 的执行已挂起，等待人工审批（该节点带审批入边）。"),
+    "request",
+  );
+  assert.equal(
+    approvalSignalOf("✅ 博文《竹编灯罩》已确认。\n审批门① 品牌定稿：请董事长批准（回复「批准」）。"),
+    "request",
+  );
+  assert.equal(approvalSignalOf("[approval] 内容策划师 的审批结果：已批准 ✅"), "decision");
+  assert.equal(
+    approvalSignalOf("[approval] 运营专员 的执行被拒绝，本轮该节点跳过（产出不落库、下游不再等待它）。"),
+    "decision",
+  );
+  assert.equal(approvalSignalOf("[chat] 上一轮回复已中止（新消息开始新一轮）。"), null);
+  assert.equal(approvalSignalOf("[chat] 市场分析师 出错：模型服务暂不可达。"), null);
+});
+
+test("approvalSignalOf：门①已批准+门②请批准的合并消息按「仍待批」计", () => {
+  // request 判定优先 —— 合并消息的语义是「还有一道门在等人」
+  assert.equal(
+    approvalSignalOf("✅ 审批门① 品牌定稿已批准。\n审批门② 对外发布：请董事长批准（回复「批准」）。"),
+    "request",
+  );
+});
+
+test("deriveWaitingApproval：倒序取最近一条审批信号", () => {
+  // 挂起 → true
+  assert.equal(deriveWaitingApproval([sys("[approval] X 的执行已挂起，等待人工审批。")]), true);
+  // 决定收场 → false
+  assert.equal(
+    deriveWaitingApproval([
+      sys("[approval] X 的执行已挂起，等待人工审批。"),
+      sys("[approval] X 的审批结果：已批准 ✅"),
+    ]),
+    false,
+  );
+  // 无关系统消息不干扰倒序判定
+  assert.equal(
+    deriveWaitingApproval([
+      sys("[approval] X 的执行已挂起，等待人工审批。"),
+      sys("[chat] 交接摘要：A → B。"),
+    ]),
+    true,
+  );
+  // 无系统消息 / 消息流（含 assistant_text）不误报
+  assert.equal(deriveWaitingApproval([]), false);
+  assert.equal(deriveWaitingApproval([base("m1", "assistant_text", { body: "好的" })]), false);
+  // 新一轮又挂起 → true
+  assert.equal(
+    deriveWaitingApproval([
+      sys("[approval] X 的审批结果：已拒绝 ❌"),
+      sys("[approval] Y 的执行已挂起，等待人工审批。"),
+    ]),
+    true,
+  );
 });

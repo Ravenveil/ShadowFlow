@@ -13,7 +13,7 @@
  * 样式类沿用 product-app.css（sf-*），新增 sf-tl-* 见文件尾部。
  */
 
-import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronRight,
@@ -27,14 +27,8 @@ import {
   ThumbsUp,
 } from "lucide-react";
 import { chatAssetUrl, type DiffLine, type StepRow, type TimelineMessage } from "./chat-api";
-
-const TL_PALETTE = ["#ff5e3a", "#2777e8", "#d97b38", "#c64f7d", "#7c5cff", "#0ea5a4", "#2ec4a6"];
-
-function nameColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return TL_PALETTE[h % TL_PALETTE.length];
-}
+import { approvalSignalOf } from "./message-patches";
+import { AgentAvatar } from "./avatar";
 
 function fmtClock(ts: number): string {
   if (!ts) return "";
@@ -62,13 +56,17 @@ function fmtMs(ms?: number): string {
   return m < 60 ? `${m}m ${totalSec % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-/** 可折叠卡片（thinking / tool_call / diff / raw …）。默认收起。 */
+/** 可折叠卡片（thinking / tool_call / diff / raw …）。默认收起。
+ *  active（2026-11-09 流式思考自动折叠）：true = 流式进行中——进入 active 自动
+ *  展开看过程，active 结束（thinking_finalize）自动折叠成摘要行；用户手动点开/收
+ *  起仍然优先（只在边沿触发自动动作，不与人抢开合）。 */
 export function SfFold({
   title,
   meta,
   badge,
   icon,
   defaultOpen = false,
+  active = false,
   children,
 }: {
   title: string;
@@ -76,9 +74,18 @@ export function SfFold({
   badge?: ReactNode;
   icon?: ReactNode;
   defaultOpen?: boolean;
+  active?: boolean;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const prevActiveRef = useRef(active);
+  useEffect(() => {
+    const prev = prevActiveRef.current;
+    prevActiveRef.current = active;
+    if (prev === active) return;
+    // 流式开始 → 展开看过程；流式收口 → 自动折叠成摘要行（可再手动展开回看）。
+    setOpen(active);
+  }, [active]);
   return (
     <div className={`sf-tl-fold ${open ? "open" : ""}`}>
       <button type="button" className="sf-tl-fold-head" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -209,13 +216,7 @@ export function TimelineRow({ msg }: { msg: TimelineMessage }) {
       const who = assistantIdentity(msg);
       return (
         <article className="sf-agent-message">
-          <span
-            className="sf-agent-avatar small"
-            style={{ "--avatar-color": nameColor(who.name) } as CSSProperties}
-          >
-            {who.label.slice(0, 1)}
-            <i />
-          </span>
+          <AgentAvatar label={who.label} small />
           <div className="sf-message-body">
             <div className="sf-message-author">
               <strong>{who.name}</strong>
@@ -230,17 +231,27 @@ export function TimelineRow({ msg }: { msg: TimelineMessage }) {
       );
     }
 
-    case "thinking":
+    case "thinking": {
+      // 流式思考（2026-11-09）：streaming 时展开流式渲染正文，thinking_finalize
+      // 后自动折叠成 label+meta 摘要行（SfFold active 边沿触发），可再展开回看。
+      const streaming = msg.status === "streaming" || msg.status === "running";
       return (
         <SfFold
           title={msg.label || "思考过程"}
-          meta={`${msg.preview ? `${msg.preview.slice(0, 24)}… · ` : ""}${msg.tokens != null ? `${msg.tokens} tokens` : msg.duration_ms != null ? fmtMs(msg.duration_ms) : ""}`}
-          badge={statusBadge(msg.status, msg.status === "streaming")}
+          meta={
+            streaming
+              ? `思考流式输出中${msg.body ? ` · ${msg.body.length} 字` : ""}`
+              : `${msg.preview ? `${msg.preview.slice(0, 24)}… · ` : ""}${msg.tokens != null ? `${msg.tokens} tokens` : msg.duration_ms != null ? fmtMs(msg.duration_ms) : ""}`
+          }
+          badge={statusBadge(msg.status, streaming)}
           icon={<Terminal size={11} />}
+          defaultOpen={streaming}
+          active={streaming}
         >
           <pre className="sf-tl-pre">{msg.body || "（无内容）"}</pre>
         </SfFold>
       );
+    }
 
     case "tool_call":
       return (
@@ -477,12 +488,24 @@ export function TimelineRow({ msg }: { msg: TimelineMessage }) {
         </p>
       );
 
-    case "raw":
+    case "raw": {
+      // chat-gateway 系统提示（审批挂起/中止/交接摘要…）：直接可见的系统行——
+      // 此前折叠进「原始输出」，审批门挂起提示因此没人看得见（2026-11-09）。
+      if (msg.source === "chat-gateway") {
+        const signal = approvalSignalOf(msg.body);
+        return (
+          <p className={`sf-tl-sys ${signal === "request" ? "sf-tl-sys-approval" : ""}`}>
+            <span className="sf-tl-sys-tag">{signal === "request" ? "待审批" : "系统"}</span>
+            <span style={{ whiteSpace: "pre-wrap" }}>{msg.body ?? ""}</span>
+          </p>
+        );
+      }
       return (
         <SfFold title="原始输出" meta={msg.source || ""} icon={<Terminal size={11} />}>
           <pre className="sf-tl-pre">{msg.body}</pre>
         </SfFold>
       );
+    }
 
     default:
       return (

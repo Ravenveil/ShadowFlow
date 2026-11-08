@@ -1716,7 +1716,12 @@ export default function ProductApp() {
 
         {view === "agents" && <AgentsView />}
         {view === "knowledge" && <KnowledgeView />}
-        {view === "biz" && <BizView />}
+        {view === "biz" && (
+          <BizView
+            // 看板同步（2026-11-09）：run 状态签名变化（一轮干完/新任务开跑）→ 静默刷新
+            runsSig={chat.runs.map((r) => `${r.session_id}:${r.status}`).join("|")}
+          />
+        )}
         {view === "projects" && <ProjectsView />}
         {view === "schedules" && <SchedulesView />}
         {view === "settings" && <SettingsView />}
@@ -2657,6 +2662,8 @@ function ChatThread({
   onLogin: () => void;
 }) {
   const hasMessages = chat.messages.length > 0;
+  // 有 run 在飞 = 团队真在干活（spinner 状态细分 2026-11-09：转圈不再只会说「拆解中」）。
+  const runsActive = chat.runs.some((r) => !isTerminalRunStatus(r.status));
 
   // 加载态：首次进入拉取 timeline
   if (chat.status === "loading" && !hasMessages) {
@@ -2705,8 +2712,9 @@ function ChatThread({
           </button>
         </div>
       )}
-      {/* 流式指示：agent.typing 瞬态 / 发出后等待回复（sf-working 动画保留到收到回复） */}
-      {(chat.typing || chat.awaitingReply) && (
+      {/* 流式指示（2026-11-09 状态细分）：正在生成 / 等待你审批 / 团队执行中 / 拆解调度中。
+          一轮干完（run 全终态或收到回复）即收起，不再干挂转圈。 */}
+      {(chat.typing || chat.awaitingReply || chat.waitingApproval || runsActive) && (
         <div className="sf-working">
           <span />
           <span />
@@ -2715,6 +2723,14 @@ function ChatThread({
             {chat.typing ? (
               <>
                 <strong>{chat.typing}</strong> 正在生成回复
+              </>
+            ) : chat.waitingApproval ? (
+              <>
+                <strong>等待你审批</strong> · 团队已暂停，批/拒后继续（任务面板可操作）
+              </>
+            ) : runsActive ? (
+              <>
+                <strong>Agent 团队</strong> 执行中，过程卡实时推进
               </>
             ) : (
               <>
@@ -4139,7 +4155,7 @@ function shortBuyUrl(url: string): string {
   }
 }
 
-function BizView() {
+function BizView({ runsSig }: { runsSig?: string }) {
   const [tab, setTab] = useState<"overview" | "products" | "sales" | "shipments" | "posts">("overview");
   const [state, setState] = useState<SfLoadState>("loading");
   const [ov, setOv] = useState<BizOverview | null>(null);
@@ -4148,8 +4164,8 @@ function BizView() {
   const [shipments, setShipments] = useState<BizShipment[]>([]);
   const [posts, setPosts] = useState<BizPost[]>([]);
   const [steps, setSteps] = useState<BizOpsStep[]>([]);
-  const load = useCallback(() => {
-    setState("loading");
+  const load = useCallback((silent = false) => {
+    if (!silent) setState("loading");
     sfFetch<BizOverview>("/api/craft-profit/overview")
       .then((d) => {
         setOv(d);
@@ -4177,6 +4193,23 @@ function BizView() {
   }, []);
   useEffect(() => {
     load();
+  }, [load]);
+  // 看板同步（2026-11-09）：团队干活落库（[intake]/[post]/[order]/[ship]/[report]
+  // 标记）发生在聊天轮里——run 状态翻转（一轮干完/新任务开跑）→ 静默刷新；
+  // 另挂 15s 兜底轮询覆盖轮内增量（silent 不闪加载骨架）。
+  const lastSigRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastSigRef.current === null) {
+      lastSigRef.current = runsSig ?? "";
+      return; // 首个值由挂载时的 load() 覆盖
+    }
+    if (lastSigRef.current === runsSig) return;
+    lastSigRef.current = runsSig ?? "";
+    load(true);
+  }, [load, runsSig]);
+  useEffect(() => {
+    const t = setInterval(() => load(true), 15_000);
+    return () => clearInterval(t);
   }, [load]);
 
   /** 发布/重试发布帖子（POST /api/social-publish/posts/:id/publish）。 */
@@ -4211,7 +4244,7 @@ function BizView() {
           <h1>生意看板</h1>
           <span>手工艺品代销：商品、销售、快递、社媒与盈利，实时同步自后端业务域。</span>
         </div>
-        <button onClick={load}>
+        <button onClick={() => load()}>
           <RotateCcw size={15} /> 刷新
         </button>
       </div>

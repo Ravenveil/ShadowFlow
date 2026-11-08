@@ -17,7 +17,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import {
   approvalDecisionHandler,
+  approvalPendingHandler,
   clearPendingApprovals,
+  listPendingApprovalItems,
   parseApprovalDecision,
   registerPendingApproval,
   swapDagRun,
@@ -226,5 +228,86 @@ describe('registerPendingApproval 30 分钟兜底超时', () => {
     const p2 = registerPendingApproval('g1', 'n2');
     expect(tryResolveApprovalFromText('g1', '拒绝')).toBe(true);
     await expect(p2).resolves.toBe('rejected');
+  });
+});
+
+// ── 2026-11-09 挂起审批可见化 — GET /:id/approvals/pending 接线 ──────────────
+// 根因回归：挂起只活在内存 Map、前端审批 Tab 拉的是 Python 单源 → 审批门永远
+// 不可见 → DAG 静默挂 30 分钟。现在 Node 条目带元数据可列、可批/拒闭环。
+describe('挂起审批可见化（listPendingApprovalItems / approvalPendingHandler）', () => {
+  it('registerPendingApproval meta → 出参对齐前端 PendingApprovalItem，决定后消失', async () => {
+    const p = registerPendingApproval('g1', 'agent-content', {
+      nodeName: '内容策划师',
+      preview: '上游 [总经理] 产出摘要',
+    });
+    const items = listPendingApprovalItems('g1', 1_000_000);
+    expect(items).toHaveLength(1);
+    const item = items[0] as Record<string, unknown>;
+    expect(item.approval_id).toBe('g1:agent-content');
+    expect(item.node_id).toBe('agent-content'); // decideApproval 回投 POST :nodeId 的键
+    expect(item.submitter_name).toBe('内容策划师');
+    expect(String(item.summary)).toContain('内容策划师');
+    expect(item.detail).toBe('上游 [总经理] 产出摘要');
+    expect(typeof item.waiting_seconds).toBe('number');
+    expect(item.kind).toBe('人工审批门');
+    // 决定送达后从列表消失
+    expect(tryResolveApprovalFromText('g1', '批准')).toBe(true);
+    await expect(p).resolves.toBe('approved');
+    expect(listPendingApprovalItems('g1')).toHaveLength(0);
+  });
+
+  it('无 meta 回落 nodeId 当展示名（旧调用零改动）', () => {
+    registerPendingApproval('g2', 'gate-publish');
+    const items = listPendingApprovalItems('g2');
+    expect(items).toHaveLength(1);
+    expect((items[0] as Record<string, unknown>).submitter_name).toBe('gate-publish');
+  });
+
+  it('跨组隔离：只列本组挂起', () => {
+    registerPendingApproval('g1', 'n1');
+    registerPendingApproval('g2', 'n2');
+    expect(listPendingApprovalItems('g1')).toHaveLength(1);
+    expect(listPendingApprovalItems('g3')).toHaveLength(0);
+  });
+
+  it('waiting_seconds 随注册时刻推进（now 注入控时）', () => {
+    registerPendingApproval('g1', 'n1');
+    expect(listPendingApprovalItems('g1', 2_000_000)[0].waiting_seconds).toBeGreaterThanOrEqual(0);
+    const items = listPendingApprovalItems('g1', Date.now() + 65_000);
+    expect((items[0] as Record<string, unknown>).waiting_seconds as number).toBeGreaterThanOrEqual(65);
+  });
+
+  it('approvalPendingHandler：Node 侧条目与 Python 注册表合并返回', async () => {
+    registerPendingApproval('g1', 'n1', { nodeName: '品牌定稿', preview: '博文《X》' });
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ items: [{ approval_id: 'py-1' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ));
+    try {
+      const out: { body?: unknown } = {};
+      approvalPendingHandler({ params: { id: 'g1' } }, { json: (b) => { out.body = b; } });
+      await vi.waitFor(() => expect(out.body).toBeDefined());
+      const items = (out.body as { items: Array<Record<string, unknown>> }).items;
+      expect(items).toHaveLength(2);
+      expect(items[0].approval_id).toBe('g1:n1');
+      expect(items[1].approval_id).toBe('py-1'); // Python runtime 侧（run-sessions）合并可见
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('Python 不可达 fail-soft：只回 Node 侧条目', async () => {
+    registerPendingApproval('g1', 'n1');
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
+    try {
+      const out: { body?: unknown } = {};
+      approvalPendingHandler({ params: { id: 'g1' } }, { json: (b) => { out.body = b; } });
+      await vi.waitFor(() => expect(out.body).toBeDefined());
+      expect((out.body as { items: unknown[] }).items).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -26,7 +26,12 @@ import {
   type TimelineMessage,
   type UserAttachment,
 } from "./chat-api";
-import { applyPatchToList, isTerminalRunStatus, upsertMessage } from "./message-patches";
+import {
+  applyPatchToList,
+  deriveWaitingApproval,
+  isTerminalRunStatus,
+  upsertMessage,
+} from "./message-patches";
 
 export interface GroupChatSnapshot {
   status: "idle" | "loading" | "ready" | "error";
@@ -36,6 +41,8 @@ export interface GroupChatSnapshot {
   typing: string | null;
   /** 已发消息、等待 agent 回复（sf-working 动画）。 */
   awaitingReply: boolean;
+  /** 有审批门挂起等人（系统提示推导）——spinner 显示「等待你审批」。 */
+  waitingApproval: boolean;
   error: string | null;
   /** SSE 是否在线（false = 轮询兜底中）。 */
   live: boolean;
@@ -72,6 +79,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
     runs: [],
     typing: null,
     awaitingReply: false,
+    waitingApproval: false,
     error: null,
     live: false,
   });
@@ -88,6 +96,10 @@ export function useGroupChat(groupId: string | null): GroupChat {
   const awaitingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const groupIdRef = useRef<string | null>(groupId);
   groupIdRef.current = groupId;
+  // 本轮是否见过非终态 run（loadTimeline 收尾判定：见过了、现在全终态 = 一轮干完）。
+  const sawActiveRunRef = useRef(false);
+  // SSE 在线状态镜像（轮询停启判定：只在 SSE 在线时停兜底轮询）。
+  const liveRef = useRef(false);
 
   const patch = useCallback((p: Partial<GroupChatSnapshot>) => {
     setSnapshot((cur) => ({ ...cur, ...p }));
@@ -108,6 +120,13 @@ export function useGroupChat(groupId: string | null): GroupChat {
       try {
         const res = await getTimeline(gid);
         if (groupIdRef.current !== gid) return;
+        // ── 一轮收尾判定（2026-11-09 OpenBot「runner 在 finish 后结算」）────
+        // 见过非终态 run、现在全部终态 = 本轮真的干完了 → 解除等待态；此前
+        // awaitingReply 只认 assistant_text，团队全被审批门卡住时转圈干挂 90s。
+        const runs = res.runs ?? [];
+        const anyActive = runs.some((r) => !isTerminalRunStatus(r.status));
+        if (anyActive) sawActiveRunRef.current = true;
+        const turnSettled = sawActiveRunRef.current && !anyActive;
         setSnapshot((cur) => {
           // 保留尚未被服务端确认的本地乐观消息（id 前缀 local-）
           const serverIds = new Set(res.messages.map((m) => m.id));
@@ -115,12 +134,17 @@ export function useGroupChat(groupId: string | null): GroupChat {
             (m) => m.id.startsWith("local-") && !serverIds.has(m.id),
           );
           const merged = [...res.messages, ...localOnly].sort((a, b) => a.ts - b.ts);
+          const nextAwaiting = turnSettled ? false : cur.awaitingReply;
+          // 轮询停启：本轮干完/等待态解除且 SSE 在线 → 停掉兜底轮询（断线时保留）。
+          if (!nextAwaiting && !anyActive && liveRef.current) stopPolling();
           return {
             ...cur,
             status: "ready",
             error: null,
             messages: merged,
-            runs: res.runs ?? [],
+            runs,
+            waitingApproval: deriveWaitingApproval(merged),
+            awaitingReply: nextAwaiting,
           };
         });
       } catch (err) {
@@ -133,7 +157,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
         }
       }
     },
-    [patch],
+    [patch, stopPolling],
   );
 
   const startPolling = useCallback(() => {
@@ -166,6 +190,21 @@ export function useGroupChat(groupId: string | null): GroupChat {
           typing: null,
           awaitingReply: tl.kind === "assistant_text" ? false : cur.awaitingReply,
         }));
+      } else if (msg.event === "system.notice") {
+        // 系统提示（审批挂起/中止/交接摘要…）此前被显式丢弃（「additive 不打扰
+        // 聊天流」）——审批门挂起提示因此全程不可见，DAG 静默挂 30 分钟。这里
+        // 合入时间线（raw · chat-gateway 系统行），并同步推导「等待你审批」。
+        let item: MessageItem | null = null;
+        try {
+          item = JSON.parse(msg.data) as MessageItem;
+        } catch {
+          return;
+        }
+        const tl = chatItemToTimeline(item);
+        setSnapshot((cur) => {
+          const messages = upsertMessage(cur.messages, tl);
+          return { ...cur, messages, waitingApproval: deriveWaitingApproval(messages) };
+        });
       } else if (msg.event === "agent.typing") {
         let name = "Agent";
         try {
@@ -180,7 +219,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
           setSnapshot((cur) => ({ ...cur, typing: null }));
         }, TYPING_TIMEOUT_MS);
       }
-      // system.notice 等其它帧：忽略（additive，不打扰聊天流）
+      // 其它帧：忽略（additive，不打扰聊天流）
     };
 
     eventsCloseRef.current = openSse(`/api/groups/${gid}/events`, {
@@ -188,9 +227,11 @@ export function useGroupChat(groupId: string | null): GroupChat {
       onMessage: handle,
       onOpen: () => {
         reconnectAttemptRef.current = 0;
+        liveRef.current = true;
         patch({ live: true });
       },
       onError: () => {
+        liveRef.current = false;
         patch({ live: false });
         startPolling();
         // 断线重连（带 Last-Event-ID 补帧），指数退避上限 8 次
@@ -280,6 +321,8 @@ export function useGroupChat(groupId: string | null): GroupChat {
     if (awaitingTimerRef.current) clearTimeout(awaitingTimerRef.current);
     lastEventIdRef.current = undefined;
     reconnectAttemptRef.current = 0;
+    sawActiveRunRef.current = false;
+    liveRef.current = false;
 
     if (!groupId) {
       setSnapshot({
@@ -288,6 +331,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
         runs: [],
         typing: null,
         awaitingReply: false,
+        waitingApproval: false,
         error: null,
         live: false,
       });
@@ -300,13 +344,18 @@ export function useGroupChat(groupId: string | null): GroupChat {
       runs: [],
       typing: null,
       awaitingReply: false,
+      waitingApproval: false,
       error: null,
       live: false,
     });
     void loadTimeline(false);
     openEventsStream();
+    // run 流订阅补齐（2026-11-09）：新建 gateway run 要等下一次 timeline 才进
+    // snapshot.runs，syncRunStreams 才会订阅其过程流。打开轮询让发现延迟 ≤2s；
+    // 一轮干完/等待态解除且 SSE 在线时由 loadTimeline 停掉（断线时保留兜底）。
+    startPolling();
     // 初始一次 run 流对账（timeline 返回后由 runs effect 接手）
-  }, [groupId, loadTimeline, openEventsStream, stopPolling]);
+  }, [groupId, loadTimeline, openEventsStream, startPolling, stopPolling]);
 
   // runs 变化 → 对账 run 流订阅
   useEffect(() => {
@@ -355,6 +404,8 @@ export function useGroupChat(groupId: string | null): GroupChat {
           text: content,
           ...(atts ? { attachments: atts } : {}),
         };
+        // 新一轮开始：收尾判定复位（旧轮见过的 run 不参与新轮判定）。
+        sawActiveRunRef.current = false;
         setSnapshot((cur) => ({
           ...cur,
           messages: upsertMessage(cur.messages, optimistic),
@@ -365,6 +416,10 @@ export function useGroupChat(groupId: string | null): GroupChat {
         awaitingTimerRef.current = setTimeout(() => {
           setSnapshot((cur) => ({ ...cur, awaitingReply: false }));
         }, AWAITING_TIMEOUT_MS);
+        // run 发现补齐（2026-11-09）：send 后 run 注册有延迟（意图/计划 LLM 先行，
+        // 最长数分钟），轮询 timeline 让 gateway run 一注册就进 runs 快照、被
+        // syncRunStreams 订阅——否则 thinking/plan_card 过程卡全程不可见。
+        startPolling();
       }
       try {
         const item = await postMessage(gid, content, atts, opts);
@@ -401,7 +456,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
         }));
       }
     },
-    [],
+    [startPolling],
   );
 
   const stop = useCallback(async () => {
@@ -430,6 +485,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
     runs: snapshot.runs,
     typing: snapshot.typing,
     awaitingReply: snapshot.awaitingReply,
+    waitingApproval: snapshot.waitingApproval,
     error: snapshot.error,
     live: snapshot.live,
     send,

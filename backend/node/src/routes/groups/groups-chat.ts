@@ -62,6 +62,8 @@ import { createHopBroadcaster } from '../../lib/chat-dag/hop-broadcast';
 import { planWithLlm, decomposeWithLlm, type ParsedTask } from '../../lib/orchestrator-parse';
 // 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
 import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
+// 模型错误人话化（2026-11-08，OpenBot provider-refusal 模式）— 出错面统一收口。
+import { humanizeModelError } from '../../lib/provider-refusal';
 import { promptBlock } from '../../storage/memory-lessons';
 
 import {
@@ -123,13 +125,26 @@ const MAX_FANOUT_AGENTS = 5;
 const activeDagRuns = new Map<string, AbortController>();
 
 // ── 2026-11-05 OpenBot 审批纪律 — chat DAG approve 边的人工审批门 ─────────────
-// pendingApprovals: "${groupId}:${nodeId}" → resolve。执行器 deps.approval.request
+// pendingApprovals: "${groupId}:${nodeId}" → 挂起条目。执行器 deps.approval.request
 // 挂起等 Promise；用户两条路批/拒：
 //   1) 显式 API：POST /api/groups/:id/approvals/:nodeId { decision: 'approve'|'reject' }
 //   2) 会话内自然语言：该群下一条用户消息若以 批准/同意/approve/go/继续 开头 → 批；
 //      以 拒绝/不同意/reject/否/停 开头 → 拒。（群聊主链路不受影响：消息照常
 //      持久化 + fan-out；只在没有 pending 时才完全旁路。）
-const pendingApprovals = new Map<string, (v: 'approved' | 'rejected') => void>();
+// 2026-11-09 挂起可见化 — 条目携带元数据（节点名/预览/注册时刻），供
+// GET /:id/approvals/pending 点亮前端审批 Tab（此前挂起只活在内存 Map，
+// 前端拉的是 Python runtime 注册表 → 审批门永远不可见 → DAG 干等 30 分钟）。
+interface PendingApprovalEntry {
+  resolve: (v: 'approved' | 'rejected') => void;
+  nodeId: string;
+  /** 发起节点展示名（agent 名 / 审批门名）——审批卡标题。 */
+  nodeName: string;
+  /** 挂起原因预览（上游产出摘要 / 派发 prompt / 博文标题）。 */
+  preview: string;
+  /** 注册时刻（epoch ms）——审批卡「已等待」时长。 */
+  createdAt: number;
+}
+const pendingApprovals = new Map<string, PendingApprovalEntry>();
 
 /** 测试可见：清空审批注册表（groups-chat 路由单测隔离用）。 */
 export function clearPendingApprovals(): void {
@@ -160,10 +175,10 @@ export function tryResolveApprovalFromText(groupId: string, text: string): boole
   if (entries.length === 0) return false;
   const verdict = parseApprovalDecision(text);
   if (!verdict) return false;
-  for (const [key, resolve] of entries) {
+  for (const [key, entry] of entries) {
     pendingApprovals.delete(key);
     try {
-      resolve(verdict);
+      entry.resolve(verdict);
     } catch {
       /* resolver 异常不阻断聊天主链路 */
     }
@@ -282,21 +297,77 @@ export function nextChatTurnSeq(groupId: string): number {
 }
 
 /**
+ * 取消一次挂起审批（拒绝收场）。图→博文流水线里新草稿顶替旧流水线时收掉
+ * 旧审批门用；幂等（无此挂起 → false，不抛）。
+ */
+export function cancelPendingApproval(groupId: string, nodeId: string): boolean {
+  const key = `${groupId}:${nodeId}`;
+  const entry = pendingApprovals.get(key);
+  if (!entry) return false;
+  pendingApprovals.delete(key);
+  try { entry.resolve('rejected'); } catch { /* settled */ }
+  return true;
+}
+
+/**
  * 注册一次节点审批挂起，返回等决定的 Promise（决定路径①②③的单一注册真源）。
  * deps.approval.request 接线与回归测试共用。外部取消（用户插话换轮/停止生成）
  * 由 swapDagRun 拒收场；这里另挂 30 分钟兜底超时（与 run 超时同量级，避免永久
  * pending 占内存）——超时视作拒绝，审批 promise 永不悬挂。
+ * meta（2026-11-09）：节点展示名/预览随条目存下，GET /:id/approvals/pending
+ * 审批卡可见化用；缺省回落 nodeId（旧调用零改动）。
  */
-export function registerPendingApproval(groupId: string, nodeId: string): Promise<'approved' | 'rejected'> {
+export function registerPendingApproval(
+  groupId: string,
+  nodeId: string,
+  meta?: { nodeName?: string; preview?: string },
+): Promise<'approved' | 'rejected'> {
   return new Promise<'approved' | 'rejected'>((resolve) => {
     const key = `${groupId}:${nodeId}`;
-    pendingApprovals.set(key, resolve);
+    pendingApprovals.set(key, {
+      resolve,
+      nodeId,
+      nodeName: meta?.nodeName?.trim() || nodeId,
+      preview: (meta?.preview ?? '').trim(),
+      createdAt: Date.now(),
+    });
     setTimeout(() => {
-      if (pendingApprovals.delete(key)) {
-        try { resolve('rejected'); } catch { /* settled */ }
+      const entry = pendingApprovals.get(key);
+      if (entry && pendingApprovals.delete(key)) {
+        try { entry.resolve('rejected'); } catch { /* settled */ }
       }
     }, 30 * 60_000).unref?.();
   });
+}
+
+/**
+ * GET /api/groups/:id/approvals/pending 出参（2026-11-09 挂起可见化）。
+ * 条目对齐前端 PendingApprovalItem（ProductApp normalizeApproval）：
+ * decideApproval 回投 POST /:id/approvals/:node_id → approvalDecisionHandler
+ * 命中本注册表同一 key，批/拒闭环成立。now 注入供测试控时。
+ */
+export function listPendingApprovalItems(
+  groupId: string,
+  now: number = Date.now(),
+): Array<Record<string, unknown>> {
+  const items: Array<Record<string, unknown>> = [];
+  for (const [key, entry] of pendingApprovals.entries()) {
+    if (!key.startsWith(`${groupId}:`)) continue;
+    items.push({
+      approval_id: key,
+      node_id: entry.nodeId,
+      submitter_name: entry.nodeName,
+      summary: entry.preview
+        ? `${entry.nodeName}：${entry.preview.slice(0, 80)}`
+        : `${entry.nodeName} 的执行等待人工审批`,
+      waiting_seconds: Math.max(0, Math.round((now - entry.createdAt) / 1000)),
+      kind: '人工审批门',
+      target: entry.nodeName,
+      detail: entry.preview,
+      impact: '批准后该节点继续执行并交接下游；拒绝则本轮跳过该节点',
+    });
+  }
+  return items;
 }
 
 // 测试可见:登记本轮 controller 并取消同 group 上一轮,返回本轮 controller。
@@ -306,9 +377,9 @@ export function swapDagRun(groupId: string, registry: Map<string, AbortControlle
   // 用户插话/重发 = 放弃上一轮，审批 promise 不悬挂（executor 侧 blocked 收口）。
   for (const key of [...pendingApprovals.keys()]) {
     if (!key.startsWith(`${groupId}:`)) continue;
-    const resolve = pendingApprovals.get(key);
+    const entry = pendingApprovals.get(key);
     pendingApprovals.delete(key);
-    try { resolve?.('rejected'); } catch { /* settled */ }
+    try { entry?.resolve('rejected'); } catch { /* settled */ }
   }
   const ac = new AbortController();
   registry.set(groupId, ac);
@@ -1459,8 +1530,8 @@ async function runFanout(
           ...(effTeam.edges.some((e) => e.kind === 'approve')
             ? {
                 approval: {
-                  request: ({ nodeId, nodeName }: { nodeId: string; nodeName: string; preview: string; signal: AbortSignal }) =>
-                    registerPendingApproval(groupId, nodeId).then((v) => {
+                  request: ({ nodeId, nodeName, preview }: { nodeId: string; nodeName: string; preview: string; signal: AbortSignal }) =>
+                    registerPendingApproval(groupId, nodeId, { nodeName, preview }).then((v) => {
                       // 决定落一条系统消息（审批留痕；postMessage 失败不回传）。
                       void pyPostMessage(groupId, {
                         content: `[approval] ${nodeName} 的审批结果：${v === 'approved' ? '已批准 ✅' : '已拒绝 ❌'}`,
@@ -2115,6 +2186,13 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     ).catch((e) => {
       // eslint-disable-next-line no-console
       console.warn('[groups-chat] fanout failed:', e);
+      // 错误人话化收尾（2026-11-09 OpenBot）：派发失败必须在聊天里可见收场——
+      // 此前只留一条服务端 warn，用户端转圈会一直等一条永远不会来的回复。
+      void pyPostMessage(groupId, {
+        content: `[chat] 本轮任务派发失败：${humanizeModelError(e instanceof Error ? e.message : String(e))}。可以重发消息重试。`,
+        sender_name: 'system',
+        sender_kind: 'system',
+      }).catch(() => {});
     });
   })();
 });
@@ -2140,8 +2218,8 @@ export function approvalDecisionHandler(
     return;
   }
   const key = `${groupId}:${nodeId}`;
-  const resolve = pendingApprovals.get(key);
-  if (!resolve) {
+  const entry = pendingApprovals.get(key);
+  if (!entry) {
     res.status(409).json({
       error: { code: 'NO_PENDING_APPROVAL', message: `no pending approval for node ${nodeId} in group ${groupId}` },
     });
@@ -2149,12 +2227,44 @@ export function approvalDecisionHandler(
   }
   pendingApprovals.delete(key);
   try {
-    resolve(decision === 'approve' ? 'approved' : 'rejected');
+    entry.resolve(decision === 'approve' ? 'approved' : 'rejected');
   } catch { /* resolver 已 settle — 幂等 */ }
   res.json({ group_id: groupId, node_id: nodeId, decision });
 }
 
 router.post('/:id/approvals/:nodeId', approvalDecisionHandler);
+
+/**
+ * GET /api/groups/:id/approvals/pending — 挂起审批可见化（2026-11-09）。
+ * Node 内存挂起（chat DAG approve 边 + 图→博文流水线审批门）与 Python runtime
+ * 注册表（run-sessions 体系）合并返回，前端审批 Tab 才能点亮批/拒按钮。
+ * 此前 Node 无此 GET 路由 → 落 proxyFallback 打 Python 单源 → chat DAG 的挂起
+ * 永远不可见（「审批门静默挂 30 分钟」根因）。Python 侧拉取 fail-soft：不可达
+ * 只影响合并项，Node 侧条目照常返回。
+ * 处理器导出供回归测试直打（不起真 Express）。
+ */
+export function approvalPendingHandler(
+  req: { params: { id: string } },
+  res: { json(body: unknown): void },
+): void {
+  void (async () => {
+    const groupId = req.params.id;
+    const items = listPendingApprovalItems(groupId);
+    let pyItems: unknown[] = [];
+    try {
+      const py = await pyGet<unknown>(
+        `/api/groups/${encodeURIComponent(groupId)}/approvals/pending`,
+      );
+      if (Array.isArray(py)) pyItems = py;
+      else if (py && typeof py === 'object' && Array.isArray((py as { items?: unknown }).items)) {
+        pyItems = (py as { items: unknown[] }).items;
+      }
+    } catch { /* Python 侧不可达只影响合并项 */ }
+    res.json({ items: [...items, ...pyItems] });
+  })();
+}
+
+router.get('/:id/approvals/pending', approvalPendingHandler);
 
 export { router as groupsChatRouter };
 export default router;
