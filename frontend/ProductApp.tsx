@@ -10,7 +10,6 @@ import {
 } from "react";
 import {
   ArrowLeft,
-  BarChart3,
   BookOpen,
   Bot,
   CalendarClock,
@@ -103,12 +102,11 @@ function SfLoadTag({ state, okText }: { state: SfLoadState; okText?: string }) {
   return okText ? <p className="sf-live-tag on">{okText}</p> : null;
 }
 
-type View = "chat" | "agents" | "knowledge" | "dashboard" | "biz" | "projects" | "schedules" | "settings";
+type View = "chat" | "agents" | "knowledge" | "biz" | "projects" | "schedules" | "settings";
 
 const viewCopy: Record<Exclude<View, "chat">, { title: string; subtitle: string }> = {
   agents: { title: "Agent 团队", subtitle: "管理角色、能力与协作关系" },
   knowledge: { title: "知识库", subtitle: "管理团队共享的知识与上下文" },
-  dashboard: { title: "数据看板", subtitle: "用量、成本、Run 成功率与每日简报" },
   biz: { title: "生意看板", subtitle: "手工艺品代销：商品、销售、快递、社媒与盈利" },
   projects: { title: "项目", subtitle: "管理工作空间、会话与交付成果" },
   schedules: { title: "定时任务", subtitle: "管理所有 Agent 的周期与一次性计划" },
@@ -704,13 +702,6 @@ export default function ProductApp() {
           >
             <BookOpen size={17} />
             <span>知识库</span>
-          </button>
-          <button
-            className={view === "dashboard" ? "active" : ""}
-            onClick={() => navigate("dashboard")}
-          >
-            <BarChart3 size={17} />
-            <span>数据看板</span>
           </button>
           <button className={view === "biz" ? "active" : ""} onClick={() => navigate("biz")}>
             <Store size={17} />
@@ -1314,7 +1305,6 @@ export default function ProductApp() {
 
         {view === "agents" && <AgentsView />}
         {view === "knowledge" && <KnowledgeView />}
-        {view === "dashboard" && <DashboardView />}
         {view === "biz" && <BizView />}
         {view === "projects" && <ProjectsView />}
         {view === "schedules" && <SchedulesView />}
@@ -2205,14 +2195,6 @@ interface SfDashOverview {
   runs: { total: number; succeeded: number; failed: number; canceled: number; success_rate: number | null };
   active: { projects: number; conversations: number };
 }
-interface SfDashBreakdownItem {
-  key?: string;
-  model?: string;
-  label?: string;
-  calls?: number;
-  total_tokens?: number;
-  cost_est_usd?: number;
-}
 /** /api/dashboard/briefing —— 每日简报（零 LLM，库内现算）。 */
 interface SfDashBriefing {
   generated_at: number;
@@ -3098,69 +3080,36 @@ function fmtDelta(d: number | null): [string, string] {
   if (d == null) return ["—", ""];
   return [`${d >= 0 ? "+" : ""}${d}%`, d >= 0 ? "up" : "down"];
 }
-/** 毫秒 → MM/DD（图表 X 轴）。 */
-function fmtDayLabel(ts: number): string {
-  const d = new Date(ts);
-  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** 商品追踪（单个商品）：/api/craft-profit 商品聚合行 + 每日归桶点。 */
-type TrackProduct = BizProduct & { profit_per_unit_cents: number; created_at: number };
-type TrackDay = { day: number; units: number; revenue_cents: number; profit_cents: number };
-
-function DashboardView() {
-  const [days, setDays] = useState<7 | 30 | 90>(30);
-  const [metric, setMetric] = useState<"tokens" | "calls" | "cost">("tokens");
-  const [refreshing, setRefreshing] = useState(false);
+/**
+ * 运行数据速览卡（2026-11-08 数据看板从侧边栏撤下，重点并入生意看板）：
+ * 用量 / 成本 / Run 成功率 + 每日简报要点 + Agent 产出排行，实时取
+ * /api/dashboard/{overview,briefing,agents}（零 LLM，库内现算）。
+ */
+function RunDigestCard() {
   const [reload, setReload] = useState(0);
   const [state, setState] = useState<SfLoadState>("loading");
-  // 全部实时接 /api/dashboard/{overview,timeseries,breakdown,briefing,agents}；不可达显示空态
   const [ov, setOv] = useState<SfDashOverview | null>(null);
-  const [series, setSeries] = useState<number[] | null>(null);
-  const [seriesDays, setSeriesDays] = useState<number[]>([]);
-  const [breakdown, setBreakdown] = useState<SfDashBreakdownItem[] | null>(null);
-  const [agentRows, setAgentRows] = useState<SfDashAgentItem[]>([]);
   const [brief, setBrief] = useState<SfDashBriefing | null>(null);
-  // 商品追踪（单个商品）：列表按页面天数窗口刷；选中后拉该商品的销售流水与每日趋势
-  const [trackProducts, setTrackProducts] = useState<TrackProduct[]>([]);
-  const [trackId, setTrackId] = useState("");
-  const [trackSeries, setTrackSeries] = useState<TrackDay[] | null>(null);
-  const [trackSales, setTrackSales] = useState<BizSale[]>([]);
-  const [trackMetric, setTrackMetric] = useState<"profit" | "revenue" | "units">("profit");
+  const [agentRows, setAgentRows] = useState<SfDashAgentItem[]>([]);
 
   useEffect(() => {
     let dead = false;
     setState("loading");
     (async () => {
       try {
-        const [o, t, b, br, ag] = await Promise.all([
-          sfFetch<SfDashOverview>(`/api/dashboard/overview?days=${days}`),
-          sfFetch<{ series?: Array<{ day?: number; tokens?: number; calls?: number; cost?: number }> }>(
-            `/api/dashboard/timeseries?days=${days}&metric=${metric}`,
-          ),
-          sfFetch<{ items?: SfDashBreakdownItem[] }>(`/api/dashboard/breakdown?days=${days}&by=model`),
-          sfFetch<SfDashBriefing>(`/api/dashboard/briefing?days=7`),
-          sfFetch<{ items?: SfDashAgentItem[] }>(`/api/dashboard/agents?days=${days}`),
+        const [o, br, ag] = await Promise.all([
+          sfFetch<SfDashOverview>("/api/dashboard/overview?days=7"),
+          sfFetch<SfDashBriefing>("/api/dashboard/briefing?days=7"),
+          sfFetch<{ items?: SfDashAgentItem[] }>("/api/dashboard/agents?days=7"),
         ]);
         if (dead) return;
         setOv(o ?? null);
-        const rows = t.series ?? [];
-        setSeriesDays(rows.map((row) => Number(row.day) || 0));
-        setSeries(
-          rows.map((row) =>
-            Number(metric === "cost" ? row.cost : metric === "calls" ? row.calls : row.tokens) || 0,
-          ),
-        );
-        setBreakdown(b.items ?? []);
         setBrief(br ?? null);
         setAgentRows(ag.items ?? []);
         setState("ready");
       } catch {
         if (dead) return;
         setOv(null);
-        setSeries(null);
-        setSeriesDays([]);
-        setBreakdown(null);
         setBrief(null);
         setAgentRows([]);
         setState("error");
@@ -3169,78 +3118,10 @@ function DashboardView() {
     return () => {
       dead = true;
     };
-  }, [days, metric, reload]);
-
-  // 商品列表（近 days 天聚合，与页面范围联动）；默认选中盈利最高的第一个
-  useEffect(() => {
-    let dead = false;
-    sfFetch<{ items?: TrackProduct[] }>(`/api/craft-profit/products?days=${days}`)
-      .then((d) => {
-        if (dead) return;
-        const items = d.items ?? [];
-        setTrackProducts(items);
-        setTrackId((prev) => (items.some((p) => p.id === prev) ? prev : (items[0]?.id ?? "")));
-      })
-      .catch(() => {
-        if (dead) return;
-        setTrackProducts([]);
-        setTrackId("");
-      });
-    return () => {
-      dead = true;
-    };
-  }, [days, reload]);
-
-  // 选中商品的销售流水（状态/运单号追踪履约）与每日归桶趋势
-  useEffect(() => {
-    let dead = false;
-    if (!trackId) {
-      setTrackSeries(null);
-      setTrackSales([]);
-      return;
-    }
-    sfFetch<{ items?: BizSale[] }>(`/api/craft-profit/sales?limit=50&product_id=${trackId}`)
-      .then((d) => {
-        if (!dead) setTrackSales(d.items ?? []);
-      })
-      .catch(() => {
-        if (!dead) setTrackSales([]);
-      });
-    sfFetch<{ series?: TrackDay[] }>(`/api/craft-profit/timeseries?days=${days}&product_id=${trackId}`)
-      .then((d) => {
-        if (!dead) setTrackSeries(d.series ?? []);
-      })
-      .catch(() => {
-        if (!dead) setTrackSeries(null);
-      });
-    return () => {
-      dead = true;
-    };
-  }, [days, reload, trackId]);
-
-  const values = series ?? [];
-  const maxValue = Math.max(...values, 1);
-  const niceMax = Math.ceil(maxValue / 4) * 4 || 4;
-  const points = values
-    .map(
-      (value, index) =>
-        `${(index / Math.max(1, values.length - 1)) * 680},${142 - (value / niceMax) * 136}`,
-    )
-    .join(" ");
-  const axisLabels = [niceMax, niceMax * 0.75, niceMax * 0.5, niceMax * 0.25, 0].map((v) =>
-    v >= 1000 ? `${Math.round(v / 100) / 10}k` : `${v}`,
-  );
-  // X 轴日期标签按真实数据日生成（首/¼/½/¾/末，末位标「今天」）
-  const xLabels = (() => {
-    const n = seriesDays.length;
-    if (n === 0) return ["—", "—", "—", "—", "今天"];
-    const picks = [...new Set([0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1])];
-    return picks.map((i) => (i === n - 1 ? "今天" : fmtDayLabel(seriesDays[i])));
-  })();
+  }, [reload]);
 
   const runs = ov?.runs ?? { total: 0, succeeded: 0, failed: 0, canceled: 0, success_rate: null };
-  const successRate = runs.success_rate ?? 0;
-  const usageCards: Array<[string, string, string, string]> = ov
+  const stats: Array<[string, string, string, string]> = ov
     ? (() => {
         const dc = fmtDelta(ov.usage.deltas.calls);
         const dt = fmtDelta(ov.usage.deltas.total_tokens);
@@ -3251,11 +3132,10 @@ function DashboardView() {
           ["估算成本", `$${ov.usage.cost_est_usd.toFixed(2)}`, dp[0], dp[1]],
           [
             "Run 成功率",
-            ov.runs.success_rate != null ? `${ov.runs.success_rate}%` : "—",
-            `共 ${ov.runs.total} 次`,
+            runs.success_rate != null ? `${runs.success_rate}%` : "—",
+            `共 ${runs.total} 次`,
             "",
           ],
-          ["活跃项目", String(ov.active.projects), `${ov.active.conversations} 个会话`, ""],
         ];
       })()
     : [
@@ -3263,162 +3143,40 @@ function DashboardView() {
         ["Token 消耗", "—", "—", ""],
         ["估算成本", "—", "—", ""],
         ["Run 成功率", "—", "—", ""],
-        ["活跃项目", "—", "—", ""],
       ];
-  const breakdownRows: Array<[string, string, string, string, string]> = (() => {
-    const rows = breakdown ?? [];
-    const totalTokens = rows.reduce((sum, row) => sum + (row.total_tokens ?? 0), 0) || 1;
-    return rows.slice(0, 5).map((row) => [
-      row.key ?? row.model ?? row.label ?? "—",
-      String(row.calls ?? "—"),
-      fmtCompact(row.total_tokens ?? 0),
-      `$${(row.cost_est_usd ?? 0).toFixed(2)}`,
-      `${Math.round(((row.total_tokens ?? 0) / totalTokens) * 100)}%`,
-    ]);
-  })();
-  // Agent 产出排行（/api/dashboard/agents，agent_hops 交接产出字符）
+  // Agent 产出排行 top5（agent_hops 交接产出字符）
   const agentBars: Array<[string, number, number]> = agentRows
-    .slice(0, 6)
+    .slice(0, 5)
     .map((row) => [row.agent.slice(0, 8), row.output_chars ?? 0, row.hops ?? 0] as [string, number, number]);
   const maxAgentChars = Math.max(...agentBars.map(([, n]) => n), 1);
 
-  // 商品追踪派生：选中商品行、待发货单数、柱状图取值与 X 轴标签
-  const trackSel = trackProducts.find((p) => p.id === trackId) ?? null;
-  const trackPending = trackSales.filter((s) => s.status === "pending").length;
-  const trackValues = (trackSeries ?? []).map((d) =>
-    trackMetric === "units" ? d.units : trackMetric === "revenue" ? d.revenue_cents : d.profit_cents,
-  );
-  const trackMax = Math.max(...trackValues, 1);
-  const trackXLabels = (() => {
-    const rows = trackSeries ?? [];
-    const n = rows.length;
-    if (n === 0) return ["—", "—", "—", "—", "今天"];
-    const picks = [...new Set([0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1])];
-    return picks.map((i) => (i === n - 1 ? "今天" : fmtDayLabel(rows[i].day)));
-  })();
-
-  function refresh() {
-    setRefreshing(true);
-    setReload((n) => n + 1);
-    window.setTimeout(() => setRefreshing(false), 650);
-  }
-  /** 模型用量分布导出 CSV（客户端生成，带 BOM 防 Excel 乱码）。 */
-  function exportCsv() {
-    const head = "模型,调用,Tokens,成本USD,占比\n";
-    const body = breakdownRows.map((row) => row.join(",")).join("\n");
-    const blob = new Blob([`\ufeff${head}${body}`], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `dashboard-model-usage-${days}d.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
-    <section className="sf-dashboard">
-      <div className="sf-page-heading">
+    <article className="sf-digest-card">
+      <div className="sf-card-title">
         <div>
-          <p>DATA PLATFORM</p>
-          <h1>数据看板</h1>
-          <span>调用、Token 消耗、成本估算、Run 成功率、每日简报与单个商品追踪。</span>
+          <strong>运行数据速览</strong>
+          <span>原「数据看板」重点 · 近 7 天 · 实时同步</span>
         </div>
-        <button onClick={refresh} disabled={refreshing}>
-          <Zap size={14} /> {refreshing ? "刷新中…" : "刷新数据"}
-        </button>
-      </div>
-      <SfLoadTag state={state} okText="看板数据已同步" />
-
-      <div className="sf-range-tabs">
-        {([7, 30, 90] as const).map((range) => (
-          <button
-            key={range}
-            className={days === range ? "active" : ""}
-            onClick={() => setDays(range)}
-          >
-            近 {range} 天
+        <div className="sf-digest-head">
+          <SfLoadTag state={state} okText="已同步" />
+          <button onClick={() => setReload((n) => n + 1)}>
+            <RotateCcw size={12} /> 刷新
           </button>
-        ))}
+        </div>
       </div>
 
-      <div className="sf-metric-grid">
-        {usageCards.map(([label, value, delta, state]) => (
+      <div className="sf-metric-grid sf-digest-stats">
+        {stats.map(([label, value, delta, deltaState]) => (
           <article key={label}>
             <p>{label}</p>
             <strong>{value}</strong>
-            <span className={state}>{delta}</span>
+            <span className={deltaState}>{delta}</span>
           </article>
         ))}
       </div>
 
-      <div className="sf-dashboard-grid">
-        <article className="sf-chart-card">
-          <div className="sf-card-title">
-            <div>
-              <strong>使用趋势</strong>
-              <span>按日统计</span>
-            </div>
-            <div className="sf-metric-tabs">
-              {(["tokens", "calls", "cost"] as const).map((item) => (
-                <button
-                  key={item}
-                  className={metric === item ? "active" : ""}
-                  onClick={() => setMetric(item)}
-                >
-                  {item === "tokens" ? "Tokens" : item === "calls" ? "调用" : "成本"}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="sf-chart">
-            <div className="sf-chart-y">
-              {axisLabels.map((label, i) => (
-                <span key={i}>{label}</span>
-              ))}
-            </div>
-            <svg viewBox="0 0 680 150" preserveAspectRatio="none" aria-label={`${metric} 使用趋势`}>
-              <defs>
-                <linearGradient id="sfChartFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ff5e3a" stopOpacity=".22" />
-                  <stop offset="100%" stopColor="#ff5e3a" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <polygon points={`0,150 ${points} 680,150`} fill="url(#sfChartFill)" />
-              <polyline
-                points={points}
-                fill="none"
-                stroke="#ff5e3a"
-                strokeWidth="3"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-              {values.map((value, index) => (
-                <circle
-                  key={index}
-                  cx={(index / Math.max(1, values.length - 1)) * 680}
-                  cy={142 - (value / niceMax) * 136}
-                  r="3.5"
-                  fill="#fff"
-                  stroke="#ff5e3a"
-                  strokeWidth="2"
-                />
-              ))}
-            </svg>
-          </div>
-          <div className="sf-chart-x">
-            {xLabels.map((label, i) => (
-              <span key={i}>{label}</span>
-            ))}
-          </div>
-        </article>
-
-        <article className="sf-brief-card">
-          <div className="sf-card-title">
-            <div>
-              <strong>每日简报</strong>
-              <span>{brief ? `更新于 ${fmtBizTime(brief.generated_at)}` : "加载中…"}</span>
-            </div>
-          </div>
+      <div className="sf-digest-cols">
+        <div className="sf-digest-brief">
           <div className="sf-brief-highlight">
             <span>
               <Zap size={17} />
@@ -3452,52 +3210,14 @@ function DashboardView() {
           <div className="sf-dashboard-alert">
             <ShieldCheck size={15} />
             <span>{brief?.alerts?.[0] ?? "近 7 天无告警"}</span>
-            <ChevronRight size={14} />
           </div>
-        </article>
-      </div>
+        </div>
 
-      <div className="sf-dashboard-row2">
-        <article className="sf-donut-card">
-          <div className="sf-card-title">
-            <div>
-              <strong>Run 成功率</strong>
-              <span>近 {days} 天 · 共 {runs.total} 次</span>
-            </div>
-          </div>
-          <div className="sf-donut-wrap">
-            <svg viewBox="0 0 120 120" role="img" aria-label="Run 成功率">
-              <circle cx="60" cy="60" r="50" fill="none" stroke="#f1efe9" strokeWidth="13" />
-              <circle
-                cx="60"
-                cy="60"
-                r="50"
-                fill="none"
-                stroke="#2ec4a6"
-                strokeWidth="13"
-                strokeLinecap="round"
-                strokeDasharray={`${(successRate / 100) * 314} 314`}
-                transform="rotate(-90 60 60)"
-              />
-              <text x="60" y="60" textAnchor="middle" fontSize="21" fontWeight="800" fill="#17162d">
-                {successRate}%
-              </text>
-              <text x="60" y="76" textAnchor="middle" fontSize="10" fill="#999">
-                成功 {runs.succeeded}
-              </text>
-            </svg>
-            <ul className="sf-donut-legend">
-              <li><i style={{ background: "#2ec4a6" }} />成功 {runs.succeeded}</li>
-              <li><i style={{ background: "#ff5e3a" }} />失败 {runs.failed}</li>
-              <li><i style={{ background: "#d9d4ca" }} />取消 {runs.canceled}</li>
-            </ul>
-          </div>
-        </article>
-        <article className="sf-agent-usage-card">
+        <div className="sf-digest-agents">
           <div className="sf-card-title">
             <div>
               <strong>Agent 产出排行</strong>
-              <span>按交接产出字符 · 实时</span>
+              <span>按交接产出字符</span>
             </div>
           </div>
           <ul className="sf-usage-bars">
@@ -3521,209 +3241,9 @@ function DashboardView() {
               </li>
             ))}
           </ul>
-        </article>
-      </div>
-
-      <div className="sf-breakdown-card">
-        <div className="sf-card-title">
-          <div>
-            <strong>模型用量分布</strong>
-            <span>按 Token 统计{state === "ready" ? " · 实时" : ""}</span>
-          </div>
-          <button onClick={exportCsv}>导出 CSV</button>
         </div>
-        <div className="sf-breakdown-head">
-          <span>模型</span>
-          <span>调用</span>
-          <span>Tokens</span>
-          <span>成本</span>
-          <span>占比</span>
-        </div>
-        {breakdownRows.length === 0 && <p className="sf-biz-empty">暂无模型用量数据</p>}
-        {breakdownRows.map((row, index) => (
-          <div className="sf-breakdown-row" key={row[0]}>
-            <span>
-              <i className={`model-${index}`} />
-              {row[0]}
-            </span>
-            {row.slice(1).map((cell) => (
-              <span key={cell}>{cell}</span>
-            ))}
-          </div>
-        ))}
       </div>
-
-      <div className="sf-track-card">
-        <div className="sf-card-title">
-          <div>
-            <strong>商品追踪</strong>
-            <span>单个商品的销量、盈利走势与订单履约 · 近 {days} 天</span>
-          </div>
-          {trackProducts.length > 0 && (
-            <select
-              className="sf-track-select"
-              value={trackId}
-              onChange={(e) => setTrackId(e.target.value)}
-              aria-label="选择要追踪的商品"
-            >
-              {trackProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {!trackSel && (
-          <p className="sf-biz-empty sf-track-empty">还没有商品可追踪 —— 让团队执行 [intake] 登记商品</p>
-        )}
-
-        {trackSel && (
-          <>
-            <div className="sf-track-kpis">
-              {(
-                [
-                  [
-                    "售价",
-                    fmtYuan(trackSel.price_cents),
-                    `成本 ${fmtYuan(trackSel.cost_cents)} · 快递 ${fmtYuan(trackSel.shipping_cents)}`,
-                  ],
-                  ["单件毛利", fmtYuan(trackSel.profit_per_unit_cents), "售价 − 成本 − 快递"],
-                  ["已售", `${trackSel.sold_units} 件`, `近 ${days} 天`],
-                  ["营收", fmtYuan(trackSel.revenue_cents), "窗口内销售流水"],
-                  [
-                    "盈利",
-                    fmtYuan(trackSel.profit_cents),
-                    trackSel.revenue_cents > 0
-                      ? `利润率 ${Math.round((trackSel.profit_cents / trackSel.revenue_cents) * 1000) / 10}%`
-                      : "利润率 —",
-                  ],
-                  ["待发货", `${trackPending} 单`, "订单履约跟踪"],
-                ] as Array<[string, string, string]>
-              ).map(([label, value, sub]) => (
-                <article key={label}>
-                  <p>{label}</p>
-                  <strong>{value}</strong>
-                  <span>{sub}</span>
-                </article>
-              ))}
-            </div>
-
-            <div className="sf-track-body">
-              <article className="sf-track-chart">
-                <div className="sf-card-title">
-                  <div>
-                    <strong>
-                      每日{trackMetric === "units" ? "销量" : trackMetric === "revenue" ? "营收" : "盈利"}
-                    </strong>
-                    <span>按日本地零点归桶</span>
-                  </div>
-                  <div className="sf-metric-tabs">
-                    {(
-                      [
-                        ["profit", "盈利"],
-                        ["revenue", "营收"],
-                        ["units", "件数"],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <button
-                        key={key}
-                        className={trackMetric === key ? "active" : ""}
-                        onClick={() => setTrackMetric(key)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="sf-track-bars">
-                  <svg viewBox="0 0 680 150" preserveAspectRatio="none" aria-label="单商品每日趋势">
-                    <line x1="0" y1="142.5" x2="680" y2="142.5" stroke="#e6e0d6" strokeWidth="1" />
-                    {trackValues.map((v, i) => {
-                      const w = 680 / Math.max(1, trackValues.length);
-                      const h = (v / trackMax) * 132;
-                      return (
-                        <rect
-                          key={i}
-                          x={i * w + w * 0.18}
-                          y={142 - h}
-                          width={w * 0.64}
-                          height={Math.max(h, v > 0 ? 2 : 0)}
-                          fill="#ff5e3a"
-                          opacity={0.85}
-                        >
-                          <title>
-                            {`${fmtDayLabel((trackSeries ?? [])[i]?.day ?? 0)} · ${
-                              trackMetric === "units" ? `${v} 件` : fmtYuan(v)
-                            }`}
-                          </title>
-                        </rect>
-                      );
-                    })}
-                  </svg>
-                </div>
-                <div className="sf-track-x">
-                  {trackXLabels.map((label, i) => (
-                    <span key={i}>{label}</span>
-                  ))}
-                </div>
-                {trackValues.every((v) => v === 0) && (
-                  <p className="sf-track-empty">近 {days} 天该商品没有销售记录</p>
-                )}
-              </article>
-
-              <article className="sf-track-orders">
-                <div className="sf-card-title">
-                  <div>
-                    <strong>订单履约</strong>
-                    <span>该商品最近 {trackSales.length} 单 · 状态与运单号可追踪</span>
-                  </div>
-                </div>
-                <div className="sf-biz-table-wrap sf-track-orders-table">
-                  <table className="sf-biz-table">
-                    <thead>
-                      <tr>
-                        <th>时间</th>
-                        <th>数量</th>
-                        <th>单价</th>
-                        <th>状态</th>
-                        <th>运单号</th>
-                        <th>盈利</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trackSales.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="sf-biz-empty">
-                            该商品还没有销售记录 —— 让团队执行 [order] 登记订单
-                          </td>
-                        </tr>
-                      )}
-                      {trackSales.map((s) => {
-                        const st = BIZ_SALE_STATUS[s.status] ?? { label: s.status, cls: "" };
-                        return (
-                          <tr key={s.id}>
-                            <td>{fmtBizTime(s.created_at)}</td>
-                            <td>{s.qty}</td>
-                            <td>{fmtYuan(s.price_cents)}</td>
-                            <td>
-                              <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
-                            </td>
-                            <td>{s.tracking || "—"}</td>
-                            <td>{fmtYuan(s.profit_cents)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            </div>
-          </>
-        )}
-      </div>
-    </section>
+    </article>
   );
 }
 
@@ -3929,6 +3449,8 @@ function BizView() {
           </button>
         ))}
       </div>
+
+      {tab === "overview" && <RunDigestCard />}
 
       {tab === "overview" && (
         <div className="sf-biz-table-wrap">

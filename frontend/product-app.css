@@ -4811,3 +4811,73 @@
 .sf-track-orders-table .sf-biz-badge {
   white-space: nowrap;
 }
+
+/* ── 运行数据速览卡（原数据看板重点并入生意看板，2026-11-08） ── */
+.sf-digest-card {
+  margin-top: 16px;
+  border: 1px solid #ded7cc;
+  border-radius: 13px;
+  background: #fffdf9;
+  padding: 17px 19px;
+}
+.sf-digest-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sf-digest-head .sf-live-tag {
+  margin: 0;
+}
+.sf-digest-head button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #ff5e3a;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.sf-digest-stats {
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 12px;
+}
+.sf-digest-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 16px 22px;
+  margin-top: 15px;
+}
+.sf-digest-brief ul {
+  margin-top: 10px;
+}
+.sf-digest-brief li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #eee9e1;
+  padding: 7px 2px;
+  color: #77716b;
+  font-size: 10px;
+}
+.sf-digest-brief li strong {
+  color: #17162d;
+}
+.sf-digest-brief li strong.warm {
+  color: #ff5e3a;
+}
+.sf-digest-brief .sf-dashboard-alert {
+  grid-template-columns: 18px 1fr;
+}
+.sf-digest-agents .sf-usage-bars {
+  margin-top: 13px;
+}
+@media (max-width: 900px) {
+  .sf-digest-cols {
+    grid-template-columns: 1fr;
+  }
+  .sf-digest-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
