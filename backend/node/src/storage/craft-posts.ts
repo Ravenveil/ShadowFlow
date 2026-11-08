@@ -309,13 +309,16 @@ export function getPost(postId: string): CraftPost | undefined {
 
 /**
  * 发布落标：合成一行 [post] 标记走 applyCraftMarkers 既有落库通道
- * （营销动态 + 社媒发布域）。fail-soft：任何失败降级为结果描述，不抛。
+ * （营销动态 + 社媒发布域）。media 随帖透传（2026-11-08 协议扩展）：
+ * post.images 原样进 media（{name,path,url,is_image} 同构、≤18，库里已归一）。
+ * fail-soft：任何失败降级为结果描述，不抛。
  */
 async function firePostMarker(post: CraftPost): Promise<MarkerResult> {
   const line = `[post] ${JSON.stringify({
     platform: '小红书',
     title: post.title,
     text: post.body,
+    media: post.images,
   })}`;
   try {
     const { applied } = await applyCraftMarkers(line, { scoped: true });

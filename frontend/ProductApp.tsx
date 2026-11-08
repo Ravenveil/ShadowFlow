@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   ArrowLeft,
+  BarChart3,
   BookOpen,
   Bot,
   CalendarClock,
@@ -18,6 +19,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   FileText,
   Folder,
   GitBranch,
@@ -28,6 +30,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   Paperclip,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -53,7 +56,9 @@ import {
 import "./product-app.css";
 import AuthModal from "./src/AuthModal";
 import EmbeddingSection from "./src/EmbeddingSection";
+import CreditsUsageSection from "./src/CreditsUsageSection";
 import { authGuest, authLogout, displayNameOf, initialsOf, useAuthState } from "./src/auth";
+import { productBuyUrl } from "./src/shop";
 import {
   ApiError,
   apiFetch,
@@ -61,6 +66,7 @@ import {
   chatAssetUrl,
   decideApproval,
   createGroup,
+  createMemo,
   createProject,
   getGroupDag,
   getTeamDag,
@@ -68,23 +74,28 @@ import {
   listAgents,
   listGroups,
   listPendingApprovals,
+  listMemos,
   listProjects,
   listRunSessionsByGroup,
   resolveDm,
   retryRunStep,
   setUnauthorizedHandler,
+  updateMemo,
+  deleteMemo,
   uploadChatAttachment,
   type AgentRecord,
   type GroupRecord,
   type PendingApprovalItem,
   type RunSessionItem,
+  type SfMemo,
   type SfTeamDag as ApiTeamDag,
   type TimelineMessage,
   type UserAttachment,
 } from "./src/chat-api";
 import { useGroupChat, type GroupChat } from "./src/useGroupChat";
 import { isTerminalRunStatus } from "./src/message-patches";
-import { TimelineList } from "./src/TimelineView";
+import { TimelineList, userVisibleText } from "./src/TimelineView";
+import { stripMarkdown } from "./src/markdown";
 import { AgentAvatar } from "./src/avatar";
 import { TurnRail } from "./src/TurnRail";
 
@@ -94,7 +105,7 @@ type SfLoadState = "loading" | "ready" | "error";
 
 function SfLoadTag({ state, okText }: { state: SfLoadState; okText?: string }) {
   if (state === "loading") return <p className="sf-live-tag">加载中…</p>;
-  if (state === "error") return <p className="sf-live-tag">数据加载失败 · 请刷新重试</p>;
+  if (state === "error") return null;
   return okText ? <p className="sf-live-tag on">{okText}</p> : null;
 }
 
@@ -104,7 +115,7 @@ const viewCopy: Record<Exclude<View, "chat">, { title: string; subtitle: string 
   agents: { title: "Agent 团队", subtitle: "管理角色、能力与协作关系" },
   knowledge: { title: "知识库", subtitle: "管理团队共享的知识与上下文" },
   biz: { title: "生意看板", subtitle: "手工艺品代销：商品、销售、快递、社媒与盈利" },
-  projects: { title: "项目", subtitle: "管理工作空间、会话与交付成果" },
+  projects: { title: "工作备忘", subtitle: "个人日程与备忘，随手增删" },
   schedules: { title: "定时任务", subtitle: "管理所有 Agent 的周期与一次性计划" },
   settings: { title: "设置", subtitle: "模型、Skills、集成、记忆与工作空间" },
 };
@@ -130,11 +141,11 @@ function fmtRelativeTime(iso?: string | number | null): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** 会话列表预览：最后一条消息内容截断。 */
+/** 会话列表预览：最后一条消息内容截断（2026-11-08 协议标记行剥掉不进预览，md 语法剥平）。 */
 function groupPreview(group: GroupRecord): string {
   const msgs = Array.isArray(group.messages) ? group.messages : [];
   const last = msgs[msgs.length - 1];
-  const content = (last?.content ?? "").trim().replace(/\s+/g, " ");
+  const content = stripMarkdown(userVisibleText((last?.content ?? "").trim())).replace(/\s+/g, " ");
   if (!content) return "还没有消息";
   return content.length > 32 ? `${content.slice(0, 32)}…` : content;
 }
@@ -339,21 +350,9 @@ export default function ProductApp() {
   const attIdRef = useRef(0);
   const sendingRef = useRef(false); // submitMessage 异步窗口防重入
 
-  // ── 模型选择器（2026-11-08 任务面板）：读真实 BYOK providers，发送时随消息
-  //    透传 executor/model（后端「UI model picker's choice always wins」）──
-  const [byokStore, setByokStore] = useState<ByokStoreData | null>(null);
-  const [modelChoice, setModelChoice] = useState("auto"); // "auto" | "byok:<id>::<model>"
-  useEffect(() => {
-    sfFetch<Partial<ByokStoreData>>("/api/settings/byok")
-      .then((data) =>
-        setByokStore({
-          providers: data.providers ?? {},
-          defaultModel: data.defaultModel ?? null,
-          routingPriority: data.routingPriority ?? "fallback",
-        }),
-      )
-      .catch(() => setByokStore(null));
-  }, []);
+  // ── 连接器徽标（2026-11-10 UI 改造）：点「小红书发布」后在加号旁显示小红书
+  //    图标（参考 WorkBuddy 的 +GitHub 形式），点击图标可移除 ──
+  const [xhsChip, setXhsChip] = useState(false);
 
   function openAuth(mode: "login" | "register") {
     setAuthMode(mode);
@@ -475,7 +474,7 @@ export default function ProductApp() {
     : chat.status === "loading"
       ? "正在加载会话…"
       : chat.status === "error"
-        ? "会话加载失败 · 点击重试"
+        ? ""
         : chat.runs.some((r) => !isTerminalRunStatus(r.status))
           ? "Agent 团队执行中"
           : chat.typing
@@ -632,7 +631,7 @@ export default function ProductApp() {
   /**
    * 发送消息。返回 true=已发出或已排入补发；false=建群失败（调用方保留 composer 内容供重试）。
    * 无活动会话时先建群，成功后跨群补发（2026-11-08 主理人裁决：不再静默丢内容）。
-   * opts：模型选择器透传（executor/model），由 submitMessage 从 modelChoice 解析。
+   * opts：executor/model 透传预留（模型选择器已于 2026-11-10 移除，默认服务端路由）。
    */
   async function sendText(
     text: string,
@@ -927,16 +926,21 @@ export default function ProductApp() {
     if (sendingRef.current) return; // 建群补发路径有异步窗口，防回车连发重复建群
     sendingRef.current = true;
     try {
+      // 小红书徽标点亮时（2026-11-10）：发送自动套 [post] 标记，协议 JSON 不暴露给用户。
+      // 已含 craft 标记的消息不重复包装；title 取首行（截 30 字），正文为全文。
+      const raw = message.trim();
+      const outbound =
+        xhsChip && raw && !/\[(post|draft|link|order|ship|intake|report)\]/.test(raw)
+          ? `[post] ${JSON.stringify({ platform: "小红书", title: raw.split("\n")[0].slice(0, 30), text: raw })}`
+          : raw;
       // 发出/排入补发才清空 composer；失败保留输入与附件 chips 供重试（2026-11-08 主理人裁决）
-      const ok = await sendText(
-        message.trim(),
-        ready.length > 0 ? ready : undefined,
-        parseModelChoice(modelChoice),
-      );
+      const ok = await sendText(outbound, ready.length > 0 ? ready : undefined);
       if (ok) {
         setMessage("");
+        setXhsChip(false); // 一次性激活：发完即灭，防后续消息误发成笔记
         // 仅清理已发出的 done 附件，其余保留（2026-11-09，不再一刀切清空）
         setAtts((cur) => cur.filter((a) => a.status !== "done"));
+        setNotice(null); // 发送成功即收起旧拦截提示，不再等 8 秒自动消失（2026-11-09 回归打磨）
       }
     } finally {
       sendingRef.current = false;
@@ -1010,7 +1014,7 @@ export default function ProductApp() {
             onClick={() => navigate("projects")}
           >
             <LayoutGrid size={15} />
-            <span>项目</span>
+            <span>备忘</span>
           </button>
           <button
             className={view === "schedules" ? "active" : ""}
@@ -1300,7 +1304,6 @@ export default function ProductApp() {
                   {groupsState === "loading" && <p className="sf-thread-hint">正在加载会话…</p>}
                   {groupsState === "error" && (
                     <p className="sf-thread-hint">
-                      会话加载失败 ·{" "}
                       <button type="button" className="sf-link-btn" onClick={() => void reloadGroups()}>
                         重试
                       </button>
@@ -1492,25 +1495,26 @@ export default function ProductApp() {
                 />
                 <div>
                   <span className="sf-composer-tools">
-                    {/* 模型选择器（2026-11-08）：真实 BYOK providers，随消息透传 executor/model */}
-                    <select
-                      className="sf-model-pick"
-                      value={modelChoice}
-                      onChange={(event) => setModelChoice(event.currentTarget.value)}
-                      aria-label="选择执行模型"
-                      title="执行模型（自动 = 服务端默认路由；选择后随消息指定 executor/model）"
+                    {/* 加号置最左（2026-11-10）；连接器激活后旁侧显示小红书徽标（参考 WorkBuddy +GitHub 形式） */}
+                    <button
+                      type="button"
+                      aria-label="更多"
+                      className={plusView ? "sf-plus-trigger open" : "sf-plus-trigger"}
+                      onClick={() => setPlusView(plusView ? null : "root")}
                     >
-                      <option value="auto">自动</option>
-                      {Object.entries(byokStore?.providers ?? {})
-                        .filter(([, p]) => p.enabled && (p.models?.length ?? 0) > 0)
-                        .flatMap(([pid, p]) =>
-                          p.models.map((m) => (
-                            <option key={`${pid}::${m}`} value={`byok:${pid}::${m}`}>
-                              {(BYOK_META[pid]?.short ?? pid)} · {m}
-                            </option>
-                          )),
-                        )}
-                    </select>
+                      <Plus size={15} />
+                    </button>
+                    {xhsChip && (
+                      <button
+                        type="button"
+                        className="sf-conn-chip"
+                        aria-label="小红书发布已就绪（点击移除）"
+                        title="小红书发布已就绪 · 点击移除"
+                        onClick={() => setXhsChip(false)}
+                      >
+                        <XhsIcon size={17} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       aria-label="添加附件"
@@ -1529,14 +1533,6 @@ export default function ProductApp() {
                         event.currentTarget.value = ""; // 允许重复选同一文件
                       }}
                     />
-                    <button
-                      type="button"
-                      aria-label="更多"
-                      className={plusView ? "sf-plus-trigger open" : "sf-plus-trigger"}
-                      onClick={() => setPlusView(plusView ? null : "root")}
-                    >
-                      <Plus size={15} />
-                    </button>
                     {plusView && (
                       <>
                         <div
@@ -1634,12 +1630,11 @@ export default function ProductApp() {
                                     <button
                                       type="button"
                                       className="sf-plus-row-main"
-                                      title="插入 [post] 发帖标记，发到总经理 DM / 代卖群即落库发布"
-                                      onClick={() =>
-                                        insertIntoComposer(
-                                          '[post] {"platform":"小红书","title":"（请替换标题）","text":"（请替换正文）"}',
-                                        )
-                                      }
+                                      title="点亮后，输入的内容将以小红书笔记直接发布（不再显示协议文本）"
+                                      onClick={() => {
+                                        setXhsChip(true); // 只点亮徽标，不往输入框塞 [post] JSON（2026-11-10）
+                                        setPlusView(null);
+                                      }}
                                     >
                                       <strong>小红书发布</strong>
                                       <small>{xhsStatus}</small>
@@ -1717,7 +1712,7 @@ export default function ProductApp() {
             runsSig={chat.runs.map((r) => `${r.session_id}:${r.status}`).join("|")}
           />
         )}
-        {view === "projects" && <ProjectsView />}
+        {view === "projects" && <MemosView />}
         {view === "schedules" && <SchedulesView />}
         {view === "settings" && <SettingsView />}
       </main>
@@ -2094,7 +2089,7 @@ function TaskStatusPanel({
   const turnStart = useMemo(() => {
     const lastUser = [...scoped].reverse().find((m) => m.kind === "user_turn");
     return lastUser?.ts ?? 0;
-  }, [messages]);
+  }, [scoped]);
   const liveElapsed =
     running && stats.elapsedMs <= 0 && turnStart > 0 ? fmtElapsed(nowMs - turnStart) : elapsedText;
   const pendingCount = approvals.filter((a) => a.state === "pending").length;
@@ -2633,7 +2628,6 @@ function ChatThread({
   if (chat.status === "error" && !hasMessages) {
     return (
       <div className="sf-empty">
-        <p>{chat.error ?? "会话加载失败"}</p>
         <div className="sf-empty-actions">
           <button type="button" className="sf-link-btn" onClick={() => chat.reload()}>
             重试
@@ -2660,7 +2654,6 @@ function ChatThread({
       {/* 增量加载失败但已有内容：行内错误条，保留已渲染消息 */}
       {chat.error && hasMessages && (
         <div className="sf-inline-error">
-          <p>{chat.error}</p>
           <button type="button" className="sf-link-btn" onClick={() => chat.reload()}>
             重试
           </button>
@@ -2787,13 +2780,32 @@ const POLICY_RANK: Record<PolicyCellState, number> = { deny: 3, warn: 2, permit:
 const POLICY_CYCLE: (PolicyCellState | null)[] = [null, "permit", "warn", "deny"];
 const SF_PALETTE = ["#ff5e3a", "#2777e8", "#d97b38", "#c64f7d", "#7c5cff", "#0ea5a4"];
 
-/** 模型选择值 → POST /api/groups/:id/messages 的 executor/model（"auto" = 服务端默认路由）。 */
-function parseModelChoice(choice: string): { executor?: string; model?: string } {
-  if (!choice.startsWith("byok:")) return {};
-  const sep = choice.indexOf("::");
-  const executor = sep === -1 ? choice : choice.slice(0, sep);
-  const model = sep === -1 ? undefined : choice.slice(sep + 2);
-  return { executor, ...(model ? { model } : {}) };
+/** 小红书 Logo（2026-11-10）：红底圆角方块 + 白色「小红书」字样，加号旁连接器徽标。 */
+function XhsIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      role="img"
+      aria-label="小红书"
+      style={{ display: "block", borderRadius: 5 }}
+    >
+      <rect width="24" height="24" rx="5" fill="#ff2442" />
+      <text
+        x="12"
+        y="12"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="#fff"
+        fontSize="8.2"
+        fontWeight={700}
+        fontFamily="'PingFang SC', 'Microsoft YaHei', sans-serif"
+      >
+        小红书
+      </text>
+    </svg>
+  );
 }
 
 /** 演示编队（后端不可达时的回落，与上方 agents 卡片同一批 6 名部门员工）。 */
@@ -3334,7 +3346,7 @@ function TeamOpsSection() {
         <SfApprovalsPanel approvals={approvals} onDecide={(id, d) => void decide(id, d)} />
       </div>
       <span className={`sf-live-tag ${live ? "on" : ""}`} data-testid="sf-teamops-source">
-        {loadState === "loading" ? "加载中…" : live ? "LIVE · 已连接后端" : "数据加载失败 · 已显示默认编队"}
+        {loadState === "loading" ? "加载中…" : live ? "LIVE · 已连接后端" : ""}
       </span>
     </div>
   );
@@ -3819,20 +3831,48 @@ type BizOverview = {
 type BizProduct = {
   id: string;
   name: string;
+  /** 一句话卖点（商品页副标题）。 */
+  subtitle: string;
   price_cents: number;
+  /** 市场价（划线价，0 不展示）。 */
+  market_price_cents: number;
   cost_cents: number;
   shipping_cents: number;
+  /** 库存件数（下单扣减、取消回补）。 */
+  stock: number;
+  /** 商品介绍。 */
+  intro: string;
+  /** 宣传图列表（≤5 张，第一张封面；老数据空时看 image_url）。 */
+  images: string[];
+  /** active 在售 | off_shelf 已下架。 */
+  status: string;
   sold_units: number;
   revenue_cents: number;
   profit_cents: number;
+  /** 封面图（/projects/_uploads/... 相对直链，可空串；商品售卖列表用）。 */
+  image_url: string;
+  /** 每件盈利 = 售价 − 成本 − 快递（后端算好）。 */
+  profit_per_unit_cents: number;
 };
 type BizSale = {
   id: string;
+  product_id: string;
   product_name: string;
   qty: number;
   price_cents: number;
+  shipping_cents: number;
+  /** 订单状态机：unpaid 待支付 / pending 待发货 / shipped 已发货 / done 已完成 / cancelled 已取消。 */
   status: string;
   tracking: string;
+  /** 快递公司（管理端发货时填；[ship] 标记路径为空串）。 */
+  express_company: string;
+  /** 买家称呼/电话（扫码购买下单的单有值；[order] 标记落库为空串）。 */
+  buyer_name: string;
+  buyer_contact: string;
+  /** 收货地址 / 备注 / 支付时间（unpaid 为 null）。 */
+  address: string;
+  note: string;
+  paid_at: number | null;
   created_at: number;
   profit_cents: number;
 };
@@ -3884,19 +3924,28 @@ const BIZ_POST_STATUS: Record<string, { label: string; cls: string }> = {
   failed: { label: "失败", cls: "bad" },
   draft: { label: "草稿", cls: "" },
 };
+/** 订单状态机徽标（2026-11-09 图1 订单管理）：unpaid→pending→shipped→done，cancelled 为终态。
+ *  refunded 为历史遗留行兜底。 */
 const BIZ_SALE_STATUS: Record<string, { label: string; cls: string }> = {
+  unpaid: { label: "待支付", cls: "warn" },
+  pending: { label: "待发货", cls: "info" },
   shipped: { label: "已发货", cls: "ok" },
-  pending: { label: "待发货", cls: "warn" },
+  done: { label: "已完成", cls: "" },
+  cancelled: { label: "已取消", cls: "bad" },
   refunded: { label: "已退款", cls: "bad" },
 };
 
 // ── 商品/博文卡片（2026-11-09 Task #4 数据看板）────────────────────────────
 // 流水线（图片→AI 草拟→审批门→落商品）的产出面：商品卡（名称/图/状态/盈利）
 // 与博文卡（标题/封面/状态/发布）。数据来自 be-worker Task #2 契约（2026-11-09 接入）：
-//   GET /api/craft-products → { items: CraftProductRow[] }（profit_per_unit_cents
-//     每件盈利，后端算好；status: active|off_shelf）
-//   GET /api/craft-posts    → { items: CraftPostRow[] }（status: draft|confirmed|
-//     published；images[0].url 当封面）
+//   GET /api/craft-products        → { items: CraftProductRow[] }（profit_per_unit_cents
+//     每件盈利，后端算好；status: active|off_shelf，无「售罄」枚举）
+//   GET /api/craft-profit/products?days=30 → { items: CraftProfitRow[] }（30 天累计
+//     profit_cents；LEFT JOIN 口径零销量商品也返回 0，按商品 id 并联）
+//   GET /api/craft-posts           → { items: CraftPostRow[] }（status: draft|confirmed|
+//     published；封面取 images.find(is_image) 优先、回落 images[0]）
+// 盈利口径（2026-11-09 与 be-worker 对齐）：主数字=近 30 天累计盈利 profit_cents，
+// 每件盈利 profit_per_unit_cents 做小字次要展示。
 // 金融约定：金额 ¥（fmtYuan），盈利涨跌用「涨红跌绿」（profit_delta_pct 契约暂无，
 // 有值即着色，无值不显示环比）。
 
@@ -3931,18 +3980,28 @@ type CraftCardProduct = {
   name: string;
   image_url: string;
   status: string;
-  /** 每件盈利（分）。 */
+  /** 每件盈利（分），小字次要展示。 */
   profit_per_unit_cents: number;
+  /** 近 30 天累计盈利（分），卡片主数字（/api/craft-profit/products?days=30）。 */
+  profit_30d_cents: number;
   /** 盈利环比（%）；null=无数据（契约暂未提供）。涨红跌绿：涨(+)红、跌(−)绿。 */
   profit_delta_pct: number | null;
 };
 type CraftCardPost = {
   id: string;
   title: string;
-  /** 封面（取 images[0].url；空串=占位图）。 */
+  /** 封面（images.find(is_image) 优先、回落 images[0]；空串=占位图）。 */
   cover_url: string;
   status: string;
   published_at: number | null;
+};
+
+/** 30 天累计盈利行（对齐 /api/craft-profit/products?days=30；LEFT JOIN 零销量返回 0）。 */
+type CraftProfitRow = {
+  id: string;
+  sold_units: number;
+  revenue_cents: number;
+  profit_cents: number;
 };
 
 const CRAFT_PRODUCT_STATUS: Record<string, { label: string; cls: string }> = {
@@ -3951,16 +4010,19 @@ const CRAFT_PRODUCT_STATUS: Record<string, { label: string; cls: string }> = {
 };
 const CRAFT_POST_STATUS: Record<string, { label: string; cls: string }> = {
   draft: { label: "草稿", cls: "" },
-  confirmed: { label: "待发布", cls: "warn" },
+  confirmed: { label: "已确认", cls: "info" },
   published: { label: "已发布", cls: "ok" },
 };
 
-/** 卡片数据入口（2026-11-09 接 be-worker 契约）：目录域两读端点并发拉取后映射为卡片视图。 */
+/** 卡片数据入口（2026-11-09 接 be-worker 契约）：目录域两读端点 + 盈利聚合并发拉取后映射为卡片视图。 */
 async function fetchCraftCards(): Promise<{ products: CraftCardProduct[]; posts: CraftCardPost[] }> {
-  const [pr, po] = await Promise.all([
+  const [pr, po, pf] = await Promise.all([
     sfFetch<{ items?: CraftProductRow[] }>("/api/craft-products"),
     sfFetch<{ items?: CraftPostRow[] }>("/api/craft-posts"),
+    // 30 天累计盈利（LEFT JOIN 口径：零销量商品也返回 0），按商品 id 并联到目录
+    sfFetch<{ items?: CraftProfitRow[] }>("/api/craft-profit/products?days=30"),
   ]);
+  const profitById = new Map((pf.items ?? []).map((r) => [r.id, r]));
   return {
     products: (pr.items ?? []).map((p) => ({
       id: p.id,
@@ -3968,13 +4030,16 @@ async function fetchCraftCards(): Promise<{ products: CraftCardProduct[]; posts:
       image_url: p.image_url ?? "",
       status: p.status,
       profit_per_unit_cents: p.profit_per_unit_cents ?? 0,
+      // 主数字=近 30 天累计盈利；查不到聚合行按 0 兜底
+      profit_30d_cents: profitById.get(p.id)?.profit_cents ?? 0,
       // 环比字段契约暂无：留位，有值即按涨红跌绿着色
       profit_delta_pct: null,
     })),
     posts: (po.items ?? []).map((t) => ({
       id: t.post_id,
       title: t.title,
-      cover_url: t.images?.[0]?.url ?? "",
+      // 封面取第一张图片附件（is_image），回落首个附件（2026-11-09 be-worker 契约修订）
+      cover_url: t.images?.find((i) => i.is_image)?.url ?? t.images?.[0]?.url ?? "",
       status: t.status,
       published_at: t.published_at ?? null,
     })),
@@ -4047,8 +4112,10 @@ function CraftCardsSection() {
                   <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
                 </div>
                 <div className="sf-craft-money">
-                  <em>每件盈利</em>
-                  <b>{fmtYuan(p.profit_per_unit_cents)}</b>
+                  <em>盈利 · 近30天</em>
+                  <b>{fmtYuan(p.profit_30d_cents)}</b>
+                  {/* 每件盈利降为小字次要（2026-11-09 be-worker 盈利口径） */}
+                  <small>每件 {fmtYuan(p.profit_per_unit_cents)}</small>
                   {d != null && (
                     // 涨红跌绿（金融约定）：盈利上涨红、下跌绿
                     <span className={`sf-craft-delta ${d >= 0 ? "up" : "down"}`}>
@@ -4118,6 +4185,15 @@ function BizView({ runsSig }: { runsSig?: string }) {
   const [shipments, setShipments] = useState<BizShipment[]>([]);
   const [posts, setPosts] = useState<BizPost[]>([]);
   const [steps, setSteps] = useState<BizOpsStep[]>([]);
+  const [shopDialog, setShopDialog] = useState<
+    { mode: "add" } | { mode: "edit"; product: BizProduct } | null
+  >(null);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  /** 订单管理（2026-11-09 图1）：状态筛选 chips / 发货弹窗 / 取消订单二步确认。 */
+  const [orderFilter, setOrderFilter] = useState<"all" | "unpaid" | "pending" | "shipped" | "done" | "cancelled">("all");
+  const [shipFor, setShipFor] = useState<BizSale | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
   const load = useCallback((silent = false) => {
     if (!silent) setState("loading");
     sfFetch<BizOverview>("/api/craft-profit/overview")
@@ -4132,7 +4208,7 @@ function BizView({ runsSig }: { runsSig?: string }) {
     sfFetch<{ items?: BizProduct[] }>("/api/craft-profit/products")
       .then((d) => setProducts(d.items ?? []))
       .catch(() => setProducts([]));
-    sfFetch<{ items?: BizSale[] }>("/api/craft-profit/sales")
+    sfFetch<{ items?: BizSale[] }>("/api/craft-profit/sales?limit=500")
       .then((d) => setSales(d.items ?? []))
       .catch(() => setSales([]));
     sfFetch<{ shipments?: BizShipment[] }>("/api/ops/shipments")
@@ -4179,6 +4255,52 @@ function BizView({ runsSig }: { runsSig?: string }) {
     try {
       await sfFetch(`/api/ops/shipments/${id}/ship`, { method: "POST" });
     } finally {
+      load();
+    }
+  }
+
+  /** 删除商品（DELETE /api/craft-profit/products/:id）：两步确认后调用。
+   *  失败静默刷新回真实状态；销售流水保留快照，历史盈利不变。 */
+  async function removeProduct(id: string) {
+    try {
+      await sfFetch(`/api/craft-profit/products/${id}`, { method: "DELETE" });
+    } catch {
+      /* 删除失败（网络/后端）时下方 load() 会还原真实状态 */
+    } finally {
+      setConfirmDel(null);
+      load();
+    }
+  }
+
+  /** 复制购买链接（剪贴板不可用的非安全上下文时静默降级）。 */
+  async function copyBuyLink(id: string, url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1500);
+    } catch {
+      /* 剪贴板不可用 —— 用户仍可手动复制链接文本 */
+    }
+  }
+
+  /** 标记完成（POST /api/craft-profit/sales/:id/complete）：shipped→done，幂等。 */
+  async function completeOrder(id: string) {
+    try {
+      await sfFetch(`/api/craft-profit/sales/${id}/complete`, { method: "POST" });
+    } catch {
+      /* 失败静默，load() 还原真实状态 */
+    } finally {
+      load();
+    }
+  }
+  /** 取消订单（POST /api/craft-profit/sales/:id/cancel）：仅待支付单可取消，库存回补。 */
+  async function cancelOrder(id: string) {
+    try {
+      await sfFetch(`/api/craft-profit/sales/${id}/cancel`, { method: "POST" });
+    } catch {
+      /* 失败静默，load() 还原真实状态 */
+    } finally {
+      setConfirmCancel(null);
       load();
     }
   }
@@ -4231,7 +4353,7 @@ function BizView({ runsSig }: { runsSig?: string }) {
           [
             ["overview", "总览"],
             ["products", `商品 ${products.length}`],
-            ["sales", `销售 ${sales.length}`],
+            ["sales", `订单 ${sales.length}`],
             ["shipments", `快递 ${shipments.length}`],
             ["posts", `社媒 ${posts.length}`],
           ] as Array<[typeof tab, string]>
@@ -4331,46 +4453,155 @@ function BizView({ runsSig }: { runsSig?: string }) {
         </div>
       )}
 
+      {/* 订单管理（2026-11-09 图1「商品与订单」）：KPI 行 + 状态筛选 + 订单卡片，
+          发货/完成/取消全走真实状态机端点，库存与统计随 load() 联动刷新。 */}
       {tab === "sales" && (
-        <div className="sf-biz-table-wrap">
-          <table className="sf-biz-table">
-            <thead>
-              <tr>
-                <th>商品</th>
-                <th>数量</th>
-                <th>单价</th>
-                <th>状态</th>
-                <th>快递单号</th>
-                <th>时间</th>
-                <th>盈利</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="sf-biz-empty">
-                    还没有销售记录 —— 让团队执行 [order] 登记订单
-                  </td>
-                </tr>
-              )}
-              {sales.map((s) => {
-                const st = BIZ_SALE_STATUS[s.status] ?? { label: s.status, cls: "" };
-                return (
-                  <tr key={s.id}>
-                    <td>{s.product_name || "—"}</td>
-                    <td>{s.qty}</td>
-                    <td>{fmtYuan(s.price_cents)}</td>
-                    <td>
-                      <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
-                    </td>
-                    <td>{s.tracking || "—"}</td>
-                    <td>{fmtBizTime(s.created_at)}</td>
-                    <td>{fmtYuan(s.profit_cents)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="sf-orders">
+          <div className="sf-biz-kpi sf-orders-kpi">
+            <article className="sf-biz-kpi-card">
+              <p>商品</p>
+              <strong>{products.length}</strong>
+              <span>
+                在售 {products.filter((p) => p.status === "active").length} · 下架{" "}
+                {products.filter((p) => p.status !== "active").length}
+              </span>
+            </article>
+            <article className="sf-biz-kpi-card">
+              <p>库存</p>
+              <strong>{products.reduce((n, p) => n + p.stock, 0)} 件</strong>
+              <span>可售库存合计</span>
+            </article>
+            <article className="sf-biz-kpi-card">
+              <p>累计销量</p>
+              <strong>{products.reduce((n, p) => n + p.sold_units, 0)} 件</strong>
+              <span>已支付订单口径</span>
+            </article>
+            <article className="sf-biz-kpi-card">
+              <p>待发货</p>
+              <strong>{sales.filter((s) => s.status === "pending").length} 笔</strong>
+              <span>支付后待寄出</span>
+            </article>
+          </div>
+
+          <div className="sf-order-filters">
+            {(
+              [
+                ["all", "全部"],
+                ["unpaid", "待支付"],
+                ["pending", "待发货"],
+                ["shipped", "已发货"],
+                ["done", "已完成"],
+                ["cancelled", "已取消"],
+              ] as Array<["all" | "unpaid" | "pending" | "shipped" | "done" | "cancelled", string]>
+            ).map(([key, label]) => {
+              const n = key === "all" ? sales.length : sales.filter((s) => s.status === key).length;
+              return (
+                <button
+                  key={key}
+                  className={orderFilter === key ? "active" : ""}
+                  onClick={() => setOrderFilter(key)}
+                >
+                  {label} {n}
+                </button>
+              );
+            })}
+          </div>
+
+          {(orderFilter === "all" ? sales : sales.filter((s) => s.status === orderFilter)).length === 0 ? (
+            <p className="sf-order-empty">
+              {sales.length === 0
+                ? "还没有订单 —— 顾客扫码下单后会出现在这里（[order] 标记登记的也在此列）"
+                : "该状态下没有订单"}
+            </p>
+          ) : (
+            (orderFilter === "all" ? sales : sales.filter((s) => s.status === orderFilter)).map((s) => {
+              const st = BIZ_SALE_STATUS[s.status] ?? { label: s.status, cls: "" };
+              return (
+                <article key={s.id} className="sf-order-card">
+                  <div className="sf-order-top">
+                    <strong>{s.product_name || "—"}</strong>
+                    <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
+                  </div>
+                  <p className="sf-order-price">
+                    {fmtYuan(s.price_cents)} × {s.qty} 件 · 运费 {fmtYuan(s.shipping_cents)}
+                    <b className="sf-order-total">
+                      合计 {fmtYuan((s.price_cents + s.shipping_cents) * s.qty)}
+                    </b>
+                  </p>
+                  <div className="sf-order-meta">
+                    <span>下单 {fmtBizTime(s.created_at)}</span>
+                    {s.paid_at ? <span>支付 {fmtBizTime(s.paid_at)}</span> : null}
+                    <span className="sf-order-profit">盈利 {fmtYuan(s.profit_cents)}</span>
+                  </div>
+                  {(s.buyer_name || s.buyer_contact) && (
+                    <div className="sf-order-row">
+                      <em>买家</em>
+                      {s.buyer_name || "—"}
+                      {s.buyer_contact ? ` · ${s.buyer_contact}` : ""}
+                    </div>
+                  )}
+                  {s.address ? (
+                    <div className="sf-order-row">
+                      <em>地址</em>
+                      {s.address}
+                    </div>
+                  ) : null}
+                  {s.note ? (
+                    <div className="sf-order-row">
+                      <em>备注</em>
+                      {s.note}
+                    </div>
+                  ) : null}
+                  {(s.express_company || s.tracking) && (
+                    <div className="sf-order-row">
+                      <em>快递</em>
+                      {s.express_company || "—"} {s.tracking}
+                    </div>
+                  )}
+                  {(s.status === "pending" || s.status === "shipped" || s.status === "unpaid") && (
+                    <div className="sf-order-actions">
+                      {s.status === "pending" && (
+                        <button className="sf-order-primary" onClick={() => setShipFor(s)}>
+                          发货
+                        </button>
+                      )}
+                      {s.status === "shipped" && (
+                        <button className="sf-order-primary" onClick={() => void completeOrder(s.id)}>
+                          标记完成
+                        </button>
+                      )}
+                      {s.status === "unpaid" &&
+                        (confirmCancel === s.id ? (
+                          <>
+                            <button className="sf-order-danger" onClick={() => void cancelOrder(s.id)}>
+                              确认取消
+                            </button>
+                            <button className="sf-biz-act" onClick={() => setConfirmCancel(null)}>
+                              返回
+                            </button>
+                          </>
+                        ) : (
+                          <button className="sf-order-cancel" onClick={() => setConfirmCancel(s.id)}>
+                            取消订单
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </article>
+              );
+            })
+          )}
+
+          {shipFor && (
+            <BizShipDialog
+              sale={shipFor}
+              onClose={() => setShipFor(null)}
+              onShipped={() => {
+                setShipFor(null);
+                load();
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -4471,124 +4702,726 @@ function BizView({ runsSig }: { runsSig?: string }) {
           </table>
         </div>
       )}
+
+      {/* 商品售卖列表（2026-11-08）：看板底部常驻货架 —— 每件商品带购买链接，
+          顾客打开链接进 #/buy/<id> 购买页下单并在页面内付费；右上「添加商品」上架。 */}
+      <div className="sf-shop">
+        <div className="sf-shop-head">
+          <div>
+            <h2>商品售卖列表</h2>
+            <p>顾客打开商品链接即可进购买页下单，在链接页面完成支付</p>
+          </div>
+          <button className="sf-shop-add" onClick={() => setShopDialog({ mode: "add" })}>
+            <Plus size={14} /> 添加商品
+          </button>
+        </div>
+        {products.length === 0 ? (
+          <p className="sf-shop-empty">还没有商品 —— 点右上「添加商品」上架第一件手工艺品</p>
+        ) : (
+          <div className="sf-shop-grid">
+            {products.map((p) => {
+              const buyUrl = productBuyUrl(p.id);
+              return (
+                <article key={p.id} className="sf-shop-card">
+                  <div className="sf-shop-img">
+                    {p.image_url ? (
+                      <img
+                        src={chatAssetUrl(p.image_url)}
+                        alt={p.name}
+                        onError={(e) => {
+                          // 图片链接失效（文件被清理等）→ 降级占位，不显破图
+                          e.currentTarget.style.display = "none";
+                          e.currentTarget.parentElement?.classList.add("sf-shop-img-broken");
+                        }}
+                      />
+                    ) : (
+                      <span>
+                        <Store size={22} />
+                      </span>
+                    )}
+                  </div>
+                  <div className="sf-shop-info">
+                    <strong>{p.name}</strong>
+                    <p className="sf-shop-price">{fmtYuan(p.price_cents)}</p>
+                    <small>
+                      已售 {p.sold_units} 件 · 每件盈利 {fmtYuan(p.profit_per_unit_cents)} · 库存{" "}
+                      {p.stock} 件
+                      {p.status !== "active" ? " · 已下架" : ""}
+                    </small>
+                  </div>
+                  {/* 商品链接（2026-11-08 下午：货架收款码撤掉，付费引导统一
+                      走链接页）：链接旁提示买家在链接页面完成支付，一键复制；
+                      删除走两步确认防误触（销售流水保留，历史盈利不变）。 */}
+                  <div className="sf-shop-foot">
+                    <a
+                      className="sf-shop-link"
+                      href={buyUrl}
+                      title={buyUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {shortBuyUrl(buyUrl)}
+                    </a>
+                    <span className="sf-shop-pay-hint" title="请把链接发给买家，买家在链接页面内下单并完成支付">
+                      请在链接页面付费
+                    </span>
+                    <button
+                      className="sf-shop-copy"
+                      title="复制购买链接"
+                      onClick={() => void copyBuyLink(p.id, buyUrl)}
+                    >
+                      {copiedId === p.id ? <Check size={11} /> : <Copy size={11} />}
+                      {copiedId === p.id ? "已复制" : "复制"}
+                    </button>
+                    <button
+                      className="sf-shop-copy"
+                      title="编辑商品"
+                      onClick={() => setShopDialog({ mode: "edit", product: p })}
+                    >
+                      <Pencil size={11} /> 编辑
+                    </button>
+                    {confirmDel === p.id ? (
+                      <span className="sf-shop-del-ask">
+                        <button className="sf-shop-del-yes" onClick={() => void removeProduct(p.id)}>
+                          确认删除
+                        </button>
+                        <button className="sf-shop-del-no" onClick={() => setConfirmDel(null)}>
+                          取消
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="sf-shop-del"
+                        title="删除商品"
+                        onClick={() => setConfirmDel(p.id)}
+                      >
+                        <Trash2 size={11} /> 删除
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {shopDialog && (
+        <BizProductDialog
+          product={shopDialog.mode === "edit" ? shopDialog.product : null}
+          onClose={() => setShopDialog(null)}
+          onSaved={() => {
+            setShopDialog(null);
+            load();
+          }}
+        />
+      )}
     </section>
   );
 }
 
-function ProjectsView() {
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [liveProjects, setLiveProjects] = useState<SfProject[] | null>(null);
-  const [projectsState, setProjectsState] = useState<SfLoadState>("loading");
-  const loadProjects = useCallback(() => {
-    setProjectsState("loading");
-    sfFetch<SfProject[]>("/api/projects?withSessions=1")
-      .then((list) => {
-        setLiveProjects(Array.isArray(list) ? list : []);
-        setProjectsState("ready");
-      })
-      .catch(() => {
-        setLiveProjects(null);
-        setProjectsState("error");
-      });
-  }, []);
-  useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
+/** 商品弹窗（添加/编辑，2026-11-08 图3 商品编辑）：完整商品信息 + 宣传图多张（第一张封面）。
+ *  添加走 POST /api/craft-products，编辑走 PATCH /api/craft-products/:id（apiGuard 内网写）。
+ *  毛利 = 售价 − 成本（不含运费），随输入实时提示。 */
+function BizProductDialog({
+  product,
+  onClose,
+  onSaved,
+}: {
+  product: BizProduct | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const editing = !!product;
+  const [name, setName] = useState(product?.name ?? "");
+  const [subtitle, setSubtitle] = useState(product?.subtitle ?? "");
+  const [price, setPrice] = useState(product ? (product.price_cents / 100).toFixed(2) : "");
+  const [cost, setCost] = useState(product ? (product.cost_cents / 100).toFixed(2) : "");
+  const [market, setMarket] = useState(
+    product && product.market_price_cents > 0 ? (product.market_price_cents / 100).toFixed(2) : "",
+  );
+  const [stock, setStock] = useState(product ? String(product.stock) : "999");
+  const [ship, setShip] = useState(product ? (product.shipping_cents / 100).toFixed(2) : "");
+  const [pstatus, setPstatus] = useState(product?.status ?? "active");
+  const [intro, setIntro] = useState(product?.intro ?? "");
+  // 宣传图初始列表（2026-11-08 黑屏修复）：接口 images 出过 JSON 文本形态（"[]"），
+  // 直接当数组用会在 keptUrls.map 抛错整页崩掉 —— 数组 / JSON 文本 / 异常三态都归一成 string[]。
+  const initImgs: string[] = (() => {
+    const raw: unknown = product?.images;
+    let list: unknown[] = [];
+    if (Array.isArray(raw)) list = raw;
+    else if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (Array.isArray(parsed)) list = parsed;
+      } catch {
+        list = [];
+      }
+    }
+    return list.filter((x): x is string => typeof x === "string").slice(0, 5);
+  })();
+  const [keptUrls, setKeptUrls] = useState<string[]>(
+    initImgs.length > 0 ? initImgs : product?.image_url ? [product.image_url] : [],
+  );
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [newPreviews, setNewPreviews] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const input = form.elements.namedItem("projectName") as HTMLInputElement | null;
-    const name = input?.value.trim();
-    if (!name) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      await createProject(name);
-      setShowCreate(false);
-      loadProjects();
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "创建失败，请重试");
-    } finally {
-      setCreating(false);
+  const totalImgs = keptUrls.length + newFiles.length;
+
+  function pickFiles(list: FileList | null) {
+    setError("");
+    if (!list) return;
+    const added: File[] = [];
+    for (const f of Array.from(list)) {
+      if (totalImgs + added.length >= 5) {
+        setError("宣传图最多 5 张");
+        break;
+      }
+      if (!f.type.startsWith("image/")) {
+        setError("只支持图片文件（png / jpg / webp 等）");
+        continue;
+      }
+      if (f.size > CHAT_UPLOAD_MAX_BYTES) {
+        setError("图片超过 8MB，请压缩后再传");
+        continue;
+      }
+      added.push(f);
+    }
+    if (added.length === 0) return;
+    setNewFiles((prev) => [...prev, ...added]);
+    for (const f of added) {
+      const reader = new FileReader();
+      reader.onload = () => setNewPreviews((prev) => [...prev, String(reader.result ?? "")]);
+      reader.readAsDataURL(f);
     }
   }
 
-  const cards: Array<[string, string, string, string, string]> = (liveProjects ?? []).map((p, i) => [
-    p.name,
-    `${(p.sessions ?? []).length} 个会话`,
-    "",
-    ["#ff5e3a", "#00a594", "#8e6cff", "#d97b38", "#c64f7d"][i % 5],
-    p.updated_at ? String(p.updated_at).slice(0, 10) : "最近",
-  ]);
+  function removeAt(i: number) {
+    if (i < keptUrls.length) {
+      setKeptUrls((prev) => prev.filter((_, x) => x !== i));
+    } else {
+      const j = i - keptUrls.length;
+      setNewFiles((prev) => prev.filter((_, x) => x !== j));
+      setNewPreviews((prev) => prev.filter((_, x) => x !== j));
+    }
+  }
+
+  function yuanToCents(v: string, field: string): number {
+    const n = Number(v);
+    if (v.trim() !== "" && (!Number.isFinite(n) || n < 0)) throw new Error(`${field} 不能是负数`);
+    return Math.round((Number.isFinite(n) ? n : 0) * 100);
+  }
+
+  const priceNum = Number(price);
+  const costNum = Number(cost);
+  const marginPct =
+    Number.isFinite(priceNum) && priceNum > 0 && Number.isFinite(costNum)
+      ? Math.round(((priceNum - costNum) / priceNum) * 1000) / 10
+      : null;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setError("");
+    if (!name.trim()) {
+      setError("请填写商品名称");
+      return;
+    }
+    let priceCents = 0;
+    let costCents = 0;
+    let shipCents = 0;
+    let marketCents = 0;
+    let stockN = 0;
+    try {
+      priceCents = yuanToCents(price, "售价");
+      costCents = yuanToCents(cost, "成本");
+      shipCents = yuanToCents(ship, "运费");
+      marketCents = yuanToCents(market, "市场价");
+      stockN = Number(stock);
+      if (!Number.isInteger(stockN) || stockN < 0) throw new Error("库存必须是非负整数");
+    } catch (err) {
+      setError((err as Error).message);
+      return;
+    }
+    setBusy(true);
+    try {
+      // 新图走聊天附件同款上传（_uploads/<ts>-<rand>/，/projects 直链）；
+      // 列表顺序 = 展示顺序，第一张为封面（与 image_url 同步）。
+      const uploaded: string[] = [];
+      for (const f of newFiles) {
+        const att = await uploadChatAttachment(f);
+        uploaded.push(att.url);
+      }
+      const images = [...keptUrls, ...uploaded];
+      const payload = {
+        name: name.trim(),
+        subtitle: subtitle.trim(),
+        price_cents: priceCents,
+        market_price_cents: marketCents,
+        cost_cents: costCents,
+        shipping_cents: shipCents,
+        stock: stockN,
+        intro: intro.trim(),
+        images,
+        status: pstatus,
+      };
+      if (editing) {
+        await sfFetch(`/api/craft-products/${encodeURIComponent(product.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await sfFetch("/api/craft-products", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败，请重试");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sf-shop-mask" onClick={onClose}>
+      <div className="sf-shop-modal sf-shop-modal-wide" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <h3>{editing ? "编辑商品" : "添加商品"}</h3>
+          <button className="sf-shop-close" onClick={onClose} aria-label="关闭">
+            <X size={15} />
+          </button>
+        </header>
+        <form onSubmit={submit}>
+          <div className="sf-shop-modal-body">
+            <div className="sf-shop-fields">
+              <label>
+                <span>商品名称 *</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="如：水杯"
+                  maxLength={200}
+                />
+              </label>
+              <label>
+                <span>一句话卖点</span>
+                <input
+                  value={subtitle}
+                  onChange={(e) => setSubtitle(e.target.value)}
+                  placeholder="如：一个水杯"
+                  maxLength={200}
+                />
+              </label>
+              <div className="sf-shop-fields-row">
+                <label>
+                  <span>售价（元）*</span>
+                  <input
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="21.00"
+                    inputMode="decimal"
+                  />
+                </label>
+                <label>
+                  <span>成本（元）</span>
+                  <input
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    placeholder="12.00"
+                    inputMode="decimal"
+                  />
+                </label>
+                <label>
+                  <span>市场价（元）</span>
+                  <input
+                    value={market}
+                    onChange={(e) => setMarket(e.target.value)}
+                    placeholder="40.00（划线价，可空）"
+                    inputMode="decimal"
+                  />
+                </label>
+              </div>
+              <div className="sf-shop-fields-row">
+                <label>
+                  <span>库存（件）</span>
+                  <input
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    placeholder="999"
+                    inputMode="numeric"
+                  />
+                </label>
+                <label>
+                  <span>运费（元）</span>
+                  <input
+                    value={ship}
+                    onChange={(e) => setShip(e.target.value)}
+                    placeholder="2.00"
+                    inputMode="decimal"
+                  />
+                </label>
+                <label>
+                  <span>上架状态</span>
+                  <select value={pstatus} onChange={(e) => setPstatus(e.target.value)}>
+                    <option value="active">在售</option>
+                    <option value="off_shelf">已下架</option>
+                  </select>
+                </label>
+              </div>
+              <p className="sf-shop-margin-tip">
+                毛利 = 售价 − 成本，当前毛利 <strong>{marginPct !== null ? `${marginPct}%` : "—"}</strong>
+                ；营收统计不含运费。
+              </p>
+              <label>
+                <span>商品介绍</span>
+                <textarea
+                  value={intro}
+                  onChange={(e) => setIntro(e.target.value)}
+                  rows={5}
+                  maxLength={4000}
+                  placeholder="一个可以喝水的水杯"
+                />
+              </label>
+            </div>
+            <div className="sf-shop-pick sf-shop-pick-multi">
+              <span className="sf-shop-pick-title">宣传图片（最多 5 张，第一张为封面）</span>
+              <div className="sf-shop-imgs">
+                {keptUrls.map((u, i) => (
+                  <div key={`k${i}`} className="sf-shop-img-tile">
+                    <img src={chatAssetUrl(u)} alt={`宣传图 ${i + 1}`} />
+                    {i === 0 ? <em className="sf-shop-cover">封面</em> : null}
+                    <button
+                      type="button"
+                      className="sf-shop-img-x"
+                      onClick={() => removeAt(i)}
+                      aria-label="移除图片"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+                {newPreviews.map((u, i) => (
+                  <div key={`n${i}`} className="sf-shop-img-tile">
+                    <img src={u} alt={`新图 ${i + 1}`} />
+                    {keptUrls.length === 0 && i === 0 ? <em className="sf-shop-cover">封面</em> : null}
+                    <button
+                      type="button"
+                      className="sf-shop-img-x"
+                      onClick={() => removeAt(keptUrls.length + i)}
+                      aria-label="移除图片"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+                {totalImgs < 5 ? (
+                  <button type="button" className="sf-shop-img-add" onClick={() => fileRef.current?.click()}>
+                    + 上传图片
+                  </button>
+                ) : null}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => {
+                  pickFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <small>支持 JPG / PNG / WebP，单张 ≤ 8MB。</small>
+            </div>
+          </div>
+          {error ? <p className="sf-shop-modal-err">{error}</p> : null}
+          <footer>
+            <button type="button" onClick={onClose} disabled={busy}>
+              取消
+            </button>
+            <button type="submit" className="sf-shop-save" disabled={busy}>
+              {busy ? "保存中…" : editing ? "保存修改" : "保存并上架"}
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** 发货弹窗（2026-11-09 图1「快递公司 + 快递单号」）：POST /api/craft-profit/sales/:id/ship。
+ *  快递单号必填；后端同步建 ops_shipments 运单（快递 tab 直接可见，fail-soft 不阻断）。 */
+function BizShipDialog({
+  sale,
+  onClose,
+  onShipped,
+}: {
+  sale: BizSale;
+  onClose: () => void;
+  onShipped: () => void;
+}) {
+  const [company, setCompany] = useState("顺丰速运");
+  const [tracking, setTracking] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const t = tracking.trim();
+    if (!t) {
+      setError("请填写快递单号");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await sfFetch(`/api/craft-profit/sales/${sale.id}/ship`, {
+        method: "POST",
+        body: JSON.stringify({ express_company: company, tracking: t }),
+      });
+      onShipped();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "发货失败，请重试");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sf-shop-mask" onClick={onClose}>
+      <div className="sf-shop-modal" onClick={(e) => e.stopPropagation()}>
+        <header>
+          <h3>发货</h3>
+          <button className="sf-shop-close" onClick={onClose} aria-label="关闭">
+            <X size={15} />
+          </button>
+        </header>
+        <form onSubmit={submit}>
+          <div className="sf-shop-modal-body">
+            <p className="sf-ship-product">
+              {sale.product_name} · {fmtYuan(sale.price_cents)} × {sale.qty} 件 · 合计{" "}
+              {fmtYuan((sale.price_cents + sale.shipping_cents) * sale.qty)}
+            </p>
+            <div className="sf-shop-fields">
+              <label>
+                <span>快递公司 *</span>
+                <select value={company} onChange={(e) => setCompany(e.target.value)}>
+                  {["顺丰速运", "中通快递", "圆通速递", "京东物流", "邮政EMS", "德邦快递"].map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>快递单号 *</span>
+                <input
+                  value={tracking}
+                  onChange={(e) => setTracking(e.target.value)}
+                  placeholder="如：SF1234567890"
+                  maxLength={64}
+                />
+              </label>
+            </div>
+          </div>
+          {error ? <p className="sf-shop-modal-err">{error}</p> : null}
+          <footer>
+            <button type="button" onClick={onClose} disabled={busy}>
+              取消
+            </button>
+            <button type="submit" className="sf-shop-save" disabled={busy}>
+              {busy ? "保存中…" : "确认发货"}
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/** 备忘日期徽标：逾期/今天/未来三态（类日程）。 */
+function memoDueInfo(due: string | null): { label: string; tone: "over" | "today" | "future" } | null {
+  if (!due) return null;
+  const now = new Date();
+  const t = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (due < t) return { label: `已逾期 · ${due}`, tone: "over" };
+  if (due === t) return { label: `今天 · ${due}`, tone: "today" };
+  return { label: due, tone: "future" };
+}
+
+/** 工作备忘（2026-11-08）：「项目」页改造成个人备忘/日程区，自由增删改。 */
+function MemosView() {
+  const [memos, setMemos] = useState<SfMemo[] | null>(null);
+  const [memosState, setMemosState] = useState<SfLoadState>("loading");
+  const [title, setTitle] = useState("");
+  const [due, setDue] = useState("");
+  const [note, setNote] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const loadMemos = useCallback(() => {
+    setMemosState("loading");
+    listMemos()
+      .then((list) => {
+        setMemos(list);
+        setMemosState("ready");
+      })
+      .catch(() => {
+        setMemos(null);
+        setMemosState("error");
+      });
+  }, []);
+  useEffect(() => {
+    loadMemos();
+  }, [loadMemos]);
+
+  function resetForm() {
+    setTitle("");
+    setDue("");
+    setNote("");
+    setEditingId(null);
+    setFormError(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const t = title.trim();
+    if (!t) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (editingId) {
+        await updateMemo(editingId, { title: t, note: note.trim(), due_at: due || null });
+      } else {
+        await createMemo({ title: t, note: note.trim(), due_at: due || null });
+      }
+      resetForm();
+      loadMemos();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "保存失败，请重试");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEdit(m: SfMemo) {
+    setEditingId(m.memo_id);
+    setTitle(m.title);
+    setDue(m.due_at ?? "");
+    setNote(m.note);
+    setFormError(null);
+  }
+
+  async function toggleDone(m: SfMemo) {
+    try {
+      await updateMemo(m.memo_id, { done: !m.done });
+      loadMemos();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "更新失败，请重试");
+    }
+  }
+
+  async function removeMemo(m: SfMemo) {
+    if (!window.confirm(`删除备忘「${m.title}」？`)) return;
+    try {
+      await deleteMemo(m.memo_id);
+      if (editingId === m.memo_id) resetForm();
+      loadMemos();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "删除失败，请重试");
+    }
+  }
+
+  const list = memos ?? [];
+  const openCount = list.filter((m) => !m.done).length;
   return (
     <section className="sf-subview">
       <div className="sf-subview-intro">
         <div>
-          <p>WORKSPACES</p>
-          <h1>项目</h1>
-          <span>组织会话、Agent、知识与最终交付成果。</span>
+          <p>MEMO · SCHEDULE</p>
+          <h1>工作备忘</h1>
+          <span>个人日程与备忘，随手增删。</span>
         </div>
-        <button onClick={() => setShowCreate(!showCreate)}>
-          <Plus size={15} /> 新建项目
+      </div>
+      <SfLoadTag state={memosState} />
+      <form className="sf-memo-form" onSubmit={handleSubmit}>
+        <input
+          autoFocus
+          maxLength={200}
+          placeholder="备忘标题（必填）"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={saving}
+        />
+        <input
+          type="date"
+          value={due}
+          onChange={(e) => setDue(e.target.value)}
+          disabled={saving}
+          title="日期（可选）"
+        />
+        <input
+          maxLength={2000}
+          placeholder="备注（可选）"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={saving}
+        />
+        <button type="submit" disabled={saving || !title.trim()}>
+          {saving ? "保存中…" : editingId ? "保存修改" : "添加"}
         </button>
-      </div>
-      <SfLoadTag state={projectsState} />
-      {projectsState === "ready" && cards.length === 0 && (
-        <p className="sf-biz-empty">还没有项目 —— 点右上角「新建项目」创建</p>
-      )}
-      {showCreate && (
-        <form className="sf-inline-create" onSubmit={handleCreate}>
-          <Folder size={17} />
-          <input
-            autoFocus
-            required
-            name="projectName"
-            maxLength={60}
-            placeholder="输入项目名称"
-            disabled={creating}
-          />
-          <button type="submit" disabled={creating}>
-            {creating ? "创建中…" : "创建"}
+        {editingId && (
+          <button type="button" onClick={resetForm} disabled={saving}>
+            <X size={15} /> 取消
           </button>
-          <button type="button" onClick={() => setShowCreate(false)} disabled={creating}>
-            <X size={15} />
-          </button>
-          {createError && <span className="sf-inline-create-error">{createError}</span>}
-        </form>
+        )}
+        {formError && <span className="sf-inline-create-error">{formError}</span>}
+      </form>
+      {memosState === "ready" && (
+        <p className="sf-memo-stats">
+          共 {list.length} 条 · 待办 {openCount} 条 · 已完成 {list.length - openCount} 条
+        </p>
       )}
-      <div className="sf-project-grid">
-        {cards.map(([name, meta, progress, color, updated]) => (
-          <article key={name}>
-            <header>
-              <span style={{ background: color }}>
-                <Folder size={17} />
-              </span>
-              <button>
-                <MoreHorizontal size={17} />
+      {memosState === "ready" && list.length === 0 && (
+        <p className="sf-biz-empty">还没有备忘 —— 在上方填一条，点「添加」</p>
+      )}
+      <ul className="sf-memo-list">
+        {list.map((m) => {
+          const dueInfo = memoDueInfo(m.due_at);
+          return (
+            <li key={m.memo_id} className={`sf-memo-item${m.done ? " done" : ""}`}>
+              <button
+                className="sf-memo-check"
+                onClick={() => toggleDone(m)}
+                title={m.done ? "标记为待办" : "标记完成"}
+              >
+                {m.done ? "✓" : ""}
               </button>
-            </header>
-            <h2>{name}</h2>
-            <p>{meta}</p>
-            {progress ? (
-              <div>
-                <span>
-                  <i style={{ width: progress, background: color }} />
-                </span>
-                <strong>{progress}</strong>
+              <div className="sf-memo-main">
+                <div className="sf-memo-head">
+                  <h3>{m.title}</h3>
+                  {dueInfo && <span className={`sf-memo-due ${dueInfo.tone}`}>{dueInfo.label}</span>}
+                </div>
+                {m.note && <p>{m.note}</p>}
               </div>
-            ) : null}
-            <footer>
-              <span>最近更新：{updated}</span>
-              <button>
-                打开项目 <ChevronRight size={14} />
-              </button>
-            </footer>
-          </article>
-        ))}
-      </div>
+              <div className="sf-memo-actions">
+                <button onClick={() => startEdit(m)} title="编辑">
+                  <Pencil size={13} />
+                </button>
+                <button onClick={() => removeMemo(m)} title="删除">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
@@ -5527,8 +6360,6 @@ function AdminUsersSection() {
     return (
       <div className="sf-settings-placeholder">
         <AlertTriangle size={25} />
-        <strong>加载失败</strong>
-        <p>用户列表加载出错，请稍后重试。</p>
         <button type="button" onClick={() => void load()}>
           重试
         </button>
@@ -5597,6 +6428,7 @@ function SettingsView() {
     ["外观", ["主题与显示", "语言"]],
     ["集成", ["Skills", "模型与密钥", "向量模型", "工具提供商", "连接器", "MCP 集成"]],
     ["记忆", ["记忆条目", "Agent 画像", "交接与写回"]],
+    ["计费", ["用量"]],
     ["数据", ["通知", "高级设置"]],
   ];
   if (isAdmin) groups.push(["管理员", ["用户管理"]]);
@@ -5616,6 +6448,8 @@ function SettingsView() {
                   <Server size={15} />
                 ) : item === "向量模型" ? (
                   <Zap size={15} />
+                ) : item === "用量" ? (
+                  <BarChart3 size={15} />
                 ) : item === "个人资料" ? (
                   <Users size={15} />
                 ) : item === "用户管理" ? (
@@ -5648,6 +6482,8 @@ function SettingsView() {
           <ConnectorsSection mcp />
         ) : section === "记忆条目" ? (
           <MemoryEntriesSection />
+        ) : section === "用量" ? (
+          <CreditsUsageSection />
         ) : section === "用户管理" ? (
           <AdminUsersSection />
         ) : (

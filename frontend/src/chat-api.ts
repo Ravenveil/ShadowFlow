@@ -581,7 +581,10 @@ export async function resolveDm(agentId: string): Promise<{ group_id: string; ag
 export async function listAgents(): Promise<AgentRecord[]> {
   const json = await apiFetch<{ data?: AgentRecord[]; agents?: AgentRecord[] }>("/api/agents");
   const list = json?.data ?? json?.agents ?? [];
-  return Array.isArray(list) ? list : [];
+  if (!Array.isArray(list)) return [];
+  // 只展示内置编制（Python 落库 agent）。yaml-template 是设计期模板——当前库里
+  // 只有 BMAD 测试夹具（arch/dev/pm/qa），文件保留供后端测试用，但不进选择器。
+  return list.filter((a) => a.source !== "yaml-template");
 }
 
 export async function listProjects(): Promise<
@@ -599,6 +602,51 @@ export async function listProjects(): Promise<
 
 export async function createProject(name: string): Promise<unknown> {
   return apiFetch("/api/projects", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+// ── 个人工作备忘/日程（2026-11-08）：「项目」页改造成个人备忘区 ──────────────
+
+export type SfMemo = {
+  memo_id: string;
+  title: string;
+  note: string;
+  due_at: string | null;
+  done: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
+export async function listMemos(): Promise<SfMemo[]> {
+  const json = await apiFetch<{ data?: SfMemo[] } | SfMemo[]>("/api/memos");
+  const list = Array.isArray(json) ? json : (json?.data ?? []);
+  return Array.isArray(list) ? list : [];
+}
+
+export async function createMemo(input: {
+  title: string;
+  note?: string;
+  due_at?: string | null;
+}): Promise<SfMemo> {
+  const json = await apiFetch<{ data?: SfMemo } | SfMemo>("/api/memos", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return (Array.isArray(json) ? json[0] : (json?.data ?? json)) as SfMemo;
+}
+
+export async function updateMemo(
+  memoId: string,
+  patch: { title?: string; note?: string; due_at?: string | null; done?: boolean },
+): Promise<SfMemo> {
+  const json = await apiFetch<{ data?: SfMemo } | SfMemo>(
+    `/api/memos/${encodeURIComponent(memoId)}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+  );
+  return (Array.isArray(json) ? json[0] : (json?.data ?? json)) as SfMemo;
+}
+
+export async function deleteMemo(memoId: string): Promise<void> {
+  await apiFetch(`/api/memos/${encodeURIComponent(memoId)}`, { method: "DELETE" });
 }
 
 export async function listPendingApprovals(groupId: string): Promise<PendingApprovalItem[]> {
