@@ -343,15 +343,25 @@ async def resolve_dm_conversation(
     request: Request,
     agent_id: str,
     workspace_id: Optional[str] = Query(default=None),
+    exclude_group_ids: Optional[List[str]] = Query(default=None),
 ) -> DmResolveResponse:
     """Find-or-create the DM conversation for (workspace_id, agent_id).
 
     Idempotent: returns the existing kind='dm' conversation whose single member
     is ``agent_id`` in this workspace, or creates one. The returned ``group_id``
     is then used by the frontend exactly like a group conversation.
+
+    ``exclude_group_ids`` — 2026-11-08 归属感知（修「消息发不出来」）：Node 网关的
+    DM resolve 编排器（server/src/routes/groups/dm-resolve.ts）按登录归属筛选后，
+    用排除法把 find-or-create 限制在「当前身份可归属的会话」内——被排除的候选
+    跳过不命中（全部排除时即新建），使每个登录身份拿到自己的 DM，绝不递到别人
+    的会话（否则归属守卫 404，时间线/发消息全线挂掉）。不传 = 历史行为。
     """
+    excluded = set(exclude_group_ids or [])
     # 找已有 DM conversation（同 workspace + 单成员是该 agent）。
     for rec in _list_groups_records(workspace_id, kinds=["dm"]):
+        if rec.get("group_id") in excluded:
+            continue
         ids = rec.get("agent_ids") or []
         if len(ids) == 1 and ids[0] == agent_id:
             # 秘书问候幂等补种（2026-11-06；同日「Hello World!」改常规欢迎语）：

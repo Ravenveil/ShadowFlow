@@ -27,7 +27,10 @@ import acpRouter from './routes/system/acp';
 import { groupsChatRouter } from './routes/groups/groups-chat';
 // 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
 // 时挂载，挂在 proxyFallback 之前）。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
-import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
+import { groupsNodeRouter } from './routes/groups/groups-node';
+// 2026-11-08 — DM resolve 归属感知（修「消息发不出来」）：每个登录身份只拿得到
+// 自己的 DM，绝不递别人的会话（详见 routes/groups/dm-resolve.ts 文件头）。
+import { handleDmResolveOwned } from './routes/groups/dm-resolve';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/system/fs-browse';
 // Story 15.14 — POST /api/artifacts/lint
@@ -67,7 +70,7 @@ import authRouter from './routes/system/auth';
 // 列表按 owner 过滤、详情按归属校验（非本人 404 不泄露存在性），admin 全量可见。
 import adminRouter from './routes/system/admin';
 import { attachUser, requireAuth, requireAdmin } from './middleware/auth-context';
-import { groupAccessGuard, captureGroupOwnerMiddleware } from './middleware/group-access';
+import { groupAccessGuard } from './middleware/group-access';
 import { apiGuard } from './middleware/api-guard';
 // 公网稳定性/兼容性批（2026-11-08）：keepAlive 对齐反代阈值 + CORS_ORIGINS
 // 补放行来源 + SF_WEB_DIST 单端口 SPA 托管。
@@ -227,10 +230,14 @@ app.use('/api/groups', groupsChatRouter);
 // 经 proxyFallback 转 Python，行为零变化。DM resolve 在 /api/chat/* 下单独挂。
 if (process.env.SF_GROUPS_BACKEND === 'node') {
   app.use('/api/groups', groupsNodeRouter);
-  // DM resolve 建群 → 响应捕获 group_id 记归属（登录用户）。
-  app.post('/api/chat/dm/:agent_id/resolve', captureGroupOwnerMiddleware(), handleDmResolve);
   console.log('[groups] SF_GROUPS_BACKEND=node — /api/groups served by Node SQLite store');
 }
+// DM resolve 归属感知（2026-11-08 修「消息发不出来」）：双后端统一挂载——每个
+// 登录身份只拿得到自己的 DM（本人已有 → 无主认领 → 新建），绝不递别人的会话
+// （否则归属守卫 404，时间线/发消息全线挂掉）。python 模式内部转 Python
+// find-or-create（保留秘书问候播种）；无 req.user 的旧用法 next() 落给
+// proxyFallback。必须挂在 proxyFallback 之前、attachUser 之后。
+app.post('/api/chat/dm/:agent_id/resolve', handleDmResolveOwned);
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
 // 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
 app.use('/api/fs', fsBrowseRouter);

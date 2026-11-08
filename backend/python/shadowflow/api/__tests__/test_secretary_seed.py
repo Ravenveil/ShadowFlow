@@ -156,3 +156,69 @@ class TestSecretarySeed:
         gid = r.json()["group_id"]
         msgs = client.get(f"/api/groups/{gid}/messages").json()["messages"]
         assert msgs == []
+
+
+class TestDmResolveExclude:
+    """exclude_group_ids — 2026-11-08 归属感知（修「消息发不出来」）。
+
+    Node 网关按登录归属筛选出「当前身份可归属的 DM」后用排除法调本端点：
+    被排除的候选不命中（全排除即新建），使每个登录身份拿到自己的 DM。
+    """
+
+    @staticmethod
+    def _create_dm(client, name="总经理"):
+        """经 POST /api/groups 造一条秘书 DM（等价另一身份 resolve 出的会话）。"""
+        r = client.post(
+            "/api/groups",
+            json={"name": name, "agent_ids": ["agent-shadow-secretary"], "kind": "dm"},
+        )
+        assert r.status_code == 201
+        return r.json()["group_id"]
+
+    def test_exclude_skips_excluded_and_returns_other(self, client):
+        """排除 A → 返回 B（而不是先命中 A）。"""
+        gid_a = client.post("/api/chat/dm/agent-shadow-secretary/resolve").json()["group_id"]
+        gid_b = self._create_dm(client)
+        r = client.post(
+            "/api/chat/dm/agent-shadow-secretary/resolve",
+            params=[("exclude_group_ids", gid_a)],
+        )
+        assert r.status_code == 200
+        assert r.json()["group_id"] == gid_b
+        assert r.json()["created"] is False
+
+    def test_exclude_all_creates_new(self, client):
+        """全部排除 → 新建（绝不递回被排除的会话）。"""
+        gid_a = client.post("/api/chat/dm/agent-shadow-secretary/resolve").json()["group_id"]
+        r = client.post(
+            "/api/chat/dm/agent-shadow-secretary/resolve",
+            params=[("exclude_group_ids", gid_a)],
+        )
+        assert r.status_code == 200
+        assert r.json()["created"] is True
+        assert r.json()["group_id"] != gid_a
+        # 新会话同样播种问候
+        msgs = client.get(f"/api/groups/{r.json()['group_id']}/messages").json()["messages"]
+        assert len(msgs) == 1
+        assert msgs[0]["content"] == seed_mod.SECRETARY_GREETING
+
+    def test_exclude_multiple_all_excluded_creates_new(self, client):
+        gid_a = client.post("/api/chat/dm/agent-shadow-secretary/resolve").json()["group_id"]
+        gid_b = self._create_dm(client)
+        r = client.post(
+            "/api/chat/dm/agent-shadow-secretary/resolve",
+            params=[
+                ("exclude_group_ids", gid_a),
+                ("exclude_group_ids", gid_b),
+            ],
+        )
+        assert r.status_code == 200
+        assert r.json()["created"] is True
+        assert r.json()["group_id"] not in {gid_a, gid_b}
+
+    def test_no_exclude_param_keeps_legacy_behavior(self, client):
+        """不传参数 = 历史行为（幂等命中已有会话）。"""
+        gid = client.post("/api/chat/dm/agent-shadow-secretary/resolve").json()["group_id"]
+        r = client.post("/api/chat/dm/agent-shadow-secretary/resolve")
+        assert r.json()["group_id"] == gid
+        assert r.json()["created"] is False

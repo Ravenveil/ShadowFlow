@@ -120,8 +120,11 @@ if (WITH_PYTHON) {
     "-m", "uvicorn", "shadowflow.server:app",
     "--app-dir", path.join(ROOT, "backend", "python"),
     "--host", "127.0.0.1", "--port", String(PY_PORT),
+    // 2026-11-08 · 热重载：Python 改动（如消息附件持久化）此前不重启不生效，
+    // 线上长期跑旧代码静默丢数据。与网关 tsx watch 对齐，改完即生效。
+    "--reload",
   ]);
-  console.log(`[dev] py  ${pyBin} -m uvicorn shadowflow.server:app (:${PY_PORT})`);
+  console.log(`[dev] py  ${pyBin} -m uvicorn shadowflow.server:app (:${PY_PORT}, reload)`);
 }
 launch("gw", process.execPath, [
   path.join("node_modules", "tsx", "dist", "cli.mjs"),

@@ -301,6 +301,20 @@ export default function ProductApp() {
       .catch(() => setProjectsTree([]));
   }, [reloadGroups]);
 
+  // 身份切换（游客 ↔ 登录/注册）→ 旧身份的会话按归属隔离已不可再访问，
+  // 清掉当前会话并重拉列表，避免 timeline 404 把界面卡死在「Group not found」
+  // （2026-11-08 修「消息发不出来」的前端侧）。
+  const authUserId = auth.user?.user_id ?? null;
+  const prevAuthUserIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevAuthUserIdRef.current;
+    prevAuthUserIdRef.current = authUserId;
+    if (prev === undefined || prev === authUserId) return;
+    setActiveGroupId(null);
+    setActiveTitle("新对话");
+    void reloadGroups();
+  }, [authUserId, reloadGroups]);
+
   // 点击账号区外部时收起「三个点」菜单
   useEffect(() => {
     if (!accountMenuOpen) return;
