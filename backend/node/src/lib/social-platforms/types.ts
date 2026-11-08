@@ -27,7 +27,8 @@ export interface PublishReceipt {
   /** 平台侧帖子 ID（mock 模式为确定性派生值）。 */
   external_id?: string;
   /** 失败时的结构化码：CREDENTIALS_MISSING / NEED_COVER_ASSET / NEED_VIDEO_ASSET /
-   *  PLATFORM_LIMIT / REAL_WIRING_PENDING / PLATFORM_REJECTED / NETWORK_ERROR。 */
+   *  PLATFORM_LIMIT / REAL_WIRING_PENDING / PLATFORM_REJECTED / NETWORK_ERROR /
+   *  TOKEN_REFRESH_FAILED（小红书 access_token 过期且自动续期失败）。 */
   code?: string;
   error?: string;
   /** mock 模式模拟的内容审核状态。 */

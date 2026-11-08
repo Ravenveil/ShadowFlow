@@ -9,15 +9,18 @@
  *      JSON {title, content, images: [file_id...]} → data.note_id
  *   统一响应信封 {code, message, data}。
  *
- * 凭证：SP_XHS_ACCESS_TOKEN（授权码/refresh_token 换得的 access_token，约 2h 有效，
- * 由运营方续期填入）。端点按开放平台文档命名，若平台侧路径调整仅需改本文件。
+ * 凭证：SP_XHS_ACCESS_TOKEN（授权码/refresh_token 换得的 access_token，约 2h 有效）。
+ * 发布前走 xhs-token.ts 的 ensureFreshXhsToken() 自动续期：临期（默认 30min）/
+ * 过期/缺 token 时静默 refresh 并回写 .env；续期失败且旧 token 已死 →
+ * TOKEN_REFRESH_FAILED，尚可用 → 降级用旧值。端点按开放平台文档命名，
+ * 若平台侧路径调整仅需改本文件。
  */
 
 import { downloadBytes, postJson, postMultipart, asRecord, asString } from './http';
+import { ensureFreshXhsToken } from './xhs-token';
 import type { PlatformAdapter, PlatformSpec, PublishReceipt } from './types';
 
 const BASE = 'https://open.xiaohongshu.com/api/v1';
-const AUTH = () => ({ authorization: `Bearer ${(process.env.SP_XHS_ACCESS_TOKEN ?? '').trim()}` });
 
 /** 统一信封成功判定：code 0/200 或 success=true。 */
 function envelopeError(data: unknown): string | null {
@@ -34,8 +37,11 @@ export function createXiaohongshuAdapter(_spec: PlatformSpec): PlatformAdapter {
     platform: _spec.id,
     mode: 'real',
     async publish(_postId, input): Promise<PublishReceipt> {
-      const token = (process.env.SP_XHS_ACCESS_TOKEN ?? '').trim();
-      if (!token) {
+      // 发布前自动续期：临期（默认 30min）/过期/缺 token 静默 refresh；
+      // 失败且旧 token 已死 → TOKEN_REFRESH_FAILED，尚可用 → 降级用旧值
+      const ensured = await ensureFreshXhsToken();
+      if (!ensured.ok) return { ok: false, code: ensured.code, error: ensured.error };
+      if (!ensured.accessToken) {
         return {
           ok: false,
           code: 'CREDENTIALS_MISSING',
@@ -44,6 +50,7 @@ export function createXiaohongshuAdapter(_spec: PlatformSpec): PlatformAdapter {
             '需企业资质开通「笔记发布」权限后由授权码/refresh_token 换取）',
         };
       }
+      const auth = () => ({ authorization: `Bearer ${ensured.accessToken}` });
       try {
         // 1. 逐图上传拿 file_id
         const fileIds: string[] = [];
@@ -53,7 +60,7 @@ export function createXiaohongshuAdapter(_spec: PlatformSpec): PlatformAdapter {
             `${BASE}/upload/image`,
             {},
             [{ field: 'file', filename: img.filename, bytes: img.bytes, contentType: img.contentType }],
-            AUTH(),
+            auth(),
           );
           const err = envelopeError(up.data);
           if (err) return { ok: false, code: 'PLATFORM_REJECTED', error: `图片上传失败: ${err}`, raw: up.data };
@@ -66,7 +73,7 @@ export function createXiaohongshuAdapter(_spec: PlatformSpec): PlatformAdapter {
         const res = await postJson(
           `${BASE}/note/publish`,
           { title: input.title, content: input.content, images: fileIds },
-          AUTH(),
+          auth(),
         );
         const err = envelopeError(res.data);
         if (err) return { ok: false, code: 'PLATFORM_REJECTED', error: `笔记发布失败: ${err}`, raw: res.data };

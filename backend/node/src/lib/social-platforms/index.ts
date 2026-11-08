@@ -55,8 +55,10 @@ const REAL_ENV: Record<string, RealEnvContract> = {
     note: '公众号 appid/secret 换 access_token（可选 SP_WECHAT_MP_ACCESS_TOKEN 覆盖，服务商代发布用）',
   },
   xiaohongshu: {
-    envs: ['SP_XHS_ACCESS_TOKEN'],
-    note: '小红书开放平台 OAuth2 access_token（需企业资质 + 「笔记发布」权限，约 2h 有效需续期）',
+    envs: ['SP_XHS_CLIENT_ID', 'SP_XHS_CLIENT_SECRET', 'SP_XHS_ACCESS_TOKEN', 'SP_XHS_REFRESH_TOKEN'],
+    note:
+      '小红书开放平台 OAuth2（企业资质 + 「笔记发布」权限）：access_token 约 2h 有效，' +
+      '经 /api/social-publish/xhs/* 浏览器授权→code 换 token→refresh 续期并回写 .env（发布前自动续期）',
   },
   douyin: {
     envs: ['SP_DOUYIN_ACCESS_TOKEN', 'SP_DOUYIN_OPEN_ID'],

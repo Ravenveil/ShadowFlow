@@ -17,6 +17,12 @@
  *   POST /api/social-publish/posts/:id/publish    → 发布/重试（mock 或 real 由账号
  *                                                   auth_mode 决定，失败不 5xx）
  *   GET  /api/social-publish/posts/:id/log        → 发布回执（每次尝试一条）
+ *   GET  /api/social-publish/xhs/auth-url         → 小红书 OAuth2 授权页 URL（一次性
+ *                                                   浏览器登录，回调带 ?code=）
+ *   POST /api/social-publish/xhs/exchange         → code 换 access_token+refresh_token，
+ *                                                   回写 .env（约 2h 有效）
+ *   POST /api/social-publish/xhs/refresh          → refresh_token 续期，回写 .env
+ *   GET  /api/social-publish/xhs/token-status     → token 状态（打码，不回显明文）
  *
  * IMPORTANT: 字面量路径全部注册在 /:id 之前，避免 Express 把 "posts" 当 id。
  */
@@ -24,6 +30,12 @@
 import { Router, Request, Response } from 'express';
 import { PLATFORMS, realEnvContract, realFlow } from '../../lib/social-platforms';
 import { marketingCopy } from '../../lib/social-platforms/copy';
+import {
+  buildXhsAuthUrl,
+  exchangeXhsCode,
+  refreshXhsToken,
+  xhsTokenStatus,
+} from '../../lib/social-platforms/xhs-token';
 import {
   SocialPublishError,
   createAccount,
@@ -80,6 +92,39 @@ router.get('/stats', (_req: Request, res: Response) => {
   } catch (err) {
     fail(res, err);
   }
+});
+
+// ── 小红书 OAuth2 token 生命周期（2026-11-08）────────────────────────────────
+// 链路：auth-url（一次性浏览器登录）→ 回调拿 code → exchange 换 token 写 .env →
+// access_token 约 2h 过期后 refresh 续期再写 .env。全部无 5xx，结构化回执。
+
+// ① 浏览器授权 URL——整条链路唯一需要弹浏览器登录的一步
+router.get('/xhs/auth-url', (req: Request, res: Response) => {
+  const state = str(req.query.state, 64) || undefined;
+  res.json(buildXhsAuthUrl(state));
+});
+
+// ② 授权回调 ?code= 换 access_token + refresh_token，回写 .env
+router.post('/xhs/exchange', async (req: Request, res: Response) => {
+  try {
+    res.json(await exchangeXhsCode(str(body(req).code, 256)));
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// ③ refresh_token 续期（约 2h 一次；纯服务端 HTTP，不需要浏览器）
+router.post('/xhs/refresh', async (_req: Request, res: Response) => {
+  try {
+    res.json(await refreshXhsToken());
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// ④ token 状态自省（打码，不回显明文；供前端「已配置/已过期」提示）
+router.get('/xhs/token-status', (_req: Request, res: Response) => {
+  res.json(xhsTokenStatus());
 });
 
 // ── 账号 ──────────────────────────────────────────────────────────────────────

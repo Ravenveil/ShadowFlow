@@ -6,9 +6,14 @@
  *   - 请求体形态（form / json / multipart / 纯二进制）与关键字段
  *   - 平台错误 → 结构化 PLATFORM_REJECTED；缺凭证/缺素材 → CREDENTIALS_MISSING /
  *     NEED_COVER_ASSET / NEED_VIDEO_ASSET；网络失败 → NETWORK_ERROR；超长 → PLATFORM_LIMIT
+ *   - 小红书发布前自动续期（xhs-token ensureFreshXhsToken）：过期 → 先 refresh 后
+ *     上传/发布；续期失败降级旧 token / TOKEN_REFRESH_FAILED
  */
 
-import { describe, it, expect, beforeAll, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { getAdapter } from '../lib/social-platforms';
 import { marketingCopy } from '../lib/social-platforms/copy';
 
@@ -74,6 +79,17 @@ const ENV_KEYS = [
   'SP_WECHAT_MP_ACCESS_TOKEN',
   'SP_WEIBO_ACCESS_TOKEN',
   'SP_XHS_ACCESS_TOKEN',
+  'SP_XHS_CLIENT_ID',
+  'SP_XHS_CLIENT_SECRET',
+  'SP_XHS_REFRESH_TOKEN',
+  'SP_XHS_ACCESS_TOKEN_EXPIRES_AT',
+  'SP_XHS_REFRESH_MARGIN_MS',
+  'SP_XHS_REDIRECT_URI',
+  'SP_XHS_SCOPE',
+  'SP_XHS_OAUTH_BASE',
+  'SP_XHS_AUTHORIZE_URL',
+  'SP_XHS_TOKEN_URL',
+  'SF_ENV_PATH',
   'SP_DOUYIN_ACCESS_TOKEN',
   'SP_DOUYIN_OPEN_ID',
   'SP_KUAISHOU_ACCESS_TOKEN',
@@ -253,6 +269,14 @@ describe('weibo real 链（update / upload）', () => {
 // ── 小红书 ────────────────────────────────────────────────────────────────────
 
 describe('xiaohongshu real 链（upload/image → note/publish）', () => {
+  // 自动续期会回写 .env → SF_ENV_PATH 隔离到 tmp，防止写真实 .env
+  let tmp: string;
+  beforeAll(() => {
+    tmp = mkdtempSync(path.join(tmpdir(), 'sf-xhs-real-'));
+  });
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
   it('图片上传拿 file_id 后发布，Bearer 鉴权，note_id 作 external_id', async () => {
     clearEnv();
     process.env.SP_XHS_ACCESS_TOKEN = 'xhs-tok';
@@ -287,6 +311,80 @@ describe('xiaohongshu real 链（upload/image → note/publish）', () => {
     const adapter = getAdapter('xiaohongshu', 'real');
     const receipt = await adapter.publish('p', { title: 't', content: 'c', media: [] }, 1);
     expect(receipt.code).toBe('CREDENTIALS_MISSING');
+  });
+
+  it('发布前自动续期：token 过期 → 先 refresh 再上传/发布，Bearer 用新 token', async () => {
+    clearEnv();
+    process.env.SF_ENV_PATH = path.join(tmp, 'happy.env');
+    process.env.SP_XHS_CLIENT_ID = 'xhs-app';
+    process.env.SP_XHS_CLIENT_SECRET = 'xhs-secret';
+    process.env.SP_XHS_REFRESH_TOKEN = 'xhs-ref';
+    process.env.SP_XHS_ACCESS_TOKEN = 'xhs-stale';
+    process.env.SP_XHS_ACCESS_TOKEN_EXPIRES_AT = String(Date.now() - 1000); // 已过期 → 必刷
+    responder = (url) => {
+      if (url.includes('/oauth/token')) return jsonRes({ access_token: 'xhs-renewed', refresh_token: 'xhs-ref-2', expires_in: 7200 });
+      if (url.includes('/upload/image')) return jsonRes({ code: 0, data: { file_id: 'f-1' } });
+      return jsonRes({ code: 0, data: { note_id: 'note-8' } });
+    };
+    const adapter = getAdapter('xiaohongshu', 'real');
+    const receipt = await adapter.publish('p', { title: 't', content: 'c', media: ['https://assets/a.png'] }, 1);
+    expect(receipt.ok).toBe(true);
+    expect(receipt.external_id).toBe('note-8');
+
+    // 顺序：先续期，后上传、发布
+    const iTok = calls.findIndex((c) => c.url.includes('/oauth/token'));
+    const iUp = calls.findIndex((c) => c.url.includes('/upload/image'));
+    const iPub = calls.findIndex((c) => c.url.includes('/note/publish'));
+    expect(iTok).toBeGreaterThanOrEqual(0);
+    expect(iTok).toBeLessThan(iUp);
+    expect(iUp).toBeLessThan(iPub);
+
+    // 发布用的是续期后的新 token，且已回写 process.env/.env
+    const pub = call('/note/publish');
+    expect((pub.init?.headers as Record<string, string>).authorization).toBe('Bearer xhs-renewed');
+    expect(process.env.SP_XHS_ACCESS_TOKEN).toBe('xhs-renewed');
+  });
+
+  it('续期失败但旧 token 未过期 → 降级用旧 token 发布', async () => {
+    clearEnv();
+    process.env.SF_ENV_PATH = path.join(tmp, 'degrade.env');
+    process.env.SP_XHS_CLIENT_ID = 'xhs-app';
+    process.env.SP_XHS_CLIENT_SECRET = 'xhs-secret';
+    process.env.SP_XHS_REFRESH_TOKEN = 'xhs-ref';
+    process.env.SP_XHS_ACCESS_TOKEN = 'xhs-usable';
+    process.env.SP_XHS_ACCESS_TOKEN_EXPIRES_AT = String(Date.now() + 5 * 60_000); // 临期但仍有效
+    responder = (url) => {
+      if (url.includes('/oauth/token')) return jsonRes({ error: 'invalid_grant', error_description: 'refresh_token 已失效' });
+      if (url.includes('/upload/image')) return jsonRes({ code: 0, data: { file_id: 'f-2' } });
+      return jsonRes({ code: 0, data: { note_id: 'note-7' } });
+    };
+    const adapter = getAdapter('xiaohongshu', 'real');
+    const receipt = await adapter.publish('p', { title: 't', content: 'c', media: ['https://assets/a.png'] }, 1);
+    expect(receipt.ok).toBe(true);
+    expect(receipt.external_id).toBe('note-7');
+    const pub = call('/note/publish');
+    expect((pub.init?.headers as Record<string, string>).authorization).toBe('Bearer xhs-usable');
+  });
+
+  it('续期失败且 token 已死 → TOKEN_REFRESH_FAILED，不打上传/发布端点', async () => {
+    clearEnv();
+    process.env.SF_ENV_PATH = path.join(tmp, 'dead.env');
+    process.env.SP_XHS_CLIENT_ID = 'xhs-app';
+    process.env.SP_XHS_CLIENT_SECRET = 'xhs-secret';
+    process.env.SP_XHS_REFRESH_TOKEN = 'xhs-ref';
+    process.env.SP_XHS_ACCESS_TOKEN = 'xhs-dead';
+    process.env.SP_XHS_ACCESS_TOKEN_EXPIRES_AT = String(Date.now() - 1000);
+    responder = (url) => {
+      if (url.includes('/oauth/token')) return jsonRes({ error: 'invalid_grant', error_description: 'refresh_token 已失效' });
+      return jsonRes({ code: 0, data: {} });
+    };
+    const adapter = getAdapter('xiaohongshu', 'real');
+    const receipt = await adapter.publish('p', { title: 't', content: 'c', media: ['https://assets/a.png'] }, 1);
+    expect(receipt.ok).toBe(false);
+    expect(receipt.code).toBe('TOKEN_REFRESH_FAILED');
+    expect(receipt.error).toContain('refresh_token 已失效');
+    expect(calls.some((c) => c.url.includes('/upload/image'))).toBe(false);
+    expect(calls.some((c) => c.url.includes('/note/publish'))).toBe(false);
   });
 });
 
