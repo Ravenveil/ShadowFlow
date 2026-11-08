@@ -1,4 +1,6 @@
 /* turn-rail.css — 会话侧轮次锚点垂直滚动条（2026-11-08）。
+   视觉：标准网页滚动条灰阶风（细轨道 + 实心灰滑块 + 分格刻度），非激活态半透明，
+   悬停整条提亮。功能不变：滑块拖拽、点击轨道跳转、一格一轮定位、悬停预览。
    本文件故意不进 @layer：无层规则天然压过 product-app.css 的 @layer components，
    从而不动那个并行编辑中的大样式表也能修正滚动链（grid 行/项缺 min-height 会把
    消息列表撑出视口 → 滚轮失效、底部消息被绝对定位的输入框坞遮挡）。 */
@@ -24,33 +26,41 @@
 /* ── 轮次滚动条本体 ───────────────────────────────────────────────── */
 .sf-turn-rail {
   position: absolute;
-  right: 10px;
+  right: 8px;
   top: 18px;
   bottom: calc(var(--sf-dock-h, 150px) + 28px);
-  width: 20px;
+  width: 12px;
   z-index: 4;
   display: flex;
   flex-direction: column;
   outline: none;
+  opacity: 0.55;
+  transition: opacity 0.18s;
+}
+.sf-turn-rail:hover,
+.sf-turn-rail:focus-visible,
+.sf-turn-rail.dragging {
+  opacity: 1;
 }
 .sf-turn-track {
   position: relative;
   flex: 1;
-  border-radius: 10px;
-  background: rgba(23, 22, 45, 0.05);
+  border-radius: 8px;
+  background: rgba(20, 20, 30, 0.05);
   cursor: pointer;
   touch-action: none;
 }
 
-/* 每一轮对话一格（分段锚点） */
+/* 每一轮对话一格（分段锚点）：格间缝隙透出轨道形成细分隔，
+   即「一格一格」的网页滚动条刻度观感 */
 .sf-turn-cell {
   position: absolute;
   left: 0;
   right: 0;
   display: block;
   border: 0;
-  border-radius: 6px;
-  background: rgba(23, 22, 45, 0.12);
+  border-radius: 5px;
+  background: rgba(20, 20, 30, 0.1);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -58,23 +68,26 @@
   margin-top: 2px;
 }
 .sf-turn-cell:hover {
-  background: rgba(255, 94, 58, 0.4);
+  background: rgba(20, 20, 30, 0.18);
 }
 .sf-turn-cell.on {
-  background: rgba(255, 94, 58, 0.85);
+  background: rgba(20, 20, 30, 0.34);
 }
+/* 序号默认收起（网页滚动条不带数字），悬停该格随预览一起浮现 */
 .sf-turn-cell em {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  color: rgba(23, 22, 45, 0.55);
+  color: rgba(20, 20, 30, 0.55);
   font: 500 8px "DM Mono";
   font-style: normal;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
 }
-.sf-turn-cell.on em {
-  color: #fff;
+.sf-turn-cell:hover em {
+  opacity: 1;
 }
 
 /* 悬停提示：轮次预览 */
@@ -100,47 +113,46 @@
   transition: opacity 0.12s;
 }
 .sf-turn-tip strong {
-  color: #ff5e3a;
+  color: #888;
   font: 500 9px "DM Mono";
 }
 .sf-turn-cell:hover .sf-turn-tip {
   opacity: 1;
 }
 
-/* 滑块（视口括条）：可拖拽滑动页面 */
+/* 滑块（视口括条）：网页滚动条实心灰胶囊，可拖拽滑动页面 */
 .sf-turn-thumb {
   position: absolute;
-  left: -3px;
-  right: -3px;
-  border: 1.5px solid rgba(255, 94, 58, 0.75);
-  border-radius: 9px;
-  background: rgba(255, 94, 58, 0.16);
+  left: 1px;
+  right: 1px;
+  border-radius: 7px;
+  background: rgba(20, 20, 30, 0.42);
+  box-shadow: 0 1px 3px rgba(20, 20, 30, 0.18);
   cursor: grab;
+  transition: background 0.15s;
+}
+.sf-turn-thumb:hover,
+.sf-turn-thumb.dragging {
+  background: rgba(20, 20, 30, 0.62);
 }
 .sf-turn-thumb.dragging {
   cursor: grabbing;
-  background: rgba(255, 94, 58, 0.28);
 }
+/* 抓手横线收起（网页滚动条无抓手），DOM 保留不碍事 */
 .sf-turn-thumb i {
-  position: absolute;
-  left: 50%;
-  width: 8px;
-  height: 1.5px;
-  border-radius: 2px;
-  background: rgba(255, 94, 58, 0.8);
-  transform: translateX(-50%);
+  display: none;
 }
-.sf-turn-thumb i:first-child {
-  top: 4px;
-}
-.sf-turn-thumb i:last-child {
-  bottom: 4px;
+/* 键盘聚焦可见性 */
+.sf-turn-rail:focus-visible .sf-turn-thumb {
+  background: rgba(20, 20, 30, 0.62);
+  outline: 2px solid rgba(20, 20, 30, 0.35);
+  outline-offset: 1px;
 }
 
 /* 窄屏：收薄 */
 @media (max-width: 900px) {
   .sf-turn-rail {
-    right: 4px;
-    width: 14px;
+    right: 3px;
+    width: 8px;
   }
 }
