@@ -138,6 +138,8 @@ export function applyPatch(msg: TimelineMessage, patch: MessagePatch): TimelineM
 export interface ReplayableEvent {
   event: string;
   data: unknown;
+  /** RunEventRecord.ts（epoch ms）——崩溃恢复合成帧投影成可见消息时取时间戳。 */
+  ts?: number;
 }
 
 function isTimelineMessage(data: unknown): data is TimelineMessage {
@@ -180,6 +182,25 @@ export function replayTimeline(events: ReplayableEvent[]): TimelineMessage[] {
       const pos = index.get(rec.data.id);
       if (pos === undefined) continue;
       out[pos] = applyPatch(out[pos], rec.data);
+    } else if (rec.event === 'error') {
+      // 2026-11-08 快速收尾 — 崩溃恢复合成帧（interrupted_by_restart）投影成
+      // 可见 raw 系统行：进程热重启掐死在飞轮后，此帧此前只进 run 日志，
+      // 归并时间线里聊天零收场（用户只见思考卡落定、没有回复气泡）。
+      // 普通 error 帧（run 级异常）不投影，行为零变化。
+      const d = rec.data as { session_id?: unknown; interrupted_by_restart?: unknown } | null;
+      if (d && typeof d === 'object' && d.interrupted_by_restart === true) {
+        const sid = typeof d.session_id === 'string' ? d.session_id : 'run';
+        const prev = out[out.length - 1];
+        out.push({
+          id: `restart_${sid}`,
+          kind: 'raw',
+          // 归入被中断那轮的 turn（合成帧恒在事件尾部，prev 即中断轮最后消息）。
+          turn_id: prev?.turn_id ?? `restart_${sid}`,
+          ts: typeof rec.ts === 'number' ? rec.ts : (prev?.ts ?? 0),
+          body: '[chat] 上一轮回复因服务重启中断（过程记录已保留），可重新发送继续。',
+          source: 'chat-gateway',
+        });
+      }
     }
   }
   return out;

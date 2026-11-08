@@ -306,6 +306,13 @@ export async function runTeamDagFanout(
       perAgent[agentId] = 'error';
       nodeOutcome.set(agentId, 'error');
       errMsgOf.set(agentId, res.error ?? '');
+      // 2026-11-08 快速收尾 — 出错前已有正文（含思考体兜底）时先落回复气泡，
+      // 再落错误系统行：此前只报错丢正文，模型把内容写进 reasoning_content
+      // 又中途出错时用户只见思考卡、没有任何输出。
+      const partial = (res.text ?? '').trim();
+      if (partial) {
+        await deps.postMessage({ content: partial, sender_name: agent.name, sender_kind: 'agent', agent_id: agentId });
+      }
       await deps.postMessage({ content: `[chat] ${agent.name} 出错：${humanizeModelError(res.error)}`, sender_name: 'system', sender_kind: 'system' });
       return 'error';
     }

@@ -345,3 +345,60 @@ describe('chatMessagesToTimeline — group MessageItem adaptation', () => {
     expect('attachments' in out[2]).toBe(false);
   });
 });
+
+// ── 2026-11-08 快速收尾 — 崩溃恢复合成帧投影成可见收场行 ─────────────────────
+describe('replayTimeline — interrupted_by_restart 收场投影', () => {
+  it('崩溃恢复合成帧（interrupted_by_restart）投影成 raw 系统行，归入被中断轮', () => {
+    const events: ReplayableEvent[] = [
+      { event: 'message', data: { ...base, id: 'th1', kind: 'thinking', label: '思考中', status: 'streaming' } },
+      { event: 'message-patch', data: { id: 'th1', op: 'thinking_finalize', duration_ms: 900 } },
+      {
+        event: 'error',
+        ts: 1900,
+        data: {
+          session_id: 's-run-1',
+          code: 'server',
+          message: '会话进程已重启，本次运行已中断（历史已保留）',
+          interrupted_by_restart: true,
+        },
+      },
+    ];
+    const out = replayTimeline(events);
+    expect(out).toHaveLength(2);
+    // 过程卡照常收口
+    expect(out[0]).toMatchObject({ id: 'th1', kind: 'thinking', status: 'done' });
+    // 尾部新增可见收场行：稳定 id / 归入中断轮 turn / 取帧时间戳
+    expect(out[1]).toMatchObject({
+      id: 'restart_s-run-1',
+      kind: 'raw',
+      turn_id: 't1',
+      ts: 1900,
+      source: 'chat-gateway',
+    });
+    if (out[1].kind !== 'raw') throw new Error('kind drifted');
+    expect(out[1].body).toContain('中断');
+  });
+
+  it('普通 error 帧（无 interrupted_by_restart）不投影，行为零变化', () => {
+    const events: ReplayableEvent[] = [
+      { event: 'message', data: { ...base, id: 'a1', kind: 'assistant_text', body: 'hi' } },
+      { event: 'error', ts: 1800, data: { session_id: 's-run-2', code: 'server', message: 'boom' } },
+    ];
+    const out = replayTimeline(events);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ id: 'a1', kind: 'assistant_text' });
+  });
+
+  it('空 run（无任何消息帧）也能出收场行，turn_id 兜底', () => {
+    const events: ReplayableEvent[] = [
+      {
+        event: 'error',
+        ts: 1900,
+        data: { session_id: 's-run-3', interrupted_by_restart: true },
+      },
+    ];
+    const out = replayTimeline(events);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ id: 'restart_s-run-3', kind: 'raw', turn_id: 'restart_s-run-3', ts: 1900 });
+  });
+});

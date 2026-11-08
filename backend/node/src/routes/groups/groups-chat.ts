@@ -1512,6 +1512,11 @@ async function runFanout(
               });
             }
             let buf = '';
+            // 2026-11-08 快速收尾 — 思考体累积（text-delta 剥定界符后的卡体文本 +
+            // thinking-delta 结构化思考）：模型把报告全写进 reasoning_content
+            //（MiMo 实测）时 stripThinking(buf) 为空，收口以思考体兜底当回复，
+            // 杜绝「只有思考卡、没有回复气泡」。
+            let thinkingBody = '';
             let errMsg = '';
             // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
             const thinkStream = createThinkingTagStream();
@@ -1534,16 +1539,25 @@ async function runFanout(
                   const piece = sseWireToText(chunk.value);
                   buf += piece;
                   // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
-                  if (gw && thinkingId && piece) {
+                  // 2026-11-08 — thinkStream 推进不再依赖 gw（思考体累积给回复
+                  // 兜底用），emitPatch 仍 gw 防御。
+                  if (piece) {
                     const shown = thinkStream.push(piece);
                     if (shown) {
-                      gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+                      thinkingBody += shown;
+                      if (gw && thinkingId) {
+                        gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+                      }
                     }
                   }
                 } else if (chunk.type === 'thinking-delta') {
                   // 2026-11-04 — API 路结构化思考通道：只点亮过程卡，不进 buf。
-                  if (gw && thinkingId && chunk.value) {
-                    gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+                  // 2026-11-08 — 同时进思考体累积（回复兜底素材）。
+                  if (chunk.value) {
+                    thinkingBody += chunk.value;
+                    if (gw && thinkingId) {
+                      gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+                    }
                   }
                 } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
                   // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）；
@@ -1597,9 +1611,13 @@ async function runFanout(
             // 2026-11-08 图→博文流水线 — 草拟回合防线：[post] 降级 [draft]
             //（soul 的「产出可发布贴文输出 [post]」不能把未确认草稿直接发出去），
             // [draft] 走 runCraftFlowActions 挂钩点落流水线。
-            if (errMsg) return { text: stripThinking(buf), error: errMsg };
+            // 2026-11-08 快速收尾 — 回复兜底（根因 A）：模型（MiMo）把报告全写进
+            // reasoning_content 时剥思考后正文为空 → 取思考体当回复，杜绝
+            // 「只有思考卡、没有回复气泡」。正文优先，思考体次之。
+            const replySource = stripThinking(buf).trim() || thinkingBody.trim();
+            if (errMsg) return { text: replySource, error: errMsg };
             const draftTurn = craftScoped && isPostDraftRequest(basePrompt);
-            const dagText = draftTurn ? convertPostMarkersToDraft(stripThinking(buf)) : stripThinking(buf);
+            const dagText = draftTurn ? convertPostMarkersToDraft(replySource) : replySource;
             const appliedDag = await applyCraftMarkers(dagText, { scoped: craftScoped });
             await runCraftFlowActions(group, appliedDag.actions, { executor, model, headers }, attachments, draftTurn);
             return { text: appliedDag.cleaned, error: undefined };
@@ -1779,6 +1797,9 @@ async function runFanout(
       // 顺带 abort 上一轮残留），使 POST /:id/stop 能真中断 for-await 流。
       const ctrl = swapDagRun(groupId, activeDagRuns);
       let buf = '';
+      // 2026-11-08 快速收尾 — 思考体累积（DAG 路径同款）：正文剥思考后为空时
+      // 以思考体兜底当回复，杜绝「只有思考卡、没有回复气泡」。
+      let thinkingBody = '';
       let errMsg = '';
       // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
       const thinkStream = createThinkingTagStream();
@@ -1801,17 +1822,25 @@ async function runFanout(
             const piece = sseWireToText(chunk.value);
             buf += piece;
             // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
-            if (gw && thinkingId && piece) {
+            // 2026-11-08 — thinkStream 推进不依赖 gw（思考体累积给回复兜底）。
+            if (piece) {
               const shown = thinkStream.push(piece);
               if (shown) {
-                gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+                thinkingBody += shown;
+                if (gw && thinkingId) {
+                  gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
+                }
               }
             }
           } else if (chunk.type === 'thinking-delta') {
             // 2026-11-04 — API 路结构化思考通道（ApiClientCallable reasoning_content
             // → thinking-delta）：就近点亮过程卡，绝不混进最终回复 buf。
-            if (gw && thinkingId && chunk.value) {
-              gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+            // 2026-11-08 — 同时进思考体累积（回复兜底素材）。
+            if (chunk.value) {
+              thinkingBody += chunk.value;
+              if (gw && thinkingId) {
+                gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+              }
             }
           } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
             // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）；
@@ -1873,10 +1902,13 @@ async function runFanout(
       // 2026-11-07 代卖协议标记 — 串行路径同款：落业务动作 + 剥标记，
       // [build-team]/[dispatch] 流程动作在挂钩点执行（总经理主控）。
       // 2026-11-08 图→博文流水线 — 草拟回合防线与 DAG 路径同款（[post]→[draft]）。
+      // 2026-11-08 快速收尾 — 回复兜底（DAG 路径同款）：正文剥思考后为空时
+      // 取思考体当回复。
+      const replySource = stripThinking(buf).trim() || thinkingBody.trim();
       const serialDraftTurn = craftScoped && isPostDraftRequest(prompt);
       const serialText = serialDraftTurn
-        ? convertPostMarkersToDraft(stripThinking(buf))
-        : stripThinking(buf);
+        ? convertPostMarkersToDraft(replySource)
+        : replySource;
       const appliedSerial = await applyCraftMarkers(serialText, { scoped: craftScoped });
       await runCraftFlowActions(group, appliedSerial.actions, { executor, model, headers }, attachments, serialDraftTurn);
       const reply = appliedSerial.cleaned.trim();
