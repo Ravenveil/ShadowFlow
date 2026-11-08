@@ -881,7 +881,7 @@ export default function ProductApp() {
 
         {view === "chat" && (
           <div
-            className={`sf-chat-layout ${panelOpen ? "" : "panel-closed"} ${detailOpen ? "" : "detail-closed"}`}
+            className={`sf-chat-layout ${panelOpen ? "" : "panel-closed"}`}
           >
             {panelOpen && (
               <aside className="sf-thread-panel">
@@ -1038,6 +1038,17 @@ export default function ProductApp() {
               onDragLeave={onChatDragLeave}
               onDrop={onChatDrop}
             >
+              {/* 执行详情：原右侧侧边栏，现移到对话框上方内嵌显示（仍受顶栏「执行详情」开关联动） */}
+              {detailOpen && (
+                <RunPanel
+                  groupId={activeGroupId}
+                  groupName={activeTitle}
+                  chat={chat}
+                  agentsList={agentsList}
+                  agentsState={agentsState}
+                  onClose={() => setDetailOpen(false)}
+                />
+              )}
               <div className="sf-chat-scroll sf-thread-enter" key={activeGroupId ?? "none"}>
                 <ChatThread chat={chat} onQuick={sendText} onLogin={() => openAuth("login")} />
               </div>
@@ -1284,17 +1295,6 @@ export default function ProductApp() {
                 </div>
               )}
             </section>
-
-            {detailOpen && (
-              <RunPanel
-                groupId={activeGroupId}
-                groupName={activeTitle}
-                chat={chat}
-                agentsList={agentsList}
-                agentsState={agentsState}
-                onClose={() => setDetailOpen(false)}
-              />
-            )}
           </div>
         )}
 
@@ -2462,7 +2462,7 @@ function SfDagPanel({ team, matrix }: { team: SfTeamDag; matrix: PolicyMatrix })
                   markerEnd="url(#sf-arrow)"
                 />
                 {v.label && (
-                  <text x={lx} y={ly} textAnchor="middle" fontSize={7.5} fontWeight={600} fill={v.stroke}>
+                  <text x={lx} y={ly} textAnchor="middle" fontSize={9.5} fontWeight={600} fill={v.stroke}>
                     {v.label}
                   </text>
                 )}
@@ -2503,13 +2503,13 @@ function SfDagPanel({ team, matrix }: { team: SfTeamDag; matrix: PolicyMatrix })
                   x={22}
                   y={NH / 2 + 3.5}
                   textAnchor="middle"
-                  fontSize={11}
+                  fontSize={13}
                   fontWeight={700}
                   fill="#fff"
                 >
                   {(n.title || n.id).slice(0, 1)}
                 </text>
-                <text x={41} y={NH / 2 + 3.5} fontSize={11} fontWeight={650} fill="#17162d">
+                <text x={41} y={NH / 2 + 3.5} fontSize={13} fontWeight={650} fill="#17162d">
                   {n.title || n.id}
                 </text>
               </g>
@@ -3041,7 +3041,7 @@ function KnowledgeView() {
                 x={cx as number}
                 y={(cy as number) + (r as number) + 11}
                 textAnchor="middle"
-                fontSize="8"
+                fontSize="10"
                 fill="#77737d"
               >
                 {label as string}
@@ -3465,10 +3465,10 @@ function DashboardView() {
                 strokeDasharray={`${(successRate / 100) * 314} 314`}
                 transform="rotate(-90 60 60)"
               />
-              <text x="60" y="60" textAnchor="middle" fontSize="19" fontWeight="800" fill="#17162d">
+              <text x="60" y="60" textAnchor="middle" fontSize="21" fontWeight="800" fill="#17162d">
                 {successRate}%
               </text>
-              <text x="60" y="76" textAnchor="middle" fontSize="8" fill="#999">
+              <text x="60" y="76" textAnchor="middle" fontSize="10" fill="#999">
                 成功 {runs.succeeded}
               </text>
             </svg>

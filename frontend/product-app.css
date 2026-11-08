@@ -39,7 +39,7 @@
     align-items: center;
     gap: 8px;
     color: var(--sf-text);
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 800;
     letter-spacing: -0.035em;
   }
@@ -87,7 +87,7 @@
     background: #f8f5ee;
     padding: 0 10px;
     color: #17162d;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     text-align: left;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035);
@@ -149,12 +149,12 @@
     flex-direction: column;
   }
   .sf-drawer-head strong {
-    font-size: 11px;
+    font-size: 13px;
   }
   .sf-drawer-head small {
     margin-top: 1px;
     color: #9a958e;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-drawer-head > button {
     width: 28px;
@@ -180,7 +180,7 @@
     border-radius: 8px;
     color: #17162d;
     background: #fffdf9;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
   }
   .sf-new-chat:hover {
@@ -194,7 +194,7 @@
     border-radius: 5px;
     padding: 2px 5px;
     color: #aaa;
-    font: 8px "DM Mono";
+    font: 10px "DM Mono";
   }
   .sf-search {
     height: 34px;
@@ -213,7 +213,7 @@
     border: 0;
     outline: 0;
     background: transparent;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-search kbd {
     border-color: #e1e1df;
@@ -222,7 +222,7 @@
   .sf-thread-panel > p {
     margin: 13px 7px 5px;
     color: #aaa;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
@@ -275,7 +275,7 @@
   }
   .sf-conversation-list strong {
     overflow: hidden;
-    font-size: 9px;
+    font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -283,14 +283,14 @@
     margin-top: 2px;
     overflow: hidden;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .sf-conversation-list time {
     align-self: start;
     color: #aaa;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-project-tree {
     display: flex;
@@ -307,7 +307,7 @@
     border-radius: 8px;
     padding: 0 7px;
     color: #77716b;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 650;
     text-align: left;
   }
@@ -338,13 +338,13 @@
     flex-direction: column;
   }
   .sf-agent-tree-row strong {
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-agent-tree-row small {
     margin-top: 2px;
     overflow: hidden;
     color: #9a958e;
-    font-size: 6px;
+    font-size: 8px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -384,7 +384,7 @@
     border-radius: 9px;
     padding: 0 9px;
     color: #63636a;
-    font-size: 11px;
+    font-size: 13px;
     text-align: left;
   }
   .sf-primary-nav button:hover,
@@ -403,7 +403,7 @@
     background: #dededb;
     padding: 1px 6px;
     color: #777;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-rail-section {
     margin-top: 21px;
@@ -411,7 +411,7 @@
   .sf-rail-section > p {
     margin: 0 9px 6px;
     color: #a1a1a5;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
@@ -435,7 +435,7 @@
     border-radius: 9px;
     background: #17162d;
     color: #fff;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
   }
   .sf-account > div {
@@ -444,12 +444,12 @@
     flex-direction: column;
   }
   .sf-account strong {
-    font-size: 9px;
+    font-size: 11px;
   }
   .sf-account small {
     overflow: hidden;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -497,7 +497,7 @@
     flex-direction: column;
   }
   .sf-title-block strong {
-    font-size: 11px;
+    font-size: 13px;
   }
   .sf-title-block > span {
     display: flex;
@@ -505,7 +505,7 @@
     gap: 5px;
     margin-top: 2px;
     color: #96969c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-title-block > span i {
     width: 5px;
@@ -527,13 +527,13 @@
     border-radius: 8px;
     background: #eeecfc;
     color: #ff5e3a;
-    font: 600 6px "DM Mono";
+    font: 600 8px "DM Mono";
   }
   .sf-top-actions .sf-detail-toggle {
     width: auto !important;
     border: 1px solid #dededd;
     padding: 0 10px;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 600;
   }
   .sf-mobile-menu {
@@ -541,17 +541,13 @@
   }
   .sf-chat-layout {
     --col-panel: 300px;
-    --col-run: 300px;
     min-height: 0;
     flex: 1;
     display: grid;
-    grid-template-columns: var(--col-panel) minmax(0, 1fr) var(--col-run);
+    grid-template-columns: var(--col-panel) minmax(0, 1fr);
   }
   .sf-chat-layout.panel-closed {
     --col-panel: 0px;
-  }
-  .sf-chat-layout.detail-closed {
-    --col-run: 0px;
   }
   .sf-thread-panel {
     grid-column: 1;
@@ -559,11 +555,6 @@
   }
   .sf-chat {
     grid-column: 2;
-  }
-  .sf-run-panel {
-    grid-column: 3;
-    min-width: 0;
-    overflow-x: hidden;
   }
   .sf-chat-layout > * {
     min-width: 0;
@@ -584,7 +575,7 @@
     align-items: center;
     gap: 9px;
     color: #aaa;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-date-line::before,
   .sf-date-line::after {
@@ -601,7 +592,7 @@
     background: #f0f0ee;
     padding: 11px 14px;
     color: #3d3d42;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.75;
   }
   .sf-new-message {
@@ -631,7 +622,7 @@
     border-radius: 10px;
     background: color-mix(in srgb, var(--avatar-color) 12%, white);
     color: var(--avatar-color);
-    font: 700 8px "DM Mono";
+    font: 700 10px "DM Mono";
   }
   .sf-agent-avatar i {
     position: absolute;
@@ -663,20 +654,20 @@
     width: 29px;
     height: 29px;
     border-radius: 8px;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-agent-avatar.lg {
     width: 42px;
     height: 42px;
     border-radius: 12px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-agent-avatar.xl {
     width: 72px;
     height: 72px;
     border-radius: 20px;
     border-width: 1.5px;
-    font-size: 16px;
+    font-size: 18px;
   }
   .sf-agent-avatar.xl i {
     width: 13px;
@@ -714,13 +705,13 @@
     flex-direction: column;
   }
   .sf-ceo-pin strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-ceo-pin small {
     margin-top: 2px;
     overflow: hidden;
     color: #9a958e;
-    font-size: 7px;
+    font-size: 9px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -741,7 +732,7 @@
   .sf-ceo-hero h2 {
     margin-top: 15px;
     color: #17162d;
-    font-size: 17px;
+    font-size: 19px;
     letter-spacing: -0.01em;
   }
   .sf-ceo-hero > p {
@@ -750,7 +741,7 @@
     gap: 6px;
     margin-top: 6px;
     color: #9a958e;
-    font-size: 9px;
+    font-size: 11px;
   }
   .sf-ceo-hero > p i {
     width: 6px;
@@ -773,7 +764,7 @@
     background: #fffdf9;
     padding: 7px 13px;
     color: #595960;
-    font-size: 9px;
+    font-size: 11px;
     transition:
       border-color 0.15s,
       background 0.15s,
@@ -787,7 +778,7 @@
   .sf-thread-hint {
     margin-top: 20px;
     color: #b3aea6;
-    font-size: 8px;
+    font-size: 10px;
     text-align: center;
   }
   .sf-thread-enter {
@@ -810,17 +801,17 @@
     padding-top: 1px;
   }
   .sf-message-author strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-message-author span {
     color: #aaa;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-message-body > p {
     max-width: 680px;
     margin-top: 7px;
     color: #595960;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.8;
   }
   .sf-plan {
@@ -843,7 +834,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
   }
   .sf-plan-head > span svg {
@@ -851,7 +842,7 @@
   }
   .sf-plan-head small {
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-plan-row {
     display: grid;
@@ -871,7 +862,7 @@
     border: 1px solid #dddddb;
     border-radius: 50%;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-plan-row > span.done {
     border-color: #31ac84;
@@ -888,16 +879,16 @@
     flex-direction: column;
   }
   .sf-plan-row strong {
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-plan-row small {
     margin-top: 2px;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-plan-row em {
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
     font-style: normal;
   }
   .sf-plan-row em.done {
@@ -939,12 +930,12 @@
     flex-direction: column;
   }
   .sf-artifact strong {
-    font-size: 9px;
+    font-size: 11px;
   }
   .sf-artifact small {
     margin-top: 3px;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-artifact > svg {
     color: #999;
@@ -977,7 +968,7 @@
   }
   .sf-working p {
     color: #999;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-working strong {
     color: #696970;
@@ -1004,7 +995,7 @@
     padding: 14px 14px 5px;
     background: transparent;
     color: #333;
-    font-size: 10px;
+    font-size: 12px;
     resize: none;
   }
   .sf-composer > div {
@@ -1027,7 +1018,7 @@
     border-radius: 8px;
     padding: 0 8px;
     color: #77777e;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-composer button:hover {
     background: #f2f2f0;
@@ -1036,7 +1027,7 @@
   .sf-composer small {
     margin-right: 4px;
     color: #aaa;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-composer .sf-send {
     width: 29px;
@@ -1088,7 +1079,7 @@
     padding: 0 10px;
     border-radius: 9px;
     color: #2f2e2b;
-    font-size: 12px;
+    font-size: 14px;
   }
   .sf-plus-menu .sf-plus-item:hover {
     background: #f4f2ec;
@@ -1101,18 +1092,18 @@
   .sf-plus-menu .sf-plus-head {
     height: 30px;
     color: #8d8a83;
-    font-size: 11px;
+    font-size: 13px;
   }
   .sf-plus-group {
     margin: 7px 9px 3px;
     color: #a5a29a;
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.4px;
   }
   .sf-plus-note {
     margin: 10px;
     color: #999;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-plus-row {
     display: flex;
@@ -1143,7 +1134,7 @@
     max-width: 190px;
     overflow: hidden;
     color: #2f2e2b;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1153,7 +1144,7 @@
     max-width: 190px;
     overflow: hidden;
     color: #8d8a83;
-    font-size: 10px;
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1165,7 +1156,7 @@
     border-radius: 999px;
     background: #fff;
     color: #4d8a5c;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-plus-menu .sf-plus-tag:hover {
     background: #f4f2ec;
@@ -1175,11 +1166,16 @@
     color: #b06a6a;
   }
 
+  /* 执行详情：由右侧侧边栏改为对话框上方内嵌卡片（2026-11-08） */
   .sf-run-panel {
     min-width: 0;
+    max-height: 44vh;
     overflow-y: auto;
     overflow-x: hidden;
-    border-left: 1px solid var(--sf-line);
+    flex: none;
+    margin: 12px max(40px, calc((100% - 760px) / 2)) 0;
+    border: 1px solid var(--sf-line);
+    border-radius: 13px;
     background: #fafaf9;
     padding: 0 14px 20px;
   }
@@ -1191,7 +1187,7 @@
     border-bottom: 1px solid #e8e8e6;
   }
   .sf-run-head strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-run-head button {
     color: #999;
@@ -1224,16 +1220,16 @@
   }
   .sf-run-card small {
     color: #999;
-    font: 6px "DM Mono";
+    font: 8px "DM Mono";
     letter-spacing: 0.08em;
   }
   .sf-run-card strong {
     margin-top: 2px;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-run-card em {
     color: #ff5e3a;
-    font: 500 8px "DM Mono";
+    font: 500 10px "DM Mono";
     font-style: normal;
   }
   .sf-progress {
@@ -1252,7 +1248,7 @@
   .sf-run-card > p {
     margin-top: 6px;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
     text-align: right;
   }
   .sf-panel-section {
@@ -1266,13 +1262,13 @@
   }
   .sf-panel-title span {
     color: #777;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
     letter-spacing: 0.09em;
     text-transform: uppercase;
   }
   .sf-panel-title button {
     color: #ff5e3a;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-agent-row {
     display: grid;
@@ -1290,15 +1286,15 @@
     flex-direction: column;
   }
   .sf-agent-row strong {
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-agent-row small {
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-agent-row > span {
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-agent-row > span.running {
     color: #ff5e3a;
@@ -1316,7 +1312,7 @@
     border-radius: 20px;
     background: #ffe8e1;
     color: #ff5e3a;
-    font: 600 6px "DM Mono";
+    font: 600 8px "DM Mono";
     letter-spacing: 0.06em;
   }
   .sf-run-pill.stopped {
@@ -1328,12 +1324,12 @@
     align-items: center;
     gap: 3px;
     color: #777;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
   }
   .sf-run-cost {
     margin-left: auto;
     color: #999;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
   }
   .sf-run-actions {
     display: flex;
@@ -1349,7 +1345,7 @@
     border-radius: 7px;
     background: #fff;
     color: #777;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-mini-btn:hover {
     border-color: #ff8064;
@@ -1381,7 +1377,7 @@
     padding: 4px 2px;
     border-radius: 7px;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-run-tabs button.on {
     background: #fff;
@@ -1394,7 +1390,7 @@
     border-radius: 8px;
     background: #ff5e3a;
     color: #fff;
-    font: 600 6px "DM Mono";
+    font: 600 8px "DM Mono";
     font-style: normal;
     line-height: 10px;
   }
@@ -1416,7 +1412,7 @@
     border: 1px solid #ddd;
     border-radius: 50%;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
     background: #fafaf9;
   }
   .sf-step-row.done .sf-step-dot {
@@ -1435,16 +1431,16 @@
     flex-direction: column;
   }
   .sf-step-row strong {
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-step-row small {
     margin-top: 1px;
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-step-live {
     color: #ff5e3a;
-    font: 600 6px "DM Mono";
+    font: 600 8px "DM Mono";
   }
   .sf-retry {
     display: inline-flex;
@@ -1455,7 +1451,7 @@
     border-radius: 6px;
     background: #fff;
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-retry:hover {
     border-color: #ff8064;
@@ -1476,11 +1472,11 @@
   }
   .sf-step-sub p {
     color: #777;
-    font-size: 6.5px;
+    font-size: 8.5px;
   }
   .sf-step-sub em {
     color: #bbb;
-    font: 500 6px "DM Mono";
+    font: 500 8px "DM Mono";
     font-style: normal;
   }
   .sf-step-sub em.running {
@@ -1520,11 +1516,11 @@
     background: #ff5e3a;
   }
   .sf-dag-node strong {
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-dag-node em {
     color: #999;
-    font: 500 6px "DM Mono";
+    font: 500 8px "DM Mono";
     font-style: normal;
   }
   .sf-dag-edge {
@@ -1532,7 +1528,7 @@
     padding-left: 8px;
     border-left: 1px dashed #dddad4;
     color: #b3a897;
-    font: 500 6px "DM Mono";
+    font: 500 8px "DM Mono";
   }
   .sf-appr-card {
     margin-bottom: 7px;
@@ -1560,13 +1556,13 @@
     flex-direction: column;
   }
   .sf-appr-head strong {
-    font-size: 7.5px;
+    font-size: 9.5px;
     line-height: 1.35;
   }
   .sf-appr-head small {
     margin-top: 2px;
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-appr-actions {
     display: flex;
@@ -1582,7 +1578,7 @@
     padding: 4px 0;
     border: 1px solid transparent;
     border-radius: 7px;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-appr-actions button.ok {
     background: #eaf6f1;
@@ -1606,7 +1602,7 @@
     border: 1px solid #e2e2e0;
     border-radius: 6px;
     background: #fff;
-    font-size: 6.5px;
+    font-size: 8.5px;
   }
   .sf-appr-reason button {
     padding: 3px 7px;
@@ -1614,14 +1610,14 @@
     border-radius: 6px;
     background: #fdefeb;
     color: #e2542f;
-    font-size: 6.5px;
+    font-size: 8.5px;
   }
   .sf-appr-log {
     margin-top: 7px;
     padding-top: 6px;
     border-top: 1px dashed #e6e4e0;
     color: #8a8a86;
-    font-size: 6.5px;
+    font-size: 8.5px;
     line-height: 1.5;
   }
   .sf-art-row {
@@ -1653,7 +1649,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-art-row small {
     margin-top: 2px;
@@ -1661,7 +1657,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-art-actions {
     display: flex;
@@ -1691,20 +1687,20 @@
   }
   .sf-expand-card p {
     color: #777;
-    font-size: 6.5px;
+    font-size: 8.5px;
     line-height: 1.6;
   }
   .sf-expand-card p.mono {
     margin-top: 2px;
     color: #b3a897;
-    font: 500 6px "DM Mono";
+    font: 500 8px "DM Mono";
   }
   .sf-run-foot {
     margin-top: 14px;
     padding-top: 9px;
     border-top: 1px solid #e8e8e6;
     color: #b3a897;
-    font: 500 6.5px "DM Mono";
+    font: 500 8.5px "DM Mono";
     letter-spacing: 0.04em;
     text-align: center;
   }
@@ -1733,7 +1729,7 @@
     border-radius: 50%;
     background: #fafaf9;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-mini-flow > div.done > span {
     border-color: #31ab84;
@@ -1751,11 +1747,11 @@
     justify-content: space-between;
   }
   .sf-mini-flow strong {
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-mini-flow small {
     color: #999;
-    font-size: 6px;
+    font-size: 8px;
   }
   .sf-mini-flow > i {
     width: 1px;
@@ -1780,12 +1776,12 @@
     flex-direction: column;
   }
   .sf-policy-note strong {
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-policy-note small {
     margin-top: 2px;
     color: #7b9990;
-    font-size: 6px;
+    font-size: 8px;
   }
 
   .sf-subview {
@@ -1804,12 +1800,12 @@
   }
   .sf-subview-intro p {
     color: #ff5e3a;
-    font: 500 8px "DM Mono";
+    font: 500 10px "DM Mono";
     letter-spacing: 0.13em;
   }
   .sf-subview-intro h1 {
     margin-top: 7px;
-    font-size: 27px;
+    font-size: 29px;
     font-weight: 800;
     letter-spacing: -0.045em;
   }
@@ -1817,7 +1813,7 @@
     display: block;
     margin-top: 6px;
     color: #888;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-subview-intro > button {
     display: flex;
@@ -1827,7 +1823,7 @@
     background: #17162d;
     color: #fff;
     padding: 10px 13px;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
   }
   .sf-agent-grid {
@@ -1856,13 +1852,13 @@
   }
   .sf-agent-grid h2 {
     margin-top: 25px;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 750;
   }
   .sf-agent-grid article > p {
     margin-top: 5px;
     color: #888;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-agent-grid article > div:nth-of-type(2) {
     display: flex;
@@ -1877,7 +1873,7 @@
     background: #f1f1ef;
     padding: 5px 7px;
     color: #777;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-agent-grid footer {
     display: flex;
@@ -1895,7 +1891,7 @@
     align-items: center;
     gap: 5px;
     color: #777;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-agent-grid footer span i {
     width: 5px;
@@ -1907,7 +1903,7 @@
     display: flex;
     align-items: center;
     color: #ff5e3a;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-knowledge-layout {
     display: grid;
@@ -1939,18 +1935,18 @@
   .sf-knowledge-card > small {
     margin-top: 25px;
     color: #999;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
   .sf-knowledge-card h2 {
     margin-top: 7px;
-    font-size: 16px;
+    font-size: 18px;
   }
   .sf-knowledge-card > p {
     margin-top: 8px;
     color: #777;
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.7;
   }
   .sf-knowledge-card footer {
@@ -1960,7 +1956,7 @@
     border-top: 1px solid #ececeb;
     padding-top: 11px;
     color: #999;
-    font-size: 7px;
+    font-size: 9px;
   }
 
   .sf-rail-section button.active,
@@ -1978,13 +1974,13 @@
   .sf-page-heading > div > p,
   .sf-settings-content > p {
     color: #ff5e3a;
-    font: 500 8px "DM Mono";
+    font: 500 10px "DM Mono";
     letter-spacing: 0.13em;
   }
   .sf-page-heading h1,
   .sf-settings-content h1 {
     margin-top: 7px;
-    font-size: 27px;
+    font-size: 29px;
     font-weight: 800;
     letter-spacing: -0.045em;
   }
@@ -1992,7 +1988,7 @@
     display: block;
     margin-top: 6px;
     color: #88827c;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-page-heading > button {
     display: flex;
@@ -2003,7 +1999,7 @@
     background: #fffdf9;
     padding: 9px 12px;
     color: #59545b;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 650;
   }
   .sf-page-heading > button:disabled {
@@ -2030,7 +2026,7 @@
     background: #fffdf9;
     padding: 6px 11px;
     color: #807a74;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-range-tabs button.active,
   .sf-metric-tabs button.active {
@@ -2053,19 +2049,19 @@
   }
   .sf-metric-grid p {
     color: #8c867f;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-metric-grid strong {
     display: block;
     margin-top: 7px;
-    font: 600 21px "DM Mono";
+    font: 600 23px "DM Mono";
     letter-spacing: -0.05em;
   }
   .sf-metric-grid span {
     display: block;
     margin-top: 5px;
     color: #99938c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-metric-grid span.up {
     color: #269675;
@@ -2097,12 +2093,12 @@
     flex-direction: column;
   }
   .sf-card-title strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-card-title span {
     margin-top: 2px;
     color: #99938c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-chart {
     height: 180px;
@@ -2117,7 +2113,7 @@
     justify-content: space-between;
     padding-bottom: 4px;
     color: #aaa49c;
-    font: 6px "DM Mono";
+    font: 8px "DM Mono";
     text-align: right;
   }
   .sf-chart svg {
@@ -2132,7 +2128,7 @@
     justify-content: space-between;
     margin: 5px 2px 0 38px;
     color: #aaa49c;
-    font: 6px "DM Mono";
+    font: 8px "DM Mono";
   }
   .sf-brief-highlight {
     display: grid;
@@ -2159,14 +2155,14 @@
   }
   .sf-brief-highlight small {
     color: #9c766c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-brief-highlight strong {
-    font: 600 16px "DM Mono";
+    font: 600 18px "DM Mono";
   }
   .sf-brief-highlight em {
     color: #ff5e3a;
-    font: 500 8px "DM Mono";
+    font: 500 10px "DM Mono";
     font-style: normal;
   }
   .sf-brief-card ul {
@@ -2178,7 +2174,7 @@
     border-bottom: 1px solid #eee9e1;
     padding: 8px 2px;
     color: #77716b;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-brief-card li strong {
     color: #17162d;
@@ -2197,14 +2193,14 @@
     background: #fff9ef;
     padding: 9px;
     color: #a56d2d;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-breakdown-card {
     margin-top: 11px;
   }
   .sf-breakdown-card .sf-card-title > button {
     color: #ff5e3a;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 650;
   }
   .sf-breakdown-head,
@@ -2219,13 +2215,13 @@
     border-bottom: 1px solid #e9e4dc;
     padding: 7px 9px;
     color: #9d978f;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-breakdown-row {
     border-bottom: 1px solid #f0ece5;
     padding: 10px 9px;
     color: #625d58;
-    font: 8px "DM Mono";
+    font: 10px "DM Mono";
   }
   .sf-breakdown-row:last-child {
     border: 0;
@@ -2269,14 +2265,14 @@
     outline: 0;
     background: transparent;
     color: #17162d;
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-inline-create button[type="submit"] {
     border-radius: 7px;
     background: #17162d;
     color: #fff;
     padding: 7px 12px;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-project-grid {
     display: grid;
@@ -2310,12 +2306,12 @@
   }
   .sf-project-grid h2 {
     margin-top: 25px;
-    font-size: 15px;
+    font-size: 17px;
   }
   .sf-project-grid > article > p {
     margin-top: 5px;
     color: #8c867f;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-project-grid > article > div {
     display: grid;
@@ -2335,7 +2331,7 @@
     height: 100%;
   }
   .sf-project-grid > article > div strong {
-    font: 7px "DM Mono";
+    font: 9px "DM Mono";
   }
   .sf-project-grid footer {
     display: flex;
@@ -2345,13 +2341,13 @@
     border-top: 1px solid #eee9e1;
     padding-top: 11px;
     color: #99938c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-project-grid footer button {
     display: flex;
     align-items: center;
     color: #ff5e3a;
-    font-size: 8px;
+    font-size: 10px;
   }
 
   .sf-schedule-list {
@@ -2376,7 +2372,7 @@
     flex-direction: column;
     gap: 5px;
     color: #99938c;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 600;
   }
   .sf-schedule-create input,
@@ -2387,7 +2383,7 @@
     background: #fff;
     padding: 7px 9px;
     color: #17162d;
-    font-size: 10px;
+    font-size: 12px;
     outline: 0;
   }
   .sf-schedule-create input:focus,
@@ -2405,11 +2401,11 @@
     background: #17162d;
     color: #fff;
     padding: 7px 12px;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-schedule-create-error {
     color: #e2542f;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-schedule-list article {
     display: grid;
@@ -2438,12 +2434,12 @@
     flex-direction: column;
   }
   .sf-schedule-list article > div strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .sf-schedule-list article > div p {
     margin-top: 3px;
     color: #99938c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-schedule-list article > div p span {
     color: #6d675f;
@@ -2454,7 +2450,7 @@
     background: #ece7de;
     padding: 4px 8px;
     color: #8c867f;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-schedule-list article > span.enabled {
     background: #e4f5ef;
@@ -2507,7 +2503,7 @@
   .sf-settings > aside p {
     margin: 0 9px 5px;
     color: #aaa39b;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
@@ -2519,7 +2515,7 @@
     border-radius: 8px;
     padding: 7px 9px;
     color: #69635e;
-    font-size: 9px;
+    font-size: 11px;
     text-align: left;
   }
   .sf-settings > aside button:hover,
@@ -2571,12 +2567,12 @@
     flex-direction: column;
   }
   .sf-setting-block strong {
-    font-size: 9px;
+    font-size: 11px;
   }
   .sf-setting-block small {
     margin-top: 3px;
     color: #99938c;
-    font-size: 7px;
+    font-size: 9px;
   }
   .sf-setting-block > button {
     display: flex;
@@ -2586,7 +2582,7 @@
     border-radius: 8px;
     padding: 7px 9px;
     color: #625d58;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-settings-placeholder {
     max-width: 720px;
@@ -2605,13 +2601,13 @@
   }
   .sf-settings-placeholder strong {
     margin-top: 13px;
-    font-size: 13px;
+    font-size: 15px;
   }
   .sf-settings-placeholder p {
     max-width: 360px;
     margin-top: 7px;
     color: #8c867f;
-    font-size: 9px;
+    font-size: 11px;
     line-height: 1.7;
   }
   .sf-settings-placeholder button {
@@ -2620,7 +2616,7 @@
     background: #17162d;
     color: #fff;
     padding: 8px 13px;
-    font-size: 8px;
+    font-size: 10px;
   }
 
   /* ── 团队编排：工作流 DAG + 协作策略矩阵 + 审批门 ─────────────────── */
@@ -2654,14 +2650,14 @@
     color: #ff5e3a;
   }
   .sf-teamops-head h3 {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 750;
     letter-spacing: -0.01em;
   }
   .sf-teamops-name {
     margin-left: 4px;
     color: #999;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-teamops-count {
     margin-left: auto;
@@ -2670,12 +2666,12 @@
     background: #fff3ef;
     color: #ff5e3a;
     padding: 3px 8px;
-    font: 500 7.5px "DM Mono";
+    font: 500 9.5px "DM Mono";
   }
   .sf-teamops-sub {
     margin-top: 4px;
     color: #999;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-teamops-empty {
     margin-top: 16px;
@@ -2683,7 +2679,7 @@
     border-radius: 10px;
     background: #fbfaf6;
     color: #999;
-    font-size: 8.5px;
+    font-size: 10.5px;
     line-height: 1.7;
     padding: 14px;
   }
@@ -2696,7 +2692,7 @@
     background: #f4f1e9;
     color: #8b867b;
     padding: 3px 9px;
-    font: 500 7px "DM Mono";
+    font: 500 9px "DM Mono";
     letter-spacing: 0.08em;
   }
   .sf-live-tag.on {
@@ -2719,7 +2715,7 @@
     gap: 4px 12px;
     margin-top: 11px;
     color: #888;
-    font-size: 7.5px;
+    font-size: 9.5px;
   }
   .sf-dag-legend i {
     display: inline-block;
@@ -2742,7 +2738,7 @@
     align-items: center;
     gap: 3px;
     color: #777;
-    font-size: 6.5px;
+    font-size: 8.5px;
     text-align: center;
     line-height: 1.3;
   }
@@ -2753,7 +2749,7 @@
     height: 18px;
     border-radius: 6px;
     color: #fff;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
     font-style: normal;
   }
@@ -2776,7 +2772,7 @@
   }
   .sf-policy-cell.diag s {
     color: #ccc8bd;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-policy-foot {
     display: flex;
@@ -2789,7 +2785,7 @@
     align-items: center;
     gap: 5px;
     color: #888;
-    font-size: 7.5px;
+    font-size: 9.5px;
   }
   .sf-policy-legend i {
     display: inline-block;
@@ -2807,7 +2803,7 @@
     background: #17162d;
     color: #fff;
     padding: 7px 12px;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
   }
   .sf-policy-save[disabled] {
@@ -2816,7 +2812,7 @@
   .sf-policy-hint {
     margin-left: auto;
     color: #0f9d6b;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 600;
   }
   .sf-policy-hint.err {
@@ -2841,7 +2837,7 @@
   }
   .sf-approve-body strong {
     display: block;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
   }
   .sf-approve-body span {
@@ -2850,12 +2846,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #999;
-    font-size: 7.5px;
+    font-size: 9.5px;
     margin-top: 2px;
   }
   .sf-approve-wait {
     color: #b0aca2;
-    font: 500 7.5px "DM Mono";
+    font: 500 9.5px "DM Mono";
   }
   .sf-approve-btn {
     display: grid;
@@ -2911,14 +2907,14 @@
   }
   .sf-card-title strong {
     display: block;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 750;
   }
   .sf-card-title span {
     display: block;
     margin-top: 2px;
     color: #999;
-    font-size: 7.5px;
+    font-size: 9.5px;
   }
   .sf-net-count {
     border: 1px solid #e3dcfa;
@@ -2926,7 +2922,7 @@
     background: #f4f0ff;
     color: #8e6cff;
     padding: 3px 9px;
-    font: 500 7.5px "DM Mono";
+    font: 500 9.5px "DM Mono";
   }
   .sf-network-card svg {
     width: 100%;
@@ -2949,7 +2945,7 @@
     flex-direction: column;
     gap: 7px;
     color: #777;
-    font-size: 8px;
+    font-size: 10px;
   }
   .sf-donut-legend i {
     display: inline-block;
@@ -2973,7 +2969,7 @@
     width: 52px;
     flex-shrink: 0;
     color: #555;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 600;
   }
   .sf-usage-track {
@@ -2994,7 +2990,7 @@
     flex-shrink: 0;
     text-align: right;
     color: #999;
-    font: 500 7.5px "DM Mono";
+    font: 500 9.5px "DM Mono";
   }
   .sf-breakdown-row i.model-0 {
     background: #ff5e3a;
@@ -3010,7 +3006,6 @@
 @media (max-width: 1050px) {
   .sf-chat-layout {
     --col-panel: 252px;
-    --col-run: 270px;
   }
   .sf-agent-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -3208,7 +3203,7 @@
   background: #fff;
   border-radius: 10px;
   padding: 9px 12px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--sf-text);
   outline: none;
   max-width: 300px;
@@ -3219,7 +3214,7 @@
 }
 .sf-live-tag {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 12.5px;
   letter-spacing: 0.06em;
   color: #b4611e;
   background: #fdf3e3;
@@ -3271,7 +3266,7 @@
   justify-content: center;
   color: #fff;
   font-style: normal;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -3281,13 +3276,13 @@
   min-width: 0;
 }
 .sf-byok-rail strong {
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .sf-byok-rail small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--sf-muted);
 }
 .sf-byok-rail > button > b {
@@ -3313,11 +3308,11 @@
   align-items: center;
 }
 .sf-byok-detail > header h2 {
-  font-size: 17px;
+  font-size: 19px;
   margin: 0;
 }
 .sf-byok-detail > header span {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--sf-muted);
 }
 .sf-byok-field {
@@ -3328,13 +3323,13 @@
 }
 .sf-byok-field > span {
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: #57536b;
 }
 .sf-byok-field > span em {
   font-style: normal;
   margin-left: 6px;
-  font-size: 10px;
+  font-size: 12px;
   color: #7c5cff;
   border: 1px solid #d9d1ff;
   border-radius: 20px;
@@ -3351,7 +3346,7 @@
   background: #faf8f3;
   border-radius: 10px;
   padding: 9px 11px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   color: var(--sf-text);
   outline: none;
 }
@@ -3364,21 +3359,21 @@
   background: #fff;
   border-radius: 10px;
   padding: 8px 14px;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
   color: var(--sf-text);
   white-space: nowrap;
 }
 .sf-byok-field small {
   color: var(--sf-muted);
-  font-size: 10.5px;
+  font-size: 12.5px;
 }
 .sf-byok-field small a {
   color: #7c5cff;
 }
 .sf-byok-reveal {
   font-family: ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 13px;
   background: #f6f2ea;
   border-radius: 8px;
   padding: 6px 9px;
@@ -3397,7 +3392,7 @@
   background: #f6f2ea;
   border-radius: 20px;
   padding: 5px 11px;
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   color: var(--sf-text);
 }
@@ -3407,7 +3402,7 @@
 }
 .sf-byok-empty {
   font-style: normal;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--sf-muted);
 }
 .sf-byok-add {
@@ -3419,7 +3414,7 @@
   background: #fff;
   border-radius: 10px;
   padding: 8px 13px;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
   color: var(--sf-text);
   white-space: nowrap;
@@ -3437,7 +3432,7 @@
   background: #fff;
   border-radius: 10px;
   padding: 9px 16px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   cursor: pointer;
   color: var(--sf-text);
 }
@@ -3464,7 +3459,7 @@
 }
 .sf-byok-notice {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 13.5px;
   border-radius: 9px;
   padding: 8px 12px;
 }
@@ -3498,15 +3493,15 @@
   gap: 3px;
 }
 .sf-settings-list article strong {
-  font-size: 13px;
+  font-size: 15px;
 }
 .sf-settings-list article p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--sf-muted);
 }
 .sf-settings-list article > span {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: #7c5cff;
 }
 .sf-settings-list .sf-settings-act {
@@ -3516,7 +3511,7 @@
   border-radius: 999px;
   background: #fff;
   color: #55525c;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .sf-settings-list .sf-settings-act:hover {
@@ -3540,7 +3535,7 @@
   border-radius: 6px;
   background: #fff;
   color: #77737d;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 .sf-auth-tabs button.on {
@@ -3555,7 +3550,7 @@
   border-radius: 6px;
   background: #fdefeb;
   color: #e2542f;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.6;
 }
 .sf-auth-foot {
@@ -3569,7 +3564,7 @@
   border: 0;
   background: none;
   color: #17162d;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -3578,7 +3573,7 @@
   border: 0;
   background: none;
   color: #77737d;
-  font-size: 10px;
+  font-size: 12px;
 }
 .sf-auth-demo:hover {
   color: #ff5e3a;
@@ -3611,7 +3606,7 @@
   border-radius: 9px;
   background: #17162d;
   color: #fff;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
 }
 .sf-account--guest > span svg {
@@ -3624,13 +3619,13 @@
 }
 .sf-account-main strong,
 .sf-account--guest strong {
-  font-size: 9px;
+  font-size: 11px;
 }
 .sf-account-main small,
 .sf-account--guest small {
   overflow: hidden;
   color: #999;
-  font-size: 7px;
+  font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3674,7 +3669,7 @@
   padding: 3px 5px;
   overflow: hidden;
   color: #999;
-  font-size: 7.5px;
+  font-size: 9.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3688,7 +3683,7 @@
   border-radius: 6px;
   background: none;
   color: #e2542f;
-  font-size: 8.5px;
+  font-size: 10.5px;
   font-weight: 700;
 }
 .sf-account-menu button:hover {
@@ -3703,7 +3698,7 @@
   border-radius: 7px;
   background: #fbfaf7;
   color: #8a8a86;
-  font-size: 6.5px;
+  font-size: 8.5px;
   line-height: 1.6;
 }
 .sf-appr-target {
@@ -3722,27 +3717,27 @@
 .sf-appr-target > p em {
   font-style: normal;
   color: #8a8a86;
-  font-size: 6px;
+  font-size: 8px;
   letter-spacing: 0.08em;
 }
 .sf-appr-target > p b {
   border-radius: 4px;
   background: #17162d;
   color: #fff;
-  font-size: 6px;
+  font-size: 8px;
   font-weight: 700;
   padding: 1px 5px;
 }
 .sf-appr-target > strong {
   display: block;
-  font-size: 7.5px;
+  font-size: 9.5px;
   line-height: 1.35;
 }
 .sf-appr-target > small {
   display: block;
   margin-top: 3px;
   color: #999;
-  font-size: 6.5px;
+  font-size: 8.5px;
   line-height: 1.5;
 }
 .sf-appr-target > small.sf-appr-impact {
@@ -3756,7 +3751,7 @@
   border-radius: 7px;
   background: #fff;
   color: var(--sf-text, #17162d);
-  font-size: 6.5px;
+  font-size: 8.5px;
   line-height: 1.5;
   resize: vertical;
 }
@@ -3778,7 +3773,7 @@
 .sf-embed-intro {
   margin: 0;
   color: var(--sf-muted, #77737d);
-  font-size: 11.5px;
+  font-size: 13.5px;
   line-height: 1.7;
 }
 .sf-embed-switch {
@@ -3801,11 +3796,11 @@
   gap: 3px;
 }
 .sf-embed-switch strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 .sf-embed-switch small {
   color: var(--sf-muted, #77737d);
-  font-size: 10.5px;
+  font-size: 12.5px;
 }
 .sf-embed-grid {
   display: grid;
@@ -3818,7 +3813,7 @@
   gap: 6px;
   margin: 0;
   color: #57536b;
-  font-size: 11.5px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 .sf-embed-field--wide {
@@ -3830,7 +3825,7 @@
   border-radius: 10px;
   background: #faf8f3;
   padding: 9px 11px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   font-weight: 400;
   color: var(--sf-text, #17162d);
   outline: none;
@@ -3845,7 +3840,7 @@
 }
 .sf-embed-field small {
   color: var(--sf-muted, #77737d);
-  font-size: 10.5px;
+  font-size: 12.5px;
   font-weight: 400;
 }
 .sf-embed-key {
@@ -3882,7 +3877,7 @@
   gap: 7px;
   border-radius: 10px;
   padding: 9px 16px;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
 }
 .sf-embed-primary {
@@ -3910,7 +3905,7 @@
   margin: 0;
   border-radius: 10px;
   padding: 8px 12px;
-  font-size: 11.5px;
+  font-size: 13.5px;
 }
 .sf-embed-result.ok {
   background: #eaf6f1;
@@ -3947,13 +3942,13 @@
   background: #f4f1e9;
 }
 .sf-tl-fold-head strong {
-  font-size: 8.5px;
+  font-size: 10.5px;
   font-weight: 700;
   color: #17162d;
 }
 .sf-tl-fold-head small {
   color: #999;
-  font-size: 7.5px;
+  font-size: 9.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3974,7 +3969,7 @@
   flex-shrink: 0;
   border-radius: 99px;
   padding: 2px 7px;
-  font: 500 7px "DM Mono", monospace;
+  font: 500 9px "DM Mono", monospace;
   letter-spacing: 0.05em;
   font-style: normal;
 }
@@ -4014,7 +4009,7 @@
 }
 .sf-tl-text {
   color: #2b2a3a;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.75;
 }
 .sf-tl-text p {
@@ -4026,7 +4021,7 @@
   border-radius: 7px;
   background: #f7f5ef;
   color: #4a4956;
-  font: 400 7.5px/1.7 "DM Mono", monospace;
+  font: 400 9.5px/1.7 "DM Mono", monospace;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 220px;
@@ -4035,13 +4030,13 @@
 .sf-tl-result {
   margin: 0 0 5px;
   color: #696970;
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.6;
 }
 .sf-tl-meta-line {
   margin: 5px 0 5px 44px;
   color: #aaa59d;
-  font-size: 7.5px;
+  font-size: 9.5px;
   font-family: "DM Mono", monospace;
 }
 .sf-tl-rationale {
@@ -4051,21 +4046,21 @@
 }
 .sf-tl-rationale strong {
   color: #999;
-  font-size: 7.5px;
+  font-size: 9.5px;
   letter-spacing: 0.06em;
 }
 .sf-tl-rationale ul {
   margin: 3px 0 0;
   padding-left: 12px;
   color: #696970;
-  font-size: 8.5px;
+  font-size: 10.5px;
   line-height: 1.8;
 }
 .sf-tl-diff {
   margin: 0;
   border-radius: 7px;
   background: #f7f5ef;
-  font: 400 7.5px/1.8 "DM Mono", monospace;
+  font: 400 9.5px/1.8 "DM Mono", monospace;
   overflow: auto;
   max-height: 220px;
 }
@@ -4103,25 +4098,25 @@
   background: #f0ede4;
   color: #696970;
   padding: 1px 5px;
-  font: 500 7.5px "DM Mono", monospace;
+  font: 500 9.5px "DM Mono", monospace;
 }
 .sf-tl-commit strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 8.5px;
+  font-size: 10.5px;
 }
 .sf-tl-commit small {
   margin-left: auto;
   flex-shrink: 0;
   color: #aaa59d;
-  font-size: 7px;
+  font-size: 9px;
 }
 .sf-tl-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-tl-table th {
   padding: 4px 6px;
@@ -4148,14 +4143,14 @@
 .sf-tl-image figcaption {
   margin-top: 3px;
   color: #aaa59d;
-  font-size: 7px;
+  font-size: 9px;
 }
 .sf-tl-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: #2777e8;
-  font-size: 8px;
+  font-size: 10px;
   text-decoration: none;
 }
 .sf-tl-link:hover {
@@ -4182,11 +4177,11 @@
 .sf-tl-link-card strong {
   display: block;
   color: #17162d;
-  font-size: 8.5px;
+  font-size: 10.5px;
 }
 .sf-tl-link-card small {
   color: #aaa59d;
-  font-size: 7px;
+  font-size: 9px;
 }
 .sf-tl-verdict {
   display: flex;
@@ -4199,11 +4194,11 @@
   padding: 7px 10px;
 }
 .sf-tl-verdict strong {
-  font-size: 8.5px;
+  font-size: 10.5px;
 }
 .sf-tl-verdict small {
   color: #999;
-  font-size: 7.5px;
+  font-size: 9.5px;
 }
 .sf-tl-verdict .sf-tl-badge {
   display: inline-flex;
@@ -4221,11 +4216,11 @@
   padding: 7px 10px;
 }
 .sf-tl-intent strong {
-  font-size: 8.5px;
+  font-size: 10.5px;
 }
 .sf-tl-intent small {
   color: #999;
-  font-size: 7.5px;
+  font-size: 9.5px;
   line-height: 1.6;
 }
 .sf-tl-intent .sf-tl-meta-line {
@@ -4241,7 +4236,7 @@
   background: #fff;
   color: #696970;
   padding: 2px 7px;
-  font-size: 7.5px;
+  font-size: 9.5px;
 }
 
 /* ── 聊天附件：拖拽遮罩 + composer 预览 chips（2026-11-07 对话框拖拽传图）── */
@@ -4261,11 +4256,11 @@
   pointer-events: none; /* 只做提示，拖放事件由 .sf-chat 容器接收 */
 }
 .sf-drop-overlay strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 .sf-drop-overlay small {
   color: var(--sf-muted, #77737d);
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-composer-atts {
   display: flex;
@@ -4285,7 +4280,7 @@
   background: #fff;
   padding: 3px 5px;
   color: #696970;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-att-chip img {
   width: 26px;
@@ -4311,7 +4306,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-style: normal;
-  font-size: 7px;
+  font-size: 9px;
 }
 .sf-att-chip em.sf-att-up {
   color: #b07a2c;
@@ -4365,11 +4360,11 @@
 }
 .sf-login-banner strong {
   display: block;
-  font-size: 9.5px;
+  font-size: 11.5px;
 }
 .sf-login-banner small {
   color: #999;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-login-banner button {
   flex-shrink: 0;
@@ -4377,7 +4372,7 @@
   background: #17162d;
   color: #fff;
   padding: 6px 13px;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-login-banner button.ghost {
   border: 1px solid #ddd8ce;
@@ -4393,7 +4388,7 @@
   gap: 8px;
   margin: 40px auto;
   color: #999;
-  font-size: 9px;
+  font-size: 11px;
   text-align: center;
 }
 .sf-empty-actions {
@@ -4418,12 +4413,12 @@
   background: #fdefeb;
   color: #c0432c;
   padding: 7px 10px;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-inline-create-error {
   grid-column: 1 / -1;
   color: #e2542f;
-  font-size: 8px;
+  font-size: 10px;
 }
 
 /* ── 通用小控件 ───────────────────────────────────────────────── */
@@ -4432,7 +4427,7 @@
   background: none;
   color: #2777e8;
   padding: 0;
-  font-size: 8px;
+  font-size: 10px;
   cursor: pointer;
 }
 .sf-link-btn:hover {
@@ -4451,7 +4446,7 @@
   background: #ece7de;
   color: #8b867b;
   padding: 1px 6px;
-  font: 500 7px "DM Mono", monospace;
+  font: 500 9px "DM Mono", monospace;
   font-style: normal;
 }
 .sf-tree-empty {
@@ -4480,7 +4475,7 @@
   min-width: 0;
   overflow: hidden;
   color: #77737d;
-  font-size: 7.5px;
+  font-size: 9.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4497,11 +4492,11 @@
   align-items: center;
   gap: 10px;
   color: #999;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-admin-notice {
   color: #0f9d6b;
-  font-size: 7.5px;
+  font-size: 9.5px;
   font-style: normal;
 }
 .sf-admin-users article {
@@ -4519,11 +4514,11 @@
 }
 .sf-admin-users article strong {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
 }
 .sf-admin-users article small {
   color: #999;
-  font-size: 7.5px;
+  font-size: 9.5px;
 }
 .sf-admin-actions {
   display: flex;
@@ -4536,7 +4531,7 @@
   background: #faf8f3;
   color: #696970;
   padding: 4px 9px;
-  font-size: 7.5px;
+  font-size: 9.5px;
 }
 .sf-admin-actions button:hover:not(:disabled) {
   background: #ece7de;
@@ -4575,19 +4570,19 @@
 }
 .sf-biz-kpi-card p {
   color: #99938c;
-  font-size: 10px;
+  font-size: 12px;
 }
 .sf-biz-kpi-card strong {
   display: block;
   margin-top: 5px;
-  font-size: 19px;
+  font-size: 21px;
   color: #3c3833;
 }
 .sf-biz-kpi-card span {
   display: block;
   margin-top: 3px;
   color: #b3ada4;
-  font-size: 9px;
+  font-size: 11px;
 }
 .sf-biz-steps {
   display: flex;
@@ -4612,19 +4607,19 @@
   border-radius: 50%;
   background: #ece7de;
   color: #8c867f;
-  font-size: 9px;
+  font-size: 11px;
 }
 .sf-biz-step.done > span {
   background: #e4f5ef;
   color: #16a34a;
 }
 .sf-biz-step strong {
-  font-size: 10px;
+  font-size: 12px;
   color: #4c4741;
 }
 .sf-biz-step small {
   color: #99938c;
-  font-size: 9px;
+  font-size: 11px;
 }
 .sf-biz-tabs {
   display: flex;
@@ -4639,7 +4634,7 @@
   background: transparent;
   padding: 5px 13px;
   color: #8c867f;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .sf-biz-tabs button.active {
@@ -4659,14 +4654,14 @@
 .sf-biz-table th {
   text-align: left;
   color: #99938c;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   padding: 8px 10px;
   border-bottom: 1px solid #e6e0d6;
 }
 .sf-biz-table td {
   color: #4c4741;
-  font-size: 10px;
+  font-size: 12px;
   padding: 10px;
   border-bottom: 1px solid #f0ebe2;
 }
@@ -4681,7 +4676,7 @@
   background: #ece7de;
   color: #8c867f;
   padding: 2px 8px;
-  font-size: 9px;
+  font-size: 11px;
 }
 .sf-biz-badge.ok {
   background: #e4f5ef;
@@ -4699,7 +4694,7 @@
   display: block;
   margin-top: 3px;
   color: #dc2626;
-  font-size: 8px;
+  font-size: 10px;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4711,7 +4706,7 @@
   border-radius: 999px;
   background: #fff;
   color: #55525c;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 .sf-biz-act:hover {
@@ -4733,7 +4728,7 @@
   background: #fffdf9;
   padding: 6px 12px;
   color: #17162d;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 650;
   cursor: pointer;
 }
@@ -4751,20 +4746,20 @@
 }
 .sf-track-kpis p {
   color: #99938c;
-  font-size: 8px;
+  font-size: 10px;
 }
 .sf-track-kpis strong {
   display: block;
   margin-top: 5px;
   color: #29272e;
-  font: 600 15px "DM Mono";
+  font: 600 17px "DM Mono";
   letter-spacing: -0.03em;
 }
 .sf-track-kpis span {
   display: block;
   margin-top: 4px;
   color: #b3ada4;
-  font-size: 7px;
+  font-size: 9px;
 }
 .sf-track-body {
   display: grid;
@@ -4794,7 +4789,7 @@
   justify-content: space-between;
   margin: 5px 2px 0;
   color: #aaa49c;
-  font: 6px "DM Mono";
+  font: 8px "DM Mono";
 }
 .sf-track-orders-table {
   max-height: 228px;
@@ -4803,7 +4798,7 @@
 .sf-track-empty {
   margin-top: 12px;
   color: #99938c;
-  font-size: 9px;
+  font-size: 11px;
 }
 @media (max-width: 1050px) {
   .sf-track-kpis {
