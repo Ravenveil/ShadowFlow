@@ -86,6 +86,7 @@ import { useGroupChat, type GroupChat } from "./src/useGroupChat";
 import { isTerminalRunStatus } from "./src/message-patches";
 import { TimelineList } from "./src/TimelineView";
 import { AgentAvatar } from "./src/avatar";
+import { TurnRail } from "./src/TurnRail";
 
 /** 数据加载三态（加载中 / 成功 / 失败）：各视图状态标签统一入口，
  *  避免把「加载中」与「加载失败」混为一态而在加载过程闪现错误提示。 */
@@ -1416,6 +1417,8 @@ export default function ProductApp() {
               <div className="sf-chat-scroll sf-thread-enter" key={activeGroupId ?? "none"}>
                 <ChatThread chat={chat} onQuick={sendText} onLogin={() => openAuth("login")} />
               </div>
+
+              <TurnRail messages={chat.messages} />
 
               {/* 任务面板 + 输入框一体化底座（2026-11-08 UI 改造）：
                   上层任务执行状态面板（受顶栏「执行详情」开关联动），下层原输入框 */}

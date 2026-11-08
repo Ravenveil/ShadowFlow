@@ -1,0 +1,146 @@
+/* turn-rail.css — 会话侧轮次锚点垂直滚动条（2026-11-08）。
+   本文件故意不进 @layer：无层规则天然压过 product-app.css 的 @layer components，
+   从而不动那个并行编辑中的大样式表也能修正滚动链（grid 行/项缺 min-height 会把
+   消息列表撑出视口 → 滚轮失效、底部消息被绝对定位的输入框坞遮挡）。 */
+
+/* ── 滚动链修复：让 .sf-chat-scroll 真正被约束在视口内 ───────────────── */
+.sf-chat-layout {
+  grid-template-rows: minmax(0, 1fr);
+}
+.sf-chat-layout > * {
+  min-height: 0;
+}
+/* 输入框坞高度（含任务面板）由 TurnRail 用 ResizeObserver 写入；
+   底部留白随坞高伸缩，最后一轮对话不再被遮挡。 */
+.sf-chat-scroll {
+  padding-bottom: calc(var(--sf-dock-h, 150px) + 30px);
+  scrollbar-width: none;
+}
+.sf-chat-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ── 轮次滚动条本体 ───────────────────────────────────────────────── */
+.sf-turn-rail {
+  position: absolute;
+  right: 10px;
+  top: 18px;
+  bottom: calc(var(--sf-dock-h, 150px) + 28px);
+  width: 20px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.sf-turn-track {
+  position: relative;
+  flex: 1;
+  border-radius: 10px;
+  background: rgba(23, 22, 45, 0.05);
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* 每一轮对话一格（分段锚点） */
+.sf-turn-cell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: block;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(23, 22, 45, 0.12);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.sf-turn-cell + .sf-turn-cell {
+  margin-top: 2px;
+}
+.sf-turn-cell:hover {
+  background: rgba(255, 94, 58, 0.4);
+}
+.sf-turn-cell.on {
+  background: rgba(255, 94, 58, 0.85);
+}
+.sf-turn-cell em {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(23, 22, 45, 0.55);
+  font: 500 8px "DM Mono";
+  font-style: normal;
+  pointer-events: none;
+}
+.sf-turn-cell.on em {
+  color: #fff;
+}
+
+/* 悬停提示：轮次预览 */
+.sf-turn-tip {
+  position: absolute;
+  right: 26px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid #e2e2e0;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 8px 22px -10px rgba(22, 22, 28, 0.28);
+  color: #444;
+  font-size: 10px;
+  line-height: 1.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.sf-turn-tip strong {
+  color: #ff5e3a;
+  font: 500 9px "DM Mono";
+}
+.sf-turn-cell:hover .sf-turn-tip {
+  opacity: 1;
+}
+
+/* 滑块（视口括条）：可拖拽滑动页面 */
+.sf-turn-thumb {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  border: 1.5px solid rgba(255, 94, 58, 0.75);
+  border-radius: 9px;
+  background: rgba(255, 94, 58, 0.16);
+  cursor: grab;
+}
+.sf-turn-thumb.dragging {
+  cursor: grabbing;
+  background: rgba(255, 94, 58, 0.28);
+}
+.sf-turn-thumb i {
+  position: absolute;
+  left: 50%;
+  width: 8px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: rgba(255, 94, 58, 0.8);
+  transform: translateX(-50%);
+}
+.sf-turn-thumb i:first-child {
+  top: 4px;
+}
+.sf-turn-thumb i:last-child {
+  bottom: 4px;
+}
+
+/* 窄屏：收薄 */
+@media (max-width: 900px) {
+  .sf-turn-rail {
+    right: 4px;
+    width: 14px;
+  }
+}
