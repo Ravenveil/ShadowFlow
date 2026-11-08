@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   Sparkles,
   Store,
+  Trash2,
   Truck,
   UserRound,
   Users,
@@ -681,7 +682,7 @@ export default function ProductApp() {
           <button className={view === "agents" ? "active" : ""} onClick={() => navigate("agents")}>
             <Users size={17} />
             <span>Agent 团队</span>
-            <span className="sf-count">4</span>
+            {agentsList.length > 0 && <span className="sf-count">{displayAgents(agentsList).length}</span>}
           </button>
           <button
             className={view === "knowledge" ? "active" : ""}
@@ -2835,7 +2836,17 @@ function AgentsView() {
   );
 }
 
-type SfPackCard = { pack_id?: string; name?: string; title?: string; description?: string; source_count?: number };
+type SfPackCard = {
+  pack_id?: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  source_count?: number;
+  /** /api/memory-bank/packs 实际返回 stats.sources（不是 source_count）。 */
+  stats?: { sources?: number; chunks?: number; bytes?: number };
+  created_at?: string;
+  status?: string;
+};
 
 /** 新建知识包弹窗：POST /api/memory-bank/packs + 可选上传来源文件。 */
 function PackCreateModal({
@@ -2962,19 +2973,13 @@ function KnowledgeView() {
   useEffect(() => {
     reload();
   }, []);
-  const cards: Array<[string, string, string, string]> =
-    packs === null || packs.length === 0
-      ? [
-          ["品牌空间", "Atlas Brand Hub", "品牌定位、语调、受众与核心产品信息。", "12 份文档"],
-          ["项目资料", "新品发布研究", "市场、竞品与用户访谈的结构化资料。", "24 个来源"],
-          ["方法论", "营销交付 SOP", "团队使用的流程模板与质量标准。", "8 个流程"],
-        ]
-      : packs.slice(0, 6).map((p) => [
-          "知识包",
-          p.name || p.title || (p.pack_id ? p.pack_id.slice(0, 8) : "未命名"),
-          p.description || "团队共享知识包。",
-          p.source_count != null ? `${p.source_count} 个来源` : "知识包",
-        ]);
+  const cards: Array<[string, string, string, string, string]> = (packs ?? []).slice(0, 6).map((p) => [
+    "知识包",
+    p.name || p.title || (p.pack_id ? p.pack_id.slice(0, 8) : "未命名"),
+    p.description || "团队共享知识包。",
+    `${p.stats?.sources ?? p.source_count ?? 0} 个来源`,
+    p.created_at ? fmtRelativeTime(p.created_at) : "",
+  ]);
   return (
     <section className="sf-subview">
       <div className="sf-subview-intro">
@@ -2993,7 +2998,9 @@ function KnowledgeView() {
             <strong>知识网络</strong>
             <span>文档 × Agent 的引用关系图</span>
           </div>
-          <span className="sf-net-count">44 个节点 · 61 条引用</span>
+          <span className="sf-net-count">
+            {packs === null ? "加载中…" : `${packs.length} 个知识包 · 网络示意`}
+          </span>
         </div>
         <svg viewBox="0 0 720 170" preserveAspectRatio="xMidYMid meet" aria-label="知识网络">
           <defs>
@@ -3044,8 +3051,11 @@ function KnowledgeView() {
         </svg>
       </div>
       <SfLoadTag state={packsState} />
+      {packsState === "ready" && cards.length === 0 && (
+        <p className="sf-biz-empty">还没有知识包 —— 点右上角「添加知识」创建</p>
+      )}
       <div className="sf-knowledge-layout">
-        {cards.map(([tag, title, desc, count], i) => (
+        {cards.map(([tag, title, desc, count, updated], i) => (
           <div key={title} className={`sf-knowledge-card${i === 0 ? " featured" : ""}`}>
             {i === 0 ? <BookOpen /> : i === 1 ? <FileText /> : <GitBranch />}
             <small>{tag}</small>
@@ -3053,7 +3063,7 @@ function KnowledgeView() {
             <p>{desc}</p>
             <footer>
               <span>{count}</span>
-              <span>{i === 0 ? "刚刚更新" : i === 1 ? "2 小时前" : "昨天"}</span>
+              <span>{updated}</span>
             </footer>
           </div>
         ))}
@@ -3080,6 +3090,10 @@ function fmtDayLabel(ts: number): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** 商品追踪（单个商品）：/api/craft-profit 商品聚合行 + 每日归桶点。 */
+type TrackProduct = BizProduct & { profit_per_unit_cents: number; created_at: number };
+type TrackDay = { day: number; units: number; revenue_cents: number; profit_cents: number };
+
 function DashboardView() {
   const [days, setDays] = useState<7 | 30 | 90>(30);
   const [metric, setMetric] = useState<"tokens" | "calls" | "cost">("tokens");
@@ -3093,6 +3107,12 @@ function DashboardView() {
   const [breakdown, setBreakdown] = useState<SfDashBreakdownItem[] | null>(null);
   const [agentRows, setAgentRows] = useState<SfDashAgentItem[]>([]);
   const [brief, setBrief] = useState<SfDashBriefing | null>(null);
+  // 商品追踪（单个商品）：列表按页面天数窗口刷；选中后拉该商品的销售流水与每日趋势
+  const [trackProducts, setTrackProducts] = useState<TrackProduct[]>([]);
+  const [trackId, setTrackId] = useState("");
+  const [trackSeries, setTrackSeries] = useState<TrackDay[] | null>(null);
+  const [trackSales, setTrackSales] = useState<BizSale[]>([]);
+  const [trackMetric, setTrackMetric] = useState<"profit" | "revenue" | "units">("profit");
 
   useEffect(() => {
     let dead = false;
@@ -3136,6 +3156,53 @@ function DashboardView() {
       dead = true;
     };
   }, [days, metric, reload]);
+
+  // 商品列表（近 days 天聚合，与页面范围联动）；默认选中盈利最高的第一个
+  useEffect(() => {
+    let dead = false;
+    sfFetch<{ items?: TrackProduct[] }>(`/api/craft-profit/products?days=${days}`)
+      .then((d) => {
+        if (dead) return;
+        const items = d.items ?? [];
+        setTrackProducts(items);
+        setTrackId((prev) => (items.some((p) => p.id === prev) ? prev : (items[0]?.id ?? "")));
+      })
+      .catch(() => {
+        if (dead) return;
+        setTrackProducts([]);
+        setTrackId("");
+      });
+    return () => {
+      dead = true;
+    };
+  }, [days, reload]);
+
+  // 选中商品的销售流水（状态/运单号追踪履约）与每日归桶趋势
+  useEffect(() => {
+    let dead = false;
+    if (!trackId) {
+      setTrackSeries(null);
+      setTrackSales([]);
+      return;
+    }
+    sfFetch<{ items?: BizSale[] }>(`/api/craft-profit/sales?limit=50&product_id=${trackId}`)
+      .then((d) => {
+        if (!dead) setTrackSales(d.items ?? []);
+      })
+      .catch(() => {
+        if (!dead) setTrackSales([]);
+      });
+    sfFetch<{ series?: TrackDay[] }>(`/api/craft-profit/timeseries?days=${days}&product_id=${trackId}`)
+      .then((d) => {
+        if (!dead) setTrackSeries(d.series ?? []);
+      })
+      .catch(() => {
+        if (!dead) setTrackSeries(null);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [days, reload, trackId]);
 
   const values = series ?? [];
   const maxValue = Math.max(...values, 1);
@@ -3201,6 +3268,21 @@ function DashboardView() {
     .map((row) => [row.agent.slice(0, 8), row.output_chars ?? 0, row.hops ?? 0] as [string, number, number]);
   const maxAgentChars = Math.max(...agentBars.map(([, n]) => n), 1);
 
+  // 商品追踪派生：选中商品行、待发货单数、柱状图取值与 X 轴标签
+  const trackSel = trackProducts.find((p) => p.id === trackId) ?? null;
+  const trackPending = trackSales.filter((s) => s.status === "pending").length;
+  const trackValues = (trackSeries ?? []).map((d) =>
+    trackMetric === "units" ? d.units : trackMetric === "revenue" ? d.revenue_cents : d.profit_cents,
+  );
+  const trackMax = Math.max(...trackValues, 1);
+  const trackXLabels = (() => {
+    const rows = trackSeries ?? [];
+    const n = rows.length;
+    if (n === 0) return ["—", "—", "—", "—", "今天"];
+    const picks = [...new Set([0, Math.floor(n / 4), Math.floor(n / 2), Math.floor((3 * n) / 4), n - 1])];
+    return picks.map((i) => (i === n - 1 ? "今天" : fmtDayLabel(rows[i].day)));
+  })();
+
   function refresh() {
     setRefreshing(true);
     setReload((n) => n + 1);
@@ -3225,7 +3307,7 @@ function DashboardView() {
         <div>
           <p>DATA PLATFORM</p>
           <h1>数据看板</h1>
-          <span>调用、Token 消耗、成本估算、Run 成功率与每日简报。</span>
+          <span>调用、Token 消耗、成本估算、Run 成功率、每日简报与单个商品追踪。</span>
         </div>
         <button onClick={refresh} disabled={refreshing}>
           <Zap size={14} /> {refreshing ? "刷新中…" : "刷新数据"}
@@ -3455,6 +3537,177 @@ function DashboardView() {
             ))}
           </div>
         ))}
+      </div>
+
+      <div className="sf-track-card">
+        <div className="sf-card-title">
+          <div>
+            <strong>商品追踪</strong>
+            <span>单个商品的销量、盈利走势与订单履约 · 近 {days} 天</span>
+          </div>
+          {trackProducts.length > 0 && (
+            <select
+              className="sf-track-select"
+              value={trackId}
+              onChange={(e) => setTrackId(e.target.value)}
+              aria-label="选择要追踪的商品"
+            >
+              {trackProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {!trackSel && (
+          <p className="sf-biz-empty sf-track-empty">还没有商品可追踪 —— 让团队执行 [intake] 登记商品</p>
+        )}
+
+        {trackSel && (
+          <>
+            <div className="sf-track-kpis">
+              {(
+                [
+                  [
+                    "售价",
+                    fmtYuan(trackSel.price_cents),
+                    `成本 ${fmtYuan(trackSel.cost_cents)} · 快递 ${fmtYuan(trackSel.shipping_cents)}`,
+                  ],
+                  ["单件毛利", fmtYuan(trackSel.profit_per_unit_cents), "售价 − 成本 − 快递"],
+                  ["已售", `${trackSel.sold_units} 件`, `近 ${days} 天`],
+                  ["营收", fmtYuan(trackSel.revenue_cents), "窗口内销售流水"],
+                  [
+                    "盈利",
+                    fmtYuan(trackSel.profit_cents),
+                    trackSel.revenue_cents > 0
+                      ? `利润率 ${Math.round((trackSel.profit_cents / trackSel.revenue_cents) * 1000) / 10}%`
+                      : "利润率 —",
+                  ],
+                  ["待发货", `${trackPending} 单`, "订单履约跟踪"],
+                ] as Array<[string, string, string]>
+              ).map(([label, value, sub]) => (
+                <article key={label}>
+                  <p>{label}</p>
+                  <strong>{value}</strong>
+                  <span>{sub}</span>
+                </article>
+              ))}
+            </div>
+
+            <div className="sf-track-body">
+              <article className="sf-track-chart">
+                <div className="sf-card-title">
+                  <div>
+                    <strong>
+                      每日{trackMetric === "units" ? "销量" : trackMetric === "revenue" ? "营收" : "盈利"}
+                    </strong>
+                    <span>按日本地零点归桶</span>
+                  </div>
+                  <div className="sf-metric-tabs">
+                    {(
+                      [
+                        ["profit", "盈利"],
+                        ["revenue", "营收"],
+                        ["units", "件数"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        className={trackMetric === key ? "active" : ""}
+                        onClick={() => setTrackMetric(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="sf-track-bars">
+                  <svg viewBox="0 0 680 150" preserveAspectRatio="none" aria-label="单商品每日趋势">
+                    <line x1="0" y1="142.5" x2="680" y2="142.5" stroke="#e6e0d6" strokeWidth="1" />
+                    {trackValues.map((v, i) => {
+                      const w = 680 / Math.max(1, trackValues.length);
+                      const h = (v / trackMax) * 132;
+                      return (
+                        <rect
+                          key={i}
+                          x={i * w + w * 0.18}
+                          y={142 - h}
+                          width={w * 0.64}
+                          height={Math.max(h, v > 0 ? 2 : 0)}
+                          fill="#ff5e3a"
+                          opacity={0.85}
+                        >
+                          <title>
+                            {`${fmtDayLabel((trackSeries ?? [])[i]?.day ?? 0)} · ${
+                              trackMetric === "units" ? `${v} 件` : fmtYuan(v)
+                            }`}
+                          </title>
+                        </rect>
+                      );
+                    })}
+                  </svg>
+                </div>
+                <div className="sf-track-x">
+                  {trackXLabels.map((label, i) => (
+                    <span key={i}>{label}</span>
+                  ))}
+                </div>
+                {trackValues.every((v) => v === 0) && (
+                  <p className="sf-track-empty">近 {days} 天该商品没有销售记录</p>
+                )}
+              </article>
+
+              <article className="sf-track-orders">
+                <div className="sf-card-title">
+                  <div>
+                    <strong>订单履约</strong>
+                    <span>该商品最近 {trackSales.length} 单 · 状态与运单号可追踪</span>
+                  </div>
+                </div>
+                <div className="sf-biz-table-wrap sf-track-orders-table">
+                  <table className="sf-biz-table">
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>数量</th>
+                        <th>单价</th>
+                        <th>状态</th>
+                        <th>运单号</th>
+                        <th>盈利</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trackSales.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="sf-biz-empty">
+                            该商品还没有销售记录 —— 让团队执行 [order] 登记订单
+                          </td>
+                        </tr>
+                      )}
+                      {trackSales.map((s) => {
+                        const st = BIZ_SALE_STATUS[s.status] ?? { label: s.status, cls: "" };
+                        return (
+                          <tr key={s.id}>
+                            <td>{fmtBizTime(s.created_at)}</td>
+                            <td>{s.qty}</td>
+                            <td>{fmtYuan(s.price_cents)}</td>
+                            <td>
+                              <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
+                            </td>
+                            <td>{s.tracking || "—"}</td>
+                            <td>{fmtYuan(s.profit_cents)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
+          </>
+        )}
       </div>
     </section>
   );
@@ -3932,20 +4185,13 @@ function ProjectsView() {
     }
   }
 
-  const cards: Array<[string, string, string, string, string]> =
-    liveProjects === null
-      ? [
-          ["Atlas 新品发布", "4 位 Agent · 8 个会话", "68%", "#ff5e3a", "今天"],
-          ["Q2 内容增长", "3 位 Agent · 12 个会话", "42%", "#00a594", "今天"],
-          ["客户提案自动化", "2 位 Agent · 5 个会话", "86%", "#8e6cff", "今天"],
-        ]
-      : liveProjects.map((p, i) => [
-          p.name,
-          `${(p.sessions ?? []).length} 个会话`,
-          "",
-          ["#ff5e3a", "#00a594", "#8e6cff", "#d97b38", "#c64f7d"][i % 5],
-          p.updated_at ? String(p.updated_at).slice(0, 10) : "最近",
-        ]);
+  const cards: Array<[string, string, string, string, string]> = (liveProjects ?? []).map((p, i) => [
+    p.name,
+    `${(p.sessions ?? []).length} 个会话`,
+    "",
+    ["#ff5e3a", "#00a594", "#8e6cff", "#d97b38", "#c64f7d"][i % 5],
+    p.updated_at ? String(p.updated_at).slice(0, 10) : "最近",
+  ]);
   return (
     <section className="sf-subview">
       <div className="sf-subview-intro">
@@ -3959,6 +4205,9 @@ function ProjectsView() {
         </button>
       </div>
       <SfLoadTag state={projectsState} />
+      {projectsState === "ready" && cards.length === 0 && (
+        <p className="sf-biz-empty">还没有项目 —— 点右上角「新建项目」创建</p>
+      )}
       {showCreate && (
         <form className="sf-inline-create" onSubmit={handleCreate}>
           <Folder size={17} />
@@ -4016,6 +4265,7 @@ function ProjectsView() {
 type SfScheduleRow = {
   schedule_id: string;
   task_description: string;
+  group_id?: string | null;
   agent_id?: string | null;
   cron_expression?: string | null;
   start_at?: string | null;
@@ -4023,15 +4273,24 @@ type SfScheduleRow = {
   enabled: boolean;
 };
 
+/** 定时任务：列表接 GET /api/schedules，创建接 POST /api/schedules，
+ *  启停接 PATCH、删除接 DELETE（此前假数据 + 死按钮，2026-11-08 接真）。 */
 function SchedulesView() {
-  const demoRows: Array<{ id: string; name: string; agent: string; cron: string; next: string; enabled: boolean }> = [
-    { id: "demo-1", name: "每天生成竞品动态简报", agent: "市场分析师", cron: "每天 09:00", next: "明天 09:00", enabled: true },
-    { id: "demo-2", name: "汇总本周内容数据", agent: "内容策划师", cron: "每周五 18:00", next: "周五 18:00", enabled: true },
-    { id: "demo-3", name: "检查品牌舆情风险", agent: "合规审核员", cron: "每 6 小时", next: "今天 16:00", enabled: false },
-  ];
-  const [rows, setRows] = useState(demoRows);
+  const [rows, setRows] = useState<SfScheduleRow[]>([]);
   const [loadState, setLoadState] = useState<SfLoadState>("loading");
-  const live = loadState === "ready";
+  const [reload, setReload] = useState(0);
+  const [groups, setGroups] = useState<GroupRecord[]>([]);
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [trigger, setTrigger] = useState<"cron" | "once">("cron");
+
+  const agentNames = useMemo(
+    () => new Map(agents.map((a) => [String(a.agent_id), a.name || String(a.agent_id)])),
+    [agents],
+  );
+
   useEffect(() => {
     sfFetch<SfScheduleRow[]>("/api/schedules")
       .then((list) => {
@@ -4039,31 +4298,68 @@ function SchedulesView() {
           setLoadState("error");
           return;
         }
-        setRows(
-          list.map((r) => ({
-            id: r.schedule_id,
-            name: r.task_description || r.schedule_id,
-            agent: r.agent_id || "自动调度",
-            cron: r.cron_expression || (r.start_at ? `一次性 · ${String(r.start_at).slice(0, 16).replace("T", " ")}` : "—"),
-            next: r.next_run_time ? String(r.next_run_time).slice(0, 16).replace("T", " ") : "待触发",
-            enabled: !!r.enabled,
-          })),
-        );
+        setRows(list);
         setLoadState("ready");
       })
       .catch(() => setLoadState("error"));
+  }, [reload]);
+
+  useEffect(() => {
+    listGroups("all").then(setGroups).catch(() => setGroups([]));
+    listAgents().then(setAgents).catch(() => setAgents([]));
   }, []);
+
   function toggle(index: number) {
     const row = rows[index];
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, enabled: !r.enabled } : r)));
-    if (live) {
-      sfFetch(`/api/schedules/${row.id}`, {
-        method: "PATCH",
+    sfFetch(`/api/schedules/${row.schedule_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !row.enabled }),
+    }).catch(() => setRows((prev) => prev.map((r, i) => (i === index ? row : r))));
+  }
+
+  function removeRow(id: string) {
+    const prev = rows;
+    setRows((rs) => rs.filter((r) => r.schedule_id !== id));
+    sfFetch(`/api/schedules/${id}`, { method: "DELETE" }).catch(() => setRows(prev));
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const desc = (form.elements.namedItem("taskDescription") as HTMLInputElement | null)?.value.trim();
+    const groupId = (form.elements.namedItem("groupId") as HTMLSelectElement | null)?.value;
+    const agentId = (form.elements.namedItem("agentId") as HTMLSelectElement | null)?.value;
+    if (!desc || !groupId) return;
+    const body: Record<string, unknown> = { group_id: groupId, task_description: desc };
+    if (agentId) body.agent_id = agentId;
+    if (trigger === "cron") {
+      const cron = (form.elements.namedItem("cronExpr") as HTMLInputElement | null)?.value.trim();
+      if (!cron) return;
+      body.cron_expression = cron;
+    } else {
+      const at = (form.elements.namedItem("startAt") as HTMLInputElement | null)?.value;
+      if (!at) return;
+      body.start_at = new Date(at).toISOString();
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await sfFetch("/api/schedules", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !row.enabled }),
-      }).catch(() => setRows((prev) => prev.map((r, i) => (i === index ? row : r))));
+        body: JSON.stringify(body),
+      });
+      setShowCreate(false);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "创建失败，请重试");
+    } finally {
+      setCreating(false);
     }
   }
+
   return (
     <section className="sf-subview">
       <div className="sf-subview-intro">
@@ -4072,21 +4368,100 @@ function SchedulesView() {
           <h1>定时任务</h1>
           <span>全部 Agent 的周期与一次性执行计划。</span>
         </div>
-        <button>
+        <button onClick={() => setShowCreate(!showCreate)}>
           <Plus size={15} /> 创建定时任务
         </button>
       </div>
       <SfLoadTag state={loadState} />
+      {showCreate && (
+        <form className="sf-schedule-create" onSubmit={handleCreate}>
+          <label>
+            任务描述
+            <input
+              autoFocus
+              required
+              name="taskDescription"
+              maxLength={500}
+              placeholder="例如：每天生成竞品动态简报"
+              disabled={creating}
+            />
+          </label>
+          <label>
+            触发方式
+            <select
+              value={trigger}
+              onChange={(e) => setTrigger(e.target.value === "once" ? "once" : "cron")}
+              disabled={creating}
+            >
+              <option value="cron">周期（cron）</option>
+              <option value="once">一次性</option>
+            </select>
+          </label>
+          {trigger === "cron" ? (
+            <label>
+              cron 表达式
+              <input name="cronExpr" required placeholder="0 9 * * *（分 时 日 月 周）" disabled={creating} />
+            </label>
+          ) : (
+            <label>
+              执行时间
+              <input name="startAt" type="datetime-local" required disabled={creating} />
+            </label>
+          )}
+          <label>
+            执行群组
+            <select name="groupId" required defaultValue="" disabled={creating}>
+              <option value="" disabled>
+                选择群组…
+              </option>
+              {groups.map((g) => (
+                <option key={g.group_id} value={g.group_id}>
+                  {g.name || g.group_id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            指定 Agent（可选）
+            <select name="agentId" defaultValue="" disabled={creating}>
+              <option value="">自动调度</option>
+              {agents.map((a) => (
+                <option key={String(a.agent_id)} value={String(a.agent_id)}>
+                  {a.name || a.agent_id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="sf-schedule-create-actions">
+            <button type="submit" disabled={creating}>
+              {creating ? "创建中…" : "创建"}
+            </button>
+            <button type="button" onClick={() => setShowCreate(false)} disabled={creating}>
+              取消
+            </button>
+            {createError && <span className="sf-schedule-create-error">{createError}</span>}
+          </div>
+        </form>
+      )}
+      {loadState === "ready" && rows.length === 0 && (
+        <p className="sf-biz-empty">还没有定时任务 —— 点右上角「创建定时任务」添加</p>
+      )}
       <div className="sf-schedule-list">
         {rows.map((schedule, index) => (
-          <article key={schedule.id} className={schedule.enabled ? "" : "disabled"}>
+          <article key={schedule.schedule_id} className={schedule.enabled ? "" : "disabled"}>
             <span className="sf-schedule-icon">
               <CalendarClock size={18} />
             </span>
             <div>
-              <strong>{schedule.name}</strong>
+              <strong>{schedule.task_description || schedule.schedule_id}</strong>
               <p>
-                <span>{schedule.agent}</span> · {schedule.cron} · 下次 {schedule.next}
+                <span>{schedule.agent_id ? (agentNames.get(String(schedule.agent_id)) ?? schedule.agent_id) : "自动调度"}</span>
+                {" · "}
+                {schedule.cron_expression
+                  ? `cron · ${schedule.cron_expression}`
+                  : `一次性 · ${String(schedule.start_at ?? "").slice(0, 16).replace("T", " ")}`}
+                {" · 下次 "}
+                {schedule.next_run_time ? String(schedule.next_run_time).slice(0, 16).replace("T", " ") : "待触发"}
               </p>
             </div>
             <span className={schedule.enabled ? "enabled" : ""}>
@@ -4099,8 +4474,8 @@ function SchedulesView() {
             >
               <i />
             </button>
-            <button>
-              <MoreHorizontal size={17} />
+            <button onClick={() => removeRow(schedule.schedule_id)} aria-label="删除任务">
+              <Trash2 size={15} />
             </button>
           </article>
         ))}

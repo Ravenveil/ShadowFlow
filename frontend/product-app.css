@@ -2360,6 +2360,57 @@
     gap: 8px;
     margin-top: 30px;
   }
+  /* 创建定时任务表单（接 POST /api/schedules）：字段网格 + 底部动作行。 */
+  .sf-schedule-create {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 9px 12px;
+    margin-top: 23px;
+    border: 1px solid #d8d1c6;
+    border-radius: 11px;
+    background: #fffdf9;
+    padding: 12px;
+  }
+  .sf-schedule-create label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    color: #99938c;
+    font-size: 8px;
+    font-weight: 600;
+  }
+  .sf-schedule-create input,
+  .sf-schedule-create select {
+    min-width: 0;
+    border: 1px solid #ded7cc;
+    border-radius: 7px;
+    background: #fff;
+    padding: 7px 9px;
+    color: #17162d;
+    font-size: 10px;
+    outline: 0;
+  }
+  .sf-schedule-create input:focus,
+  .sf-schedule-create select:focus {
+    border-color: #ff5e3a;
+  }
+  .sf-schedule-create-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .sf-schedule-create-actions button[type="submit"] {
+    border-radius: 7px;
+    background: #17162d;
+    color: #fff;
+    padding: 7px 12px;
+    font-size: 8px;
+  }
+  .sf-schedule-create-error {
+    color: #e2542f;
+    font-size: 8px;
+  }
   .sf-schedule-list article {
     display: grid;
     grid-template-columns: 42px 1fr auto 38px 26px;
@@ -4666,4 +4717,102 @@
 .sf-biz-act:hover {
   border-color: #ff5e3a;
   color: #ff5e3a;
+}
+
+/* ── 数据看板 · 商品追踪（单个商品） ───────────────────── */
+.sf-track-card {
+  margin-top: 11px;
+  border: 1px solid #ded7cc;
+  border-radius: 13px;
+  background: #fffdf9;
+  padding: 15px;
+}
+.sf-track-select {
+  border: 1px solid #ddd6cb;
+  border-radius: 999px;
+  background: #fffdf9;
+  padding: 6px 12px;
+  color: #17162d;
+  font-size: 9px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.sf-track-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 9px;
+  margin-top: 14px;
+}
+.sf-track-kpis article {
+  border: 1px solid #ece7de;
+  border-radius: 11px;
+  background: #fff;
+  padding: 11px 12px;
+}
+.sf-track-kpis p {
+  color: #99938c;
+  font-size: 8px;
+}
+.sf-track-kpis strong {
+  display: block;
+  margin-top: 5px;
+  color: #29272e;
+  font: 600 15px "DM Mono";
+  letter-spacing: -0.03em;
+}
+.sf-track-kpis span {
+  display: block;
+  margin-top: 4px;
+  color: #b3ada4;
+  font-size: 7px;
+}
+.sf-track-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+.sf-track-chart,
+.sf-track-orders {
+  border: 1px solid #ece7de;
+  border-radius: 11px;
+  background: #fff;
+  padding: 12px;
+}
+.sf-track-bars {
+  height: 165px;
+  margin-top: 12px;
+}
+.sf-track-bars svg {
+  width: 100%;
+  height: 100%;
+  background-image: linear-gradient(#eee9e1 1px, transparent 1px);
+  background-size: 100% 25%;
+}
+.sf-track-x {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 2px 0;
+  color: #aaa49c;
+  font: 6px "DM Mono";
+}
+.sf-track-orders-table {
+  max-height: 228px;
+  margin-top: 8px;
+}
+.sf-track-empty {
+  margin-top: 12px;
+  color: #99938c;
+  font-size: 9px;
+}
+@media (max-width: 1050px) {
+  .sf-track-kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .sf-track-body {
+    grid-template-columns: 1fr;
+  }
+}
+.sf-track-orders-table .sf-biz-badge {
+  white-space: nowrap;
 }
