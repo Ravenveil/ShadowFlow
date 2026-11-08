@@ -81,8 +81,7 @@
   touch-action: none;
 }
 
-/* 每一轮对话一格：透明命中区（整轮可点），
-   格顶一枚统一色调小刻度线 —— 「一格一格」的网页滚动条刻度观感 */
+/* 每一轮对话一格：透明命中区（整轮可点），无刻度装饰 */
 .sf-turn-cell {
   position: absolute;
   left: 0;
@@ -91,26 +90,6 @@
   border: 0;
   background: transparent;
   cursor: pointer;
-}
-.sf-turn-cell::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  width: 8px;
-  height: 2.5px;
-  border-radius: 2px;
-  background: rgba(23, 22, 45, 0.32);
-  transform: translateX(-50%);
-  transition: width 0.15s, background 0.15s;
-}
-.sf-turn-cell:hover::before {
-  width: 11px;
-  background: rgba(23, 22, 45, 0.6);
-}
-.sf-turn-cell.on::before {
-  width: 11px;
-  background: rgba(23, 22, 45, 0.85);
 }
 /* 序号默认收起，悬停该格随预览一起浮现 */
 .sf-turn-cell em {
