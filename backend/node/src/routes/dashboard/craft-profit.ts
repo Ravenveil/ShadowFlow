@@ -47,6 +47,7 @@ import {
   setAutoOps,
 } from '../../storage/craft-profit-agent';
 import { craftTeamStatus, setupCraftTeam } from '../../storage/craft-team-setup';
+import { deletePostsForProduct } from '../../storage/craft-posts';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();
@@ -278,6 +279,9 @@ router.post('/products', (req: Request, res: Response) => {
 // 金额快照（历史盈利不变），商品行硬删。返回 {data} 包装方便前端统一解包。
 router.delete('/products/:id', (req: Request, res: Response) => {
   try {
+    // 卡片与商品同生共死（2026-11-08）：商品消失时连删其博文卡（直挂/反引）。
+    // 必须先删博文（source_post_id 反引依赖商品行还在）再删商品。
+    deletePostsForProduct(req.params.id);
     deleteProduct(req.params.id);
     res.json({ data: { deleted: true, id: req.params.id } });
   } catch (err) {

@@ -305,6 +305,25 @@ export function getPost(postId: string): CraftPost | undefined {
   return row ? rowToPost(row) : undefined;
 }
 
+/**
+ * 商品删除级联（2026-11-08 卡片生命周期）：卡片与商品同生共死——删商品前
+ * 调用，连删其博文卡（product_id 直挂 或 商品 source_post_id 反引，管道
+ * 「回挂」两条链路都覆盖）。必须在删商品行【之前】调用（反引依赖商品行还在）。
+ * 返回删除条数。
+ */
+export function deletePostsForProduct(productId: string): number {
+  const id = String(productId ?? '').trim();
+  if (!id) return 0;
+  const r = db()
+    .prepare(
+      `DELETE FROM craft_posts
+        WHERE product_id = ?
+           OR post_id = (SELECT source_post_id FROM cp_products WHERE id = ?)`,
+    )
+    .run(id, id);
+  return r.changes;
+}
+
 // ── PATCH（内容更新 + 状态机迁移 + 发布落 [post] 标记）───────────────────────
 
 /**

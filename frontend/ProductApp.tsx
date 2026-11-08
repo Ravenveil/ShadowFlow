@@ -3958,6 +3958,8 @@ type CraftProductRow = {
   image_url: string;
   /** active 在售 | off_shelf 已下架。 */
   status: string;
+  /** 来源博文（管道落商品反引；手动上传为空）。 */
+  source_post_id?: string | null;
   /** 每件盈利（分），后端算好。 */
   profit_per_unit_cents: number;
   created_at: number;
@@ -3970,6 +3972,8 @@ type CraftPostRow = {
   images: Array<{ name?: string; url: string; is_image?: boolean }>;
   /** draft 草稿 | confirmed 已确认 | published 已发布（单向状态机）。 */
   status: string;
+  /** 关联商品（cp_products.id，null=未关联）；卡片只留挂在实际商品上的。 */
+  product_id?: string | null;
   created_at: number;
   published_at: number | null;
 };
@@ -4023,6 +4027,13 @@ async function fetchCraftCards(): Promise<{ products: CraftCardProduct[]; posts:
     sfFetch<{ items?: CraftProfitRow[] }>("/api/craft-profit/products?days=30"),
   ]);
   const profitById = new Map((pf.items ?? []).map((r) => [r.id, r]));
+  // 卡片与商品同生共死（2026-11-08）：博文卡只保留挂在实际商品上的——
+  // product_id 直挂 或 商品 source_post_id 反引（管道回挂口径）；无主博文
+  // （商品已删 / 测试残留）不出卡，与下方实际商品（货架/商品管理）对齐。
+  const productIds = new Set((pr.items ?? []).map((p) => p.id));
+  const sourcePostIds = new Set(
+    (pr.items ?? []).map((p) => p.source_post_id).filter((v): v is string => !!v),
+  );
   return {
     products: (pr.items ?? []).map((p) => ({
       id: p.id,
@@ -4035,14 +4046,16 @@ async function fetchCraftCards(): Promise<{ products: CraftCardProduct[]; posts:
       // 环比字段契约暂无：留位，有值即按涨红跌绿着色
       profit_delta_pct: null,
     })),
-    posts: (po.items ?? []).map((t) => ({
-      id: t.post_id,
-      title: t.title,
-      // 封面取第一张图片附件（is_image），回落首个附件（2026-11-09 be-worker 契约修订）
-      cover_url: t.images?.find((i) => i.is_image)?.url ?? t.images?.[0]?.url ?? "",
-      status: t.status,
-      published_at: t.published_at ?? null,
-    })),
+    posts: (po.items ?? [])
+      .filter((t) => (t.product_id ? productIds.has(t.product_id) : sourcePostIds.has(t.post_id)))
+      .map((t) => ({
+        id: t.post_id,
+        title: t.title,
+        // 封面取第一张图片附件（is_image），回落首个附件（2026-11-09 be-worker 契约修订）
+        cover_url: t.images?.find((i) => i.is_image)?.url ?? t.images?.[0]?.url ?? "",
+        status: t.status,
+        published_at: t.published_at ?? null,
+      })),
   };
 }
 
@@ -4050,7 +4063,7 @@ async function fetchCraftCards(): Promise<{ products: CraftCardProduct[]; posts:
  * 商品/博文卡片区（2026-11-09 Task #4）：加载/错误/空态/正常四态齐全。
  * 图片走 chatAssetUrl 服务端直链；空就是空（不回落演示假数据）。
  */
-function CraftCardsSection() {
+function CraftCardsSection({ refreshKey = 0 }: { refreshKey?: number }) {
   const [state, setState] = useState<SfLoadState>("loading");
   const [products, setProducts] = useState<CraftCardProduct[]>([]);
   const [posts, setPosts] = useState<CraftCardPost[]>([]);
@@ -4073,7 +4086,7 @@ function CraftCardsSection() {
     return () => {
       dead = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   return (
     <article className="sf-craft-cards">
@@ -4190,6 +4203,8 @@ function BizView({ runsSig }: { runsSig?: string }) {
   >(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  /** 卡片区刷新钥匙（2026-11-08 卡片伴随商品生命周期）：商品增删后自增重拉卡片。 */
+  const [cardsKey, setCardsKey] = useState(0);
   /** 订单管理（2026-11-09 图1）：状态筛选 chips / 发货弹窗 / 取消订单二步确认。 */
   const [orderFilter, setOrderFilter] = useState<"all" | "unpaid" | "pending" | "shipped" | "done" | "cancelled">("all");
   const [shipFor, setShipFor] = useState<BizSale | null>(null);
@@ -4268,6 +4283,7 @@ function BizView({ runsSig }: { runsSig?: string }) {
       /* 删除失败（网络/后端）时下方 load() 会还原真实状态 */
     } finally {
       setConfirmDel(null);
+      setCardsKey((k) => k + 1); // 卡片伴随商品消失：博文卡随商品级联撤下，卡片区即时重拉
       load();
     }
   }
@@ -4367,7 +4383,7 @@ function BizView({ runsSig }: { runsSig?: string }) {
       {tab === "overview" && <RunDigestCard />}
 
       {/* 商品/博文卡片（2026-11-09 Task #4）：流水线产出面，接 /api/craft-products + /api/craft-posts */}
-      {tab === "overview" && <CraftCardsSection />}
+      {tab === "overview" && <CraftCardsSection refreshKey={cardsKey} />}
 
       {tab === "overview" && (
         <div className="sf-biz-table-wrap">
@@ -4812,6 +4828,7 @@ function BizView({ runsSig }: { runsSig?: string }) {
           onClose={() => setShopDialog(null)}
           onSaved={() => {
             setShopDialog(null);
+            setCardsKey((k) => k + 1); // 卡片伴随商品出生：商品卡+草稿博文卡即时上板
             load();
           }}
         />
@@ -4974,10 +4991,31 @@ function BizProductDialog({
           body: JSON.stringify(payload),
         });
       } else {
-        await sfFetch("/api/craft-products", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        const created = await sfFetch<{ product_id?: string; id?: string }>(
+          "/api/craft-products",
+          { method: "POST", body: JSON.stringify(payload) },
+        );
+        // 卡片伴随商品出生（2026-11-08）：上传商品成对生成博文草稿卡（封面=商品
+        // 首图、正文=商品简介），删除商品时随商品级联删除——卡片与商品同生共死。
+        const pid = created.product_id ?? created.id ?? "";
+        if (pid) {
+          const cover = images[0] ?? "";
+          try {
+            await sfFetch("/api/craft-posts", {
+              method: "POST",
+              body: JSON.stringify({
+                title: name.trim(),
+                body: intro.trim(),
+                product_id: pid,
+                images: cover
+                  ? [{ name: "商品封面", path: cover, url: cover, is_image: true }]
+                  : [],
+              }),
+            });
+          } catch {
+            /* 伴随卡生成失败不阻断商品上架（商品卡仍会正常上板） */
+          }
+        }
       }
       onSaved();
     } catch (err) {
