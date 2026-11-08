@@ -19,7 +19,6 @@ import {
   ChevronRight,
   FileText,
   GitBranch,
-  Image as ImageIcon,
   Link2,
   RotateCcw,
   Table2,
@@ -27,7 +26,7 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
-import type { DiffLine, StepRow, TimelineMessage } from "./chat-api";
+import { chatAssetUrl, type DiffLine, type StepRow, type TimelineMessage } from "./chat-api";
 
 const TL_PALETTE = ["#ff5e3a", "#2777e8", "#d97b38", "#c64f7d", "#7c5cff", "#0ea5a4", "#2ec4a6"];
 
@@ -183,11 +182,26 @@ export function TimelineRow({ msg }: { msg: TimelineMessage }) {
       return (
         <article className="sf-user-message sf-new-message">
           <p style={{ whiteSpace: "pre-wrap" }}>{msg.text ?? ""}</p>
-          {(msg.attachments ?? []).map((att) => (
-            <span className="sf-tl-attach" key={att.path}>
-              {att.is_image ? <ImageIcon size={11} /> : <FileText size={11} />} {att.name}
-            </span>
-          ))}
+          {(msg.attachments ?? []).map((att) =>
+            att.is_image ? (
+              // 图片附件缩略图（2026-11-09）：att.url 经 chatAssetUrl 拼直链，
+              // 限高约 120px，点击新窗口看原图；非图片保留原 chip
+              <a
+                className="sf-tl-attach-img-link"
+                key={att.path}
+                href={chatAssetUrl(att.url)}
+                target="_blank"
+                rel="noreferrer"
+                title={`${att.name}（点击看原图）`}
+              >
+                <img className="sf-tl-attach-img" src={chatAssetUrl(att.url)} alt={att.name} loading="lazy" />
+              </a>
+            ) : (
+              <span className="sf-tl-attach" key={att.path}>
+                <FileText size={11} /> {att.name}
+              </span>
+            ),
+          )}
         </article>
       );
 

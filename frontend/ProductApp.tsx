@@ -207,6 +207,55 @@ function displayAgents(list: AgentRecord[]): AgentRecord[] {
   return list.filter((a) => !HIDDEN_AGENT_IDS.has(String(a.agent_id ?? "")));
 }
 
+// ── 拖拽图片解析（2026-11-09 修复「拖入就没反应」）──────────────────────────
+// 从微信/浏览器/网页/Word 拖图片时 dataTransfer 只有 text/uri-list / text/html
+// （没有 Files），需要从 URL 拉取转 File 后走既有上传链路。
+
+/** 拖拽是否由聊天区接管：Files，或携带 text/uri-list / text/html 的图片类拖拽。 */
+function isChatDragAccepted(dt: DataTransfer): boolean {
+  const types: ReadonlyArray<string> = Array.from(dt.types ?? []);
+  return types.includes("Files") || types.includes("text/uri-list") || types.includes("text/html");
+}
+
+/** 从 text/uri-list / text/html 解析候选图片地址（drop 时 getData 才可读）。 */
+function extractDragUrls(dt: DataTransfer): string[] {
+  const urls: string[] = [];
+  for (const line of (dt.getData("text/uri-list") || "").split(/\r?\n/)) {
+    const url = line.trim();
+    if (url && !url.startsWith("#")) urls.push(url); // # 开头是 uri-list 注释行
+  }
+  if (urls.length === 0) {
+    // 网页/微信富文本拖拽：取 <img src="..."> 的地址
+    const re = /<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
+    for (const m of (dt.getData("text/html") || "").matchAll(re)) urls.push(m[1]);
+  }
+  return urls.slice(0, 9); // 与单条消息 9 个附件上限对齐
+}
+
+/**
+ * 拖拽 URL → File：fetch 取 blob（data: 与 http(s) 同路径）后转 File。
+ * 失败抛错：FETCH_FAIL=取不到（跨域 CORS / file: / weixin: 协议受限），NOT_IMAGE=不是图片。
+ */
+async function dragUrlToFile(url: string, index: number): Promise<File> {
+  let blob: Blob;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("FETCH_FAIL");
+    blob = await res.blob();
+  } catch {
+    // 跨域/协议受限统一按取不到处理，调用方提示改用回形针或粘贴（不许静默）
+    throw new Error("FETCH_FAIL");
+  }
+  const extHint = /\.(png|jpe?g|gif|webp|bmp|svg)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase();
+  // 优先看 Content-Type；缺失/兜底时信 URL 扩展名（部分 CDN 回 octet-stream）
+  if (!blob.type.startsWith("image/") && !(extHint && blob.size > 0)) throw new Error("NOT_IMAGE");
+  const rawExt = (extHint ?? blob.type.split("/")[1] ?? "png").toLowerCase();
+  const ext = rawExt === "jpeg" || rawExt === "jpg" ? "jpg" : rawExt === "svg+xml" || rawExt === "svg" ? "svg" : "png";
+  return new File([blob], `拖入图片-${Date.now()}-${index}.${ext}`, {
+    type: blob.type || (ext === "svg" ? "image/svg+xml" : `image/${ext}`),
+  });
+}
+
 /** composer 附件条目（2026-11-07 对话框拖拽传图）：上传中/成功/失败三态可见。 */
 interface ComposerAtt {
   id: string;
@@ -251,10 +300,29 @@ export default function ProductApp() {
   // ── 聊天附件（2026-11-07 对话框拖拽传图）：拖拽/点选文件 → 上传 → 随消息发送 ──
   const [atts, setAtts] = useState<ComposerAtt[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  // 内联提示（2026-11-09）：拖拽取不到图 / 失败附件拦截发送等，不许静默失败
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragDepthRef = useRef(0); // dragenter/leave 计数，避免经过子元素时遮罩闪烁
   const attIdRef = useRef(0);
   const sendingRef = useRef(false); // submitMessage 异步窗口防重入
+
+  // ── 模型选择器（2026-11-08 任务面板）：读真实 BYOK providers，发送时随消息
+  //    透传 executor/model（后端「UI model picker's choice always wins」）──
+  const [byokStore, setByokStore] = useState<ByokStoreData | null>(null);
+  const [modelChoice, setModelChoice] = useState("auto"); // "auto" | "byok:<id>::<model>"
+  useEffect(() => {
+    sfFetch<Partial<ByokStoreData>>("/api/settings/byok")
+      .then((data) =>
+        setByokStore({
+          providers: data.providers ?? {},
+          defaultModel: data.defaultModel ?? null,
+          routingPriority: data.routingPriority ?? "fallback",
+        }),
+      )
+      .catch(() => setByokStore(null));
+  }, []);
 
   function openAuth(mode: "login" | "register") {
     setAuthMode(mode);
@@ -502,6 +570,24 @@ export default function ProductApp() {
     });
   }
 
+  /** 内联提示（拖拽取不到图 / 发送被拦截）：8 秒自动收起，可手动关闭。 */
+  function showNotice(text: string) {
+    setNotice(text);
+    if (noticeTimerRef.current != null) window.clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = window.setTimeout(() => setNotice(null), 8000);
+  }
+
+  /** 剪贴板粘贴图片（2026-11-09）：截图/复制的图片 blob 直接进附件队列。 */
+  function onChatPaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData?.items ?? [])
+      .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => f != null);
+    if (files.length === 0) return;
+    event.preventDefault(); // 图片粘贴不再向输入框插文本
+    addChatFiles(files);
+  }
+
   // ── 聊天框加号菜单（2026-11-08）：技能 / 连接器两级弹层，数据接后端 ──────
 
   type PlusView = "root" | "skills" | "connectors";
@@ -601,48 +687,97 @@ export default function ProductApp() {
     }
   }
 
-  /** 拖拽上传：仅接管文件拖入；enter/leave 计数防闪烁。 */
+  /**
+   * 拖拽接管（2026-11-09 修复「拖入就没反应」）：除 Files 外，还接受携带
+   * text/uri-list / text/html 的图片拖拽（微信/浏览器/网页/Word 拖图时
+   * dataTransfer 没有 Files，此前守卫静默返回 → 遮罩与 drop 全部失效）。
+   * enter/leave 计数防闪烁。
+   */
   function onChatDragEnter(event: ReactDragEvent) {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!isChatDragAccepted(event.dataTransfer)) return;
     event.preventDefault();
     dragDepthRef.current += 1;
     setDragOver(true);
   }
 
   function onChatDragOver(event: ReactDragEvent) {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault(); // 必须阻止默认行为，否则浏览器直接打开文件
+    if (!isChatDragAccepted(event.dataTransfer)) return;
+    event.preventDefault(); // 必须阻止默认行为，否则浏览器直接打开文件/图片
     event.dataTransfer.dropEffect = "copy";
   }
 
   function onChatDragLeave(event: ReactDragEvent) {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!isChatDragAccepted(event.dataTransfer)) return;
     dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
     if (dragDepthRef.current === 0) setDragOver(false);
   }
 
+  /**
+   * 拖放处理：优先 dataTransfer.files；为空则从 text/uri-list / text/html 解析
+   * 图片 URL，fetch 拿 blob 转 File 后走既有 addChatFiles。取不到图/识别不了
+   * 都给可见内联提示，不许静默。
+   */
   function onChatDrop(event: ReactDragEvent) {
-    event.preventDefault();
+    const dt = event.dataTransfer;
+    const files = Array.from(dt.files ?? []);
+    const urls = files.length === 0 ? extractDragUrls(dt) : [];
     dragDepthRef.current = 0;
     setDragOver(false);
-    const files = Array.from(event.dataTransfer.files ?? []);
-    if (files.length > 0) addChatFiles(files);
+    if (files.length === 0 && urls.length === 0) {
+      // 无文件也无 URL（纯文本拖放）：只提示不接管，交还浏览器默认行为
+      //（如向输入框插入文字，preventDefault 会把这类插入一并吞掉）
+      if (isChatDragAccepted(dt)) {
+        showNotice("未识别到可上传的图片，请改用回形针按钮或截图后粘贴");
+      }
+      return;
+    }
+    event.preventDefault(); // 必须阻止：否则浏览器直接打开/导航到拖入的图片 URL
+    if (files.length > 0) {
+      addChatFiles(files);
+      return;
+    }
+    void (async () => {
+      const converted: File[] = [];
+      for (let i = 0; i < urls.length; i += 1) {
+        try {
+          converted.push(await dragUrlToFile(urls[i], i));
+        } catch (err) {
+          // 跨域取不到/内容不是图片 → 明确告诉用户换姿势，不许静默
+          showNotice(
+            err instanceof Error && err.message === "NOT_IMAGE"
+              ? "拖入的内容不是图片，仅支持图片文件"
+              : "无法获取该图片，请改用回形针按钮或截图后粘贴",
+          );
+        }
+      }
+      if (converted.length > 0) addChatFiles(converted);
+    })();
   }
 
   async function submitMessage(event: FormEvent) {
     event.preventDefault();
-    // 上传完成前不发送，防丢附件；失败条目不随消息发出（可删除后重试）
+    // 上传完成前不发送，防丢附件
     if (atts.some((a) => a.status === "uploading")) return;
+    // 失败附件拦截发送（2026-11-09）：此前 error chip 被静默丢弃，用户以为图已发出
+    if (atts.some((a) => a.status === "error")) {
+      showNotice("有附件上传失败（红标），请移除后重试，或改用回形针重新上传");
+      return;
+    }
     const ready = atts.flatMap((a) => (a.data ? [a.data] : []));
     if (!message.trim() && ready.length === 0) return;
     if (sendingRef.current) return; // 建群补发路径有异步窗口，防回车连发重复建群
     sendingRef.current = true;
     try {
       // 发出/排入补发才清空 composer；失败保留输入与附件 chips 供重试（2026-11-08 主理人裁决）
-      const ok = await sendText(message.trim(), ready.length > 0 ? ready : undefined);
+      const ok = await sendText(
+        message.trim(),
+        ready.length > 0 ? ready : undefined,
+        parseModelChoice(modelChoice),
+      );
       if (ok) {
         setMessage("");
-        setAtts([]);
+        // 仅清理已发出的 done 附件，其余保留（2026-11-09，不再一刀切清空）
+        setAtts((cur) => cur.filter((a) => a.status !== "done"));
       }
     } finally {
       sendingRef.current = false;
@@ -1043,22 +1178,33 @@ export default function ProductApp() {
               onDragLeave={onChatDragLeave}
               onDrop={onChatDrop}
             >
-              {/* 执行详情：原右侧侧边栏，现移到对话框上方内嵌显示（仍受顶栏「执行详情」开关联动） */}
-              {detailOpen && (
-                <RunPanel
-                  groupId={activeGroupId}
-                  groupName={activeTitle}
-                  chat={chat}
-                  agentsList={agentsList}
-                  agentsState={agentsState}
-                  onClose={() => setDetailOpen(false)}
-                />
-              )}
               <div className="sf-chat-scroll sf-thread-enter" key={activeGroupId ?? "none"}>
                 <ChatThread chat={chat} onQuick={sendText} onLogin={() => openAuth("login")} />
               </div>
 
+              {/* 任务面板 + 输入框一体化底座（2026-11-08 UI 改造）：
+                  上层任务执行状态面板（受顶栏「执行详情」开关联动），下层原输入框 */}
+              <div className="sf-composer-dock">
+                {detailOpen && (
+                  <TaskStatusPanel
+                    groupId={activeGroupId}
+                    groupName={activeTitle}
+                    chat={chat}
+                    agentsList={agentsList}
+                    agentsState={agentsState}
+                    onClose={() => setDetailOpen(false)}
+                  />
+                )}
               <form className="sf-composer" onSubmit={submitMessage}>
+                {notice && (
+                  <p className="sf-composer-notice" role="alert">
+                    <AlertTriangle size={12} />
+                    <span>{notice}</span>
+                    <button type="button" onClick={() => setNotice(null)} aria-label="关闭提示">
+                      <X size={11} />
+                    </button>
+                  </p>
+                )}
                 {atts.length > 0 && (
                   <div className="sf-composer-atts">
                     {atts.map((a) => (
@@ -1089,9 +1235,11 @@ export default function ProductApp() {
                   </div>
                 )}
                 <textarea
+                  ref={composerRef}
                   rows={1}
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
+                  onPaste={onChatPaste}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
@@ -3334,6 +3482,225 @@ const BIZ_SALE_STATUS: Record<string, { label: string; cls: string }> = {
   refunded: { label: "已退款", cls: "bad" },
 };
 
+// ── 商品/博文卡片（2026-11-09 Task #4 数据看板）────────────────────────────
+// 流水线（图片→AI 草拟→审批门→落商品）的产出面：商品卡（名称/图/状态/盈利）
+// 与博文卡（标题/封面/状态/发布）。数据来自 be-worker Task #2 契约（2026-11-09 接入）：
+//   GET /api/craft-products → { items: CraftProductRow[] }（profit_per_unit_cents
+//     每件盈利，后端算好；status: active|off_shelf）
+//   GET /api/craft-posts    → { items: CraftPostRow[] }（status: draft|confirmed|
+//     published；images[0].url 当封面）
+// 金融约定：金额 ¥（fmtYuan），盈利涨跌用「涨红跌绿」（profit_delta_pct 契约暂无，
+// 有值即着色，无值不显示环比）。
+
+/** 商品行（对齐 /api/craft-products 响应；product_id 是 id 的别名）。 */
+type CraftProductRow = {
+  id: string;
+  product_id?: string;
+  name: string;
+  /** 商品图（聊天附件 url / 本地路径，可空串）。 */
+  image_url: string;
+  /** active 在售 | off_shelf 已下架。 */
+  status: string;
+  /** 每件盈利（分），后端算好。 */
+  profit_per_unit_cents: number;
+  created_at: number;
+};
+
+/** 博文行（对齐 /api/craft-posts 响应）。 */
+type CraftPostRow = {
+  post_id: string;
+  title: string;
+  images: Array<{ name?: string; url: string; is_image?: boolean }>;
+  /** draft 草稿 | confirmed 已确认 | published 已发布（单向状态机）。 */
+  status: string;
+  created_at: number;
+  published_at: number | null;
+};
+
+/** 看板卡片视图模型（渲染层消费，字段按 brief：商品 名称/图/状态/盈利；博文 标题/封面/状态/发布）。 */
+type CraftCardProduct = {
+  id: string;
+  name: string;
+  image_url: string;
+  status: string;
+  /** 每件盈利（分）。 */
+  profit_per_unit_cents: number;
+  /** 盈利环比（%）；null=无数据（契约暂未提供）。涨红跌绿：涨(+)红、跌(−)绿。 */
+  profit_delta_pct: number | null;
+};
+type CraftCardPost = {
+  id: string;
+  title: string;
+  /** 封面（取 images[0].url；空串=占位图）。 */
+  cover_url: string;
+  status: string;
+  published_at: number | null;
+};
+
+const CRAFT_PRODUCT_STATUS: Record<string, { label: string; cls: string }> = {
+  active: { label: "在售", cls: "ok" },
+  off_shelf: { label: "已下架", cls: "bad" },
+};
+const CRAFT_POST_STATUS: Record<string, { label: string; cls: string }> = {
+  draft: { label: "草稿", cls: "" },
+  confirmed: { label: "待发布", cls: "warn" },
+  published: { label: "已发布", cls: "ok" },
+};
+
+/** 卡片数据入口（2026-11-09 接 be-worker 契约）：目录域两读端点并发拉取后映射为卡片视图。 */
+async function fetchCraftCards(): Promise<{ products: CraftCardProduct[]; posts: CraftCardPost[] }> {
+  const [pr, po] = await Promise.all([
+    sfFetch<{ items?: CraftProductRow[] }>("/api/craft-products"),
+    sfFetch<{ items?: CraftPostRow[] }>("/api/craft-posts"),
+  ]);
+  return {
+    products: (pr.items ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      image_url: p.image_url ?? "",
+      status: p.status,
+      profit_per_unit_cents: p.profit_per_unit_cents ?? 0,
+      // 环比字段契约暂无：留位，有值即按涨红跌绿着色
+      profit_delta_pct: null,
+    })),
+    posts: (po.items ?? []).map((t) => ({
+      id: t.post_id,
+      title: t.title,
+      cover_url: t.images?.[0]?.url ?? "",
+      status: t.status,
+      published_at: t.published_at ?? null,
+    })),
+  };
+}
+
+/**
+ * 商品/博文卡片区（2026-11-09 Task #4）：加载/错误/空态/正常四态齐全。
+ * 图片走 chatAssetUrl 服务端直链；空就是空（不回落演示假数据）。
+ */
+function CraftCardsSection() {
+  const [state, setState] = useState<SfLoadState>("loading");
+  const [products, setProducts] = useState<CraftCardProduct[]>([]);
+  const [posts, setPosts] = useState<CraftCardPost[]>([]);
+  useEffect(() => {
+    let dead = false;
+    setState("loading");
+    fetchCraftCards()
+      .then((d) => {
+        if (dead) return;
+        setProducts(d.products);
+        setPosts(d.posts);
+        setState("ready");
+      })
+      .catch(() => {
+        if (dead) return;
+        setProducts([]);
+        setPosts([]);
+        setState("error");
+      });
+    return () => {
+      dead = true;
+    };
+  }, []);
+
+  return (
+    <article className="sf-craft-cards">
+      <div className="sf-card-title">
+        <div>
+          <strong>商品 · 博文卡片</strong>
+          <span>流水线产出：图片 → AI 草拟 → 审批门 → 落商品</span>
+        </div>
+        <div className="sf-craft-head">
+          <SfLoadTag state={state} okText="已同步" />
+        </div>
+      </div>
+
+      <p className="sf-craft-group">商品</p>
+      {state === "ready" && products.length === 0 && (
+        <p className="sf-craft-empty">还没有商品 —— 流水线落商品后在此上架</p>
+      )}
+      <div className="sf-craft-grid">
+        {products.map((p) => {
+          const st = CRAFT_PRODUCT_STATUS[p.status] ?? { label: p.status, cls: "" };
+          const d = p.profit_delta_pct;
+          return (
+            <article key={p.id} className="sf-craft-card">
+              <div className="sf-craft-thumb">
+                {p.image_url ? (
+                  <img src={chatAssetUrl(p.image_url)} alt={p.name} loading="lazy" />
+                ) : (
+                  <span>
+                    <Store size={20} />
+                  </span>
+                )}
+              </div>
+              <div className="sf-craft-info">
+                <strong title={p.name}>{p.name}</strong>
+                <div className="sf-craft-meta">
+                  <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
+                </div>
+                <div className="sf-craft-money">
+                  <em>每件盈利</em>
+                  <b>{fmtYuan(p.profit_per_unit_cents)}</b>
+                  {d != null && (
+                    // 涨红跌绿（金融约定）：盈利上涨红、下跌绿
+                    <span className={`sf-craft-delta ${d >= 0 ? "up" : "down"}`}>
+                      {d >= 0 ? "▲" : "▼"} {Math.abs(d)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <p className="sf-craft-group">博文</p>
+      {state === "ready" && posts.length === 0 && (
+        <p className="sf-craft-empty">还没有博文 —— 流水线草拟确认后在此展示</p>
+      )}
+      <div className="sf-craft-grid">
+        {posts.map((p) => {
+          const st = CRAFT_POST_STATUS[p.status] ?? { label: p.status, cls: "" };
+          return (
+            <article key={p.id} className="sf-craft-card">
+              <div className="sf-craft-thumb">
+                {p.cover_url ? (
+                  <img src={chatAssetUrl(p.cover_url)} alt={p.title} loading="lazy" />
+                ) : (
+                  <span>
+                    <BookOpen size={20} />
+                  </span>
+                )}
+              </div>
+              <div className="sf-craft-info">
+                <strong title={p.title}>{p.title}</strong>
+                <div className="sf-craft-meta">
+                  <span className={`sf-biz-badge ${st.cls}`}>{st.label}</span>
+                </div>
+                <div className="sf-craft-money">
+                  <em>发布</em>
+                  <b>{p.published_at ? fmtBizTime(p.published_at) : "未发布"}</b>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+/** 购买链接的紧凑展示形式（host + #/buy/短 id…）；title 里放完整 URL。 */
+function shortBuyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const id = u.hash.replace(/^#\/buy\//, "");
+    return `${u.host}/#/buy/${id.slice(0, 8)}…`;
+  } catch {
+    return url.length > 36 ? `${url.slice(0, 36)}…` : url;
+  }
+}
+
 function BizView() {
   const [tab, setTab] = useState<"overview" | "products" | "sales" | "shipments" | "posts">("overview");
   const [state, setState] = useState<SfLoadState>("loading");
@@ -3451,6 +3818,9 @@ function BizView() {
       </div>
 
       {tab === "overview" && <RunDigestCard />}
+
+      {/* 商品/博文卡片（2026-11-09 Task #4）：流水线产出面，接 /api/craft-products + /api/craft-posts */}
+      {tab === "overview" && <CraftCardsSection />}
 
       {tab === "overview" && (
         <div className="sf-biz-table-wrap">
