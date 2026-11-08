@@ -6,6 +6,32 @@ import path from "node:path";
 
 import siteConfiguration from "./.figma/make/site.json";
 
+/**
+ * sfServerKeepAlive — 公网隧道稳定性（2026-11-08）。
+ * Node 默认 keepAliveTimeout=5s 低于反代/Cloudflare 空闲超时（约 60s+），
+ * 复用连接易被对端重置（间歇 502 / 断流）。dev 与 preview 的 httpServer
+ * 均对齐为 keepAlive=65s / headers=70s（与网关 applyHttpServerTuning 同参）。
+ */
+function sfServerKeepAlive(): Plugin {
+  // 入参按 unknown 收、运行时鸭子判定：vite 的 HttpServer 联合类型含 http2
+  // 变体（弱类型检查会拒结构型参数），转型写入两超时字段即可。
+  const tune = (httpServer: unknown) => {
+    const s = httpServer as { keepAliveTimeout?: number; headersTimeout?: number } | null | undefined;
+    if (!s) return;
+    s.keepAliveTimeout = 65_000;
+    s.headersTimeout = 70_000;
+  };
+  return {
+    name: "sf-server-keepalive",
+    configureServer(server) {
+      tune(server.httpServer);
+    },
+    configurePreviewServer(server) {
+      tune(server.httpServer);
+    },
+  };
+}
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
@@ -16,10 +42,14 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: emitSourcemaps ? "inline" : false,
       minify: !emitSourcemaps,
+      // 公网兼容（2026-11-08）：放宽产物语法目标到 ES2020（Safari 14+ / Chrome 87+），
+      // 覆盖更广的评审浏览器（dev 服务按 Vite 默认现代基线）。
+      target: "es2020",
     },
     plugins: [
       react(),
       tailwindcss(),
+      sfServerKeepAlive(),
       figmaSiteConfiguration(siteConfiguration),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),

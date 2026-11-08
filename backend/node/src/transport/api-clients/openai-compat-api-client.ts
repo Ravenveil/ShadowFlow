@@ -63,6 +63,7 @@ import type {
 } from '../../lib/conversation-types';
 import type { ToolSpec } from '../../lib/tool-spec';
 import { DEFAULT_MODELS } from './types';
+import { withDefaultLlmTimeout } from './llm-timeout';
 
 /**
  * Provider id → default baseURL. Post Phase 2 consolidation this is now the
@@ -347,6 +348,8 @@ export class OpenAiCompatApiClient implements ApiClient {
     tools: ToolSpec[];
     signal: AbortSignal;
   }): AsyncIterable<AssistantEvent> {
+    // 公网稳定性（2026-11-08）：叠加默认总超时（SF_LLM_TIMEOUT_MS），防网络抖动无限挂起。
+    const signal = withDefaultLlmTimeout(args.signal);
     const apiKey = this.opts.apiKey ?? '';
     if (!apiKey && !PROVIDERS_NO_KEY.has(this.opts.providerId)) {
       throw new Error(
@@ -463,7 +466,7 @@ export class OpenAiCompatApiClient implements ApiClient {
     let stream: AsyncIterable<unknown>;
     try {
       stream = (await client.chat.completions.create(createParams, {
-        signal: args.signal,
+        signal,
       })) as unknown as AsyncIterable<unknown>;
     } catch (err) {
       throw err instanceof Error ? err : new Error(String(err));
@@ -519,7 +522,7 @@ export class OpenAiCompatApiClient implements ApiClient {
     };
 
     for await (const chunkRaw of stream) {
-      if (args.signal.aborted) return;
+      if (signal.aborted) return;
       const chunk = chunkRaw as {
         choices?: Array<{
           delta?: {

@@ -69,6 +69,10 @@ import adminRouter from './routes/system/admin';
 import { attachUser, requireAuth, requireAdmin } from './middleware/auth-context';
 import { groupAccessGuard, captureGroupOwnerMiddleware } from './middleware/group-access';
 import { apiGuard } from './middleware/api-guard';
+// 公网稳定性/兼容性批（2026-11-08）：keepAlive 对齐反代阈值 + CORS_ORIGINS
+// 补放行来源 + SF_WEB_DIST 单端口 SPA 托管。
+import { applyHttpServerTuning, buildCorsOrigins } from './lib/http-compat';
+import { resolveWebDist, webHosting } from './lib/web-hosting';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
@@ -87,8 +91,13 @@ const app = express();
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 
+// trust proxy（2026-11-08 公网兼容）：cloudflared/反代之后 req.ip 从 XFF 解析
+// 真实客户端来源，而非恒为 127.0.0.1（与 api-guard 来源判定口径一致）。
+app.set('trust proxy', true);
+
 app.use(cors({
-  origin: [FRONTEND_ORIGIN, 'http://localhost:3000', 'http://localhost:5173'],
+  // CORS_ORIGINS（逗号分隔）补放行来源：隧道域名 / 其他前端门面（2026-11-08）。
+  origin: buildCorsOrigins(FRONTEND_ORIGIN),
   credentials: true,
 }));
 
@@ -364,7 +373,16 @@ process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
 
 // ── Start ───────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// ── 单端口 SPA 托管（2026-11-08 公网兼容，SF_WEB_DIST 启用时）────────────────
+// 未设 SF_WEB_DIST 时零行为变化。挂在所有 /api、/projects 路由之后，只接手
+// 其余 GET/HEAD：静态文件直出，深链接/刷新回落 index.html（一端口出全部）。
+const webDistDir = resolveWebDist(process.env.SF_WEB_DIST);
+if (webDistDir) {
+  app.use(webHosting(webDistDir));
+  console.log(`[index] SF_WEB_DIST — SPA hosting ${webDistDir}`);
+}
+
+const server = app.listen(PORT, () => {
   const mode = process.env.ANTHROPIC_API_KEY ? 'Claude-powered (server key)' : 'BYOK (user-supplied key)';
   console.log(`
 ╔══════════════════════════════════════════════════════╗
@@ -376,3 +394,7 @@ app.listen(PORT, () => {
   Sessions : http://localhost:${PORT}/api/run-sessions
 `);
 });
+
+// 公网稳定性（2026-11-08）：keepAlive=65s / headers=70s 对齐反代阈值，
+// 防隧道/反代空闲超时导致的间歇 502 / 连接重置。
+applyHttpServerTuning(server);

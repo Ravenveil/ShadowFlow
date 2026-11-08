@@ -36,6 +36,7 @@ import type {
 } from '../../lib/conversation-runtime';
 import type { ConversationMessage, TokenUsage } from '../../lib/conversation-types';
 import { toAnthropicMessages } from '../../lib/anthropic-block-adapter';
+import { withDefaultLlmTimeout } from './llm-timeout';
 import type { ToolSpec } from '../../lib/tool-spec';
 import { DEFAULT_MODELS } from './types';
 import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY } from '../../prompts/prompt-assembly';
@@ -186,6 +187,8 @@ export class AnthropicApiClient implements ApiClient {
     tools: ToolSpec[];
     signal: AbortSignal;
   }): AsyncIterable<AssistantEvent> {
+    // 公网稳定性（2026-11-08）：叠加默认总超时（SF_LLM_TIMEOUT_MS），防网络抖动无限挂起。
+    const signal = withDefaultLlmTimeout(args.signal);
     const apiKey = this.opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       // The runtime's error policy expects ApiClient throws to surface as
@@ -256,7 +259,7 @@ export class AnthropicApiClient implements ApiClient {
             ? { tools: args.tools.map(toAnthropicTool) }
             : {}),
         },
-        { signal: args.signal },
+        { signal },
       );
     } catch (err) {
       // Init failure (auth / network / SDK validation). Rethrow — runtime
@@ -265,7 +268,7 @@ export class AnthropicApiClient implements ApiClient {
     }
 
     for await (const ev of stream as AsyncIterable<MessageStreamEvent>) {
-      if (args.signal.aborted) {
+      if (signal.aborted) {
         // Defensive — the SDK should have already thrown. Returning here
         // means the generator completes cleanly without an extra event;
         // runtime's top-of-loop abort check handles the SSE.

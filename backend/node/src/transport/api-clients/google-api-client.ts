@@ -52,6 +52,7 @@ import type {
 } from '../../lib/conversation-types';
 import type { ToolSpec } from '../../lib/tool-spec';
 import { DEFAULT_MODELS } from './types';
+import { withDefaultLlmTimeout } from './llm-timeout';
 
 export interface GoogleApiClientOptions {
   /** BYOK key. If absent and env GOOGLE_API_KEY also empty, stream() throws. */
@@ -264,6 +265,8 @@ export class GoogleApiClient implements ApiClient {
     tools: ToolSpec[];
     signal: AbortSignal;
   }): AsyncIterable<AssistantEvent> {
+    // 公网稳定性（2026-11-08）：叠加默认总超时（SF_LLM_TIMEOUT_MS），防网络抖动无限挂起。
+    const signal = withDefaultLlmTimeout(args.signal);
     const apiKey = this.opts.apiKey ?? process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       throw new Error('Google API key not configured');
@@ -314,7 +317,7 @@ export class GoogleApiClient implements ApiClient {
       result = (await model.generateContentStream(
         { contents },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        { signal: args.signal } as any,
+        { signal } as any,
       )) as { stream: AsyncIterable<unknown> };
     } catch (err) {
       throw err instanceof Error ? err : new Error(String(err));
@@ -330,7 +333,7 @@ export class GoogleApiClient implements ApiClient {
 
     try {
       for await (const chunkRaw of result.stream) {
-        if (args.signal.aborted) return;
+        if (signal.aborted) return;
         const chunk = chunkRaw as {
           candidates?: Array<{
             content?: { parts?: Array<{ text?: string; functionCall?: { name: string; args?: Record<string, unknown> } }> };
