@@ -973,7 +973,8 @@
   .sf-working strong {
     color: #696970;
   }
-  .sf-composer {
+  /* 任务面板 + 输入框一体化底座（2026-11-08 UI 改造）：共享圆角/背景/阴影，贴底自适应 */
+  .sf-composer-dock {
     position: absolute;
     z-index: 5;
     left: max(30px, calc((100% - 760px) / 2));
@@ -1166,90 +1167,246 @@
     color: #b06a6a;
   }
 
-  /* 执行详情：由右侧侧边栏改为对话框上方内嵌卡片（2026-11-08） */
-  .sf-run-panel {
+  /* 任务执行面板（2026-11-08 UI 改造）：输入框顶部三行结构 —— 概览 / 紧凑步骤 / 四 Tab */
+  .sf-task-panel {
     min-width: 0;
-    max-height: 44vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-    flex: none;
-    margin: 12px max(40px, calc((100% - 760px) / 2)) 0;
-    border: 1px solid var(--sf-line);
-    border-radius: 13px;
-    background: #fafaf9;
-    padding: 0 14px 20px;
-  }
-  .sf-run-head {
-    height: 49px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    overflow: hidden;
     border-bottom: 1px solid #e8e8e6;
   }
-  .sf-run-head strong {
-    font-size: 12px;
-  }
-  .sf-run-head button {
-    color: #999;
-  }
-  .sf-run-card {
-    margin-top: 14px;
-    border: 1px solid #e2e2e0;
-    border-radius: 11px;
-    background: #fff;
-    padding: 11px;
-  }
-  .sf-run-card > div:first-child {
-    display: grid;
-    grid-template-columns: 33px 1fr auto;
+  .sf-task-head {
+    display: flex;
     align-items: center;
     gap: 8px;
+    padding: 8px 10px;
   }
-  .sf-run-card > div:first-child > span {
-    width: 31px;
-    height: 31px;
+  /* 概览行内横排复用 sf-run-meta / sf-run-actions：去掉竖排卡片的分隔线与上边距 */
+  .sf-task-head .sf-run-meta {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .sf-task-head .sf-run-actions {
+    margin-top: 0;
+    margin-left: auto;
+  }
+  .sf-task-status {
+    width: 22px;
+    height: 22px;
+    flex: none;
     display: grid;
     place-items: center;
-    border-radius: 9px;
+    border-radius: 7px;
+    background: #f0eae2;
+    color: #a08b74;
+  }
+  .sf-task-status.running {
     background: #ffe8e1;
     color: #ff5e3a;
   }
-  .sf-run-card > div:first-child > div {
+  .sf-task-status.done {
+    background: #e2f3ec;
+    color: #2c9a73;
+  }
+  .sf-task-status.failed {
+    background: #fde8e6;
+    color: #e2542f;
+  }
+  .sf-task-title {
+    min-width: 0;
     display: flex;
     flex-direction: column;
   }
-  .sf-run-card small {
+  .sf-task-title strong {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+  .sf-task-title small {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: #999;
-    font: 8px "DM Mono";
-    letter-spacing: 0.08em;
+    font-size: 9px;
   }
-  .sf-run-card strong {
-    margin-top: 2px;
-    font-size: 10px;
+  .sf-task-progress {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
-  .sf-run-card em {
-    color: #ff5e3a;
-    font: 500 10px "DM Mono";
-    font-style: normal;
-  }
-  .sf-progress {
+  .sf-task-progress-track {
+    width: 72px;
     height: 3px;
-    margin-top: 11px;
     overflow: hidden;
     border-radius: 3px;
     background: #ededeb;
   }
-  .sf-progress i {
+  .sf-task-progress i {
     display: block;
     width: 68%;
     height: 100%;
     background: #ff5e3a;
   }
-  .sf-run-card > p {
-    margin-top: 6px;
+  .sf-task-progress em {
+    color: #ff5e3a;
+    font: 500 10px "DM Mono";
+    font-style: normal;
+  }
+  .sf-task-chevron {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
     color: #999;
+  }
+  .sf-task-chevron:hover {
+    background: #f2f2f0;
+    color: #333;
+  }
+  .sf-task-chevron.open {
+    transform: rotate(180deg);
+  }
+  .sf-task-body {
+    max-height: 42vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 14px 16px;
+    border-top: 1px dashed #ececea;
+  }
+  .sf-task-chips {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding: 8px 0 2px;
+  }
+  .sf-task-chips button {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 3px 8px;
+    border: 1px solid #e2e2e0;
+    border-radius: 20px;
+    background: #fff;
+    color: #777;
     font-size: 9px;
-    text-align: right;
+  }
+  .sf-task-chips button.on {
+    border-color: #ff8064;
+    background: #ffe8e1;
+    color: #ff5e3a;
+  }
+  .sf-chip-dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 50%;
+    background: #ff5e3a;
+    animation: sf-dot 1.2s ease-in-out infinite;
+  }
+  .sf-task-steps {
+    margin-top: 10px;
+  }
+  .sf-task-steps-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .sf-task-steps-title span {
+    color: #777;
+    font: 500 9px "DM Mono";
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+  .sf-task-step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .sf-task-step {
+    display: grid;
+    grid-template-columns: 18px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    border-radius: 7px;
+  }
+  .sf-task-step:hover {
+    background: #f5f5f3;
+  }
+  .sf-task-step-icon {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    color: #999;
+    font-size: 8px;
+    background: #fafaf9;
+  }
+  .sf-task-step.done .sf-task-step-icon {
+    border-color: #31ab84;
+    background: #31ab84;
+    color: #fff;
+  }
+  .sf-task-step.running .sf-task-step-icon {
+    border-color: #ff8064;
+    color: #ff8064;
+    box-shadow: 0 0 0 3px #ffe9e2;
+    background: #fff;
+  }
+  .sf-task-step.failed .sf-task-step-icon {
+    border-color: #e2542f;
+    background: #e2542f;
+    color: #fff;
+  }
+  .sf-task-step strong {
+    font-size: 10px;
+  }
+  .sf-task-step.failed strong {
+    color: #e2542f;
+  }
+  .sf-task-step small {
+    color: #999;
+    font: 500 8px "DM Mono";
+  }
+  .sf-task-sub-chips {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-bottom: 2px;
+  }
+  .sf-task-sub-chips em {
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: #f1f1ef;
+    color: #999;
+    font: 500 8px "DM Mono";
+    font-style: normal;
+  }
+  .sf-task-sub-chips em.done {
+    background: #e2f3ec;
+    color: #2c9a73;
+  }
+  .sf-task-sub-chips em.running {
+    background: #ffe8e1;
+    color: #ff5e3a;
+  }
+  .sf-task-sub-chips em.failed {
+    background: #fde8e6;
+    color: #e2542f;
   }
   .sf-panel-section {
     margin-top: 21px;
@@ -1318,6 +1475,10 @@
   .sf-run-pill.stopped {
     background: #f0eae2;
     color: #a08b74;
+  }
+  .sf-run-pill.failed {
+    background: #fde8e6;
+    color: #e2542f;
   }
   .sf-run-ticker {
     display: inline-flex;
@@ -3069,7 +3230,7 @@
   .sf-chat {
     grid-column: 1;
   }
-  .sf-run-panel {
+  .sf-task-panel {
     display: none;
   }
   .sf-detail-toggle {
@@ -3113,7 +3274,7 @@
   .sf-plan-head small {
     display: none;
   }
-  .sf-composer {
+  .sf-composer-dock {
     left: 10px;
     right: 10px;
     bottom: 10px;

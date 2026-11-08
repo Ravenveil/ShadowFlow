@@ -1,4 +1,5 @@
 import {
+  ClipboardEvent as ReactClipboardEvent,
   DragEvent as ReactDragEvent,
   FormEvent,
   Fragment,
@@ -68,6 +69,7 @@ import {
   listGroups,
   listPendingApprovals,
   listProjects,
+  listRunSessionsByGroup,
   resolveDm,
   retryRunStep,
   setUnauthorizedHandler,
@@ -75,6 +77,7 @@ import {
   type AgentRecord,
   type GroupRecord,
   type PendingApprovalItem,
+  type RunSessionItem,
   type SfTeamDag as ApiTeamDag,
   type TimelineMessage,
   type UserAttachment,
@@ -307,6 +310,7 @@ export default function ProductApp() {
   const dragDepthRef = useRef(0); // dragenter/leave 计数，避免经过子元素时遮罩闪烁
   const attIdRef = useRef(0);
   const sendingRef = useRef(false); // submitMessage 异步窗口防重入
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   // ── 模型选择器（2026-11-08 任务面板）：读真实 BYOK providers，发送时随消息
   //    透传 executor/model（后端「UI model picker's choice always wins」）──
@@ -482,8 +486,13 @@ export default function ProductApp() {
   /**
    * 发送消息。返回 true=已发出或已排入补发；false=建群失败（调用方保留 composer 内容供重试）。
    * 无活动会话时先建群，成功后跨群补发（2026-11-08 主理人裁决：不再静默丢内容）。
+   * opts：模型选择器透传（executor/model），由 submitMessage 从 modelChoice 解析。
    */
-  async function sendText(text: string, attachments?: UserAttachment[]): Promise<boolean> {
+  async function sendText(
+    text: string,
+    attachments?: UserAttachment[],
+    opts?: { executor?: string; model?: string },
+  ): Promise<boolean> {
     if (!activeGroupId) {
       const name = text.trim().slice(0, 40) || `新对话 ${groups.length + 1}`;
       try {
@@ -493,13 +502,13 @@ export default function ProductApp() {
         setActiveTitle(group.name || name);
         await reloadGroups();
         // 建群成功 → 跨群补发（gidOverride 指向新群，消息随新会话服务端回读出现）
-        void chat.send(text, attachments, group.group_id);
+        void chat.send(text, attachments, group.group_id, opts);
         return true;
       } catch {
         return false; // 建群失败 → 无处可发
       }
     }
-    void chat.send(text, attachments);
+    void chat.send(text, attachments, undefined, opts);
     return true;
   }
 
@@ -1254,6 +1263,25 @@ export default function ProductApp() {
                 />
                 <div>
                   <span className="sf-composer-tools">
+                    {/* 模型选择器（2026-11-08）：真实 BYOK providers，随消息透传 executor/model */}
+                    <select
+                      className="sf-model-pick"
+                      value={modelChoice}
+                      onChange={(event) => setModelChoice(event.currentTarget.value)}
+                      aria-label="选择执行模型"
+                      title="执行模型（自动 = 服务端默认路由；选择后随消息指定 executor/model）"
+                    >
+                      <option value="auto">自动</option>
+                      {Object.entries(byokStore?.providers ?? {})
+                        .filter(([, p]) => p.enabled && (p.models?.length ?? 0) > 0)
+                        .flatMap(([pid, p]) =>
+                          p.models.map((m) => (
+                            <option key={`${pid}::${m}`} value={`byok:${pid}::${m}`}>
+                              {(BYOK_META[pid]?.short ?? pid)} · {m}
+                            </option>
+                          )),
+                        )}
+                    </select>
                     <button
                       type="button"
                       aria-label="添加附件"
@@ -1439,6 +1467,7 @@ export default function ProductApp() {
                   </span>
                 </div>
               </form>
+              </div>
 
               {dragOver && (
                 <div className="sf-drop-overlay" aria-hidden="true">
@@ -1473,9 +1502,9 @@ const RUN_STATUS_TEXT: Record<string, string> = {
 
 type RunStep = {
   name: string;
-  status: "done" | "running" | "pending";
+  status: "done" | "running" | "pending" | "failed";
   meta: string;
-  substeps: { agent: string; slot: string; status: "done" | "running" | "pending" }[];
+  substeps: { agent: string; slot: string; status: "done" | "running" | "pending" | "failed" }[];
 };
 
 type ApprovalItem = {
@@ -1519,23 +1548,25 @@ function fmtElapsed(ms: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-/** timeline step_panel/plan_card → 步骤列表（无运行数据 → 空数组=空态）。 */
+/** timeline step_panel/plan_card → 步骤列表（无运行数据 → 空数组=空态）。
+ *  status 归一：done/running/failed 保留，其余（pending/blocked）按等待处理。 */
 function deriveSteps(messages: TimelineMessage[]): RunStep[] {
+  const mapStatus = (s: string | undefined): RunStep["status"] =>
+    s === "done" ? "done" : s === "running" ? "running" : s === "failed" ? "failed" : "pending";
   const panel = [...messages]
     .reverse()
     .find((m) => m.kind === "step_panel" && (m.steps ?? []).length > 0);
   if (panel) {
     return (panel.steps ?? []).map((s) => {
-      const status = s.status === "done" ? "done" : s.status === "running" ? "running" : "pending";
+      const status = mapStatus(s.status);
       return {
         name: s.name,
         status,
-        meta: s.elapsed_ms != null ? fmtElapsed(s.elapsed_ms) : status === "pending" ? "等待中" : "",
+        meta: s.elapsed_ms != null ? fmtElapsed(s.elapsed_ms) : status === "pending" ? "等待中" : status === "failed" ? "失败" : "",
         substeps: (s.substeps ?? []).map((sub) => ({
           agent: sub.name,
           slot: "",
-          status:
-            sub.status === "done" ? "done" : sub.status === "running" ? "running" : "pending",
+          status: mapStatus(sub.status),
         })),
       };
     });
@@ -1546,7 +1577,7 @@ function deriveSteps(messages: TimelineMessage[]): RunStep[] {
   if (plan) {
     return (plan.tasks ?? []).map((t) => ({
       name: t.title,
-      status: t.status === "done" ? "done" : t.status === "running" ? "running" : "pending",
+      status: mapStatus(t.status),
       meta: t.assignee || t.agent_id || "",
       substeps: [],
     }));
@@ -1696,7 +1727,12 @@ function lastActivityOf(messages: TimelineMessage[], name: string): string {
   return "—";
 }
 
-function RunPanel({
+/**
+ * TaskStatusPanel —— 集成在对话输入框顶部的任务执行面板（2026-11-08 UI 改造）。
+ * 三行结构：① 任务概览（状态/头像/任务名/进度/折叠）② 紧凑步骤列表 ③ 流程/团队/审批/产物四 Tab。
+ * 数据全部来自真实后端（timeline 派生 + run-sessions + approvals + DAG），无假进度。
+ */
+function TaskStatusPanel({
   groupId,
   groupName,
   chat,
@@ -1721,12 +1757,55 @@ function RunPanel({
   const [dag, setDag] = useState<SfTeamDag | null>(null);
   const [artifactsPins, setArtifactsPins] = useState<Record<string, boolean>>({});
   const [nowMs, setNowMs] = useState(() => Date.now());
+  // ── 任务面板状态机：空闲收起 / 执行中自动展开 / 完成与失败保留结果视图 ──
+  const [expanded, setExpanded] = useState(false);
+  // ── 多任务切换：真实 run 任务列表（goal=任务名），activeSid=null 为合并视图 ──
+  const [sessions, setSessions] = useState<RunSessionItem[]>([]);
+  const [activeSid, setActiveSid] = useState<string | null>(null);
 
   const messages = chat.messages;
-  const steps = useMemo(() => deriveSteps(messages), [messages]);
-  const artifacts = useMemo(() => deriveArtifacts(messages), [messages]);
-  const stats = useMemo(() => deriveRunStats(messages), [messages]);
-  const running = chat.runs.some((r) => !isTerminalRunStatus(r.status));
+  // 任务切片：选中具体任务时只归并该 session 的过程消息（消息↔任务关联来自 session_id 标签）
+  const scoped = useMemo(
+    () => (activeSid ? messages.filter((m) => m.session_id === activeSid) : messages),
+    [messages, activeSid],
+  );
+  const steps = useMemo(() => deriveSteps(scoped), [scoped]);
+  const artifacts = useMemo(() => deriveArtifacts(scoped), [scoped]);
+  const stats = useMemo(() => deriveRunStats(scoped), [scoped]);
+  const running =
+    chat.runs.some((r) => !isTerminalRunStatus(r.status)) ||
+    chat.awaitingReply ||
+    chat.typing != null;
+  const lastRun = [...chat.runs].reverse().find((r) => r.session_id);
+  const runFailed = !running && lastRun?.status === "failed";
+  const runSucceeded = !running && lastRun?.status === "succeeded";
+
+  // 任务列表（真实数据）：群/运行状态变化时刷新
+  const loadSessions = useCallback(async () => {
+    if (!groupId) {
+      setSessions([]);
+      return;
+    }
+    try {
+      const list = await listRunSessionsByGroup(groupId);
+      setSessions(list);
+    } catch {
+      /* 接口不可达时保留旧列表，run 兜底仍可用 */
+    }
+  }, [groupId]);
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions, chat.runs]);
+
+  // 执行中自动展开实时步骤；会话切换复位（收起、回到合并视图、默认流程 Tab）
+  useEffect(() => {
+    if (running) setExpanded(true);
+  }, [running]);
+  useEffect(() => {
+    setExpanded(false);
+    setActiveSid(null);
+    setTab("flow");
+  }, [groupId]);
 
   // 仅真实运行中才跳秒（不再伪造固定时长）
   useEffect(() => {
@@ -1779,13 +1858,21 @@ function RunPanel({
   const elapsedText = fmtElapsed(stats.elapsedMs);
   // 运行中且 msg_foot 尚未给出耗时 → 从最后一个 user_turn 起真实跳秒
   const turnStart = useMemo(() => {
-    const lastUser = [...messages].reverse().find((m) => m.kind === "user_turn");
+    const lastUser = [...scoped].reverse().find((m) => m.kind === "user_turn");
     return lastUser?.ts ?? 0;
   }, [messages]);
   const liveElapsed =
     running && stats.elapsedMs <= 0 && turnStart > 0 ? fmtElapsed(nowMs - turnStart) : elapsedText;
   const pendingCount = approvals.filter((a) => a.state === "pending").length;
   const doneSteps = steps.filter((s) => s.status === "done").length;
+  // 概览行：任务名 = 选中任务的 goal（真实 run 目标），回落群名；Agent = 正在输入/最近发言者
+  const activeSession = activeSid ? sessions.find((s) => s.session_id === activeSid) : null;
+  const taskName = activeSession?.goal || groupName;
+  const activeAgentName =
+    chat.typing ??
+    [...scoped].reverse().find((m) => m.agent_name)?.agent_name ??
+    "Agent 团队";
+  const progressPct = steps.length > 0 ? Math.round((doneSteps / steps.length) * 100) : 0;
 
   /** 步骤级重跑：优先调 run-sessions step retry，再消息重下发（无假动画）。 */
   const retryStep = async (name: string, index: number) => {
@@ -1840,36 +1927,46 @@ function RunPanel({
   };
 
   return (
-    <aside className="sf-run-panel">
-      <div className="sf-run-head">
-        <strong>执行详情</strong>
-        <button onClick={onClose}>
-          <X size={16} />
-        </button>
-      </div>
-
-      <div className="sf-run-card">
-        <div>
-          <span>
-            <Zap size={17} />
-          </span>
-          <div>
-            <small>ACTIVE RUN</small>
-            <strong>{groupName}</strong>
+    <div className="sf-task-panel">
+      {/* Row 1 · 任务概览（收起时仅保留这一行摘要，不占多余空间） */}
+      <div className="sf-task-head">
+        <span
+          className={`sf-task-status ${running ? "running" : runFailed ? "failed" : runSucceeded ? "done" : "idle"}`}
+          title={running ? "执行中" : runFailed ? "任务失败" : runSucceeded ? "任务完成" : "空闲"}
+        >
+          {running ? (
+            <RotateCcw size={11} className="sf-spin" />
+          ) : runFailed ? (
+            <X size={11} />
+          ) : runSucceeded ? (
+            <Check size={11} />
+          ) : (
+            <Zap size={11} />
+          )}
+        </span>
+        <AgentAvatar
+          label={activeAgentName.slice(0, 2).toUpperCase()}
+          color={SF_PALETTE[activeAgentName.length % SF_PALETTE.length]}
+          small
+        />
+        <div className="sf-task-title">
+          <strong title={taskName}>{taskName}</strong>
+          <small>
+            {activeAgentName}
+            {running ? " · 执行中" : runFailed ? " · 失败" : runSucceeded ? " · 已完成" : ""}
+          </small>
+        </div>
+        {steps.length > 0 && (
+          <div className="sf-task-progress" title={`${doneSteps} / ${steps.length} 个步骤已完成`}>
+            <span className="sf-task-progress-track">
+              <i style={{ width: `${progressPct}%` }} />
+            </span>
+            <em>{progressPct}%</em>
           </div>
-          <em>{steps.length > 0 ? `${Math.round((doneSteps / steps.length) * 100)}%` : "—"}</em>
-        </div>
-        <div className="sf-progress">
-          <i style={{ width: steps.length > 0 ? `${(doneSteps / steps.length) * 100}%` : "0%" }} />
-        </div>
-        <p>
-          {steps.length > 0
-            ? `${doneSteps} / ${steps.length} 个步骤已完成`
-            : "暂无运行记录"}
-        </p>
+        )}
         <div className="sf-run-meta">
-          <span className={`sf-run-pill ${running ? "running" : "stopped"}`}>
-            {running ? "运行中" : "空闲"}
+          <span className={`sf-run-pill ${running ? "running" : runFailed ? "failed" : "stopped"}`}>
+            {running ? "运行中" : runFailed ? "失败" : runSucceeded ? "已完成" : "空闲"}
           </span>
           {(stats.elapsedMs > 0 || (running && turnStart > 0)) && (
             <span className="sf-run-ticker">
@@ -1881,19 +1978,115 @@ function RunPanel({
         </div>
         <div className="sf-run-actions">
           {running && groupId ? (
-            <button className="sf-mini-btn danger" onClick={() => void chat.stop()}>
+            <button className="sf-mini-btn danger" onClick={() => void chat.stop()} title="停止当前任务">
               <Square size={8} /> 停止
             </button>
+          ) : runFailed ? (
+            <button className="sf-mini-btn ok" onClick={rerunAll} title="重试失败的任务">
+              <RotateCcw size={8} /> 重试
+            </button>
+          ) : runSucceeded ? (
+            <button
+              className="sf-mini-btn ok"
+              onClick={() => {
+                setExpanded(true);
+                setTab("artifacts");
+              }}
+              title="查看任务产物"
+            >
+              <FileText size={8} /> 产物
+            </button>
           ) : (
-            <button className="sf-mini-btn ok" onClick={() => void chat.rerun()}>
+            <button className="sf-mini-btn ok" onClick={rerunAll} title="重跑上一轮任务">
               <Play size={8} /> 重跑上一轮
             </button>
           )}
-          <button className="sf-mini-btn" onClick={rerunAll}>
-            <RotateCcw size={8} /> 重跑
-          </button>
         </div>
+        <button
+          className={`sf-task-chevron ${expanded ? "open" : ""}`}
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? "收起任务面板" : "展开任务面板"}
+          title={expanded ? "收起" : "展开"}
+        >
+          <ChevronDown size={13} />
+        </button>
+        <button className="sf-task-chevron" onClick={onClose} aria-label="隐藏任务面板" title="隐藏（顶栏可再打开）">
+          <X size={12} />
+        </button>
       </div>
+
+      {expanded && (
+        <div className="sf-task-body">
+          {/* 多任务切换：多个后台任务可区分切换（goal=真实任务名） */}
+          {sessions.length > 1 && (
+            <div className="sf-task-chips">
+              <button
+                className={activeSid === null ? "on" : ""}
+                onClick={() => setActiveSid(null)}
+              >
+                全部
+              </button>
+              {sessions.map((s) => (
+                <button
+                  key={s.session_id}
+                  className={`${activeSid === s.session_id ? "on" : ""} ${
+                    !isTerminalRunStatus(s.status) ? "live" : ""
+                  }`}
+                  onClick={() => setActiveSid(s.session_id === activeSid ? null : s.session_id)}
+                  title={`${s.goal || s.session_id} · ${s.status}`}
+                >
+                  {!isTerminalRunStatus(s.status) && <i className="sf-chip-dot" />}
+                  {s.goal || s.session_id.slice(0, 8)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Row 2 · 紧凑任务执行列表（绿勾 / 动态加载 / 灰等待 / 红错） */}
+          <div className="sf-task-steps">
+            <div className="sf-task-steps-title">
+              <span>执行步骤{steps.length > 0 ? ` · ${doneSteps}/${steps.length}` : ""}</span>
+              {running && <em className="sf-step-live">实时更新</em>}
+            </div>
+            {steps.length === 0 ? (
+              <p className="sf-empty">
+                暂无运行记录 —— 在对话里给团队下发任务后，这里会实时显示执行步骤。
+              </p>
+            ) : (
+              <ol className="sf-task-step-list">
+                {steps.map((step, idx) => (
+                  <li key={`${step.name}-${idx}`} className={`sf-task-step ${step.status}`}>
+                    <span className="sf-task-step-icon">
+                      {step.status === "done" ? (
+                        <Check size={9} />
+                      ) : step.status === "running" ? (
+                        <RotateCcw size={9} className="sf-spin" />
+                      ) : step.status === "failed" ? (
+                        <X size={9} />
+                      ) : (
+                        idx + 1
+                      )}
+                    </span>
+                    <strong>{step.name}</strong>
+                    <small>
+                      {step.meta || (RUN_STATUS_TEXT[step.status] ?? step.status)}
+                    </small>
+                    {step.substeps.length > 0 && (
+                      <span className="sf-task-sub-chips">
+                        {step.substeps.map((sub, si) => (
+                          <em key={`${sub.agent}-${si}`} className={sub.status}>
+                            {sub.agent}
+                            {sub.slot ? ` · ${sub.slot}` : ""} ·{" "}
+                            {RUN_STATUS_TEXT[sub.status] ?? sub.status}
+                          </em>
+                        ))}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
 
       <div className="sf-run-tabs">
         <button className={tab === "flow" ? "on" : ""} onClick={() => setTab("flow")}>
@@ -2142,7 +2335,9 @@ function RunPanel({
       <div className="sf-run-foot">
         {stats.tools} tools · {(stats.tokens / 1000).toFixed(1)}k tokens · ¥{stats.cost.toFixed(3)}
       </div>
-    </aside>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2387,6 +2582,15 @@ const POLICY_LABELS: Record<PolicyCellState, string> = {
 const POLICY_RANK: Record<PolicyCellState, number> = { deny: 3, warn: 2, permit: 1 };
 const POLICY_CYCLE: (PolicyCellState | null)[] = [null, "permit", "warn", "deny"];
 const SF_PALETTE = ["#ff5e3a", "#2777e8", "#d97b38", "#c64f7d", "#7c5cff", "#0ea5a4"];
+
+/** 模型选择值 → POST /api/groups/:id/messages 的 executor/model（"auto" = 服务端默认路由）。 */
+function parseModelChoice(choice: string): { executor?: string; model?: string } {
+  if (!choice.startsWith("byok:")) return {};
+  const sep = choice.indexOf("::");
+  const executor = sep === -1 ? choice : choice.slice(0, sep);
+  const model = sep === -1 ? undefined : choice.slice(sep + 2);
+  return { executor, ...(model ? { model } : {}) };
+}
 
 /** 演示编队（后端不可达时的回落，与上方 agents 卡片同一批 6 名部门员工）。 */
 const DEMO_TEAM: SfTeamDag = {

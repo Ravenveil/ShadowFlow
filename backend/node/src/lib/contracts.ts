@@ -148,6 +148,11 @@ export interface TimelineMessageBase {
   turn_id: string;
   /** epoch ms. */
   ts: number;
+  /**
+   * 任务/运行归属（2026-11-08 任务面板）：run replay 消息带 session_id，
+   * 前端按任务切片展示。非 run 产生的消息（用户输入、群通知）无此字段。
+   */
+  session_id?: string;
 }
 
 /**

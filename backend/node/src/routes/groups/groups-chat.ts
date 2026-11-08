@@ -1851,7 +1851,10 @@ router.get('/:id/timeline', (req: Request, res: Response) => {
           continue;
         }
         runs.push({ session_id: sessionId, status: replay.status });
-        runMessages.push(...replayTimeline(replay.events));
+        // 任务归属标签（2026-11-08 任务面板）：run replay 消息带 session_id，前端按任务切片
+        runMessages.push(
+          ...replayTimeline(replay.events).map((m) => ({ ...m, session_id: sessionId })),
+        );
       }
     }
 

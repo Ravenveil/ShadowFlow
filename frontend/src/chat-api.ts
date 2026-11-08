@@ -186,6 +186,8 @@ export type TimelineMessage = TimelineMessageBase & {
   // 归属（群聊 fan-out 下的过程卡属于哪个 agent）
   agent_id?: string;
   agent_name?: string;
+  /** 任务/运行归属（2026-11-08 任务面板）：run replay 消息带 session_id，前端按任务切片。 */
+  session_id?: string;
 };
 
 /** 流式增量补丁（详见 message-patches.ts 的 applyPatch）。 */
@@ -211,6 +213,17 @@ export type MessagePatch = TimelineMessageBase & {
 export interface RunRef {
   session_id: string;
   status: string;
+}
+
+/** GET /api/run-sessions?group_id= 的任务条目（任务名=goal，状态为真实 run 状态）。 */
+export interface RunSessionItem {
+  session_id: string;
+  goal: string;
+  conversation_id: string | null;
+  group_id: string | null;
+  status: string;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface TimelineResponse {
@@ -486,6 +499,7 @@ export async function postMessage(
   groupId: string,
   content: string,
   attachments?: UserAttachment[],
+  opts?: { executor?: string; model?: string },
 ): Promise<MessageItem> {
   return apiFetch<MessageItem>(`/api/groups/${encodeURIComponent(groupId)}/messages`, {
     method: "POST",
@@ -494,8 +508,23 @@ export async function postMessage(
       sender_kind: "user",
       // 附件仅在非空时携带（2026-11-07 对话框拖拽传图）
       ...(attachments && attachments.length > 0 ? { attachments } : {}),
+      // 执行器/模型选择（2026-11-08 任务面板）：后端 "UI model picker's choice always wins"
+      ...(opts?.executor ? { executor: opts.executor } : {}),
+      ...(opts?.model ? { model: opts.model } : {}),
     }),
   });
+}
+
+/**
+ * 任务列表：GET /api/run-sessions?group_id=（2026-11-08 任务面板）。
+ * 返回该会话全部 run 任务（任务名=goal，状态为真实 run 状态）。
+ */
+export async function listRunSessionsByGroup(groupId: string): Promise<RunSessionItem[]> {
+  const json = await apiFetch<{ sessions?: RunSessionItem[]; data?: RunSessionItem[] }>(
+    `/api/run-sessions?group_id=${encodeURIComponent(groupId)}`,
+  );
+  const list = json?.sessions ?? json?.data ?? [];
+  return Array.isArray(list) ? list : [];
 }
 
 // ── 聊天附件上传（2026-11-07 对话框拖拽传图）────────────────────────────────

@@ -46,8 +46,14 @@ export interface GroupChatControls {
    * text 可为空串（仅发附件，2026-11-07 对话框拖拽传图）；attachments 为已上传成功的附件。
    * gidOverride：跨群补发（2026-11-08 主理人裁决「建群后自动补发」）——目标群为
    * 尚未激活的新群时跳过乐观气泡，直接 postMessage，消息随新会话服务端回读出现。
+   * opts：执行器/模型选择（2026-11-08 任务面板），透传 POST body.executor/body.model。
    */
-  send: (text: string, attachments?: UserAttachment[], gidOverride?: string) => Promise<void>;
+  send: (
+    text: string,
+    attachments?: UserAttachment[],
+    gidOverride?: string,
+    opts?: { executor?: string; model?: string },
+  ) => Promise<void>;
   stop: () => Promise<void>;
   rerun: () => Promise<void>;
   reload: () => void;
@@ -221,9 +227,11 @@ export function useGroupChat(groupId: string | null): GroupChat {
               try {
                 const tl = JSON.parse(msg.data) as TimelineMessage;
                 if (tl && typeof tl.id === "string") {
+                  // 打任务归属标签（2026-11-08 任务面板）：run 流消息归到本 session，前端按任务切片
+                  const tagged: TimelineMessage = tl.session_id ? tl : { ...tl, session_id: sid };
                   setSnapshot((cur) => ({
                     ...cur,
-                    messages: upsertMessage(cur.messages, tl),
+                    messages: upsertMessage(cur.messages, tagged),
                   }));
                 }
               } catch {
@@ -322,7 +330,12 @@ export function useGroupChat(groupId: string | null): GroupChat {
 
   // ── 操作 ────────────────────────────────────────────────────────────────
   const send = useCallback(
-    async (text: string, attachments?: UserAttachment[], gidOverride?: string) => {
+    async (
+      text: string,
+      attachments?: UserAttachment[],
+      gidOverride?: string,
+      opts?: { executor?: string; model?: string },
+    ) => {
       // 目标群统一取 gid（2026-11-08 裁决）：gidOverride 优先，否则当前激活群
       const gid = gidOverride ?? groupIdRef.current;
       const content = text.trim();
@@ -354,7 +367,7 @@ export function useGroupChat(groupId: string | null): GroupChat {
         }, AWAITING_TIMEOUT_MS);
       }
       try {
-        const item = await postMessage(gid, content, atts);
+        const item = await postMessage(gid, content, atts, opts);
         const real = chatItemToTimeline(item);
         // 旧后端未回传 attachments 时保留乐观 chips，避免消息确认后闪烁丢失
         if (!real.attachments?.length && atts) real.attachments = atts;
