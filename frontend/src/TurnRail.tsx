@@ -208,6 +208,12 @@ export function TurnRail({ messages }: { messages: TimelineMessage[] }) {
     if (sc) sc.scrollTop += e.deltaY;
   };
 
+  /** 上下箭头按钮：按一下滚一屏弱（网页滚动条步进感） */
+  const scrollBy = (delta: number) => {
+    const sc = railRef.current?.parentElement?.querySelector<HTMLElement>(".sf-chat-scroll");
+    sc?.scrollBy({ top: delta, behavior: "smooth" });
+  };
+
   // 键盘可达性
   const onKeyDown = (e: React.KeyboardEvent) => {
     const sc = railRef.current?.parentElement?.querySelector<HTMLElement>(".sf-chat-scroll");
@@ -242,6 +248,12 @@ export function TurnRail({ messages }: { messages: TimelineMessage[] }) {
       onPointerUp={onRailUp}
       onPointerCancel={onRailUp}
     >
+      <button
+        type="button"
+        className="sf-turn-arrow up"
+        aria-label="向上滚动"
+        onClick={() => scrollBy(-240)}
+      />
       <div className="sf-turn-track" onPointerDown={onTrackDown}>
         {segs.map((s, i) => (
           <button
@@ -264,11 +276,14 @@ export function TurnRail({ messages }: { messages: TimelineMessage[] }) {
           className={`sf-turn-thumb ${dragging ? "dragging" : ""}`}
           style={{ top: `${thumb.topPct}%`, height: `${thumb.heightPct}%` }}
           onPointerDown={onThumbDown}
-        >
-          <i />
-          <i />
-        </div>
+        />
       </div>
+      <button
+        type="button"
+        className="sf-turn-arrow down"
+        aria-label="向下滚动"
+        onClick={() => scrollBy(240)}
+      />
     </div>
   );
 }
