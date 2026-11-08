@@ -1474,7 +1474,7 @@ async function runFanout(
                   kind: 'raw',
                   turn_id: gw.turnId,
                   ts: Date.now(),
-                  body: `[chat] ${name} 出错：${errMsg}`,
+                  body: `[chat] ${name} 出错：${humanizeModelError(errMsg)}`,
                   source: 'chat-gateway',
                 });
               }
@@ -1739,7 +1739,7 @@ async function runFanout(
             kind: 'raw',
             turn_id: gw.turnId,
             ts: Date.now(),
-            body: `[chat] ${agentName} 出错：${errMsg}`,
+            body: `[chat] ${agentName} 出错：${humanizeModelError(errMsg)}`,
             source: 'chat-gateway',
           });
         }
@@ -1761,7 +1761,7 @@ async function runFanout(
 
       if (errMsg) {
         await pyPostMessage(groupId, {
-          content: `[chat] ${agentName} 出错：${errMsg}`,
+          content: `[chat] ${agentName} 出错：${humanizeModelError(errMsg)}`,
           sender_name: 'system',
           sender_kind: 'system',
         }).catch(() => {});

@@ -27,6 +27,7 @@ import { gate } from './policy-gate';
 import { mapLimit } from './map-limit';
 import { runNodeWithPolicy } from './node-policy';
 import { detectRejection } from './rework-detect';
+import { humanizeModelError } from '../provider-refusal';
 
 export interface UpstreamMsg { from: string; text: string }
 
@@ -305,7 +306,7 @@ export async function runTeamDagFanout(
       perAgent[agentId] = 'error';
       nodeOutcome.set(agentId, 'error');
       errMsgOf.set(agentId, res.error ?? '');
-      await deps.postMessage({ content: `[chat] ${agent.name} 出错：${res.error}`, sender_name: 'system', sender_kind: 'system' });
+      await deps.postMessage({ content: `[chat] ${agent.name} 出错：${humanizeModelError(res.error)}`, sender_name: 'system', sender_kind: 'system' });
       return 'error';
     }
     const reply = res.text.trim();

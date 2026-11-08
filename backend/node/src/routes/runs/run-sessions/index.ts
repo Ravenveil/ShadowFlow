@@ -16,6 +16,8 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { runSkillAssembler } from '../../../assembly/assembler';
 import { classifyErrorCode } from '../../../lib/classify-error';
+// 模型错误人话化（2026-11-08，OpenBot provider-refusal 模式）— run failed 摘要收口。
+import { humanizeModelError } from '../../../lib/provider-refusal';
 import {
   createRunBus,
   type RunEventSink,
@@ -1930,8 +1932,10 @@ router.get('/:id/stream', async (req: Request, res: Response) => {
       } else if (abortController.signal.aborted) {
         summary = '[run aborted by user]';
       } else if (sawError) {
+        // 2026-11-08 OpenBot provider-refusal 模式 — 供应商原始错误人话化后
+        // 再进会话消息（原文已在 error 事件/日志，聊天面不裸奔）。
         summary = lastErrorMessage
-          ? `[run failed: ${lastErrorMessage}]`
+          ? `[run failed: ${humanizeModelError(lastErrorMessage)}]`
           : '[run failed]';
       } else {
         summary = '[run completed without artifact]';
