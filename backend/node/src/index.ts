@@ -68,6 +68,7 @@ import authRouter from './routes/system/auth';
 import adminRouter from './routes/system/admin';
 import { attachUser, requireAuth, requireAdmin } from './middleware/auth-context';
 import { groupAccessGuard, captureGroupOwnerMiddleware } from './middleware/group-access';
+import { apiGuard } from './middleware/api-guard';
 import { proxyFallback } from './proxy-fallback';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
@@ -170,6 +171,11 @@ app.use('/api/skills', skillsRouter);
 app.use('/api/design-systems', designSystemsRouter);
 app.use('/api/export', exportRouter);
 // Story 15.9 — generation overrides discovery (env-locked model surface).
+// 密钥材料守卫（2026-11-08 隧道加固）：这两条是 proxyFallback 落到 Python 的
+// 连接器 / 媒体密钥路由（读写 Composio / 媒体平台 API Key），与 settings.ts 内
+// 的 keyGuard 同策略——本机恒放行，公网（cloudflared 隧道）403，防密钥被偷改。
+app.use('/api/settings/connectors/composio', apiGuard({ loopbackAlways: true }));
+app.use('/api/settings/media', apiGuard({ loopbackAlways: true }));
 app.use('/api/settings', settingsRouter);
 // Story 15.19 v2 — Local CLI auto-discovery + spawn bridge.
 app.use('/api/cli', cliRouter);

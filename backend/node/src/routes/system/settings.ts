@@ -40,8 +40,16 @@ import {
   loadEmbeddingConfig,
   saveEmbeddingConfig,
 } from '../../storage/embedding';
+import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();
+
+// ── 密钥材料守卫（2026-11-08 隧道公网加固）───────────────────────────────────
+// 凡「读明文 / 写入 / 花费」API Key 的接口一律挂此守卫：本机（localhost 直连或
+// Vite dev proxy，socket+转发头都是回环）恒放行；公网（cloudflared 隧道）一律
+// 403，除非带 SF_API_TOKEN。只读的脱敏列表（GET /byok、/embedding 等）保持
+// 匿名可用，设置页在隧道下仍能渲染，只是密钥操作按钮只在本机生效。
+const keyGuard = apiGuard({ loopbackAlways: true });
 
 // ── Story 15.9 — Generation overrides discovery (env-locked model) ───────────
 router.get('/generation-overrides', (_req: Request, res: Response) => {
@@ -213,6 +221,30 @@ function loadByok(): ByokStore {
 function maskApiKey(key: string): string {
   if (!key || key.length < 4) return '';
   return `••••${key.slice(-4)}`;
+}
+
+// ── 通用 KV dump 深度脱敏（2026-11-08）────────────────────────────────────────
+// GET /api/settings 与 GET /api/settings/:key 会原样吐整个 KV（此前公网隧道下
+// 明文泄漏 BYOK apiKey）。这里做防御性深度脱敏：密钥形状的字段名 + sk- 形状的
+// 字符串值一律只留尾 4 位——即使守卫配置被改动，明文也不出网。明文读取的唯一
+// 正规通道是 /byok/:id/reveal 与 /embedding/reveal（挂 keyGuard）。
+const SECRET_FIELD_RE =
+  /^(?:.*[_-])?(?:api[-_]?key|apikey|token|access[-_]?token|auth[-_]?token|refresh[-_]?token|secret|client[-_]?secret|password|passwd|credential|private[-_]?key)$/i;
+const SECRET_VALUE_RE = /\bsk-[A-Za-z0-9_-]{8,}\b/g;
+
+function maskSecretsDeep(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.replace(SECRET_VALUE_RE, (m) => (m.length > 4 ? `••••${m.slice(-4)}` : '••••'));
+  }
+  if (Array.isArray(value)) return value.map(maskSecretsDeep);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = SECRET_FIELD_RE.test(k) && typeof v === 'string' && v ? maskApiKey(v) : maskSecretsDeep(v);
+    }
+    return out;
+  }
+  return value;
 }
 
 // GET /api/settings/byok → { providers: {..., apiKey: masked}, defaultModel, temperature, routingPriority }
@@ -672,7 +704,7 @@ function parseProbeResponse(data: unknown, type: EndpointType, providerId: strin
   return dedupModels(parsed);
 }
 
-router.get('/byok/:providerId/models/remote', async (req: Request, res: Response) => {
+router.get('/byok/:providerId/models/remote', keyGuard, async (req: Request, res: Response) => {
   const { providerId } = req.params;
   const store = loadByok();
   const cfg = store.providers[providerId];
@@ -782,7 +814,7 @@ router.get('/byok/:providerId/models/remote', async (req: Request, res: Response
 //   same /models endpoint as the catalog refresh — cheaper than chat, and
 //   for providers without /models we degrade to "endpoint reachable, key
 //   format accepted" rather than a hard failure.
-router.post('/byok/:providerId/check', async (req: Request, res: Response) => {
+router.post('/byok/:providerId/check', keyGuard, async (req: Request, res: Response) => {
   const { providerId } = req.params;
   const store = loadByok();
   const cfg = store.providers[providerId];
@@ -876,7 +908,7 @@ router.post('/byok/:providerId/check', async (req: Request, res: Response) => {
 });
 
 // PUT /api/settings/byok/:providerId → save provider config
-router.put('/byok/:providerId', (req: Request, res: Response) => {
+router.put('/byok/:providerId', keyGuard, (req: Request, res: Response) => {
   const { providerId } = req.params;
   const {
     apiKey, baseUrl, models, enabled, type,
@@ -947,7 +979,7 @@ router.put('/byok/:providerId', (req: Request, res: Response) => {
 // `maskApiKey` used by the list/PUT responses is shoulder-surf protection for
 // the default view, not at-rest encryption — so there's nothing to decrypt.
 // 404 when the provider isn't configured (no key to reveal).
-router.get('/byok/:providerId/reveal', (req: Request, res: Response) => {
+router.get('/byok/:providerId/reveal', keyGuard, (req: Request, res: Response) => {
   const { providerId } = req.params;
   const store = loadByok();
   const provider = store.providers[providerId];
@@ -958,7 +990,7 @@ router.get('/byok/:providerId/reveal', (req: Request, res: Response) => {
 });
 
 // DELETE /api/settings/byok/:providerId → remove provider
-router.delete('/byok/:providerId', (req: Request, res: Response) => {
+router.delete('/byok/:providerId', keyGuard, (req: Request, res: Response) => {
   const { providerId } = req.params;
   const store = loadByok();
   delete store.providers[providerId];
@@ -988,7 +1020,7 @@ const IMAGE_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: 'gpt-image-1',
 };
 
-router.post('/image/generations', async (req: Request, res: Response) => {
+router.post('/image/generations', keyGuard, async (req: Request, res: Response) => {
   const body = (req.body ?? {}) as {
     prompt?: unknown;
     provider?: unknown;
@@ -1222,7 +1254,7 @@ router.get('/embedding', (_req: Request, res: Response) => {
 
 // PUT /api/settings/embedding { enabled?, provider?, model?, baseUrl?, apiKey? }
 //   partial merge — omitted fields are preserved. apiKey: '' clears the key.
-router.put('/embedding', (req: Request, res: Response) => {
+router.put('/embedding', keyGuard, (req: Request, res: Response) => {
   const body = (req.body ?? {}) as {
     enabled?: unknown;
     provider?: unknown;
@@ -1274,7 +1306,7 @@ router.put('/embedding', (req: Request, res: Response) => {
 });
 
 // GET /api/settings/embedding/reveal → { apiKey: <plaintext> } (eye-toggle)
-router.get('/embedding/reveal', (_req: Request, res: Response) => {
+router.get('/embedding/reveal', keyGuard, (_req: Request, res: Response) => {
   const config = loadEmbeddingConfig();
   if (!config.apiKey) {
     return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'embedding api key not configured' } });
@@ -1286,7 +1318,7 @@ router.get('/embedding/reveal', (_req: Request, res: Response) => {
 //   Live connectivity probe: POST {baseUrl}/embeddings with one short input.
 //   body may override { model?, baseUrl?, apiKey? } so the UI can test drafts
 //   before saving; omitted fields fall back to the stored config.
-router.post('/embedding/check', async (req: Request, res: Response) => {
+router.post('/embedding/check', keyGuard, async (req: Request, res: Response) => {
   const body = (req.body ?? {}) as { model?: unknown; baseUrl?: unknown; apiKey?: unknown };
   const stored = loadEmbeddingConfig();
   const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : stored.model;
@@ -1340,14 +1372,17 @@ router.post('/embedding/check', async (req: Request, res: Response) => {
 });
 
 // ── Story 15.17 — KV settings store ──────────────────────────────────────────
+// 注（2026-11-08）：这三条通用 KV 路由挂 keyGuard + 深度脱敏 —— 它们会原样吐/
+// 改整个 KV（含 byok 明文密钥），是隧道公网下的最大泄漏面。明文读取请走
+// /byok/:id/reveal、/embedding/reveal（同样只允许本机）。
 
 // GET /api/settings → { settings: { key: value, ... } }
-router.get('/', (_req: Request, res: Response) => {
-  res.json({ settings: listSettings() });
+router.get('/', keyGuard, (_req: Request, res: Response) => {
+  res.json({ settings: maskSecretsDeep(listSettings()) });
 });
 
 // GET /api/settings/:key → { key, value } | 404
-router.get('/:key', (req: Request, res: Response) => {
+router.get('/:key', keyGuard, (req: Request, res: Response) => {
   const key = req.params.key;
   const value = getSetting(key);
   if (value === undefined) {
@@ -1355,11 +1390,11 @@ router.get('/:key', (req: Request, res: Response) => {
       error: { code: 'NOT_FOUND', message: 'setting not found' },
     });
   }
-  res.json({ key, value });
+  res.json({ key, value: maskSecretsDeep(value) });
 });
 
 // PUT /api/settings/:key { value } → 200 { key, value }
-router.put('/:key', (req: Request, res: Response) => {
+router.put('/:key', keyGuard, (req: Request, res: Response) => {
   const key = req.params.key;
   const body = (req.body ?? {}) as { value?: unknown };
   if (!('value' in body)) {
@@ -1394,7 +1429,7 @@ router.put('/:key', (req: Request, res: Response) => {
 });
 
 // DELETE /api/settings/:key → 204
-router.delete('/:key', (req: Request, res: Response) => {
+router.delete('/:key', keyGuard, (req: Request, res: Response) => {
   deleteSetting(req.params.key);
   res.status(204).send();
 });
