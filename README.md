@@ -1,181 +1,189 @@
-# ShadowFlow · 合并仓库 —— 新前端 × 旧后端
+# ShadowFlow
 
-把 **新前端**（产品宣传页 + 董事长工作台 + BYOK 设置页）和 **旧后端**（ShadowFlow Node 网关 + Python FastAPI 编排核心）合并进同一个可运行仓库，方便预览、评审与二次开发。
+**让 AI 员工按你的方法协同工作。** 从客户需求到专业成果交付——你负责判断与决策，AI 团队负责执行。
 
-> 产品背景：**ShadowFlow — VSCode for Agent Teams**，契约优先的多智能体工作流平台（拒绝环、检查点回滚、任意 Agent 运行时插件契约）。
+ShadowFlow 是一个契约优先的多智能体业务协作平台：把散落的大模型能力组织成**有岗位、有上下游、有质量标准**的业务流程，并把执行过程与团队、任务、成本和交付成果关联起来。内置「董事长工作台」作为人类管理者的统一操控台——下达目标、审批关键节点、查看经营看板。
 
-## 内容来源
+## 核心能力
 
-| 部分 | 来源 | 版本 |
+- **董事长工作台**：统一的团队操控台（`/#/app`）。群聊派单、任务 DAG 流转、交接记录、人工审批卡、Agent 团队与知识库管理、数据看板，一处可见可控。
+- **AI 员工团队与任务 DAG**：为每个岗位配置职责、能力与输出协议；任务沿 DAG 依次交接，员工只向总经理汇报。团队一键搭建（幂等），复用不重建。
+- **人工审批门**：关键节点（品牌定稿、对外发布等）以 `approve` 边挂起，等董事长批准后流水线自动继续；拒绝则跳过并拦截下游交接。合规审核员可「驳回」打回返工（≤2 次）。
+- **业务标记协议（craft-markers）**：Agent 输出中独占一行的 `[intake]` / `[post]` / `[link]` / `[order]` / `[ship]` / `[report]` 等标记，自动解析落库（商品、社媒发布、订单、快递、盈利汇报），并从聊天展示中剥离——聊天即业务操作台。
+- **知识库**：对话中的产品素材（文字 / 图片 / 文档）自动入库，此后每轮对话自动检索注入相关上下文。
+- **数据看板**：用量、成本、Run 成功率、每日简报、产品盈利追踪（盈利曲线、每卖 100 元去向、订单履约表），全部库内现算。
+- **BYOK 模型接入**：浏览器内配置大模型提供商与密钥（MiMo 首位 + 13 家提供商），支持自定义模型、拉取远端模型列表、测试连接、默认模型与回退链；也支持 `.env` 环境变量方式。
+- **mock / real 双模**：社媒发布、快递承运默认 mock 模式（确定性回执，不发外网）；签约真实账号后按同一接口切换 `real`（如小红书 OAuth2 发布链）。
+
+## 内置演示业务线：手工艺品代销
+
+手工艺人只负责上架商品，AI 团队负责营销、联系快递员寄出，并把订单 / 盈利 / 快递情况同步回平台。三层扁平组织：
+
+| 层级 | 角色 | 职责 |
 |---|---|---|
-| 新前端 `frontend/` | [Ravenveil/shadowflow-frontend](https://github.com/Ravenveil/shadowflow-frontend) | `df14f98`（与 Figma Make 线上逐字节对齐） |
-| 旧后端 `backend/` | [Ravenveil/ShadowFlow](https://github.com/Ravenveil/ShadowFlow) | `backend/node` + `backend/python`（Node 网关 + FastAPI） |
+| 创始人（人类） | **董事长**（工作台使用者） | 业务目标 · 关键审批 · 资源授权 |
+| AI 总经理 | **总经理**（`agent-shadow-secretary`） | 理解目标 · 拆解派单 · 汇总回传 |
+| 市场研究部 | 市场分析师 | 用户画像 · 市场分析 |
+| 品牌策划部 | 品牌策划师 | 品牌方案 · 表达规范 |
+| 内容创作部 | 内容策划师 | 营销内容包（详情页 / 图文 / 短视频脚本） |
+| 电商运营部 | 运营专员 | 上架清单 · 运营计划 · 盈利汇报 |
+| 商务拓展部 | 商务专员 | 采购方案 · 线索记录 · 快递合作 |
+| 风控审核部 | 合规审核员 | 风险清单 · 审核意见（可驳回返工） |
 
-前端版本包含：设置页 BYOK 全功能（MiMo 首位 + 13 家提供商、API 密钥管理、Base URL、自定义模型、拉取远端模型、测试连接、默认模型/回退链）、CEO 主控改名「董事长」。
-
-## 目录结构
+任务 DAG（`[build-team]` 一键搭建团队，`[dispatch]` 按岗派单）：
 
 ```
-frontend/        新前端 — Vite + React 19 + Tailwind 4（宣传页 / + 董事长工作台 #/app）
-backend/node/    旧后端 · Node 网关 — Express API 聚合（:8002）
-backend/python/  旧后端 · Python FastAPI — shadowflow 编排核心（:8000）
-templates/       工作流种子模板（*.yaml）
-config/          运行配置
-dev.mjs          一键启动器（后端 + 前端）
+总经理 ──▶ 市场分析师 ──▶ 品牌策划师 ──[品牌定稿·审批门]──▶ 内容策划师
+                                                              │
+                          运营专员 ◀─[对外发布·审批门]─ 合规审核员
+                              │                         ↺ 驳回返工(≤2)
+                              └──▶ 商务专员（快递合作）
 ```
 
-## 端口约定
+全流程演示与验证记录见 [docs/手工艺品代销-演示流程拆解.md](docs/手工艺品代销-演示流程拆解.md)。
+
+## 系统架构
+
+```
+浏览器
+  │
+  ▼
+前端 Vite (:8443) ──/api、/projects 代理──▶ Node 网关 (:8002)
+宣传页 · 董事长工作台                          Express API 聚合 · 业务域落库
+BYOK 设置页 · 数据看板                              │
+                                                   ▼
+                                          Python FastAPI (:8000)
+                                          shadowflow 编排核心
+                                          （Agent 运行时 · 任务 DAG · 知识库）
+```
 
 | 服务 | 端口 | 说明 |
 |---|---|---|
-| 新前端 Vite | 8443 | `frontend/`；`/api`、`/projects` 已代理到 :8002 |
-| Node 网关 | 8002 | `backend/node/`，Express API 聚合 |
-| Python FastAPI | 8000 | `backend/python/`，`shadowflow.server:app` |
+| 前端 Vite | 8443 | `frontend/`，Vite 8 + React 19 + Tailwind 4 |
+| Node 网关 | 8002 | `backend/node/`，Express API 聚合（tsx watch 热重载） |
+| Python FastAPI | 8000 | `backend/python/`，`shadowflow.server:app`（--reload 热重载） |
 
 ## 环境要求
 
 | 依赖 | 版本 | 说明 |
 |---|---|---|
-| Node.js | ≥ 20（推荐 22 LTS） | 前端 Vite 8 + Node 网关 tsx 都跑在 Node 上 |
-| pnpm | ≥ 9（推荐，`corepack enable pnpm` 即得） | 前端锁文件是 `pnpm-lock.yaml`；用 npm 装也能跑 |
-| Python | ≥ 3.10 | FastAPI 编排核心；Windows/Linux/macOS 均可 |
-| Git | 任意近期版本 | clone 仓库 |
+| Node.js | **≥ 20.19**（推荐 22 LTS） | 前端 Vite 8 硬性要求 20.19+ 或 22.12+ |
+| npm / pnpm | 随 Node 自带即可 | 前端锁文件是 `pnpm-lock.yaml`，用 npm 一样跑 |
+| Python | **≥ 3.10** | FastAPI 编排核心 |
+| Git | 任意近期版本 | 克隆仓库 |
 
-## 安装教程（clone 即跑）
+Windows 上 `better-sqlite3` 原生模块编译需要 [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)（勾选「使用 C++ 的桌面开发」）。
 
-### 0. 克隆仓库
+## 快速开始
+
+### 1. 克隆仓库
 
 ```bash
 git clone https://github.com/Ravenveil/shadowflow-merged.git
 cd shadowflow-merged
 ```
 
-### 1. 安装依赖（三段，各装各的）
+### 2. 安装依赖（三段，各装各的）
 
 ```bash
-# ① 新前端（Vite + React 19 + Tailwind 4）
-cd frontend && pnpm install && cd ..
-#    没有 pnpm 就用 npm install，效果等同
+# ① 前端（Vite + React 19 + Tailwind 4）
+cd frontend && npm install && cd ..
 
-# ② Node 网关（Express API 聚合）
+# ② Node 网关（Express，含 better-sqlite3 原生模块）
 cd backend/node && npm install && cd ..
 
-# ③ Python 编排核心（在仓库根目录执行；推荐 venv）
+# ③ Python 编排核心（务必在仓库根目录建 .venv）
 python -m venv .venv
-# Windows:  .venv\Scripts\activate     Linux/macOS:  source .venv/bin/activate
+# Windows 激活：  .venv\Scripts\activate     Linux/macOS 激活：  source .venv/bin/activate
 pip install -e "./backend/python[server,memory]"
 ```
 
-> `server` extras = FastAPI/uvicorn 等服务端全家桶；`memory` = aiosqlite/redis 持久化。
-> 不建 venv 直接装进系统 Python 也可以（`pip install -e "./backend/python[server,memory]"`）。
-> 启动器会自动优先使用仓库根 `.venv/Scripts/python.exe`（或 `.venv/bin/python`），找不到才回落到 `python`。
+> `server` extras = FastAPI / uvicorn 等服务端全家桶；`memory` = aiosqlite / redis 持久化。
+> 启动器会自动优先使用仓库根 `.venv` 里的 Python，找不到才回落到系统 `python`。
+> 国内网络慢可先设镜像：`npm config set registry https://registry.npmmirror.com`、
+> `pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple`。
 
-### 2. 一键启动（推荐）
+### 3. 一键启动
 
 ```bash
-npm run dev                  # 起 Python(8000) + Node 网关(8002) + 新前端(8443)，自动开浏览器
+npm run dev                  # 起 Python(:8000) + Node 网关(:8002) + 前端(:8443)，自动开浏览器
 npm run dev -- --no-open     # 不自动开浏览器
-npm run dev -- --no-python   # 只起网关 + 前端（跳过 Python）
+npm run dev -- --no-python   # 只起网关 + 前端（界面能看，AI 编排不可用）
 ```
 
-启动成功的标志：控制台打印 `[dev] 全部就绪 → http://localhost:8443/`。
-打开 **http://localhost:8443/#/app** 即进入董事长工作台，内置「AI 营销公司」7 角色组织架构即刻可用。
+成功标志：控制台打印 `[dev] 全部就绪 → http://localhost:8443/`。
 
-### 3. 验证安装
+打开 **http://localhost:8443/#/app** 进入董事长工作台，内置「手工艺品代卖」业务线即刻可用：
+与总经理对话发产品素材 → 自动入知识库 → `[build-team]` 搭建 6 部门团队 → DAG 派单执行 →
+审批门拍板 → 发帖上链接 → 订单 / 快递 / 盈利自动同步看板。
+
+### 4. 验证安装
 
 ```bash
-curl http://localhost:8002/health     # Node 网关健康检查
-curl http://localhost:8002/api/agents # 应返回 8 个内置角色（7 角色 + shadow-secretary）
-curl http://localhost:8000/docs       # Python FastAPI 文档页
+curl http://localhost:8002/health       # Node 网关健康检查
+curl http://localhost:8002/api/agents   # Agent 库（内置总经理 agent-shadow-secretary）
+curl http://localhost:8000/docs         # Python FastAPI 文档页
 ```
 
-### 4. 可选配置
+> 「手工艺品代卖」6 部门团队由总经理发 `[build-team]` 时按需幂等搭建（或调用产品盈利看板的团队搭建接口），无需手动播种。
 
-- **大模型 Key（可选）**：复制 `.env.example` 为 `.env`，填 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` 任意一个；不填则走前端 BYOK 设置页（浏览器内填 Key）。
-- **重新生成内置角色种子**：`node scripts/seed-ai-marketing-org.mjs`（幂等，覆盖生成 `.shadowflow/agents/`、`.shadowflow/teams/`）。
+## 配置（可选）
 
-### 分步启动（不用 dev.mjs 时）
+- **大模型 Key**：不配也能启动界面。要用服务端 AI 能力，复制 `.env.example` 为 `.env`，填 `MIMO_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` 任一；或者直接在前端「设置 → BYOK」页面里填（浏览器内配置，支持 13 家提供商、自定义模型与回退链）。
+- **小红书真实发布**（可选）：`.env` 里配 `SP_XHS_CLIENT_ID` / `SP_XHS_CLIENT_SECRET`，走 OAuth2 授权码流程（详见 `.env.example` 内注释），账号切 `auth_mode=real` 后 `[post]` 即真发公开笔记；不配则走 mock 回执。
+- **运行时数据**：后端首次启动在仓库根生成 `.shadowflow/`（会话、技能、SQLite 等，已 gitignore）。
+
+## 分步启动（不用 dev.mjs 时）
 
 ```bash
 # 1) Python FastAPI（仓库根目录，端口 8000）
 python -m uvicorn shadowflow.server:app --app-dir backend/python --host 127.0.0.1 --port 8000
 
-# 2) Node 网关（端口 8002）
+# 2) Node 网关（端口 8002，tsx watch 热重载）
 cd backend/node && npm run dev
 
-# 3) 新前端（端口 8443，/api 已代理到 :8002）
-cd frontend && pnpm dev
+# 3) 前端（端口 8443，/api、/projects 已代理到 :8002）
+cd frontend && npm run dev
 ```
 
-### 常见问题
+## 局域网 / 公网访问
+
+前端已配置 `host: 0.0.0.0` + `allowedHosts: true`（放行所有域名），同一局域网内直接访问 `http://<本机IP>:8443` 即可；配合 cloudflared 等隧道映射 :8443 也能直接对外（`scripts/tunnel-watchdog.mjs` 提供隧道守护）。注意：密钥管理类接口仅限本机访问，经公网访问会返回 403（预期安全行为）。
+
+## 常见问题
 
 | 现象 | 处理 |
 |---|---|
-| `端口 8xxx 已被占用` | dev.mjs 会拒绝启动，先停掉占用进程（旧的 uvicorn/tsx watch/vite）再跑 |
-| `uvicorn: command not found` / 缺 fastapi | 第 1 步的 `pip install -e "./backend/python[server,memory]"` 没装或 venv 没激活 |
-| `better-sqlite3` 编译失败 | Windows 需装 VS Build Tools（C++ 桌面开发工作负荷）后重装 |
-| 手机/局域网/隧道域名打不开 | 已配置 `allowedHosts: true`（放行所有域名）+ `host: 0.0.0.0`，直接访问 `http://<你的IP>:8443` 即可 |
-| 前端页面能开但接口 404 | 确认 Node 网关(:8002)已启动；Vite 会把 `/api`、`/projects` 代理过去 |
+| `端口 8000/8002/8443 已被占用` | dev.mjs 会拒绝启动，先停掉旧的 uvicorn / tsx / vite 进程再跑 |
+| `better-sqlite3` / `node-gyp` 编译失败 | Windows 装 VS Build Tools（C++ 桌面开发）后 `cd backend/node && npm rebuild better-sqlite3`；macOS `xcode-select --install`；Linux `sudo apt install build-essential python3` |
+| `ModuleNotFoundError: No module named 'shadowflow'` / `uvicorn: command not found` | ③ 没装或 venv 没激活，激活 `.venv` 后重跑 `pip install -e "./backend/python[server,memory]"` |
+| vite 起不来 / `Unsupported engine` | Node 版本过低，升到 22 LTS |
+| 页面能开但接口 404 | Node 网关(:8002) 没起来；Vite 只代理 `/api`、`/projects` |
+| npm / pip install 卡死超时 | 设国内镜像后重试（见「安装依赖」注） |
+
+更详细的从零安装与报错速查见 [INSTALL.md](INSTALL.md)。
+
+## 目录结构
+
+```
+frontend/        前端 — Vite + React 19 + Tailwind 4（宣传页 / 董事长工作台 #/app / BYOK 设置）
+backend/node/    Node 网关 — Express API 聚合（:8002）
+backend/python/  Python FastAPI — shadowflow 编排核心（:8000）
+templates/       工作流种子模板（*.yaml）
+config/          运行配置
+scripts/         演示回放 / 隧道守护等运维脚本
+docs/            演示流程拆解等文档
+dev.mjs          一键启动器（Python + 网关 + 前端）
+```
 
 ## 依赖清单
 
-**frontend/**（`package.json` + `pnpm-lock.yaml`）
-- 运行：`react 19`、`react-dom 19`、`lucide-react`
-- 开发：`vite 8`、`@vitejs/plugin-react`、`tailwindcss 4` + `@tailwindcss/vite`、`typescript 5.7`、`oxfmt`、`@types/*`
+**frontend/**：`react 19`、`react-dom 19`、`lucide-react`；开发 `vite 8`、`tailwindcss 4`、`typescript 5.7` 等。
 
-**backend/node/**（`package.json` + `package-lock.json`）
-- 运行：`express`、`http-proxy-middleware`、`cors`、`better-sqlite3`（原生模块）、`js-yaml`、`gray-matter`、`uuid`、`archiver`、`expr-eval`、`htmlparser2`、`turndown`、`ethers`、`puppeteer-core`、`@sparticuz/chromium`、`@anthropic-ai/sdk`、`openai`、`@google/generative-ai`
-- 开发：`tsx`、`typescript`、`vitest`、`supertest`、`@types/*`
+**backend/node/**：`express`、`better-sqlite3`（原生模块）、`http-proxy-middleware`、`js-yaml`、`archiver`、`ethers`、`puppeteer-core`、`@anthropic-ai/sdk`、`openai`、`@google/generative-ai` 等；开发 `tsx`、`vitest` 等。
 
-**backend/python/**（`pyproject.toml`，包名 `shadowflow`）
-- 核心：`pydantic 2`、`pyyaml`、`httpx`
-- `[server]`：`fastapi`、`uvicorn`、`APScheduler 3.x`、`slowapi`、`python-multipart`
-- `[memory]`：`aiosqlite`、`redis`（可选持久化）
-- 其他可选 extras：`[mcp]`、`[mcp-servers]`、`[lightrag]`、`[all]`、`[dev]`（pytest/ruff/mypy）
+**backend/python/**（包名 `shadowflow`）：核心 `pydantic 2`、`pyyaml`、`httpx`；`[server]` extras = `fastapi`、`uvicorn`、`APScheduler`、`slowapi`；`[memory]` = `aiosqlite`、`redis`；另有 `[mcp]`、`[lightrag]`、`[dev]` 等可选 extras。
 
-**运行时生成（不入库）**：`.shadowflow/`（会话、技能、设计系统、SQLite）；`.env`（可选 Key）。
+## License
 
-## 内置：AI 营销公司组织架构 + 任务 DAG
-
-来源：《AI营销公司_组织架构与双线路业务流程设计方案_完整版》第 4 章。
-三层扁平结构 = **1 人类创始人（审批门）+ 1 AI 总经理 CEO + 6 部门核心员工**（首版每部门 1 名）：
-
-| 角色 | 部门 | 职责 | 交付物 |
-|---|---|---|---|
-| 创始人（人类管理者） | — | 业务目标 · 关键审批 · 资源与权限授权 | 目标下达 / 审批授权 |
-| AI 总经理 CEO | — | 理解目标 · 拆解任务 · 调度员工 · 汇总结果 | 统一派单 / 成果回传 |
-| 市场分析师 | 市场研究部 | 目标用户、市场、竞品和需求分析 | 用户画像 · 市场分析 |
-| 品牌策划师 | 品牌策划部 | 品牌定位、产品卖点、品牌故事 | 品牌方案 · 表达规范 |
-| 内容策划师 | 内容创作部 | 商品详情页、图文、短视频脚本 | 营销内容包 |
-| 运营专员 | 电商运营部 | 商品资料、上架准备、店铺运营支持 | 上架清单 · 运营计划 |
-| 商务专员 | 商务拓展部 | 企业采购材料、潜在客户筛选跟进 | 采购方案 · 线索记录 |
-| 合规审核员 | 风控审核部 | 内容合规、授权、品牌伦理和质量检查 | 风险清单 · 审核意见 |
-
-任务 DAG（`ai-marketing-co`，默认内置）：
-
-```
-创始人(审批门) ──目标下达──▶ CEO ──派单──▶ 市场分析师 ──▶ 品牌策划师
-                                                        │
-                                              [approve 品牌定稿]
-                                                        ▼
-                              商务专员 ◀── 合规审核员 ◀── 内容策划师
-                                          │    ↺ conditional 返工(≤2)
-                                [approve 对外发布]
-                                          ▼
-                                      运营专员
-```
-
-- **汇报关系**：每名员工只向 AI 总经理汇报，不互相派单；任务经 Task API 传递，聊天仅作补充沟通。
-- **控制点**：合规审核员可打回并阻断高风险内容（conditional 返工边，`[verdict:reject]`/「驳回」标记触发，≤2 次）；
-  品牌定稿与对外发布走 `approve` 边 = 人工审批门，执行前挂起等创始人批准；资金操作由人负责。
-
-种子文件：`.shadowflow/agents/agent-*.agent.yaml`（Node 全局 agent 库）+ `.json`（Python 运行时真源），
-`.shadowflow/teams/ai-marketing-co.team.yaml` + `.json`。重跑 `node scripts/seed-ai-marketing-org.mjs` 可重新生成。
-
-## 说明
-
-- 新前端自带 BYOK 设置页，可直接在浏览器里配置模型提供商/密钥（内置样例数据的展示层，`/api` 通道已接好）。
-- 后端首次启动会在仓库根生成 `.shadowflow/` 运行时目录（已 gitignore）。
-- 需要服务端大模型能力时，在仓库根放 `.env`（`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` 任一，可选，参考 `.env.example`）。
-- 董事长工作台入口：`http://localhost:8443/#/app`。
-- License：MIT
+MIT
