@@ -76,49 +76,39 @@
   position: relative;
   flex: 1;
   border-radius: 4px;
-  background: rgba(23, 22, 45, 0.04);
+  background: rgba(23, 22, 45, 0.05);
   cursor: pointer;
   touch-action: none;
 }
 
-/* 每一轮对话一格：透明命中区（整轮可点），
-   格顶一枚统一色调小刻度线 —— 「一格一格」的网页滚动条刻度观感 */
+/* 每一轮对话一格（分段锚点）：统一浅灰格 + 2px 细缝分隔，
+   「一格一格」的分段滚动条观感；悬停/当前格仅加深一档 */
 .sf-turn-cell {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 1.5px;
+  right: 1.5px;
   display: block;
   border: 0;
-  background: transparent;
+  border-radius: 3px;
+  background: rgba(23, 22, 45, 0.09);
   cursor: pointer;
+  transition: background 0.15s;
 }
-.sf-turn-cell::before {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  width: 8px;
-  height: 2.5px;
-  border-radius: 2px;
-  background: rgba(23, 22, 45, 0.32);
-  transform: translateX(-50%);
-  transition: width 0.15s, background 0.15s;
+.sf-turn-cell + .sf-turn-cell {
+  margin-top: 2px;
 }
-.sf-turn-cell:hover::before {
-  width: 11px;
-  background: rgba(23, 22, 45, 0.6);
+.sf-turn-cell:hover {
+  background: rgba(23, 22, 45, 0.17);
 }
-.sf-turn-cell.on::before {
-  width: 11px;
-  background: rgba(23, 22, 45, 0.85);
+.sf-turn-cell.on {
+  background: rgba(23, 22, 45, 0.24);
 }
 /* 序号默认收起，悬停该格随预览一起浮现 */
 .sf-turn-cell em {
   position: absolute;
-  top: 2px;
-  left: 0;
-  right: 0;
-  text-align: center;
+  inset: 0;
+  display: grid;
+  place-items: center;
   color: rgba(23, 22, 45, 0.55);
   font: 500 8px "DM Mono";
   font-style: normal;
@@ -160,26 +150,27 @@
   opacity: 1;
 }
 
-/* 滑块：同色调实心圆角条，可拖拽滑动页面 */
+/* 滑块：不透明实心条压住分格（杜绝透底脏点），同色调，可拖拽滑动页面 */
 .sf-turn-thumb {
   position: absolute;
-  left: 1px;
-  right: 1px;
-  border-radius: 5px;
-  background: rgba(23, 22, 45, 0.45);
+  left: 0;
+  right: 0;
+  border-radius: 4px;
+  background: #96969f;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9), 0 1px 3px rgba(23, 22, 45, 0.2);
   cursor: grab;
   transition: background 0.15s;
 }
 .sf-turn-thumb:hover,
 .sf-turn-thumb.dragging {
-  background: rgba(23, 22, 45, 0.68);
+  background: #7c7c86;
 }
 .sf-turn-thumb.dragging {
   cursor: grabbing;
 }
 /* 键盘聚焦可见性 */
 .sf-turn-rail:focus-visible .sf-turn-thumb {
-  background: rgba(23, 22, 45, 0.68);
+  background: #7c7c86;
   outline: 2px solid rgba(23, 22, 45, 0.35);
   outline-offset: 1px;
 }
