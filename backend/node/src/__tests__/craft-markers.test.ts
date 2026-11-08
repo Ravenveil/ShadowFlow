@@ -137,3 +137,95 @@ describe('parseCraftMarkers — build-team / dispatch（总经理主控）', () 
     expect(noText.cleaned).toBe('正文');
   });
 });
+
+// ── [post] media 协议扩展（2026-11-08）：craft_posts.images 同构，上限 18 ──
+
+describe('[post] media 随帖媒体（可选载荷，零回归）', () => {
+  it('旧标记不带 media → media 归一 []（字段形状不变）', () => {
+    const r = parseCraftMarkers('[post] {"platform":"小红书","title":"山里来的温柔","text":"…"}');
+    expect(r.actions[0]).toEqual({
+      kind: 'post',
+      platform: '小红书',
+      title: '山里来的温柔',
+      text: '…',
+      media: [],
+    });
+  });
+
+  it('对象项 {name,path,url,is_image} 同构透传；字符串项按路径简写', () => {
+    const r = parseCraftMarkers(
+      '[post] {"title":"T","text":"B","media":[' +
+        '{"name":"苗绣.jpg","path":"C:/tmp/a.jpg","url":"/files/a.jpg","is_image":true},' +
+        '{"path":"C:/tmp/b.jpg"},' +
+        '"C:/tmp/c.jpg"]}',
+    );
+    expect((r.actions[0] as { media: unknown[] }).media).toEqual([
+      { name: '苗绣.jpg', path: 'C:/tmp/a.jpg', url: '/files/a.jpg', is_image: true },
+      { name: 'b.jpg', path: 'C:/tmp/b.jpg', url: '', is_image: true },
+      { name: 'c.jpg', path: 'C:/tmp/c.jpg', url: '', is_image: true },
+    ]);
+  });
+
+  it('上限 18 项；path/url 皆空或类型不合法的项跳过（fail-soft 不炸整条标记）', () => {
+    const items = Array.from(
+      { length: 20 },
+      (_, i) => `{"name":"p${i}","path":"C:/tmp/${i}.jpg","url":"","is_image":true}`,
+    ).join(',');
+    const r = parseCraftMarkers(`[post] {"title":"T","text":"B","media":[${items}]}`);
+    expect(r.markers[0]).toMatchObject({ tag: 'post', ok: true });
+    expect((r.actions[0] as { media: unknown[] }).media).toHaveLength(18);
+
+    const skip = parseCraftMarkers(
+      '[post] {"title":"T","text":"B","media":[{"name":"空"},{"url":"x","is_image":false},123,"C:/ok.jpg"]}',
+    );
+    expect((skip.actions[0] as { media: unknown[] }).media).toEqual([
+      { name: 'x', path: '', url: 'x', is_image: false },
+      { name: 'ok.jpg', path: 'C:/ok.jpg', url: '', is_image: true },
+    ]);
+  });
+});
+
+// ── [draft] 商品字段占位词（2026-11-08 防编造：「待确认」不废稿）─────────────
+
+describe('[draft] 商品字段占位词归一（防编造）', () => {
+  it('占位词金额归 0、占位词商品名归空（确认面显示「待确认」）', () => {
+    const r = parseCraftMarkers(
+      '[draft] {"title":"T","body":"B","product_name":"待确认","price":"待确认","cost":"未知","shipping":"暂无"}',
+    );
+    expect(r.markers[0]).toMatchObject({ tag: 'draft', ok: true });
+    expect(r.actions[0]).toEqual({
+      kind: 'draft',
+      title: 'T',
+      body: 'B',
+      topics: [],
+      product_name: '',
+      price_cents: 0,
+      cost_cents: 0,
+      shipping_cents: 0,
+      images: [],
+    });
+  });
+
+  it('数字/字符串数字/缺省零回归；乱写与负数仍报错（协议违规要可见）', () => {
+    const ok = parseCraftMarkers(
+      '[draft] {"title":"T","body":"B","price":"68","cost_cents":2500}',
+    );
+    expect(ok.actions[0]).toMatchObject({
+      price_cents: 6800,
+      cost_cents: 2500,
+      shipping_cents: 0,
+    });
+    const bad = parseCraftMarkers('[draft] {"title":"T","body":"B","price":"abc"}');
+    expect(bad.markers[0]!.ok).toBe(false);
+    expect(bad.markers[0]!.error).toMatch(/金额/);
+    const neg = parseCraftMarkers('[draft] {"title":"T","body":"B","price":-1}');
+    expect(neg.markers[0]!.ok).toBe(false);
+    expect(neg.markers[0]!.error).toMatch(/金额/);
+  });
+
+  it('intake 登记口径不变：占位词在 intake 仍报错（真实登记不许糊弄）', () => {
+    const r = parseCraftMarkers('[intake] {"name":"杯垫","price":"待确认","cost":20,"shipping":8}');
+    expect(r.markers[0]!.ok).toBe(false);
+    expect(r.markers[0]!.error).toMatch(/金额/);
+  });
+});

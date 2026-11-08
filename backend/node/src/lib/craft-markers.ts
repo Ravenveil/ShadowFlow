@@ -6,6 +6,9 @@
  *
  *   [intake] {"name":"苗绣杯垫","price":68,"cost":20,"shipping":8}
  *   [post]   {"platform":"小红书","title":"山里来的温柔","text":"…"}
+ *     （可选 media：[{name,path,url,is_image}…]，与 craft_posts.images 完全同构、
+ *     上限 18；发布时从 post.images 透传随帖落 sp_posts.media。旧标记不带 media
+ *     零回归——media 归一为 []）
  *   [link]   {"product":"苗绣杯垫","url":"https://…"}
  *   [order]  {"product":"苗绣杯垫","qty":2}
  *   [ship]   {"product":"苗绣杯垫","qty":2,"tracking":"SF123","receiver":"张三","phone":"13800138000","address":"…"}
@@ -14,6 +17,13 @@
  *   [build-team] {} ——搭建代卖团队（幂等；总经理专用）
  *   [dispatch] {"to":"营销专员、订单管家","text":"任务说明"} ——派活给团队
  *     （to 可以是字符串（、/，分隔）或数组；总经理向工作群下发任务用）
+ *   [draft] {"title":"标题","body":"正文","topics":["a","b"]} ——小红书博文草稿
+ *     （图→博文流水线；可选 product_name/price/cost/shipping/images，金额单位元。
+ *     商品字段无依据写「待确认」占位（2026-11-08 防编造：占位词归一为缺省、
+ *     确认面显示「待确认」，不废稿；乱写数字/负数仍报错——协议违规要可见）。
+ *     只草拟不发布——落 craft_posts(status: draft) 等用户
+ *     确认 + 董事长两道审批，执行在 groups-chat 挂钩点走 be-worker REST，与
+ *     build-team/dispatch 同款「挂钩点执行」语义）
  *
  * 约定（写进各 agent soul）：
  *   - 标记独占一行（行首，前面只能有空白）；`[craft:xxx]` 是等价别名。
@@ -24,7 +34,19 @@
 /** 运营动态分类（与 storage/craft-profit 的 AgentEvent.kind 对齐）。 */
 export type CraftEventKind = 'marketing' | 'order' | 'shipping';
 
-export type CraftTag = 'intake' | 'post' | 'link' | 'order' | 'ship' | 'report' | 'build-team' | 'dispatch';
+export type CraftTag = 'intake' | 'post' | 'link' | 'order' | 'ship' | 'report' | 'build-team' | 'dispatch' | 'draft';
+
+/**
+ * [post] 随帖媒体项（2026-11-08 media 协议扩展）：与 craft_posts.images 项
+ * 完全同构 {name,path,url,is_image}，上限 18。发布时从 post.images 直接透传，
+ * 经 syncSocialPost 落 sp_posts.media（正文截 500 字口径不变）。
+ */
+export interface CraftMediaItem {
+  name: string;
+  path: string;
+  url: string;
+  is_image: boolean;
+}
 
 export type CraftAction =
   | {
@@ -34,7 +56,14 @@ export type CraftAction =
       cost_cents: number;
       shipping_cents: number;
     }
-  | { kind: 'post'; platform: string; title: string; text: string }
+  | {
+      kind: 'post';
+      platform: string;
+      title: string;
+      text: string;
+      /** 随帖媒体（可选，缺省 []）：craft_posts.images 同构项，上限 18。 */
+      media: CraftMediaItem[];
+    }
   | { kind: 'link'; product: string; url: string; platform: string }
   | { kind: 'order'; product: string; qty: number }
   | {
@@ -51,7 +80,25 @@ export type CraftAction =
   /** 搭建代卖团队（幂等）——执行在 groups-chat 挂钩点（要发 HTTP）。 */
   | { kind: 'build-team' }
   /** 向工作群派活：to 成员名列表（转 @提及）、text 任务说明。 */
-  | { kind: 'dispatch'; to: string[]; text: string };
+  | { kind: 'dispatch'; to: string[]; text: string }
+  /**
+   * 小红书博文草稿（图→博文流水线，2026-11-08）：只草拟不发布。
+   * 落 craft_posts(status:draft) 等用户确认 + 两道审批（品牌定稿/对外发布），
+   * 执行在 groups-chat 挂钩点（要走 be-worker REST）。
+   */
+  | {
+      kind: 'draft';
+      title: string;
+      body: string;
+      topics: string[];
+      /** 可选：草稿带的商品建议（落商品时用，缺省 0/空）。 */
+      product_name: string;
+      price_cents: number;
+      cost_cents: number;
+      shipping_cents: number;
+      /** 可选：图片绝对路径（缺省取本轮用户随行附件）。 */
+      images: string[];
+    };
 
 /** 标记 → 运营动态分类（post/link 都算营销；build-team/dispatch 是流程动作）。 */
 export const TAG_EVENT_KIND: Record<CraftTag, CraftEventKind | null> = {
@@ -63,6 +110,7 @@ export const TAG_EVENT_KIND: Record<CraftTag, CraftEventKind | null> = {
   report: null,
   'build-team': null,
   dispatch: null,
+  draft: null,
 };
 
 export interface ParsedMarker {
@@ -82,7 +130,7 @@ export interface CraftParseResult {
   cleaned: string;
 }
 
-const TAG_RE = /\[(?:craft:)?(intake|post|link|order|ship|report|build-team|dispatch)\]/gi;
+const TAG_RE = /\[(?:craft:)?(intake|post|link|order|ship|report|build-team|dispatch|draft)\]/gi;
 
 /** 「元」→「分」；直接给 *_cents 时原样取整。非法（负/NaN）返回 null。 */
 function money(obj: Record<string, unknown>, key: string): number | null {
@@ -105,6 +153,60 @@ function qtyOf(v: unknown): number | null {
   const n = v === undefined ? 1 : Number(v);
   if (!Number.isFinite(n) || n < 1) return null;
   return Math.min(999, Math.round(n));
+}
+
+/** basename：路径/URL 取末段做缺省 name。 */
+function baseName(p: string): string {
+  return p.split(/[\\/]/).pop() ?? p;
+}
+
+/**
+ * media 项归一（[post] 随帖媒体，craft_posts.images 同构，上限 18）：
+ *   - 对象项 {name?,path?,url?,is_image?} → 四字段归一（is_image 缺省 true）；
+ *   - 字符串项按路径简写（name 取 basename）；
+ *   - path/url 皆空或类型不合法的项跳过（fail-soft，不让整条标记失败）。
+ */
+function mediaList(v: unknown): CraftMediaItem[] {
+  if (!Array.isArray(v)) return [];
+  const out: CraftMediaItem[] = [];
+  for (const m of v) {
+    if (out.length >= 18) break;
+    if (typeof m === 'string') {
+      const p = m.trim();
+      if (!p) continue;
+      out.push({ name: baseName(p), path: p, url: '', is_image: true });
+      continue;
+    }
+    if (m && typeof m === 'object' && !Array.isArray(m)) {
+      const o = m as Record<string, unknown>;
+      const p = str(o.path).slice(0, 2048);
+      const u = str(o.url).slice(0, 2048);
+      if (!p && !u) continue;
+      out.push({
+        name: str(o.name).slice(0, 200) || baseName(p) || u,
+        path: p,
+        url: u,
+        is_image: typeof o.is_image === 'boolean' ? o.is_image : true,
+      });
+    }
+  }
+  return out;
+}
+
+/** [draft] 商品字段占位词：模型显式声明「无依据」→ 归一为缺省（确认面「待确认」）。 */
+const DRAFT_PLACEHOLDER_RE =
+  /^(?:待确认|待定|未知|不详|暂无|无|没有|n\/?a|unknown|tbd|\?+|—+|-+)$/i;
+
+/**
+ * [draft] 金额解析（2026-11-08 防编造）：**占位词**（「待确认/未知…」= 模型
+ * 显式声明无依据）→ 0（缺省 = 确认面「待确认」，不废稿）；其余口径与 money()
+ * 一致（非法数字/负数/乱写字符串仍报错——协议违规要可见，不静默吞）。
+ * intake 等登记类标记维持严格口径不变。
+ */
+function draftMoney(obj: Record<string, unknown>, key: string): number | null {
+  const raw = obj[`${key}_cents`] !== undefined ? obj[`${key}_cents`] : obj[key];
+  if (typeof raw === 'string' && DRAFT_PLACEHOLDER_RE.test(raw.trim())) return 0;
+  return money(obj, key);
 }
 
 /** 标记 + 载荷对象 → 归一化动作；字段不合法返回错误串。 */
@@ -136,6 +238,7 @@ function buildAction(tag: CraftTag, obj: Record<string, unknown>): CraftAction |
         platform: str(obj.platform).slice(0, 60) || '社交媒体',
         title: str(obj.title).slice(0, 200),
         text: str(obj.text).slice(0, 500),
+        media: mediaList(obj.media),
       };
     case 'link': {
       const product = str(obj.product);
@@ -188,6 +291,41 @@ function buildAction(tag: CraftTag, obj: Record<string, unknown>): CraftAction |
       const text = str(obj.text);
       if (!text) return 'dispatch 缺 text（任务说明）';
       return { kind: 'dispatch', to: names.slice(0, 20), text: text.slice(0, 2000) };
+    }
+    case 'draft': {
+      const title = str(obj.title);
+      const body = str(obj.body);
+      if (!title && !body) return 'draft 缺 title/body';
+      let topics: string[] = [];
+      if (Array.isArray(obj.topics)) {
+        topics = obj.topics
+          .map((v) => str(v).replace(/^#+/, ''))
+          .filter(Boolean)
+          .slice(0, 12)
+          .map((t) => t.slice(0, 60));
+      }
+      const price = draftMoney(obj, 'price');
+      const cost = draftMoney(obj, 'cost');
+      const shipping = draftMoney(obj, 'shipping');
+      if (price === null || cost === null || shipping === null) {
+        return 'draft 金额非法（单位元，或用 *_cents）';
+      }
+      const images = Array.isArray(obj.images)
+        ? obj.images.map((v) => str(v)).filter(Boolean).slice(0, 9)
+        : [];
+      // 商品名占位词（「待确认」…）→ 归一为空（落商品名回退博文标题）。
+      const rawName = str(obj.product_name ?? obj.product);
+      return {
+        kind: 'draft',
+        title: title.slice(0, 200),
+        body: body.slice(0, 2000),
+        topics,
+        product_name: DRAFT_PLACEHOLDER_RE.test(rawName) ? '' : rawName.slice(0, 200),
+        price_cents: price,
+        cost_cents: cost,
+        shipping_cents: shipping,
+        images,
+      };
     }
     default:
       return `未知标记 ${String(tag)}`;

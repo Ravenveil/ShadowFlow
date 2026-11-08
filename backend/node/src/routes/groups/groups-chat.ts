@@ -91,7 +91,21 @@ import type { PlanTaskRow, IntentAssignment, UserAttachment } from '../../lib/co
 // 2026-11-07 拖拽传图 — 群聊附件透传：请求体清洗（与 run-sessions 同一实现）
 // + 派发上下文注入（与 run-sessions goalWithAttachments 同款引用块）。
 import { coerceAttachments } from '../runs/run-sessions/coerce';
-import { goalWithAttachments } from '../../lib/attachment-refs';
+import {
+  goalWithAttachments,
+  readAttachmentImages,
+  skippedImagesNote,
+} from '../../lib/attachment-refs';
+// 2026-11-08 图→博文流水线 — 图片草拟小红书博文 → 用户确认 → 品牌定稿/对外发布
+// 两道审批门（复用 pendingApprovals）→ 自动发布 → 落商品。编排器依赖注入，
+// 实例在 pyPostMessage 定义后装配（见 craftPostPipeline）。
+import {
+  buildDraftPrompt,
+  convertPostMarkersToDraft,
+  createCraftPostPipeline,
+  defaultCraftPostApi,
+  isPostDraftRequest,
+} from '../../lib/craft-post-pipeline';
 // B2 · 统一消息读路径 — chat MessageItem 适配 + run 事件重放（纯函数）。
 import {
   chatMessagesToTimeline,
@@ -163,7 +177,7 @@ export function parseApprovalDecision(text: string): 'approved' | 'rejected' | n
   const latinChars = (trimmed.match(/[a-z]/g) ?? []).length;
   const lenLimit = latinChars > 0 ? 10 : 6;
   if (trimmed.length > lenLimit) return null;
-  const isApprove = /^(批准|同意|approve|ok|好|通过|allowed|yes)/.test(trimmed);
+  const isApprove = /^(批准|同意|确认|approve|confirm|ok|好|通过|allowed|yes)/.test(trimmed);
   const isReject = /^(拒绝|不同意|reject|否|不行|停|驳回|no|deny)/.test(trimmed);
   if (!isApprove && !isReject) return null;
   return isApprove ? 'approved' : 'rejected';
@@ -1031,8 +1045,34 @@ async function integrateAndReport(
 // .test.ts 等既有引用方仍从本模块导入。
 export { isCasualChat };
 
+// ── 2026-11-08 图→博文流水线装配 ─────────────────────────────────────────────
+// 审批注册/决定解析/取消全部复用本模块的 pendingApprovals 单真源（显式审批
+// API 与会话短语两条决定路径对流水线审批门天然生效）；数据面走 be-worker 的
+// craft-posts/craft-products REST。门节点用 DAG approve 边的目标 agentId
+// （品牌定稿=内容策划师、对外发布=运营专员，roster 顺序见 craft-team-setup），
+// 编制缺失时回落合成 id（pendingApprovals 键空间内仍唯一）。
+const craftPostPipeline = createCraftPostPipeline({
+  registerApproval: (groupId, nodeId, meta) => registerPendingApproval(groupId, nodeId, meta),
+  cancelApproval: (groupId, nodeId) => {
+    cancelPendingApproval(groupId, nodeId);
+  },
+  decide: parseApprovalDecision,
+  notice: (groupId, content) =>
+    pyPostMessage(groupId, { content, sender_name: 'system', sender_kind: 'system' }).catch(
+      () => {},
+    ),
+  api: defaultCraftPostApi(),
+  gateNodeIds: () => {
+    const ids = readCraftTeamRef()?.agent_ids ?? [];
+    return {
+      brand: ids[3] ?? 'craft-post:brand',
+      publish: ids[5] ?? 'craft-post:publish',
+    };
+  },
+});
+
 /**
- * [build-team]/[dispatch] 流程动作执行（2026-11-07 总经理主控）。fail-soft：
+ * [build-team]/[dispatch]/[draft] 流程动作执行（2026-11-07 总经理主控）。fail-soft：
  * 单个动作失败落系统消息，不打断聊天主链路。
  *
  *   build-team —— 幂等搭建代卖团队（setupCraftTeam），落系统消息报结果；
@@ -1040,11 +1080,16 @@ export { isCasualChat };
  *     显式发起新一轮 fan-out，@提及定向派给被点名的成员）。**只在总经理 DM
  *     里执行**：工作群里派活靠 DAG 交接，群里再落 dispatch 会双重派发（且
  *     可能自我循环）。
+ *   draft —— 图→博文流水线草稿（2026-11-08）：落 craft_posts(status:draft)
+ *     进入「用户确认→两道审批门→自动发布→落商品」流水线；图片取本轮用户
+ *     随行附件（attachments）与标记自带 images 的并集。
  */
 async function runCraftFlowActions(
   srcGroup: GroupRecord,
   actions: CraftAction[],
   ctx: { executor: string; model: string | undefined; headers: Request['headers'] },
+  attachments?: UserAttachment[],
+  draftTurn = false,
 ): Promise<void> {
   const notice = (content: string) =>
     pyPostMessage(srcGroup.group_id, {
@@ -1052,6 +1097,8 @@ async function runCraftFlowActions(
       sender_name: 'system',
       sender_kind: 'system',
     }).catch(() => {});
+  // 图→博文流水线草稿：同轮多条 [draft] 取最后一条（模型返工后最新版为准）。
+  let draftAction: Extract<CraftAction, { kind: 'draft' }> | null = null;
   for (const a of actions) {
     if (a.kind === 'build-team') {
       try {
@@ -1062,6 +1109,8 @@ async function runCraftFlowActions(
       } catch (e) {
         await notice(`[team] 建团队失败：${(e as Error).message}`);
       }
+    } else if (a.kind === 'draft') {
+      draftAction = a;
     } else if (a.kind === 'dispatch') {
       if (srcGroup.kind !== 'dm') continue; // 群里派活走 DAG 交接，不重复下发
       const target = readCraftTeamRef()?.group_id;
@@ -1095,6 +1144,17 @@ async function runCraftFlowActions(
         await notice(`[dispatch] 派活失败：${(e as Error).message}`);
       }
     }
+  }
+  // 图→博文流水线：草稿落 craft_posts(draft) + 进入「确认→两道审批门→自动
+  // 发布→落商品」（编排器内部 fail-soft 播报，不打断聊天主链路）。
+  if (draftAction) {
+    await craftPostPipeline.handleDraft(srcGroup.group_id, draftAction, attachments).catch(() => {});
+  } else if (draftTurn) {
+    // 2026-11-08 协议行 fail-soft — 草拟回合没解析到 [draft] 标记（模型模仿了
+    // 历史展示格式/漏吐协议行）：必须可见报出来，不许静默无落库让用户干等。
+    await notice(
+      '⚠️ 本轮草拟未解析到 [draft] 协议标记，草稿未落库、未进入确认环节（模型输出缺结构化协议行）。可直接重发「根据这张图发小红书博文草稿」重试。',
+    );
   }
 }
 
@@ -1177,9 +1237,28 @@ async function runFanout(
     : executor === 'anthropic-direct'
       ? 'anthropic'
       : null;
+  // 2026-11-08 图→博文流水线 — craftScoped 判定上移：草拟路由（isPostDraftRequest）
+  // 与视觉注入都要在 plan/派发前知道「本轮是代卖域」。
+  const craftScoped = isCraftGroup(group);
   let plan: ChatPlan | null = null;
   if (mentioned.size > 0) {
     plan = mentionPlan(userText, cleanText, planRoster, [...mentioned]);
+  } else if (craftScoped && isPostDraftRequest(userText)) {
+    // 2026-11-08 图→博文流水线 — 草拟请求定向派给内容策划师（结构化 [draft]
+    // 输出，工单自包含「只草拟不发布」纪律）。内容策划师不在编制（团队没建/
+    // 改名）→ plan 留空走后续兜底，不硬造路由。手搓 plan（ChatPlan 纯数据，
+    // source 用 'mention' 语义：单点定向派活，不进 LLM 拆解）。
+    const contentAgent = planRoster.find((a) => a.name === '内容策划师');
+    if (contentAgent) {
+      plan = {
+        intent: 'task',
+        strategy: 'solo',
+        source: 'mention',
+        tasks: [
+          { agentId: contentAgent.id, title: '图→博文草拟', prompt: buildDraftPrompt(userText) },
+        ],
+      };
+    }
   } else if (isCasualChat(userText)) {
     plan = casualPlan(userText, planRoster);
   } else if (hasAtToken) {
@@ -1210,8 +1289,8 @@ async function runFanout(
   // （fail-soft：Python 未起/超时/零命中 → 空串）；DAG/串行两条派发路径共用。
   // 2026-11-07 手工艺品代卖 — 代卖团队群（isCraftGroup）里用户发来的产品
   // 资料（介绍/图片/文档文本）自动同步到「手工艺品资料」记忆库 pack，并把
-  // pack id 并入本轮检索（同步失败不阻塞聊天）。
-  const craftScoped = isCraftGroup(group);
+  // pack id 并入本轮检索（同步失败不阻塞聊天）。craftScoped 判定见 runFanout
+  // 顶部（2026-11-08 图→博文流水线上移复用）。
   let kbPackIds = knowledgePackIds ?? [];
   if (craftScoped) {
     // 文字介绍 → 知识库；随行附件（图片/产品文档）→ 知识库 /files（2026-11-08）。
@@ -1227,6 +1306,17 @@ async function runFanout(
       `[groups-chat] injecting knowledge_block (chars=${kbText.length}, packs=${knowledgePackIds?.length ?? 0})`,
     );
   }
+
+  // 2026-11-08 视觉注入（修草拟"盲写"根因）— is_image 附件真实字节读一次，
+  // DAG/串行两条派发路径共用：随 turn 的 images 进模型消息（openai-compat
+  // image_url data URI / Anthropic image.source），此前模型只收到路径文本、
+  // 根本看不到图 → 草稿编造画面。>4MB/超 9 张/读失败的进 skipped 注记
+  // （prompt 硬规则要求模型声明「无法读取图片内容」而非虚构）。
+  const vision = await readAttachmentImages(attachments).catch(() => ({
+    parts: [],
+    skipped: [] as string[],
+  }));
+  const visionNote = skippedImagesNote(vision.skipped);
 
   try {
     // 2026-06-03 Phase 2a — group 绑了 team 且能读到单一真源 DAG → 按拓扑调度多 agent。
@@ -1430,9 +1520,13 @@ async function runFanout(
               for await (const chunk of callable.turn({
                 // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
                 system: soul + chatLessonsBlock(agentId),
-                // 2026-11-07 拖拽传图 — 附件引用块并入派发上下文（DAG 路径）。
-                prompt: goalWithAttachments(turnPrompt + kbText + upstreamText, attachments),
+                // 2026-11-07 拖拽传图 — 附件引用块并入派发上下文（DAG 路径）；
+                // 2026-11-08 视觉注入 — is_image 附件真实字节随消息进模型
+                //（images → image 块 → openai-compat image_url data URI）。
+                prompt:
+                  goalWithAttachments(turnPrompt + kbText + upstreamText, attachments) + visionNote,
                 history: turnHistory,
+                images: vision.parts,
                 signal,
                 model,
               })) {
@@ -1500,9 +1594,14 @@ async function runFanout(
             // 2026-11-07 代卖协议标记 — 成功回复里的 [intake]/[order]/[ship] 等
             // 标记落产品盈利看板并从聊天文本剥掉（非代卖群 no-op）；[build-team]/
             // [dispatch] 流程动作在挂钩点执行（总经理主控）。
+            // 2026-11-08 图→博文流水线 — 草拟回合防线：[post] 降级 [draft]
+            //（soul 的「产出可发布贴文输出 [post]」不能把未确认草稿直接发出去），
+            // [draft] 走 runCraftFlowActions 挂钩点落流水线。
             if (errMsg) return { text: stripThinking(buf), error: errMsg };
-            const appliedDag = await applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
-            await runCraftFlowActions(group, appliedDag.actions, { executor, model, headers });
+            const draftTurn = craftScoped && isPostDraftRequest(basePrompt);
+            const dagText = draftTurn ? convertPostMarkersToDraft(stripThinking(buf)) : stripThinking(buf);
+            const appliedDag = await applyCraftMarkers(dagText, { scoped: craftScoped });
+            await runCraftFlowActions(group, appliedDag.actions, { executor, model, headers }, attachments, draftTurn);
             return { text: appliedDag.cleaned, error: undefined };
           },
           postMessage: async (m) => {
@@ -1690,9 +1789,11 @@ async function runFanout(
         for await (const chunk of callable.turn({
           // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
           system: soul + chatLessonsBlock(agentId),
-          // 2026-11-07 拖拽传图 — 附件引用块并入派发上下文（串行路径，DAG 同款）。
-          prompt: goalWithAttachments(turnPrompt + kbText, attachments),
+          // 2026-11-07 拖拽传图 — 附件引用块并入派发上下文（串行路径，DAG 同款）；
+          // 2026-11-08 视觉注入 — is_image 附件真实字节随消息进模型（DAG 同款）。
+          prompt: goalWithAttachments(turnPrompt + kbText, attachments) + visionNote,
           history: turnHistory,
+          images: vision.parts,
           signal: ctrl.signal,
           model,
         })) {
@@ -1771,8 +1872,13 @@ async function runFanout(
       // （思考已在过程卡实时流式展示）；全剥空 → 当空回复收口。
       // 2026-11-07 代卖协议标记 — 串行路径同款：落业务动作 + 剥标记，
       // [build-team]/[dispatch] 流程动作在挂钩点执行（总经理主控）。
-      const appliedSerial = await applyCraftMarkers(stripThinking(buf), { scoped: craftScoped });
-      await runCraftFlowActions(group, appliedSerial.actions, { executor, model, headers });
+      // 2026-11-08 图→博文流水线 — 草拟回合防线与 DAG 路径同款（[post]→[draft]）。
+      const serialDraftTurn = craftScoped && isPostDraftRequest(prompt);
+      const serialText = serialDraftTurn
+        ? convertPostMarkersToDraft(stripThinking(buf))
+        : stripThinking(buf);
+      const appliedSerial = await applyCraftMarkers(serialText, { scoped: craftScoped });
+      await runCraftFlowActions(group, appliedSerial.actions, { executor, model, headers }, attachments, serialDraftTurn);
       const reply = appliedSerial.cleaned.trim();
       if (!reply) {
         await pyPostMessage(groupId, {
@@ -2173,6 +2279,11 @@ router.post('/:id/messages', (req: Request, res: Response) => {
     // 先把决定送达（不改聊天主链路：消息照常持久化； fan-out 照常，若用户
     // 批/拒后还想派新活，这条消息本身就是新一轮）。
     tryResolveApprovalFromText(groupId, content);
+    // 2026-11-08 图→博文流水线 — 草稿确认/放弃与审批门挂起期的决定消息在此
+    // 消费，不再发起新一轮 fan-out（swapDagRun 会把流水线挂起的审批门当「上
+    // 一轮」掐掉）。非决定消息/无流水线 → false 照常派发（fan-out 打断挂起
+    // 审批门时流水线按「被拒绝或被打断」收场并提示重进）。
+    if (await craftPostPipeline.takeInput(groupId, content)) return;
     // 对话框知识库（2026-11-06）— 记忆库 pack id 透传给 fan-out（每轮检索注入）。
     // 2026-11-07 拖拽传图 — 附件透传给 fan-out（goalWithAttachments 注入派发上下文）。
     void runFanout(

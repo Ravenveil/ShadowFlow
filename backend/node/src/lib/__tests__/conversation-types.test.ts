@@ -70,11 +70,18 @@ function check(label: string, expected: unknown, actual: unknown) {
         return `use:${b.id}/${b.name}`;
       case 'tool_result':
         return `res:${b.tool_use_id}/${b.is_error}`;
+      case 'image':
+        return `img:${b.media_type}`;
     }
   };
   check('ContentBlock text narrowing', 'text:hello', probe(text));
   check('ContentBlock tool_use narrowing', 'use:tu_1/read_file', probe(toolUse));
   check('ContentBlock tool_result narrowing', 'res:tu_1/false', probe(toolResult));
+  check(
+    'ContentBlock image narrowing',
+    'img:image/png',
+    probe({ kind: 'image', media_type: 'image/png', data: 'aGk=' }),
+  );
 }
 
 // ── 2. ConversationMessage carries blocks + optional usage ───────────────────

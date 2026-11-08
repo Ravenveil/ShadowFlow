@@ -65,7 +65,19 @@ export type ContentBlock =
       tool_name: string;
       output: string;
       is_error: boolean;
-    };
+    }
+  /**
+   * 图片块（2026-11-08 视觉注入，修草拟"盲写"）——base64 图片字节随 user
+   * 消息进模型。**只进瞬态 turn 消息**（ApiClientCallable.turn 按次合成的那条
+   * user 消息），绝不写入 session.messages 历史/会话存储——所以
+   * SESSION_SCHEMA_VERSION 不 bump（序列化面零变化，无 base64 膨胀）。
+   *
+   * wire 翻译：Anthropic 走 `image.source{type:'base64'}`（anthropic-block-adapter
+   * 映射）；OpenAI-compat 走 `image_url` data URI（openai-compat-api-client）。
+   * 其余 client（google/codex/claude-code CLI）现阶段按未知块跳过（text-only），
+   * 由草拟 prompt 的「无法读取图片内容必须明说」硬规则兜底防编造。
+   */
+  | { kind: 'image'; media_type: string; data: string };
 
 /** Conversation message role — matches Anthropic + the Rust `MessageRole`. */
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';

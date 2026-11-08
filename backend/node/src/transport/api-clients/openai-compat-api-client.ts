@@ -146,13 +146,16 @@ function toOpenAiTool(t: ToolSpec): {
  * `OpenAI.Chat.Completions.ChatCompletionMessageParam` we actually emit; kept
  * local so this module has no SDK-internal type imports.
  */
+type OpenAiTextPart = { type: 'text'; text: string };
+/** 2026-11-08 视觉注入 — OpenAI-compat 多模态 content part（data URI 或 URL）。 */
+type OpenAiImagePart = { type: 'image_url'; image_url: { url: string } };
+type OpenAiUserPart = OpenAiTextPart | OpenAiImagePart;
+
 type OpenAiMessage =
   | { role: 'system'; content: string }
   | {
       role: 'user';
-      content:
-        | string
-        | Array<{ type: 'text'; text: string }>;
+      content: string | OpenAiUserPart[];
     }
   | {
       role: 'assistant';
@@ -169,6 +172,10 @@ type OpenAiMessage =
  * Convert our internal ConversationMessage[] to OpenAI's messages[] shape.
  *
  *   - user with [text]            → {role:'user', content: text}
+ *   - user with text + image      → {role:'user', content:[text part,
+ *                                   image_url part(data:…;base64,…), …]}
+ *     （2026-11-08 视觉注入：ContentBlock image 块 → image_url content part；
+ *     无 image 块时维持纯 string content，旧行为零变化）
  *   - assistant with text +       → {role:'assistant', content: text,
  *     tool_use blocks                tool_calls: [...]}
  *   - tool with tool_result       → {role:'tool', tool_call_id, content: output}
@@ -187,10 +194,38 @@ export function toOpenAiMessages(messages: ConversationMessage[]): OpenAiMessage
         .join('');
       out.push({ role: 'system', content: text });
     } else if (m.role === 'user') {
-      const text = m.blocks
-        .map((b) => (b.kind === 'text' ? b.text : ''))
-        .join('');
-      out.push({ role: 'user', content: text });
+      const hasImage = m.blocks.some((b) => b.kind === 'image');
+      if (!hasImage) {
+        // 纯文本 user 消息维持 string content（零回归）。
+        const text = m.blocks
+          .map((b) => (b.kind === 'text' ? b.text : ''))
+          .join('');
+        out.push({ role: 'user', content: text });
+      } else {
+        // 含 image 块 → content parts 数组（text part + image_url part）。
+        const parts: OpenAiUserPart[] = [];
+        for (const b of m.blocks) {
+          if (b.kind === 'text') {
+            if (b.text.length > 0) parts.push({ type: 'text', text: b.text });
+          } else if (b.kind === 'image') {
+            // 空字节的 image 块不发（防 data URI 残缺被 provider 400）。
+            if (!b.data) continue;
+            const mime = b.media_type || 'image/png';
+            parts.push({
+              type: 'image_url',
+              image_url: { url: `data:${mime};base64,${b.data}` },
+            });
+          }
+          // tool_use / tool_result 不会出现在 user 消息；防御性跳过。
+        }
+        // 兜底：图片块全被过滤（data 空）→ 退化为 string content。
+        out.push({
+          role: 'user',
+          content: parts.some((p) => p.type === 'image_url')
+            ? parts
+            : parts.map((p) => (p as OpenAiTextPart).text).join(''),
+        });
+      }
     } else if (m.role === 'assistant') {
       let textBuf = '';
       const toolCalls: Array<{
@@ -242,6 +277,50 @@ export function toOpenAiMessages(messages: ConversationMessage[]): OpenAiMessage
     }
   }
   return out;
+}
+
+// ─── 视觉降级（provider 不收 image_url 时的优雅回退）────────────────────────
+
+/** 降级注记：图片没随消息送达时替换进 user 文本，让模型按「看不到图」硬规则走。 */
+export const IMAGE_DROPPED_NOTE =
+  '（图片未随消息送达：本模型不支持图片输入，无法读取图片内容——请勿虚构画面）';
+
+/**
+ * 去图降级（纯函数）：把 user content 里的 image_url part 换成降级注记文本，
+ * 并把 parts 归并回 string content（其余消息原样）。用于 provider 对
+ * image_url 一律 400 的线：去掉图片重发一次，不崩、不静默丢图（模型拿到
+ * 明示注记 → prompt 硬规则要求它声明「无法读取图片内容」而非编造）。
+ */
+export function deimageWireMessages(messages: OpenAiMessage[]): OpenAiMessage[] {
+  return messages.map((m) => {
+    if (m.role !== 'user' || typeof m.content === 'string') return m;
+    const parts = m.content;
+    if (!parts.some((p) => p.type === 'image_url')) return m;
+    const texts: string[] = [];
+    for (const p of parts) {
+      if (p.type === 'text') texts.push(p.text);
+      else texts.push(IMAGE_DROPPED_NOTE);
+    }
+    return { role: 'user', content: texts.join('\n') };
+  });
+}
+
+/** 该消息面是否带 image_url part（决定 400 时要不要走去图重试）。 */
+function hasImageParts(messages: OpenAiMessage[]): boolean {
+  return messages.some(
+    (m) => m.role === 'user' && typeof m.content !== 'string' && m.content.some((p) => p.type === 'image_url'),
+  );
+}
+
+/**
+ * 判定「可能是 provider 拒收图片」类失败（400/404/415/422 请求被拒不兼容）。
+ * 调用方仅在消息真带 image_url part 时才拿它决定去图重试；非图片类 400
+ * 重试去图版仍会失败 → 第二次错误照实上抛，代价只有一次多余请求。
+ */
+function isImageRejection(err: unknown): boolean {
+  const e = err as { status?: number; statusCode?: number };
+  const status = e?.status ?? e?.statusCode;
+  return status === 400 || status === 404 || status === 415 || status === 422;
 }
 
 // ─── stop_reason normalization ────────────────────────────────────────────
@@ -469,7 +548,25 @@ export class OpenAiCompatApiClient implements ApiClient {
         signal,
       })) as unknown as AsyncIterable<unknown>;
     } catch (err) {
-      throw err instanceof Error ? err : new Error(String(err));
+      // 视觉降级（2026-11-08，修草拟"盲写"兜底）：provider 拒收 image_url
+      // （400/404/415/422）且消息真带图 → 去图重发一次（降级注记替换进 user
+      // 文本，prompt 硬规则要求模型声明「无法读取图片内容」而非编造画面）。
+      // 仍失败、非图片类错误或已中止 → 照旧上抛，不无限重试。
+      if (!(hasImageParts(wireMessages) && isImageRejection(err) && !signal.aborted)) {
+        throw err instanceof Error ? err : new Error(String(err));
+      }
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[OpenAiCompatApiClient] provider rejected image parts (${err instanceof Error ? err.message : String(err)}), retrying once without images`,
+      );
+      createParams.messages = deimageWireMessages(wireMessages);
+      try {
+        stream = (await client.chat.completions.create(createParams, {
+          signal,
+        })) as unknown as AsyncIterable<unknown>;
+      } catch (err2) {
+        throw err2 instanceof Error ? err2 : new Error(String(err2));
+      }
     }
 
     /**

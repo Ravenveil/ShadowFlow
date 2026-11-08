@@ -122,6 +122,12 @@ export interface RunTurnArgs {
   system_prompt: string;
   user_message: string;
   /**
+   * 2026-11-08 视觉注入 — 随本轮 user 消息的图片（base64，瞬态）。附加在
+   * user 消息的 image 块上随每次 LLM 调用重发；不传 = 纯文本（零变化）。
+   * 该 user 消息只活在 runTurn 的 in-memory history 里，不落会话存储。
+   */
+  user_images?: Array<{ media_type: string; data: string }>;
+  /**
    * Optional rolling history. Defaults to `[]`. The runtime appends the new
    * user/assistant/tool messages produced by this turn. If the caller wants
    * isolation, pass a fresh array; if continuation, pass the same array
@@ -157,9 +163,17 @@ export class ConversationRuntime {
     const history = args.history ?? [];
 
     // 1) Push the user message that opens the turn.
+    // 2026-11-08 视觉注入 — user_images 以 image 块附后（无则单 text 块零变化）。
     history.push({
       role: 'user',
-      blocks: [{ kind: 'text', text: args.user_message }],
+      blocks: [
+        { kind: 'text', text: args.user_message },
+        ...(args.user_images ?? []).map((img) => ({
+          kind: 'image' as const,
+          media_type: img.media_type,
+          data: img.data,
+        })),
+      ],
     });
 
     let iterations = 0;

@@ -368,7 +368,7 @@ function check(label: string, expected: unknown, actual: unknown) {
 // ── 6. Exhaustiveness: switch covers every ContentBlock variant ──────────────
 // Compile-time check via inline self-test: if a future variant is added to
 // ContentBlock without updating toAnthropicBlock, the build will break. At
-// runtime we just sanity-check that the three known variants all map to a
+// runtime we just sanity-check that the known variants all map to a
 // wire block with a defined `type` field.
 {
   const variants: ContentBlock[] = [
@@ -381,12 +381,33 @@ function check(label: string, expected: unknown, actual: unknown) {
       output: 'o',
       is_error: false,
     },
+    { kind: 'image', media_type: 'image/png', data: 'aGk=' },
   ];
   for (const v of variants) {
     const wire: AnthropicBlock = toAnthropicBlock(v);
     const typeField = wire.type;
     check(`exhaustive: kind=${v.kind} maps to a non-empty wire type`, true, typeof typeField === 'string' && typeField.length > 0);
   }
+}
+
+// ── 7. image variant（2026-11-08 视觉注入）───────────────────────────────────
+{
+  const img: ContentBlock = { kind: 'image', media_type: 'image/png', data: 'aGVsbG8=' };
+  check(
+    'toAnthropicBlock: image → source.base64（Anthropic 原生图块直译）',
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } },
+    toAnthropicBlock(img),
+  );
+  check(
+    'image round-trip: internal → wire → internal',
+    img,
+    fromAnthropicBlock(toAnthropicBlock(img)),
+  );
+  check(
+    'toAnthropicMessages: user 消息 image 块随 wire 下行',
+    [{ role: 'user', content: [{ type: 'text', text: '看图' }, toAnthropicBlock(img)] }],
+    toAnthropicMessages([{ role: 'user', blocks: [{ kind: 'text', text: '看图' }, img] }]),
+  );
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

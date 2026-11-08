@@ -74,6 +74,19 @@ export interface ToolSpec {
 }
 
 /**
+ * Base64 图片内容（2026-11-08 视觉注入，修草拟"盲写"）。与
+ * conversation-types ContentBlock 的 `image` 变体同形；由调用方（groups-chat
+ * 的 readAttachmentImages）读真实字节后传入，transport 侧翻译成 wire 形态
+ * （OpenAI-compat `image_url` data URI / Anthropic `image.source`）。
+ */
+export interface LlmImageContent {
+  /** MIME 类型，如 `image/png`（调用方做 magic-byte 探测）。 */
+  media_type: string;
+  /** base64 图片字节（不带 `data:` 前缀，wire 层拼 data URI）。 */
+  data: string;
+}
+
+/**
  * Single-turn input contract. Constructed by the orchestration layer; the
  * callable treats it as immutable.
  *
@@ -88,6 +101,11 @@ export interface ToolSpec {
  * passes `history: []` between agents — coordination happens through files on
  * `workspace`, not through chat log. The field is retained for compatibility
  * with non-team / single-turn flows and for future use.
+ *
+ * `images`（2026-11-08）：随本轮 user 消息注入的图片（瞬态，不进 history）。
+ * 支持多模态的 client 翻译成各自 wire 形态；不支持的按未知块跳过（text-only
+ * 回退，prompt 侧「无法读取图片内容必须明说」硬规则兜底防编造）。缺省不传 =
+ * 纯文本轮，零行为变化。
  */
 export interface LlmCallableTurnInput {
   system: string;
@@ -99,6 +117,7 @@ export interface LlmCallableTurnInput {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  images?: LlmImageContent[];
 }
 
 /**

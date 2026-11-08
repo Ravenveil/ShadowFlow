@@ -30,6 +30,7 @@
  */
 
 import type { ApiClient } from '../lib/conversation-runtime';
+import type { ConversationMessage } from '../lib/conversation-types';
 import { AnthropicApiClient } from './api-clients/anthropic-api-client';
 import { OpenAiCompatApiClient } from './api-clients/openai-compat-api-client';
 import { GoogleApiClient } from './api-clients/google-api-client';
@@ -39,6 +40,7 @@ import type {
   LlmCallable,
   LlmCallableCapabilities,
   LlmCallableTurnInput,
+  LlmImageContent,
 } from './LlmCallable';
 import { LlmCallError, type TurnChunk } from '../workflow/types';
 
@@ -132,6 +134,24 @@ function buildApiClient(
 }
 
 /**
+ * 合成单轮 user 消息（纯函数，2026-11-08 视觉注入）：prompt 文本块在前，
+ * 随行图片（base64）以 `image` 块附后。图片块**只活在本条瞬态消息里**——
+ * 不写 history、不落会话存储（见 conversation-types image 变体注释）。
+ * 无 images 时退化为单 text 块（旧行为零变化）。
+ */
+export function buildUserTurnMessage(
+  prompt: string,
+  images?: LlmImageContent[],
+): ConversationMessage {
+  const blocks: ConversationMessage['blocks'] = [{ kind: 'text', text: prompt }];
+  for (const img of images ?? []) {
+    if (!img?.data) continue;
+    blocks.push({ kind: 'image', media_type: img.media_type, data: img.data });
+  }
+  return { role: 'user', blocks };
+}
+
+/**
  * In-process ApiClient → LlmCallable adapter. One instance binds one
  * provider id + credentials/model pinning; reusable across turns.
  */
@@ -185,12 +205,12 @@ export class ApiClientCallable implements LlmCallable {
     // "one turn = one stream call"; multi-turn history is the orchestrator's
     // job. We forward `input.history` verbatim so any callable that DOES want
     // a rolling history (non-team / single-skill flows) still gets it.
+    // 2026-11-08 视觉注入 — 随行图片（is_image 附件真实字节）以 image 块附进
+    // 本条瞬态 user 消息；OpenAI-compat 译成 image_url data URI、Anthropic 译
+    // 成 image.source，其余 client 按未知块跳过（text-only）。
     const messages = [
       ...input.history,
-      {
-        role: 'user' as const,
-        blocks: [{ kind: 'text' as const, text: input.prompt }],
-      },
+      buildUserTurnMessage(input.prompt, input.images),
     ];
 
     let stream: AsyncIterable<unknown>;

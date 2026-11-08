@@ -5,8 +5,9 @@
  *   ① applyCraftMarkers —— 把 agent 输出协议标记（lib/craft-markers 解析）
  *      落到产品盈利库：[intake] 上架商品、[order] 记销售、[post]/[link] 营销
  *      动态、[ship] 快递动态、[report] 盈利汇报（只剥标记）；[build-team]/
- *      [dispatch] 是流程动作（建团队/向工作群派活），本层只剥标记并把动作
- *      透传给调用方（groups-chat 挂钩点发 HTTP 执行）。作用域（isCraftGroup）：
+ *      [dispatch] 是流程动作（建团队/向工作群派活），[draft] 是博文草稿流程
+ *      动作（图→博文流水线），本层只剥标记并把动作透传给调用方（groups-chat
+ *      挂钩点执行）。作用域（isCraftGroup）：
  *      代卖团队绑的群 + 「总经理」的 DM（主控对话，团队未建时 [build-team]
  *      也要生效），其他群 agent 引用协议标记不剥不落库。
  *   ② ingestProductMaterial —— 用户发来的产品资料（文字介绍/图片/文档文本）
@@ -37,7 +38,7 @@ import { createShipment, shipShipment } from './ops-shipping';
 import { PLATFORMS } from '../lib/social-platforms';
 import { CARRIERS } from '../lib/shipping';
 import { getSetting } from './settings';
-import { parseCraftMarkers, type CraftAction, type CraftTag } from '../lib/craft-markers';
+import { parseCraftMarkers, type CraftAction, type CraftMediaItem, type CraftTag } from '../lib/craft-markers';
 import { PYTHON_BACKEND_URL } from '../python-backend';
 
 /** 团队 setup 写入的 settings key（craft-team-setup.ts 同用）。 */
@@ -148,12 +149,15 @@ function fitPost(platformId: string, title: string, content: string): { title: s
 /**
  * 帖子落社媒发布域并 mock 发布（fail-soft：失败只降级为「已建未发」，不抛，
  * 不影响聊天与盈利库主链路）。返回发布状态描述（进运营动态）。
+ * media（craft_posts.images 同构项，[post] 标记可选载荷）直接透传落
+ * sp_posts.media——旧标记不带 media 时行为不变（sp_posts.media 仍 '[]'）。
  */
 async function syncSocialPost(input: {
   platform: string;
   title: string;
   content: string;
   productId?: string;
+  media?: CraftMediaItem[];
 }): Promise<string> {
   const platformId = normalizePlatform(input.platform);
   const accountId = ensureSocialAccount(platformId);
@@ -162,6 +166,7 @@ async function syncSocialPost(input: {
     account_id: accountId,
     title: fitted.title,
     content: fitted.content,
+    ...(input.media?.length ? { media: input.media } : {}),
     ...(input.productId ? { product_id: input.productId } : {}),
   });
   try {
@@ -239,11 +244,12 @@ async function applyOne(action: CraftAction): Promise<AppliedAction> {
       case 'post': {
         const detail = `在${action.platform}发帖：${action.title || action.text.slice(0, 40) || '推广内容'}`;
         insertAgentEvent('marketing', detail);
-        // 同步社媒发布域（帖子 + 发布回执），失败降级不改营销动态。
+        // 同步社媒发布域（帖子 + 发布回执；media 随帖透传），失败降级不改营销动态。
         const socialNote = await syncSocialPost({
           platform: action.platform,
           title: action.title || action.text.slice(0, 20) || '好物推荐',
           content: action.text || action.title,
+          media: action.media,
         });
         return { tag: 'post', ok: true, detail: `${detail}（${socialNote}）` };
       }
@@ -283,6 +289,11 @@ async function applyOne(action: CraftAction): Promise<AppliedAction> {
         return { tag: 'build-team', ok: true, detail: '搭建代卖团队（挂钩点执行）' };
       case 'dispatch':
         return { tag: 'dispatch', ok: true, detail: `派活给 ${action.to.join('、')}` };
+      case 'draft':
+        // 流程动作：博文草稿落 craft_posts + 确认/审批流水线在 groups-chat
+        // 挂钩点执行（走 be-worker REST），此处只剥标记（与 build-team/dispatch
+        // 同款「挂钩点执行」语义）。
+        return { tag: 'draft', ok: true, detail: `博文草稿《${action.title || '未命名'}》（挂钩点执行）` };
       default:
         return { tag: 'report', ok: false, error: '未知动作' };
     }

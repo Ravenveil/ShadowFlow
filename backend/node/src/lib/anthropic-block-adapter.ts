@@ -48,10 +48,22 @@ import type { ContentBlock, ConversationMessage } from './conversation-types';
  *    Anthropic supports a richer multi-part content shape but we only ever
  *    send/receive plain strings, matching the Rust port's behavior.
  */
+/**
+ * Anthropic wire 图片 MIME —— @anthropic-ai/sdk 的 Base64ImageSource 同款
+ * 字面量联合（SDK 只认这四种）。内部 ContentBlock.media_type 是宽松 string，
+ * 由 toAnthropicBlock 收窄（readAttachmentImages 只会产出这四种）。
+ */
+export type AnthropicImageMime = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
 export type AnthropicBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  /** 图片块（2026-11-08 视觉注入）— Anthropic Messages API 原生 base64 图。 */
+  | {
+      type: 'image';
+      source: { type: 'base64'; media_type: AnthropicImageMime; data: string };
+    };
 
 /**
  * Internal ContentBlock → wire-format AnthropicBlock. Total — every variant
@@ -70,6 +82,17 @@ export function toAnthropicBlock(b: ContentBlock): AnthropicBlock {
         tool_use_id: b.tool_use_id,
         content: b.output,
         is_error: b.is_error,
+      };
+    case 'image':
+      // Anthropic 原生支持 base64 图片块，直译（视觉注入在 Anthropic 线同样生效）。
+      // media_type 宽松 string → wire 字面量收窄（注入面只产 png/jpeg/gif/webp）。
+      return {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: b.media_type as AnthropicImageMime,
+          data: b.data,
+        },
       };
   }
 }
@@ -107,6 +130,14 @@ export function fromAnthropicBlock(b: AnthropicBlock): ContentBlock {
         tool_name: '',
         output: b.content,
         is_error: b.is_error ?? false,
+      };
+    case 'image':
+      // 回程（wire → internal）仅协议完整性：请求侧 image 块是我们合成的瞬态
+      // user 消息，模型响应不会回吐 image；真回吐也按 base64 直译。
+      return {
+        kind: 'image',
+        media_type: b.source?.media_type ?? '',
+        data: b.source?.data ?? '',
       };
   }
 }
