@@ -1,0 +1,19 @@
+{
+  "ledger": {
+    "income": 947000,
+    "refund": 205600,
+    "expense": 320100
+  },
+  "orders": {
+    "amount": 947000,
+    "cost": 320100
+  },
+  "diffs": {
+    "income_cents": 0,
+    "expense_cents": 0,
+    "refund_cents": 0,
+    "refund_rows": 0
+  },
+  "issues": [],
+  "balanced": true
+}
