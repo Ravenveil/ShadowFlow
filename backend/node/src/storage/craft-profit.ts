@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
-import { getDb } from './sqlite';
+import { addColumnIfMissing, getDb } from './sqlite';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS cp_products (
   price_cents INTEGER NOT NULL,
   cost_cents INTEGER NOT NULL DEFAULT 0,
   shipping_cents INTEGER NOT NULL DEFAULT 0,
+  image_url TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cp_sales (
@@ -77,8 +78,22 @@ function migrate(conn: Database.Database): void {
       if (!names.has('tracking')) {
         conn.exec(`ALTER TABLE cp_sales ADD COLUMN tracking TEXT NOT NULL DEFAULT ''`);
       }
+      // 扫码购买（2026-11-08）：老库补买家字段；[order] 标记落库的行为空串。
+      if (!names.has('buyer_name')) {
+        conn.exec(`ALTER TABLE cp_sales ADD COLUMN buyer_name TEXT NOT NULL DEFAULT ''`);
+      }
+      if (!names.has('buyer_contact')) {
+        conn.exec(`ALTER TABLE cp_sales ADD COLUMN buyer_contact TEXT NOT NULL DEFAULT ''`);
+      }
     }
   }
+  // 商品目录扩展（2026-11-08，博文/商品数据层对齐）：cp_products 补
+  // image_url/status/source_post_id —— 扩展盈利域既有商品表，不另建目录表。
+  // addColumnIfMissing 幂等（列已存在跳过），且必须跑在建表 DDL 之后（db()
+  // 里 DDL → migrate 顺序保证）；老行由 DEFAULT 回填（status='active'）。
+  addColumnIfMissing(conn, 'cp_products', 'image_url', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(conn, 'cp_products', 'status', "TEXT NOT NULL DEFAULT 'active'");
+  addColumnIfMissing(conn, 'cp_products', 'source_post_id', 'TEXT');
 }
 
 /** 以库文件为 key 记已建表；测试 _resetForTests() 换库后会自动重建。 */
@@ -129,12 +144,21 @@ function qty(v: unknown): number {
 
 // ── 类型 ─────────────────────────────────────────────────────────────────────
 
+/** 商品上下架状态（目录域，2026-11-08）：active 在售 / off_shelf 已下架。 */
+export type ProductStatus = 'active' | 'off_shelf';
+
 export interface CraftProduct {
   id: string;
   name: string;
   price_cents: number;
   cost_cents: number;
   shipping_cents: number;
+  /** 商品图（聊天附件 url / 本地路径，目录展示用，可空串）。 */
+  image_url: string;
+  /** active | off_shelf（2026-11-08 目录扩展；老行默认 active）。 */
+  status: ProductStatus;
+  /** 来源博文（craft_posts.post_id，可空；空 = 未关联博文）。 */
+  source_post_id: string | null;
   created_at: number;
   /** 每件盈利 = 售价 − 成本 − 快递（后端算好，前端不自己减）。 */
   profit_per_unit_cents: number;
@@ -154,16 +178,38 @@ export interface CraftSale {
   status: string;
   /** 运单号（[ship] 登记后回填）。 */
   tracking: string;
+  /** 买家称呼/联系电话（扫码购买下单时留；[order] 标记落库为空串）。 */
+  buyer_name: string;
+  buyer_contact: string;
   created_at: number;
 }
 
 // ── 商品（上架）──────────────────────────────────────────────────────────────
+
+/** 商品状态校验（目录域）：active|off_shelf，其余 400。 */
+function productStatus(v: unknown): ProductStatus {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (s !== 'active' && s !== 'off_shelf') {
+    throw new CraftProfitError('status 非法（可选 active|off_shelf）');
+  }
+  return s;
+}
+
+/** 来源博文引用：空/null 清空（存 NULL），有值截 128（存在性由路由校验，避免循环依赖）。 */
+function sourcePostRef(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = typeof v === 'string' ? v.trim().slice(0, 128) : '';
+  return s || null;
+}
 
 export function createProduct(input: {
   name?: unknown;
   price_cents?: unknown;
   cost_cents?: unknown;
   shipping_cents?: unknown;
+  image_url?: unknown;
+  status?: unknown;
+  source_post_id?: unknown;
 }): CraftProduct {
   const row = {
     id: randomUUID(),
@@ -171,15 +217,28 @@ export function createProduct(input: {
     price_cents: cents(input.price_cents ?? 0, 'price_cents'),
     cost_cents: cents(input.cost_cents ?? 0, 'cost_cents'),
     shipping_cents: cents(input.shipping_cents ?? 0, 'shipping_cents'),
+    image_url: text(input.image_url, 2048, 'image_url'),
+    status: input.status === undefined ? ('active' as ProductStatus) : productStatus(input.status),
+    source_post_id: sourcePostRef(input.source_post_id),
     created_at: Date.now(),
   };
   db()
     .prepare(
       `INSERT INTO cp_products
-         (id, name, price_cents, cost_cents, shipping_cents, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+         (id, name, price_cents, cost_cents, shipping_cents, image_url, status, source_post_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(row.id, row.name, row.price_cents, row.cost_cents, row.shipping_cents, row.created_at);
+    .run(
+      row.id,
+      row.name,
+      row.price_cents,
+      row.cost_cents,
+      row.shipping_cents,
+      row.image_url,
+      row.status,
+      row.source_post_id,
+      row.created_at,
+    );
   return { ...row, profit_per_unit_cents: profitPerUnit(row) };
 }
 
@@ -191,11 +250,90 @@ function profitPerUnit(p: {
   return p.price_cents - p.cost_cents - p.shipping_cents;
 }
 
-export function listProducts(): CraftProduct[] {
-  const rows = db().prepare(`SELECT * FROM cp_products ORDER BY created_at DESC`).all() as Array<
-    Omit<CraftProduct, 'profit_per_unit_cents'>
-  >;
+export function listProducts(filter: { status?: string } = {}): CraftProduct[] {
+  const status = typeof filter.status === 'string' && filter.status.trim() ? filter.status.trim() : '';
+  if (status) productStatus(status); // 非法过滤值直接 400，不静默全量
+  const rows = db()
+    .prepare(
+      `SELECT * FROM cp_products ${status ? 'WHERE status = ?' : ''} ORDER BY created_at DESC`,
+    )
+    .all(...(status ? [status] : [])) as Array<Omit<CraftProduct, 'profit_per_unit_cents'>>;
   return rows.map((r) => ({ ...r, profit_per_unit_cents: profitPerUnit(r) }));
+}
+
+/** 单商品查找（目录/引用校验用）；没有返回 undefined。 */
+export function getProduct(id: string): CraftProduct | undefined {
+  const row = db().prepare(`SELECT * FROM cp_products WHERE id = ?`).get(id) as
+    | Omit<CraftProduct, 'profit_per_unit_cents'>
+    | undefined;
+  return row ? { ...row, profit_per_unit_cents: profitPerUnit(row) } : undefined;
+}
+
+/**
+ * 商品目录 PATCH（2026-11-08）：字段缺省（undefined）不动、null/空串清空引用；
+ * created_id 不可改。找不到商品抛 404。source_post_id 存在性由路由层校验
+ * （storage 层不引 craft_posts，避免 craft-profit ↔ craft-posts 循环依赖）。
+ */
+export function updateProduct(
+  id: string,
+  patch: {
+    name?: unknown;
+    price_cents?: unknown;
+    cost_cents?: unknown;
+    shipping_cents?: unknown;
+    image_url?: unknown;
+    status?: unknown;
+    source_post_id?: unknown;
+  },
+): CraftProduct {
+  const conn = db();
+  const existing = conn.prepare(`SELECT * FROM cp_products WHERE id = ?`).get(id) as
+    | Omit<CraftProduct, 'profit_per_unit_cents'>
+    | undefined;
+  if (!existing) throw new CraftProfitError('product not found', 404);
+  const row = {
+    id,
+    name: patch.name !== undefined ? text(patch.name, 200, 'name', true) : existing.name,
+    price_cents: patch.price_cents !== undefined ? cents(patch.price_cents, 'price_cents') : existing.price_cents,
+    cost_cents: patch.cost_cents !== undefined ? cents(patch.cost_cents, 'cost_cents') : existing.cost_cents,
+    shipping_cents:
+      patch.shipping_cents !== undefined ? cents(patch.shipping_cents, 'shipping_cents') : existing.shipping_cents,
+    image_url: patch.image_url !== undefined ? text(patch.image_url, 2048, 'image_url') : existing.image_url,
+    status: patch.status !== undefined ? productStatus(patch.status) : existing.status,
+    source_post_id:
+      patch.source_post_id !== undefined ? sourcePostRef(patch.source_post_id) : existing.source_post_id,
+    created_at: existing.created_at,
+  };
+  conn
+    .prepare(
+      `UPDATE cp_products
+          SET name = ?, price_cents = ?, cost_cents = ?, shipping_cents = ?,
+              image_url = ?, status = ?, source_post_id = ?
+        WHERE id = ?`,
+    )
+    .run(
+      row.name,
+      row.price_cents,
+      row.cost_cents,
+      row.shipping_cents,
+      row.image_url,
+      row.status,
+      row.source_post_id,
+      id,
+    );
+  return { ...row, profit_per_unit_cents: profitPerUnit(row) };
+}
+
+/**
+ * 删除商品（2026-11-08 商品售卖列表）：硬删除商品行。销售流水保留金额快照
+ * （listSales 对已删商品显示「(商品已删除)」），历史盈利口径不受影响。
+ * 找不到商品抛 404。
+ */
+export function deleteProduct(id: string): void {
+  const res = db()
+    .prepare(`DELETE FROM cp_products WHERE id = ?`)
+    .run(String(id ?? ''));
+  if (res.changes === 0) throw new CraftProfitError('product not found', 404);
 }
 
 // ── 销售（记一笔）────────────────────────────────────────────────────────────

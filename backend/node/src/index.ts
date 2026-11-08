@@ -56,6 +56,9 @@ import memoryHandoffRouter from './routes/memory/memory-handoff';
 import merchantBoardRouter from './routes/dashboard/merchant-board';
 // 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 成本 − 快递
 import craftProfitRouter from './routes/dashboard/craft-profit';
+// 小红书博文/商品目录（2026-11-08）— craft 域扩展：博文状态机 + 商品目录 CRUD
+import craftPostsRouter from './routes/dashboard/craft-posts';
+import craftProductsRouter from './routes/dashboard/craft-products';
 // 社交发布（2026-11-07）— 社交平台直连发布：账号/营销帖/发布回执 + 平台适配器
 // （mock/real 双模）。外接模块，自带幂等建表，不改既有逻辑。
 import socialPublishRouter from './routes/social/social-publish';
@@ -212,6 +215,10 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/merchant', merchantBoardRouter);
 // 产品盈利看板（2026-11-07）：/api/craft-profit/*，挂 proxyFallback 之前
 app.use('/api/craft-profit', craftProfitRouter);
+// 小红书博文/商品目录（2026-11-08）：/api/craft-posts/*、/api/craft-products/*，
+// 数据层复用 cp_products 扩展列 + craft_posts，挂 proxyFallback 之前
+app.use('/api/craft-posts', craftPostsRouter);
+app.use('/api/craft-products', craftProductsRouter);
 // 社交发布（营销帖直发六大平台），挂 proxyFallback 之前
 app.use('/api/social-publish', socialPublishRouter);
 // 代运营全流程（分发编排 + 快递履约），挂 proxyFallback 之前

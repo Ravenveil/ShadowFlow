@@ -40,9 +40,13 @@ function paths() {
  * Add a column to a table if it isn't already present. Idempotent: reads
  * PRAGMA table_info and only issues ALTER TABLE when the column is missing.
  * `colDef` is the SQLite type/affinity (e.g. 'TEXT') — keep it nullable with
- * no NOT NULL/UNIQUE so the ALTER can never fail on an existing populated table.
+ * no NOT NULL/UNIQUE so the ALTER can never fail on an existing populated table
+ * (NOT NULL is safe only with a non-null DEFAULT that backfills existing rows).
+ *
+ * 导出给外接 storage 模块复用（2026-11-08 craft 域扩展）：迁移必须跑在建表
+ * DDL 之后（CREATE TABLE IF NOT EXISTS 不会给已有表补列）。
  */
-function addColumnIfMissing(
+export function addColumnIfMissing(
   db: Database.Database,
   table: string,
   column: string,
