@@ -3,8 +3,10 @@
  * tunnel-watchdog.mjs — 公网链接守护（2026-11-08 公网稳定性批）。
  *
  * 监测对象：产品链接隧道（cloudflared 快速隧道）+ 本地三服务端口。
- *   · 隧道探测连续 2 次失败才动作（防瞬时网络抖动误杀）；存活时**绝不重启**
+ *   · 隧道探测连续 3 次失败才动作（防瞬时网络抖动误杀）；存活时**绝不重启**
  *     ——快速隧道每次重启都会换随机域名，保住现有进程 = 保住已交付链接。
+ *   · 拉新前必杀旧进程（2026-11-11 修僵尸堆积：此前 3 天盲拉 280 次、80+ 孤儿
+ *     cloudflared 常驻，全是废隧道的死域名额）。
  *   · 隧道挂了但本地服务活着 → 自动拉起 cloudflared；新域名从启动输出抓取，
  *     写 .workbuddy/tunnel-url.txt 并醒目提示（link.md 需同步更新）。
  *   · 三服务端口全挂 → 自动重启 dev.mjs 整树（SF_WATCHDOG_RESTART_DEV=0 关闭）。
@@ -110,10 +112,27 @@ function parseTunnelUrl(text) {
 }
 
 let cloudflaredChild = null;
+function killTree(pid) {
+  try {
+    if (IS_WIN) {
+      spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      process.kill(pid, "SIGTERM");
+    }
+  } catch { /* 已死则无所谓 */ }
+}
+
 function startCloudflared() {
   if (!fs.existsSync(CLOUDFLARED)) {
     log("找不到 cloudflared:", CLOUDFLARED, "— 无法自动拉起隧道");
     return;
+  }
+  // 防僵尸堆积（2026-11-11）：拉新前先终止上一个还活着的孩子。
+  // 旧进程的隧道域名已死（探测连续失败才走到这），留着只是占资源的孤儿。
+  if (cloudflaredChild && cloudflaredChild.exitCode === null) {
+    log("终止上一个 cloudflared pid=", cloudflaredChild.pid, "（其隧道域名已失效）");
+    killTree(cloudflaredChild.pid);
+    cloudflaredChild = null;
   }
   log("拉起 cloudflared →", TUNNEL_TARGET);
   const child = spawn(CLOUDFLARED, ["tunnel", "--url", TUNNEL_TARGET, "--no-autoupdate"], {
@@ -173,8 +192,8 @@ async function tick() {
     return; // 隧道健康：绝不重启（保住随机域名 = 保住已交付链接）
   }
 
-  if (state.consecutiveTunnelFailures < 2) {
-    log(`隧道探测失败（${state.consecutiveTunnelFailures}/2，等复测再动作）`);
+  if (state.consecutiveTunnelFailures < 3) {
+    log(`隧道探测失败（${state.consecutiveTunnelFailures}/3，等复测再动作）`);
     return;
   }
 
