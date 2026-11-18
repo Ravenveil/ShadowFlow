@@ -52,6 +52,10 @@ import schedulesRouter from './routes/runs/schedules';
 import { startSchedulerEngine } from './scheduler/engine';
 // 单后端迁移第三批 — opc 全域 31 端点（opc-impl 77841b05）
 import opcRouter from './routes/opc/opc';
+// 单后端迁移第三批 — impl-c agents 邻接域（bc1cfaf4）
+import registryRouter from './routes/agents/registry';
+import approvalsRouter from './routes/runs/approvals';
+import { a2aRouter } from './routes/system/acp';
 // 单后端迁移第三批 — memory state stub + agent state（裸 /state 前缀）
 import memoryStateRouter from './routes/memory/memory-state';
 import agentStateRouter from './routes/agents/agent-state';
@@ -173,6 +177,10 @@ app.use('/api/runs', runsRouter);
 // 独立 router 同挂 /api/runs（路径不与 runs.ts 冲突），必须在 proxyFallback 之前。
 app.use('/api/runs', runSuggestionsRouter);
 app.use('/api/agents', agentsRouter);
+// impl-c 第三批（bc1cfaf4）— runtime registry + agent packs（/registry* 路径面，
+// 与 agentsRouter 的 /{agent_id} 不重叠；registry 内部静态路由已先于
+// /registry/:agent_id 注册，packs 不被吞）。须挂 proxyFallback 之前。
+app.use('/api/agents', registryRouter);
 // S0.7 — Team DAG endpoints (yaml-backed). Mounted before proxyFallback so
 // /:id/dag and /:id/dag/validate hit Node; non-matching /api/teams paths
 // (root list, create, etc.) fall through to Python via proxyFallback.
@@ -203,6 +211,14 @@ if (!shouldMountProxyFallback()) {
 // 原则（/api/opc 继续转 Python），同样条件挂载。
 if (!shouldMountProxyFallback()) {
   app.use('/api/opc', opcRouter);
+}
+// impl-c 第三批（bc1cfaf4）— approvals 根挂载：覆盖 /api/approvals/*、
+// /api/groups/*/approvals/pending、裸 /approvals/pending 三种形状（桥接
+// toolApprovals 审批门；与 Python svc=None 降级行为等价）。
+app.use('/', approvalsRouter);
+// A2A bridge — 仅 A2A_BRIDGE_ENABLED=true 时挂（对齐 Python server.py:281-283）。
+if (['1', 'true', 'yes'].includes((process.env.A2A_BRIDGE_ENABLED ?? '').toLowerCase())) {
+  app.use(a2aRouter); // GET /.well-known/agent.json + POST /a2a/
 }
 // Story 15.19 v2 — Local CLI auto-discovery + spawn bridge.
 app.use('/api/cli', cliRouter);
