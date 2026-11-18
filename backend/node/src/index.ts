@@ -44,6 +44,9 @@ import catalogRouter from './routes/projects/catalog';
 // 多模态记忆库 — createMemoryBankRouter()，router 内部自带 10mb parser，
 // 必须挂在全局 1mb parser（:106）之前，否则 >1mb 文本入库请求被 413 挡掉。
 import { createMemoryBankRouter } from './memory-bank/routes';
+// 单后端迁移第三批（2026-11-18）— settings 缺口端点 + sessions
+import settingsExtRouter from './routes/system/settings-ext';
+import sessionsRouter from './routes/runs/sessions';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
 import asrRouter from './routes/system/asr';
@@ -170,6 +173,13 @@ app.use('/api/design-systems', designSystemsRouter);
 app.use('/api/export', exportRouter);
 // Story 15.9 — generation overrides discovery (env-locked model surface).
 app.use('/api/settings', settingsRouter);
+// 单后端迁移第三批 — settings 缺口端点（agents/detect·selection、composio、
+// pets、byok/media DELETE 老协议）。必须挂在 settingsRouter **之后**：
+// /appearance /byok /byok/models /media /preferences 已覆盖路径先被旧 router
+// 吃掉，ext 只接新形状端点，避免路由冲突。
+app.use('/api/settings', settingsExtRouter);
+// sessions（context/report/checkpoint，存储为进程内 TTL Map，与 Python 同构）
+app.use('/api/sessions', sessionsRouter);
 // Story 15.19 v2 — Local CLI auto-discovery + spawn bridge.
 app.use('/api/cli', cliRouter);
 // ClawHub（2026-06）— Claw 安装会话（POST 建会话 + GET SSE 日志流 + cancel）。
