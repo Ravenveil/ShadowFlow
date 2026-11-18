@@ -247,6 +247,12 @@ app.use('/api', templatesRouter);
 if (groupsBackendEnv() === 'node') {
   app.use('/api', inboxRouter);
 }
+// impl-c teams 域补挂（2026-11-09）：teams-store.ts 的完整 CRUD（GET / + /:id +
+// PATCH/DELETE + workflow/policy/validation-hooks/versions/branch/restore/chat）
+// 交付时未接线。挂载顺序在 teamsRouter（DAG/plan 子集）之后即可——两者路径不
+// 冲突（teams.ts 只有 /:id/dag* 与 /:id/plan*）。
+import teamsStoreRouter from './routes/agents/teams-store';
+app.use('/api/teams', teamsStoreRouter);
 // 单后端迁移收尾 — catalog 双前缀挂载（对齐 Python server.py:262-265）：
 // Python 端 APIRouter(prefix="/catalog") 挂了两份，裸 /catalog 保持原路径，
 // /api/catalog 是给前端 Node 网关的别名。Node 版 router 内部路径为 /apps，
