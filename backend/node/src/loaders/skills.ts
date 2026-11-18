@@ -14,6 +14,12 @@
  */
 
 import { composeMultiTurnPrompt } from '../prompts';
+// 2026-11-09 — 静态 import 替代原懒 require('./skill-loader')（见 reloadSkills 内注释）。
+// ESM 循环环安全：skill-loader 对本模块的运行时引用只有 inferKind（hoisted）。
+import {
+  loadFsSkills,
+  warmCompileCache,
+} from './skill-loader';
 
 export type SkillMode = 'blueprint' | 'prototype' | 'report';
 export type PreviewType = 'yaml' | 'html' | 'markdown';
@@ -288,16 +294,18 @@ export function reloadSkills(): {
   reloaded: number;
   errors: Array<{ id: string; message: string }>;
 } {
-  // Lazy-require avoids a circular import at module init time
-  // (skill-loader imports SkillDefinition type from this file).
-  const loader = require('./skill-loader') as typeof import('./skill-loader');
-  const { loaded, errors } = loader.loadFsSkills(Object.keys(HARDCODED_SKILLS));
+  // 2026-11-09 — 原懒 require('./skill-loader') 在 vitest ESM 转换下不存在
+  //（任何 import index.ts 的测试都会在 reloadSkills() 炸 "Cannot find module"，
+  // createRequire(import.meta.url) 同样解析不了虚拟转换产物）。改为静态 import：
+  // skill-loader 只在函数体内用本模块的 inferKind（hoisted function decl）+
+  // 类型（零运行时），ESM 循环环在函数内取值安全，加载期无 TDZ 风险。
+  const { loaded, errors } = loadFsSkills(Object.keys(HARDCODED_SKILLS));
   SKILLS = { ...HARDCODED_SKILLS, ...loaded };
   // Round 4 PR-C: fire-and-forget compile cache warmer. Boot is never
   // blocked by the LLM compile pass; the assembler also handles cache
   // misses on demand, so this is a latency optimisation only.
   try {
-    loader.warmCompileCache(loaded);
+    warmCompileCache(loaded);
   } catch (err) {
     console.warn(`[skill-loader] warmCompileCache failed: ${(err as Error).message ?? err}`);
   }

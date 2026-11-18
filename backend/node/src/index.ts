@@ -39,6 +39,11 @@ import messageFeedbackRouter from './routes/groups/message-feedback';
 import workspacesRouter from './routes/projects/workspaces';
 import templatesRouter from './routes/system/templates';
 import inboxRouter from './routes/groups/inbox';
+// 单后端迁移收尾 — catalog（/catalog + /api/catalog 双前缀，对齐 Python server.py:262-265）
+import catalogRouter from './routes/projects/catalog';
+// 多模态记忆库 — createMemoryBankRouter()，router 内部自带 10mb parser，
+// 必须挂在全局 1mb parser（:106）之前，否则 >1mb 文本入库请求被 413 挡掉。
+import { createMemoryBankRouter } from './memory-bank/routes';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
 import asrRouter from './routes/system/asr';
@@ -102,6 +107,11 @@ app.use(cors({
   origin: [...FRONTEND_ORIGINS, 'http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
 }));
+
+// 多模态记忆库（2026-11-09 挂载）— /api/memory-bank/*。必须在全局 express.json
+// 之前挂载：router 内部自挂 10mb parser，若全局 1mb parser 先命中会直接 413。
+// 路由文件同时被 legacy 与 single 使用（功能已全量迁移），无条件挂载。
+app.use('/api/memory-bank', createMemoryBankRouter());
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -237,6 +247,13 @@ app.use('/api', templatesRouter);
 if (groupsBackendEnv() === 'node') {
   app.use('/api', inboxRouter);
 }
+// 单后端迁移收尾 — catalog 双前缀挂载（对齐 Python server.py:262-265）：
+// Python 端 APIRouter(prefix="/catalog") 挂了两份，裸 /catalog 保持原路径，
+// /api/catalog 是给前端 Node 网关的别名。Node 版 router 内部路径为 /apps，
+// 这里同样双挂保证 legacy 前端直连 /catalog/* 与 single 前端走 /api/catalog/*
+// 两种路径都通。共享仓库根 JSON，legacy↔single 数据兼容，无条件挂载。
+app.use('/catalog', catalogRouter);
+app.use('/api/catalog', catalogRouter);
 
 // /api/groups — formerly a placeholder stub that returned synthetic IDs and
 // empty arrays. Removed 2026-05-19 so groups requests fall through to the
