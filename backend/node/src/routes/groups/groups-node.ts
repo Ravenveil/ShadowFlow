@@ -23,6 +23,7 @@
  *   - patch    → { data: record, meta: {} }
  *   - messages GET → { group_id, messages:[MessageItem] }（裸，无 envelope）
  *   - messages POST → 201 MessageItem（裸）
+ *   - thread     → _envelope({ source_message, replies }, { count })
  *   - reactions → _envelope({ message_id, reactions })
  *   - pin       → _envelope({ message_id, pinned })
  *   - user-settings GET/PUT → _envelope(setting)
@@ -394,6 +395,37 @@ router.post('/:id/messages/:mid/pin', (req: Request, res: Response) => {
     return;
   }
   res.json(envelope({ message_id: req.params.mid, pinned }));
+});
+
+// ── GET /api/groups/:id/messages/:mid/thread — 线程视图（第三批迁移） ─────────
+// 对齐 python groups.py:1100 get_message_thread：404 GROUP_NOT_FOUND /
+// MESSAGE_NOT_FOUND 用 detail.error 信封；命中回
+// { data: { source_message, replies }, meta: { count: len(replies) } }。
+// replies = reply_to === message_id 的消息，按持久化顺序（store 已按 timestamp ASC）。
+
+router.get('/:id/messages/:mid/thread', (req: Request, res: Response) => {
+  const rec = store.getGroup(req.params.id);
+  if (!rec) {
+    groupNotFound(res, req.params.id);
+    return;
+  }
+  const messages = store.listGroupMessages(req.params.id);
+  const source = messages.find((m) => m.message_id === req.params.mid);
+  if (!source) {
+    // python: f"Message {message_id!r} not found in group {group_id!r}"（比通用
+    // helper 的措辞多 in group 段，逐字对齐不用通用 messageNotFound）。
+    res.status(404).json({
+      detail: {
+        error: {
+          code: 'MESSAGE_NOT_FOUND',
+          message: `Message '${req.params.mid}' not found in group '${req.params.id}'`,
+        },
+      },
+    });
+    return;
+  }
+  const replies = messages.filter((m) => m.reply_to === req.params.mid);
+  res.json(envelope({ source_message: source, replies }, { count: replies.length }));
 });
 
 // ── GET/PUT /api/groups/:id/user-settings ─────────────────────────────────────
