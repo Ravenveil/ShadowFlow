@@ -64,6 +64,12 @@ import conversationsRouter, {
 } from './routes/projects/conversations';
 import authRouter from './routes/system/auth';
 import { proxyFallback } from './proxy-fallback';
+import {
+  getBackendMode,
+  groupsBackendEnv,
+  shouldMountProxyFallback,
+} from './config/backend-mode';
+import { installSingleBackendGapHandler } from './config/backend-gap';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
 import { sweepOrphanHops } from './storage/agent-hops';
@@ -186,10 +192,10 @@ app.use('/api/groups', groupsChatRouter);
 // GET /:id/timeline 仍先被网关拦截跑回复/聚合），proxyFallback **之前**。仅
 // SF_GROUPS_BACKEND==='node' 时挂载；默认（python/未设）不挂 → /api/groups/* 仍
 // 经 proxyFallback 转 Python，行为零变化。DM resolve 在 /api/chat/* 下单独挂。
-if (process.env.SF_GROUPS_BACKEND === 'node') {
+if (groupsBackendEnv() === 'node') {
   app.use('/api/groups', groupsNodeRouter);
   app.post('/api/chat/dm/:agent_id/resolve', handleDmResolve);
-  console.log('[groups] SF_GROUPS_BACKEND=node — /api/groups served by Node SQLite store');
+  console.log('[groups] groups backend=node — /api/groups served by Node SQLite store');
 }
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
 // 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
@@ -220,7 +226,18 @@ app.use('/api/actions', actionsRouter);
 // Single-port UX: any /api/* not matched by the 12 Node routers above is
 // transparently proxied to the Python backend. Mounted BEFORE the 404 catch-all
 // so unmatched /api/* paths reach Python instead of returning a Node 404.
-app.use('/api', proxyFallback);
+//
+// 单后端迁移（第一批）：SF_BACKEND_MODE=single 时不挂 proxyFallback，改挂 gap
+// handler——对未迁移端点返回结构化 404 并计数，暴露 /health/backend-gaps。
+// legacy（默认）行为完全不变。
+if (shouldMountProxyFallback()) {
+  app.use('/api', proxyFallback);
+} else {
+  const installed = installSingleBackendGapHandler(app);
+  console.log(
+    `[backend] mode=single — proxyFallback disabled, gap handler installed=${installed}`,
+  );
+}
 
 // ── Static artifacts (Story 15.2) ─────────────────────────────────────────────
 // Serves files written by runSkillAssembler under .shadowflow/projects/<id>/

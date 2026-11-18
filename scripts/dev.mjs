@@ -14,6 +14,10 @@
  * (SF_PYTHON 环境变量 > 根目录 .venv > 系统 python)。
  *
  * 可选参数:--no-open 不开浏览器;--no-python 只起网关+前端。
+ *
+ * 单后端（2026-11-18）：设 SF_BACKEND_MODE=single 时不拉起 Python，网关只跑
+ * Node（groups 自动走 Node SQLite）。未迁移端点返回结构化 BACKEND_GAP 404,
+ * 访问 http://localhost:8002/health/backend-gaps 看剩余清单。
  */
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -31,7 +35,9 @@ const PY_PORT = 8000;
 
 const args = new Set(process.argv.slice(2));
 const OPEN_BROWSER = !args.has('--no-open');
-const WITH_PYTHON = !args.has('--no-python');
+const SINGLE_BACKEND = (process.env.SF_BACKEND_MODE ?? '').trim().toLowerCase() === 'single';
+// single 模式不启 Python；--no-python 仍可单独用于 legacy 调试。
+const WITH_PYTHON = !args.has('--no-python') && !SINGLE_BACKEND;
 
 const C = {
   py: '\x1b[34m', // blue
@@ -275,6 +281,7 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
   ────────────────────────────────────────────
   ${C.cyan}UI${C.reset}      ${uiUrl}
   ${C.cyan}网关${C.reset}    http://localhost:${GW_PORT}/health
+  ${C.cyan}模式${C.reset}    ${SINGLE_BACKEND ? `${C.green}单后端 (SF_BACKEND_MODE=single)${C.reset}` : `${C.dim}双后端 legacy${C.reset}`}${SINGLE_BACKEND ? `\n  ${C.dim}剩余缺口: http://localhost:${GW_PORT}/health/backend-gaps${C.reset}` : ''}
   ${withPython ? `${C.cyan}Python${C.reset}  http://localhost:${PY_PORT}/docs` : `${C.dim}Python  已跳过${C.reset}`}
   ${C.dim}Ctrl+C 停止全部服务${C.reset}
 `);
