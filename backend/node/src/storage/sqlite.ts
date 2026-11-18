@@ -214,16 +214,19 @@ export function getDb(): Database.Database {
     duration_ms INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage(ts);
-  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);
-  CREATE INDEX IF NOT EXISTS idx_token_usage_run ON token_usage(run_id);
-  CREATE INDEX IF NOT EXISTS idx_token_usage_agent ON token_usage(agent_id);`);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_session ON token_usage(session_id);`);
   // 成本追踪断点清零（2026-11-07，T12/BE-07）— 旧库（2026-11-05 建表，无归属
   // 四列）走 ALTER 补列；新库 DDL 已全列，此处幂等跳过。必须放在上面建表
   // 之后（否则旧库缺席、新库表未建时 ALTER 直接炸 no such table）。
+  // 注意顺序：run/agent 两个索引依赖补列后的列，必须排在 addColumnIfMissing
+  // 之后——CREATE INDEX 的列名解析在执行前完成，旧库缺列时先建索引会直接
+  // 抛 no such column: run_id（2026-11-18 单后端迁移测试实证）。
   addColumnIfMissing(db, 'token_usage', 'run_id', 'TEXT');
   addColumnIfMissing(db, 'token_usage', 'agent_id', 'TEXT');
   addColumnIfMissing(db, 'token_usage', 'project_id', 'TEXT');
   addColumnIfMissing(db, 'token_usage', 'duration_ms', 'INTEGER');
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_token_usage_run ON token_usage(run_id);
+  CREATE INDEX IF NOT EXISTS idx_token_usage_agent ON token_usage(agent_id);`);
 
   // 记忆交接 + 长期画像写回（2026-11-05，功能线③ OPC-OS PR#3 设计的另一半）—
   // 纯增量表，不动 memory_lessons / agent_hops 的既有语义。交接副本单独存
@@ -306,6 +309,25 @@ export function getDb(): Database.Database {
     UNIQUE(run_id, seq)
   );
   CREATE INDEX IF NOT EXISTS idx_run_artifacts_run ON run_artifacts(run_id, seq);`);
+
+  // 单后端迁移·记忆配置（移植自 python shadowflow/memory/memory_profile.py +
+  // api/memory/memory.py 的 _profiles 纯内存 dict——进程重启即丢、无历史数据，
+  // 故直接建新表、无数据迁移）。storage/memory-profile-configs.ts 提供 CRUD，
+  // routes/memory/memory-profiles.ts 挂 /api/memory/profiles*。
+  // 时间列用 TEXT（ISO-8601），与 Python datetime.isoformat() 语义对齐；
+  // 列表按 updated_at 倒序（memory.py list_profiles 同口径）。
+  db.exec(`CREATE TABLE IF NOT EXISTS memory_profile_configs (
+    profile_id TEXT PRIMARY KEY,
+    working_memory_limit INTEGER NOT NULL DEFAULT 4096,
+    episodic_retention_days INTEGER NOT NULL DEFAULT 30,
+    semantic_retrieval_top_k INTEGER NOT NULL DEFAULT 5,
+    compression_top_k INTEGER NOT NULL DEFAULT 10,
+    writeback_policy TEXT NOT NULL DEFAULT 'on_task_complete',
+    state_sync_policy TEXT NOT NULL DEFAULT 'lazy',
+    compression_policy TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );`);
 
   _db = db;
   _initialized = true;
