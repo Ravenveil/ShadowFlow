@@ -47,6 +47,10 @@ import { createMemoryBankRouter } from './memory-bank/routes';
 // 单后端迁移第三批（2026-11-18）— settings 缺口端点 + sessions
 import settingsExtRouter from './routes/system/settings-ext';
 import sessionsRouter from './routes/runs/sessions';
+// 单后端迁移第三批 — memory state stub + agent state（裸 /state 前缀）
+import memoryStateRouter from './routes/memory/memory-state';
+import agentStateRouter from './routes/agents/agent-state';
+import memoryProfilesRouter from './routes/memory/memory-profiles';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
 import asrRouter from './routes/system/asr';
@@ -198,6 +202,16 @@ app.use('/api/memory-entries', memoryEntriesRouter);
 // 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂在 proxyFallback 之前。
 app.use('/api/memory/lessons', memoryLessonsRouter);
 app.use('/api/memory/handoff', memoryHandoffRouter);
+// 单后端迁移第三批（d7ad88ec）— memory state stub（与 memory/handoff 同前缀
+// 串联，路径不相交）。
+// batch2 遗留补挂（impl-b ebf29d3e 交付、此前漏接线）：memory profiles CRUD。
+// 挂在 memoryStateRouter 之前——profiles 是完整实现，state 是 stub，
+// 两者路径不相交（/profiles* vs /state/*），顺序仅作语义声明。
+app.use('/api/memory', memoryProfilesRouter);
+app.use('/api/memory', memoryStateRouter);
+// agent state（impl-b d7ad88ec）— 裸 /state 前缀：Python state.py APIRouter 无
+// prefix、server.py:271 裸挂载，SDK/前端调的就是 /state/...，挂 /api/state 会全 404。
+app.use('/state', agentStateRouter);
 app.use('/api/dashboard', dashboardRouter);
 // 功能线① 商家商业化数据（订单分时 / 客流 / 第一单链路），挂 proxyFallback 之前
 app.use('/api/merchant', merchantBoardRouter);
