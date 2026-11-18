@@ -44,12 +44,11 @@ import {
 } from '../../lib/plan-gate';
 import { resolveProviderKey } from '../../transport/byokKey';
 import { isProviderId, PROVIDER_IDS, type ProviderId } from '../../transport/api-clients';
+import { listLocalAgentSummaries } from '../../storage/teams-store';
 
 const router = Router();
 
 const VALID_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
-
-const PYTHON_BASE = process.env.PYTHON_BACKEND_URL ?? 'http://localhost:8000';
 
 // Mirror of the path resolution in team-yaml.ts. Kept local because the
 // writer needs the same precedence (root wins over local) when picking
@@ -249,27 +248,20 @@ router.post('/:id/dag/validate', (req: Request, res: Response) => {
 // { nodes, edges }；D1/D2 校验不合法则回喂错误让模型重试一次，仍不合法 → 422；
 // LLM 自身失败 → 502。前端 TeamDagEditor「AI 生成草稿」消费。
 
-/** 解析 roster：Python agent 库优先，yaml 模板兜底；找不到的 id 原样带出。 */
+/** 解析 roster：本地 agent 库（json + yaml 模板），找不到的 id 原样带出。
+ *
+ * 2026-11-xx 单后端迁移：此前优先打 ${PYTHON_BASE}/api/agents 取 roster；
+ * single 模式下没有 Python 进程，改为读本地 agent 库——
+ * storage/teams-store.listLocalAgentSummaries() 扫 repoDataFile('agents')
+ * 下 *.json（Python 的 agent store 读的就是同一目录，legacy 模式下两边
+ * 同源等价），再并入 yaml 模板兜底。legacy 模式行为不受影响（此前 Python
+ * 不可达时也走这批本地兜底）。 */
 async function resolveDraftRoster(agentIds: string[]): Promise<DagDraftAgent[]> {
   const wanted = new Set(agentIds);
   const found = new Map<string, DagDraftAgent>();
-  try {
-    const pyRes = await fetch(`${PYTHON_BASE}/api/agents`);
-    if (pyRes.ok) {
-      const env = (await pyRes.json()) as {
-        data?: Array<{ agent_id?: unknown; name?: unknown; soul?: unknown }>;
-      };
-      for (const a of env.data ?? []) {
-        if (typeof a.agent_id !== 'string' || !wanted.has(a.agent_id)) continue;
-        found.set(a.agent_id, {
-          id: a.agent_id,
-          name: typeof a.name === 'string' && a.name ? a.name : a.agent_id,
-          role: typeof a.soul === 'string' ? a.soul : undefined,
-        });
-      }
-    }
-  } catch {
-    /* Python 不可达 — 退到 yaml 模板 + 裸 id */
+  for (const a of listLocalAgentSummaries()) {
+    if (!wanted.has(a.id) || found.has(a.id)) continue;
+    found.set(a.id, { id: a.id, name: a.name, role: a.role });
   }
   try {
     for (const a of listYamlAgents().agents) {
