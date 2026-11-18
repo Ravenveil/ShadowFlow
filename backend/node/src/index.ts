@@ -50,6 +50,8 @@ import sessionsRouter from './routes/runs/sessions';
 // 单后端迁移第三批 — schedules 5 端点 + 调度引擎（sched-impl 4ae8bdca）
 import schedulesRouter from './routes/runs/schedules';
 import { startSchedulerEngine } from './scheduler/engine';
+// 单后端迁移第三批 — opc 全域 31 端点（opc-impl 77841b05）
+import opcRouter from './routes/opc/opc';
 // 单后端迁移第三批 — memory state stub + agent state（裸 /state 前缀）
 import memoryStateRouter from './routes/memory/memory-state';
 import agentStateRouter from './routes/agents/agent-state';
@@ -194,6 +196,13 @@ app.use('/api/sessions', sessionsRouter);
 if (!shouldMountProxyFallback()) {
   app.use('/api/schedules', schedulesRouter);
   startSchedulerEngine();
+}
+// opc（opc-impl 77841b05）— 单路由覆盖全部 31 条端点（router 内部路径不含
+// /api/opc 前缀）。独立 opc.sqlite 与 Python 同一物理文件，legacy↔single 数据
+// 兼容；与 schedules 不同，无轮询引擎无双跑风险，但为保持「legacy 语义零变化」
+// 原则（/api/opc 继续转 Python），同样条件挂载。
+if (!shouldMountProxyFallback()) {
+  app.use('/api/opc', opcRouter);
 }
 // Story 15.19 v2 — Local CLI auto-discovery + spawn bridge.
 app.use('/api/cli', cliRouter);
