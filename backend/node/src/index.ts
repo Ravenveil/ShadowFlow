@@ -47,6 +47,9 @@ import { createMemoryBankRouter } from './memory-bank/routes';
 // 单后端迁移第三批（2026-11-18）— settings 缺口端点 + sessions
 import settingsExtRouter from './routes/system/settings-ext';
 import sessionsRouter from './routes/runs/sessions';
+// 单后端迁移第三批 — schedules 5 端点 + 调度引擎（sched-impl 4ae8bdca）
+import schedulesRouter from './routes/runs/schedules';
+import { startSchedulerEngine } from './scheduler/engine';
 // 单后端迁移第三批 — memory state stub + agent state（裸 /state 前缀）
 import memoryStateRouter from './routes/memory/memory-state';
 import agentStateRouter from './routes/agents/agent-state';
@@ -184,6 +187,14 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/settings', settingsExtRouter);
 // sessions（context/report/checkpoint，存储为进程内 TTL Map，与 Python 同构）
 app.use('/api/sessions', sessionsRouter);
+// schedules（sched-impl 4ae8bdca）— 条件挂载：仅 single 模式由 Node 接管并
+// 启动轮询引擎（30s 磁盘轮询 .shadowflow/schedules/，与 Python APScheduler
+// 同一数据目录）。legacy 下不挂路由不启引擎，/api/schedules 继续转 Python，
+// 避免双后端同时轮询同一目录双触发。
+if (!shouldMountProxyFallback()) {
+  app.use('/api/schedules', schedulesRouter);
+  startSchedulerEngine();
+}
 // Story 15.19 v2 — Local CLI auto-discovery + spawn bridge.
 app.use('/api/cli', cliRouter);
 // ClawHub（2026-06）— Claw 安装会话（POST 建会话 + GET SSE 日志流 + cancel）。
