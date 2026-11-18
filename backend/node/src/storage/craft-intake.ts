@@ -26,6 +26,7 @@ import {
 import { getSetting } from './settings';
 import { parseCraftMarkers, type CraftAction, type CraftTag } from '../lib/craft-markers';
 import { PYTHON_BACKEND_URL } from '../python-backend';
+import { isSingleBackend } from '../config/backend-mode';
 
 /** 团队 setup 写入的 settings key（craft-team-setup.ts 同用）。 */
 export const CRAFT_TEAM_KEY = 'craft_profit.team';
@@ -175,6 +176,11 @@ export function applyCraftMarkers(
 }
 
 // ── ② 产品资料自动同步记忆库（fail-soft）────────────────────────────────────
+//
+// 单后端迁移（2026-11-18）：不再硬编码 Python URL。分流与 lib/memory-bank.ts 同
+// 规则：single / SF_MEMORY_BANK_MODE=node → 直调本地 memory-bank service；
+// =python → 原 HTTP；auto（默认）→ 本地优先、失败回退 HTTP。
+// fail-soft 契约不变：记忆库整体不可用 → 返回 null，绝不阻塞聊天链路。
 
 let packCache: string | null = null;
 
@@ -182,7 +188,62 @@ interface Envelope<T> {
   data?: T;
 }
 
+function memoryBankDispatch(): 'node' | 'python' | 'auto' {
+  const raw = (process.env.SF_MEMORY_BANK_MODE ?? '').trim().toLowerCase();
+  if (raw === 'node' || raw === 'python' || raw === 'auto') return raw;
+  return 'auto';
+}
+
+/** 本地实现：listPacks → ensure → ingestText。异常向上抛给 kbFetch 的 fail-soft。 */
+async function localEnsureCraftPackId(): Promise<string> {
+  const { listPacks, createPack } = await import('../memory-bank/service');
+  const hit = listPacks().find((p) => p.name === CRAFT_PACK_NAME);
+  if (hit?.pack_id) return hit.pack_id;
+  const created = createPack(
+    CRAFT_PACK_NAME,
+    '残障伙伴手工艺品代卖：产品介绍、图片/文档说明、定价与卖点',
+  );
+  return created.pack_id;
+}
+
+async function localIngestText(packId: string, text: string, sourceName: string): Promise<void> {
+  const { ingestTextTyped } = await import('../memory-bank/service');
+  ingestTextTyped(packId, text, { source_name: sourceName, deduplicate: true });
+}
+
 async function kbFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const mode = memoryBankDispatch();
+  const single = isSingleBackend();
+  const tryLocal = mode !== 'python';
+  const tryHttp = mode === 'python' || (mode === 'auto' && !single);
+  if (tryLocal) {
+    try {
+      if (path === '/api/memory-bank/packs' && (!init?.method || init.method === 'GET')) {
+        const { listPacks } = await import('../memory-bank/service');
+        return { packs: listPacks().map((p) => ({ pack_id: p.pack_id, name: p.name })) } as unknown as T;
+      }
+      if (path === '/api/memory-bank/packs' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body ?? '{}')) as { name?: string; description?: string };
+        const { createPack } = await import('../memory-bank/service');
+        const manifest = createPack(body.name ?? CRAFT_PACK_NAME, body.description ?? '');
+        return { pack_id: manifest.pack_id } as unknown as T;
+      }
+      const m = /^\/api\/memory-bank\/packs\/([a-f0-9]{32})\/text$/.exec(path);
+      if (m && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body ?? '{}')) as {
+          text?: string;
+          source_name?: string;
+        };
+        localIngestText(m[1], body.text ?? '', body.source_name || '产品资料.txt');
+        return {} as T;
+      }
+      // 未识别的本地路径：抛错走回退
+      throw new Error(`local path not supported: ${path}`);
+    } catch {
+      if (!tryHttp) return null; // node 模式 / single：无回退
+      // auto：掉到 HTTP
+    }
+  }
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), KB_TIMEOUT_MS);

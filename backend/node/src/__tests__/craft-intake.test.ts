@@ -40,7 +40,14 @@ beforeAll(async () => {
   profit.listProducts(); // 触发 cp_* 懒建表
 });
 
-afterAll(() => {
+afterAll(async () => {
+  // node 模式用例会打开 memory_bank.sqlite 句柄——不关则 Windows 下删临时目录 EBUSY
+  try {
+    const mbDb = await import('../memory-bank/db');
+    mbDb.closeAll();
+  } catch {
+    /* node 模式用例未跑到时无句柄 */
+  }
   sqlite._resetForTests();
   process.chdir(origCwd);
   rmSync(tmp, { recursive: true, force: true });
@@ -189,6 +196,12 @@ describe('applyCraftMarkers — 流程动作透传（build-team/dispatch）', ()
 });
 
 describe('ingestProductMaterial — 产品资料自动同步知识库', () => {
+  // 单后端迁移（2026-11-18）：kbFetch 默认 auto 会先走本地 service（不经过
+  // fetch）。这组测试验证的是 HTTP 回退路径契约 → 显式 python 模式。
+  beforeEach(() => {
+    process.env.SF_MEMORY_BANK_MODE = 'python';
+  });
+
   function stubKb(log: string[]) {
     let packCreated = false;
     vi.stubGlobal(
@@ -244,5 +257,20 @@ describe('ingestProductMaterial — 产品资料自动同步知识库', () => {
       throw new Error('ECONNREFUSED');
     }));
     expect(await intake.ingestProductMaterial('这是一段足够长的产品介绍文本，同步失败也不该抛错。')).toBeNull();
+  });
+
+  it('SF_MEMORY_BANK_MODE=node → 直调本地 service，零 fetch（不落 HTTP）', async () => {
+    process.env.SF_MEMORY_BANK_MODE = 'node';
+    intake._resetCraftPackCache();
+    const fetchSpy = vi.fn(async () => {
+      throw new Error('should not be called in node mode');
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const p = await intake.ingestProductMaterial('本地模式直调测试：手工藤编收纳篮，天然材质纯手工编织。');
+    expect(p).toBeTruthy();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // 本地 pack 真实落库（repoDataFile('knowledge') 下可查）
+    const { listPacks } = await import('../memory-bank/service');
+    expect(listPacks().some((pk) => pk.name === intake.CRAFT_PACK_NAME)).toBe(true);
   });
 });
