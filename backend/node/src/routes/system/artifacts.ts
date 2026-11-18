@@ -14,8 +14,31 @@
 
 import { Router, Request, Response } from 'express';
 import { runLint } from '../../quality/lint';
+import { togglePin, isValidArtifactId } from '../../storage/artifact-pins';
 
 const router = Router();
+
+// 单后端迁移：POST /api/artifacts/:id/pin（移植自 Python runs/artifacts.py）
+// toggle 置顶，存 <repo>/.shadowflow/artifacts/artifact_pins.json。
+// 放在 /lint 之前，路径不冲突（/lint 是字面量，/:id/pin 需两段）。
+router.post('/:artifactId/pin', (req: Request, res: Response) => {
+  const { artifactId } = req.params;
+  if (!isValidArtifactId(artifactId)) {
+    res.status(400).json({
+      error: { code: 'INVALID_ARTIFACT_ID', message: 'Invalid artifact_id format' },
+    });
+    return;
+  }
+  const pinnedAt = togglePin(artifactId);
+  res.status(200).json({
+    data: {
+      artifact_id: artifactId,
+      pinned: pinnedAt !== null,
+      pinned_at: pinnedAt,
+    },
+    meta: {},
+  });
+});
 
 router.post('/lint', (req: Request, res: Response) => {
   const body = (req.body ?? {}) as { session_id?: unknown; filename?: unknown; type?: unknown };

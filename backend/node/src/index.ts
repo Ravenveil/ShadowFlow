@@ -30,8 +30,11 @@ import { groupsChatRouter } from './routes/groups/groups-chat';
 import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/system/fs-browse';
-// Story 15.14 — POST /api/artifacts/lint
+// Story 15.14 — POST /api/artifacts/lint（+ 单后端迁移：/:id/pin）
 import artifactsRouter from './routes/system/artifacts';
+// 单后端迁移第一批 — 三个纯 JSON 端点（移植自 Python，读仓库根 .shadowflow）
+import walletRouter from './routes/system/wallet';
+import messageFeedbackRouter from './routes/groups/message-feedback';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
 import asrRouter from './routes/system/asr';
@@ -213,6 +216,13 @@ app.use('/api/asr', asrRouter);
 // block）、执行后记 action-journal；同挂 proxyFallback 之前。
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/actions', actionsRouter);
+// 单后端迁移第一批 — 纯 JSON 端点接管（必须在 proxyFallback/gap 之前）：
+//   /api/wallet/{status,activity,skin-pack}  ← Python system/wallet.py
+//   /api/messages/:mid/feedback (GET+POST)   ← Python groups.py L1 feedback 段
+//   /api/artifacts/:id/pin                   ← Python runs/artifacts.py（已并入 artifactsRouter）
+// 三者与 Python 共享 <repo>/.shadowflow 下同一份 JSON，legacy↔single 数据兼容。
+app.use('/api/wallet', walletRouter);
+app.use('/api/messages', messageFeedbackRouter);
 
 // /api/groups — formerly a placeholder stub that returned synthetic IDs and
 // empty arrays. Removed 2026-05-19 so groups requests fall through to the
