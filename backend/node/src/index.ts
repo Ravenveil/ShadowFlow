@@ -35,6 +35,10 @@ import artifactsRouter from './routes/system/artifacts';
 // 单后端迁移第一批 — 三个纯 JSON 端点（移植自 Python，读仓库根 .shadowflow）
 import walletRouter from './routes/system/wallet';
 import messageFeedbackRouter from './routes/groups/message-feedback';
+// 单后端迁移第二批 — workspaces（纯 JSON）/ templates（共享 yaml）/ inbox（sqlite）
+import workspacesRouter from './routes/projects/workspaces';
+import templatesRouter from './routes/system/templates';
+import inboxRouter from './routes/groups/inbox';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
 import asrRouter from './routes/system/asr';
@@ -223,6 +227,16 @@ app.use('/api/actions', actionsRouter);
 // 三者与 Python 共享 <repo>/.shadowflow 下同一份 JSON，legacy↔single 数据兼容。
 app.use('/api/wallet', walletRouter);
 app.use('/api/messages', messageFeedbackRouter);
+// 单后端迁移第二批（挂载裁决）：
+//   /api/workspaces — 仓库根 .shadowflow/workspaces/*.json 与 Python 同源 → 无条件挂
+//   /api/templates{,/:id/inbox} — 共享 templates/*.yaml → 无条件挂
+//   /api/inbox — 聚合 sqlite 群/agent 数据 → 仅 node 后端时挂（single 强制 node）
+// briefboard 并入 groups-node.ts（随 /api/groups 条件挂载，本文件无需改动）。
+app.use('/api/workspaces', workspacesRouter);
+app.use('/api', templatesRouter);
+if (groupsBackendEnv() === 'node') {
+  app.use('/api', inboxRouter);
+}
 
 // /api/groups — formerly a placeholder stub that returned synthetic IDs and
 // empty arrays. Removed 2026-05-19 so groups requests fall through to the

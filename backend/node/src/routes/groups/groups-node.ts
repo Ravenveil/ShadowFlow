@@ -513,5 +513,26 @@ router.get('/:id/events', (req: Request, res: Response) => {
   });
 });
 
+// ── GET /api/groups/:id/briefboard — per-day agent output feed ────────────────
+// 移植 python groups.py:442 get_group_briefboard。Python 数据源是 runtime
+// service 的**内存 run store**（进程内 Steps，重启即清）；Node 侧没有对应
+// in-memory store——单后端下 run 产物的步骤流归 run-event-store/下一步批次，
+// 这里先对齐行为契约：群 404（裸 detail 字符串——python groups.py:454 同款，
+// 不是 detail.error 信封），命中时回 { data: { date, entries: [] } }。
+router.get('/:id/briefboard', (req: Request, res: Response) => {
+  const rec = store.getGroup(req.params.id);
+  if (!rec) {
+    // 注意：python groups.py:454 抛 HTTPException(status_code=404, detail=f"...")——
+    // FastAPI 序列化为 {"detail": "Group not found: <id>"}，裸字符串非 error 信封。
+    res.status(404).json({ detail: `Group not found: ${req.params.id}` });
+    return;
+  }
+  const date =
+    typeof req.query.date === 'string' && req.query.date
+      ? req.query.date
+      : new Date().toISOString().slice(0, 10);
+  res.json(envelope({ date, entries: [] }));
+});
+
 export { router as groupsNodeRouter };
 export default router;
