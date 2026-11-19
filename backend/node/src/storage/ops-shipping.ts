@@ -27,6 +27,18 @@ import {
   type ShipReceipt,
   type TrackReceipt,
 } from '../lib/shipping';
+// 纯规则已迁至 domains/commerce/shipping-model.ts（状态机/收件校验/去重键，可独立单测）；
+// 本文件保留 DDL/SQL/适配器调用与装配，导出名原样保留。
+import {
+  alreadyShipped,
+  canAdvanceTracking,
+  checkReceiver,
+  checkWeight,
+  eventKey,
+  normalizeMode,
+  RANK,
+  trimTo,
+} from '../domains/commerce/shipping-model';
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS ops_shipments (
@@ -112,8 +124,8 @@ export interface ShipEventRow {
   created_at: number;
 }
 
-/** 状态推进次序（failed 不参与比较，单独处理）。 */
-const RANK: Record<string, number> = { pending: 0, shipped: 1, in_transit: 2, delivered: 3 };
+/** 状态推进次序（failed 不参与比较）——单一真源在 shipping-model，此处仅转出兼容。 */
+export { RANK };
 
 function appendEvent(
   conn: Database.Database,
@@ -130,8 +142,15 @@ function appendEvent(
     .run(randomUUID(), shipmentId, status, note, at);
 }
 
-function text(v: unknown, max: number): string {
-  return typeof v === 'string' ? v.trim().slice(0, max) : '';
+/** 文本截断委托 domain model（非字符串当空串）。 */
+const text = trimTo;
+
+/** 领域规则失败 → 原 HTTP 错误类（保持路由与既有调用方的错误语义）。 */
+function raiseRule(
+  r: { ok: false; code: string; message: string },
+  status = 400,
+): never {
+  throw new OpsShipError(status, r.code, r.message);
 }
 
 // ── 运单 ──────────────────────────────────────────────────────────────────────
@@ -156,20 +175,15 @@ export function createShipment(input: CreateShipmentInput): ShipmentRow {
   const receiverName = text(input.receiver_name, 64);
   const receiverPhone = text(input.receiver_phone, 32);
   const receiverAddress = text(input.receiver_address, 512);
-  if (!receiverName) {
-    throw new OpsShipError(400, 'INVALID_RECEIVER_NAME', '收件人姓名不能为空');
-  }
   // 只做「像不像号码」的粗校验：真实号码格式各国各异，过严会把海外件挡在门外。
-  if (receiverPhone.replace(/[^0-9]/g, '').length < 6) {
-    throw new OpsShipError(400, 'INVALID_RECEIVER_PHONE', '收件人电话至少 6 位数字');
-  }
-  if (receiverAddress.length < 6) {
-    throw new OpsShipError(400, 'INVALID_RECEIVER_ADDRESS', '收件地址过短，无法寄达');
-  }
-  const weight = Number(input.weight_grams ?? 0);
-  if (!Number.isFinite(weight) || weight < 0) {
-    throw new OpsShipError(400, 'INVALID_WEIGHT', 'weight_grams 必须是非负数');
-  }
+  const receiverCheck = checkReceiver({
+    name: receiverName,
+    phone: receiverPhone,
+    address: receiverAddress,
+  });
+  if (!receiverCheck.ok) raiseRule(receiverCheck, 400);
+  const weightCheck = checkWeight(input.weight_grams);
+  if (!weightCheck.ok) raiseRule(weightCheck, 400);
   const orderId = text(input.order_id, 64);
   const conn = db();
   if (orderId) {
@@ -185,12 +199,12 @@ export function createShipment(input: CreateShipmentInput): ShipmentRow {
     id: randomUUID(),
     order_id: orderId,
     carrier: carrier.id,
-    mode: input.mode === 'real' ? 'real' : 'mock',
+    mode: normalizeMode(input.mode),
     tracking_no: null,
     receiver_name: receiverName,
     receiver_phone: receiverPhone,
     receiver_address: receiverAddress,
-    weight_grams: Math.round(weight),
+    weight_grams: weightCheck.grams,
     remark: text(input.remark, 256),
     status: 'pending',
     attempts: 0,
@@ -280,7 +294,7 @@ export async function shipShipment(id: string): Promise<{
   if (!shipment) {
     throw new OpsShipError(404, 'SHIPMENT_NOT_FOUND', `运单不存在: ${id}`);
   }
-  if (shipment.tracking_no && RANK[shipment.status] >= RANK.shipped) {
+  if (alreadyShipped(shipment.status, shipment.tracking_no)) {
     throw new OpsShipError(409, 'SHIPMENT_ALREADY_SHIPPED', '运单已交运，不能重复交运');
   }
 
@@ -352,12 +366,10 @@ export async function syncShipmentTracking(id: string): Promise<{
   }
 
   const conn = db();
-  const existing = new Set(
-    listShipEvents(id).map((e) => `${e.status}\u0000${e.note}`),
-  );
+  const existing = new Set(listShipEvents(id).map((e) => eventKey(e.status, e.note)));
   let added = 0;
   for (const ev of receipt.events ?? []) {
-    const key = `${ev.status}\u0000${ev.note}`;
+    const key = eventKey(ev.status, ev.note);
     if (existing.has(key)) continue;
     existing.add(key);
     appendEvent(conn, id, ev.status, ev.note, ev.at || Date.now());
@@ -365,13 +377,10 @@ export async function syncShipmentTracking(id: string): Promise<{
   }
 
   const next = receipt.status as CarrierStatus | undefined;
-  if (next && RANK[next] !== undefined) {
-    const cur = RANK[shipment.status] ?? -1;
-    if (RANK[next] > cur) {
-      conn
-        .prepare('UPDATE ops_shipments SET status = ?, updated_at = ? WHERE id = ?')
-        .run(next, Date.now(), id);
-    }
+  if (next && canAdvanceTracking(shipment.status, next)) {
+    conn
+      .prepare('UPDATE ops_shipments SET status = ?, updated_at = ? WHERE id = ?')
+      .run(next, Date.now(), id);
   }
 
   return { shipment: getShipment(id) as ShipmentRow, receipt, added };

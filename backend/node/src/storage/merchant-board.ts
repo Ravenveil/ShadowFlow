@@ -22,10 +22,30 @@
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
 import { getDb } from './sqlite';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
-const MIN15_MS = 15 * 60 * 1000;
+// 纯规则已迁至 domains/commerce/merchant-model.ts（口径/分桶/校验，单一真源，可独立单测）；
+// 本文件保留 DDL/migration/SQL 与装配，导出名原样保留。
+import {
+  DAY_MS,
+  HOUR_MS,
+  MIN15_MS,
+  parseText,
+  parseCents,
+  bucketSize,
+  dayStart,
+  bucketKey,
+  nextBucket,
+  timeWindow as modelTimeWindow,
+  rangeWindow as modelRangeWindow,
+  rangeClause,
+  pctDelta,
+  buildOverviewCore,
+  wantsCompare,
+  conversionRate,
+  MerchantDomainError,
+  type OverviewCore,
+  type LedgerSums,
+  type OrderStats,
+} from '../domains/commerce/merchant-model';
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS mb_products (
@@ -136,94 +156,43 @@ export class MerchantError extends Error {
   }
 }
 
-// ── 输入校验 ──────────────────────────────────────────────────────────────────
+// ── 校验 / 分桶 / 区间规则 —— 全部委托 domains/commerce/merchant-model.ts ────
+// 路由层用 instanceof MerchantError 做映射，故把 model 的领域错误转成 MerchantError。
 
 function text(v: unknown, max: number, field: string, required = false): string {
-  const s = typeof v === 'string' ? v.trim().slice(0, max) : '';
-  if (required && !s) throw new MerchantError(`${field} is required`);
-  return s;
-}
-
-function cents(v: unknown, field: string): number {
-  const n = typeof v === 'number' ? v : Number(v);
-  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-    throw new MerchantError(`${field} must be a non-negative integer (cents)`);
+  try {
+    return parseText(v, max, field, required);
+  } catch (err) {
+    if (err instanceof MerchantDomainError) throw new MerchantError(err.message);
+    throw err;
   }
-  return n;
 }
 
-function bucketSize(granularity: unknown): number {
-  if (granularity === '15m') return MIN15_MS;
-  if (granularity === 'hour') return HOUR_MS;
-  return DAY_MS;
+function cents(v: unknown, field: string, required = false): number {
+  try {
+    return parseCents(v, field, required);
+  } catch (err) {
+    if (err instanceof MerchantDomainError) throw new MerchantError(err.message);
+    throw err;
+  }
 }
 
-/** 本地零点。按天分桶必须用本地日界：用 UTC 零点的话，国内商家早上 8 点前的
- *  订单会落到「昨天」，开门做生意第一件事看到的就是错的数。 */
-function dayStart(ts: number): number {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-/** 时间戳 → 桶键。day 用本地零点，其余按 epoch 整除。 */
-function bucketKey(ts: number, size: number): number {
-  return size === DAY_MS ? dayStart(ts) : Math.floor(ts / size) * size;
-}
-
-/** 下一个桶键。day 走 dayStart 而不是直接 +24h，跨夏令时也不会错位。 */
-function nextBucket(key: number, size: number): number {
-  return size === DAY_MS ? dayStart(key + DAY_MS) : key + size;
-}
-
-/** ISO8601 或毫秒时间戳；没给就取「今天 00:00（本地）到现在」。 */
 function timeWindow(startRaw: unknown, endRaw: unknown, granularity: string) {
-  const now = Date.now();
-  const end = typeof endRaw === 'string' && endRaw ? Date.parse(endRaw) : now;
-  const start = typeof startRaw === 'string' && startRaw ? Date.parse(startRaw) : dayStart(now);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
-    throw new MerchantError('start/end must be valid ISO8601 with start < end');
+  try {
+    return modelTimeWindow(startRaw, endRaw, granularity, () => Date.now());
+  } catch (err) {
+    if (err instanceof MerchantDomainError) throw new MerchantError(err.message);
+    throw err;
   }
-  const size = bucketSize(granularity);
-  // 最多 2000 个桶，避免有人传十年范围把内存打爆
-  if (Math.ceil((end - start) / size) > 2000) {
-    throw new MerchantError('time range too wide for this granularity');
-  }
-  return { from: start, to: end, size, granularity: granularity === '15m' || granularity === 'hour' ? granularity : 'day' };
 }
 
-/**
- * 可选时间区间（用于「本月赚多少」这类问法）。
- *
- * 与 timeWindow 的区别：那个是画曲线用的，必须给区间并补零值桶；
- * 这个是给聚合/列表用的，**不给就是全量**（保持老行为零变化），
- * 且只做边界校验，不生成桶。
- *
- * 返回 null 表示该侧不设限。
- */
 function rangeWindow(startRaw: unknown, endRaw: unknown): { from: number | null; to: number | null } {
-  const parse = (v: unknown, field: string): number | null => {
-    if (v === undefined || v === null || v === '') return null;
-    const s = typeof v === 'string' ? v : String(v);
-    // 纯数字字符串当毫秒时间戳，其余按 ISO8601
-    const n = /^\d+$/.test(s) ? Number(s) : Date.parse(s);
-    if (!Number.isFinite(n)) throw new MerchantError(`${field} must be ISO8601 or epoch millis`);
-    return n;
-  };
-  const from = parse(startRaw, 'start');
-  const to = parse(endRaw, 'end');
-  if (from !== null && to !== null && from >= to) {
-    throw new MerchantError('start must be earlier than end');
+  try {
+    return modelRangeWindow(startRaw, endRaw);
+  } catch (err) {
+    if (err instanceof MerchantDomainError) throw new MerchantError(err.message);
+    throw err;
   }
-  return { from, to };
-}
-
-/** 把 rangeWindow 的结果拼成 WHERE 片段（含前导 AND），参数按顺序塞进 params。 */
-function rangeClause(column: string, from: number | null, to: number | null, params: unknown[]): string {
-  let sql = '';
-  if (from !== null) { sql += ` AND ${column} >= ?`; params.push(from); }
-  if (to !== null) { sql += ` AND ${column} < ?`; params.push(to); }
-  return sql;
 }
 
 // ── 商品 / 访客 / 订单 ────────────────────────────────────────────────────────
@@ -460,27 +429,10 @@ export function refundOrder(orderId: string): { order: Order; idempotent: boolea
 
 // ── 看板口径 ──────────────────────────────────────────────────────────────────
 
-/** 单段区间的核心口径（本期与环比上期共用同一份形状）。 */
-interface OverviewCore {
-  range: { from: number | null; to: number | null };
-  revenue_cents: number;
-  cost_cents: number;
-  gross_profit_cents: number;
-  gross_margin_pct: number | null;
-  orders_total: number;
-  paid_orders: number;
-  refunded_orders: number;
-  transacted_orders: number;
-  avg_order_cents: number;
-}
+/** 单段区间的核心口径（本期与环比上期共用同一份形状）；形状与规则取自 domain model。 */
+export type { OverviewCore };
 
-/** 上期分母为 0 时不编造增长率：两边都 0 记 0，从 0 涨起来记 null（前端显示「新增」）。 */
-function pctDelta(cur: number, prev: number): number | null {
-  if (prev === 0) return cur === 0 ? 0 : null;
-  return Math.round(((cur - prev) / Math.abs(prev)) * 1000) / 10;
-}
-
-/** 单段区间的核心口径，抽出来给「本期 / 上期」复用，保证环比两边算法同源。 */
+/** 单段区间的核心口径：SQL 取数在此，口径计算委托 buildOverviewCore（单一真源）。 */
 function computeOverview(conn: Database.Database, from: number | null, to: number | null): OverviewCore {
   const ledgerParams: unknown[] = [];
   const ledgerWhere = `WHERE 1 = 1${rangeClause('created_at', from, to, ledgerParams)}`;
@@ -505,23 +457,14 @@ function computeOverview(conn: Database.Database, from: number | null, to: numbe
     )
     .get(...orderParams) as { total: number; paid: number; refunded: number };
 
-  const revenue = sums.income - sums.refund;
-  const gross = revenue - sums.expense;
   // 客单价 = 净营收 / 未退款成交单数。把已退款单算进分母会把客单价压低 ——
   // 退了款那单不算还留着钱，商家看到的「一单挣多少」就不是真的。
-  const paidOnly = orderStats.paid;
-  return {
-    range: { from, to },
-    revenue_cents: revenue,
-    cost_cents: sums.expense,
-    gross_profit_cents: gross,
-    gross_margin_pct: revenue ? Math.round((gross / revenue) * 1000) / 10 : null,
-    orders_total: orderStats.total,
-    paid_orders: paidOnly,
-    refunded_orders: orderStats.refunded,
-    transacted_orders: paidOnly + orderStats.refunded,
-    avg_order_cents: paidOnly ? Math.round(revenue / paidOnly) : 0,
-  };
+  // 口径规则本身在 domains/commerce/merchant-model.buildOverviewCore，此处只喂数。
+  return buildOverviewCore(
+    { from, to },
+    { income: sums.income, refund: sums.refund, expense: sums.expense },
+    { total: orderStats.total, paid: orderStats.paid, refunded: orderStats.refunded },
+  );
 }
 
 export interface OverviewComparison extends OverviewCore {
@@ -556,8 +499,7 @@ export function overview(input: { start?: unknown; end?: unknown; compare?: unkn
     .get(...firstOrderParams) ?? null;
 
   let comparison: OverviewComparison | null = null;
-  const wantCompare =
-    input.compare === true || input.compare === 1 || input.compare === '1' || input.compare === 'true';
+  const wantCompare = wantsCompare(input.compare);
   if (wantCompare && from !== null) {
     const span = Math.max((to ?? Date.now()) - from, 1);
     const previous = computeOverview(conn, from - span, from);

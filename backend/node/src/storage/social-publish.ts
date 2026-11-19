@@ -30,6 +30,19 @@ import {
 } from '../lib/social-platforms';
 import { lintContent } from '../lib/social-platforms/compliance-lint';
 import { recordAction } from '../lib/action-journal';
+// 纯规则已迁至 domains/commerce/social-model.ts（状态机/审核门/平台限制，可独立单测）；
+// 本文件保留 DDL/SQL/适配器调用与装配，导出名原样保留。
+import {
+  buildReviewRecord,
+  checkMedia,
+  checkPostBody,
+  checkPublishable,
+  checkReview,
+  checkSubmitForReview,
+  parseStoredMedia,
+  reviewActionDecision,
+  reviewNextStatus,
+} from '../domains/commerce/social-model';
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS sp_accounts (
@@ -225,16 +238,18 @@ export function deleteAccount(id: string): void {
 
 // ── 帖子 ──────────────────────────────────────────────────────────────────────
 
+/** 领域规则失败 → 原 HTTP 错误类（路由与既有调用方的错误语义完全不变）。 */
+function raiseRule(
+  r: { ok: false; code: string; message: string },
+  status = 400,
+): never {
+  throw new SocialPublishError(status, r.code, r.message);
+}
+
 function parseMedia(spec: PlatformSpec, media: unknown): string[] {
-  if (media == null) return [];
-  if (!Array.isArray(media) || media.some((m) => typeof m !== 'string')) {
-    throw new SocialPublishError(400, 'INVALID_MEDIA', 'media 必须是字符串数组');
-  }
-  const list = media as string[];
-  if (list.length > spec.max_media) {
-    throw new SocialPublishError(400, 'MEDIA_LIMIT', `${spec.name} 最多 ${spec.max_media} 张图`);
-  }
-  return list.map((m) => String(m).slice(0, 2048));
+  const r = checkMedia(media, spec.max_media, spec.name);
+  if (!r.ok) raiseRule(r, 400);
+  return r.list;
 }
 
 export function createPost(input: {
@@ -258,15 +273,8 @@ export function createPost(input: {
   }
   const title = String(input.title ?? '').trim();
   const content = String(input.content ?? '').trim();
-  if (!content) {
-    throw new SocialPublishError(400, 'INVALID_CONTENT', 'content 不能为空');
-  }
-  if (spec.title_max > 0 && title.length > spec.title_max) {
-    throw new SocialPublishError(400, 'TITLE_LIMIT', `${spec.name} 标题最多 ${spec.title_max} 字`);
-  }
-  if (content.length > spec.content_max) {
-    throw new SocialPublishError(400, 'CONTENT_LIMIT', `${spec.name} 正文最多 ${spec.content_max} 字`);
-  }
+  const body = checkPostBody(title, content, spec);
+  if (!body.ok) raiseRule(body, 400);
   const media = parseMedia(spec, input.media);
   // 合规审计（P0-3）：任何写路径自动落 lint 结果，可回溯到词表版本。
   // 命中不阻断入库——sp_posts 是草稿箱，打回由发布链/人工门决定（T09 语义），
@@ -356,13 +364,8 @@ export function submitForReview(id: string): PostRow {
   if (!post) {
     throw new SocialPublishError(404, 'POST_NOT_FOUND', `帖子不存在: ${id}`);
   }
-  if (post.status !== 'draft' && post.status !== 'rejected') {
-    throw new SocialPublishError(
-      409,
-      'INVALID_STATUS',
-      `当前状态 ${post.status} 不能提审（仅 draft / rejected 可提审）`,
-    );
-  }
+  const gate = checkSubmitForReview(post.status);
+  if (!gate.ok) raiseRule(gate, 409);
   db().prepare(`UPDATE sp_posts SET status = 'pending_review' WHERE id = ?`).run(id);
   recordAction({
     tool_name: 'social.review',
@@ -384,20 +387,10 @@ export function reviewPost(
   if (!post) {
     throw new SocialPublishError(404, 'POST_NOT_FOUND', `帖子不存在: ${id}`);
   }
-  if (post.status !== 'pending_review') {
-    throw new SocialPublishError(
-      409,
-      'INVALID_STATUS',
-      `当前状态 ${post.status} 不在审核中（仅 pending_review 可审核）`,
-    );
-  }
-  const review: ReviewRecord = {
-    decision,
-    ...(comment ? { comment: comment.slice(0, 500) } : {}),
-    ...(reviewer ? { reviewer: reviewer.slice(0, 64) } : {}),
-    ts: Date.now(),
-  };
-  const next = decision === 'approve' ? 'approved' : 'rejected';
+  const gate = checkReview(post.status);
+  if (!gate.ok) raiseRule(gate, 409);
+  const review = buildReviewRecord(decision, comment, reviewer, Date.now());
+  const next = reviewNextStatus(decision);
   db()
     .prepare(`UPDATE sp_posts SET status = ?, review_json = ? WHERE id = ?`)
     .run(next, JSON.stringify(review), id);
@@ -405,7 +398,7 @@ export function reviewPost(
     tool_name: 'social.review',
     phase: 'decided',
     // action journal 裁定枚举是 auto/approve/deny/block — reject 语义映射 deny。
-    decision: decision === 'approve' ? 'approve' : 'deny',
+    decision: reviewActionDecision(decision),
     ...(reviewer ? { session_id: reviewer } : {}),
     detail: { post_id: id, from: 'pending_review', to: next, comment: review.comment ?? '' },
   });
@@ -425,17 +418,10 @@ export async function publishPost(
   if (!post) {
     throw new SocialPublishError(404, 'POST_NOT_FOUND', `帖子不存在: ${id}`);
   }
-  if (post.status === 'published') {
-    throw new SocialPublishError(409, 'POST_ALREADY_PUBLISHED', '帖子已发布，不能重复发布');
-  }
   // C5 人工门（2026-11-07）：WAITING_HUMAN 期间与被退回的帖子禁止外发。
   // draft 直发保留——人工点发布即人工门本身；自动化批量外发走提审→过审。
-  if (post.status === 'pending_review') {
-    throw new SocialPublishError(409, 'REVIEW_PENDING', '帖子在人工审核中，过审前不可外发');
-  }
-  if (post.status === 'rejected') {
-    throw new SocialPublishError(409, 'REVIEW_REJECTED', '帖子已被审核退回，请修改后重新提审');
-  }
+  const gate = checkPublishable(post.status);
+  if (!gate.ok) raiseRule(gate, 409);
   const account = getAccount(post.account_id);
   if (!account) {
     throw new SocialPublishError(409, 'ACCOUNT_NOT_FOUND', '帖子所属账号已不存在');
@@ -449,14 +435,7 @@ export async function publishPost(
 
   conn.prepare(`UPDATE sp_posts SET status = 'publishing' WHERE id = ?`).run(id);
 
-  const media = (() => {
-    try {
-      const parsed: unknown = JSON.parse(post.media);
-      return Array.isArray(parsed) ? parsed.filter((m): m is string => typeof m === 'string') : [];
-    } catch {
-      return [];
-    }
-  })();
+  const media = parseStoredMedia(post.media);
   const input: PublishInput = { title: post.title, content: post.content, media };
 
   const adapter = getAdapter(post.platform, account.auth_mode === 'real' ? 'real' : 'mock');
