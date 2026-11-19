@@ -50,6 +50,7 @@ import {
   Brain,
   IdCard,
   ArrowRightLeft,
+  MonitorPlay,
   type LucideIcon,
 } from 'lucide-react';
 import { useI18n } from '../../common/i18n';
@@ -64,6 +65,8 @@ import { McpIntegrationsSection } from '../../core/components/settings/McpIntegr
 import { PetSettings } from '../../core/components/pet/PetSettings';
 import { NotificationsSection } from '../../core/components/settings/NotificationsSection';
 import { AdvancedSection } from '../../core/components/settings/AdvancedSection';
+// 远程执行（SSH）：论文团实验真正落到远端 GPU 机器上跑（2026-11-10）
+import { RemoteExecSection } from '../../core/components/settings/RemoteExecSection';
 import { MediaProvidersSection } from '../../core/components/settings/MediaProvidersSection';
 import { WelcomeSection } from '../../core/components/settings/WelcomeSection';
 import { WalletSection } from './WalletSection';
@@ -103,6 +106,7 @@ type SectionId =
   | 'tool-providers'
   | 'connectors'
   | 'mcp-integrations'
+  | 'remote-exec'               // 远程执行（SSH）— 主机/私钥/远端目录 + 试跑
   // 0G（停用保留）
   | 'wallet'       // backed by /api/wallet/*
   // 记忆
@@ -156,6 +160,7 @@ const STATIC_NAV_GROUPS: Array<{ group: string; items: Array<{ id: SectionId }> 
       { id: 'tool-providers' },
       { id: 'connectors' },
       { id: 'mcp-integrations' },
+      { id: 'remote-exec' },
     ],
   },
   // 2026-08-11: 「0G」设置分组停用（0G 组件先不用，代码保留可回退）。
@@ -211,6 +216,7 @@ function buildNavGroups(t: (key: string, options?: Record<string, unknown>) => s
         { id: 'tool-providers',          label: t('settings.navToolProviders'), icon: Wrench },
         { id: 'connectors',              label: t('settings.navConnectors'), icon: Plug },
         { id: 'mcp-integrations',        label: t('settings.navMcp'), icon: Server },
+        { id: 'remote-exec',             label: t('settings.navRemoteExec', { defaultValue: '远程执行 / SSH' }), icon: MonitorPlay },
       ],
     },
     // 2026-08-11: 0G 分组停用，同步移除 i18n 组（wallet 条目代码保留）
@@ -397,6 +403,8 @@ export default function SettingsPage() {
           {activeSection === 'tool-providers'    && <LegacySectionWrap><ToolProvidersTab /></LegacySectionWrap>}
           {activeSection === 'connectors'        && <LegacySectionWrap><ConnectorsSection /></LegacySectionWrap>}
           {activeSection === 'mcp-integrations'  && <LegacySectionWrap><McpIntegrationsSection /></LegacySectionWrap>}
+          {/* 远程执行自带 760 上限，裸渲染避免重复包裹 */}
+          {activeSection === 'remote-exec'       && <RemoteExecSection />}
 
           {/* 0G（停用保留，仅 hash 深链可达） */}
           {activeSection === 'wallet'  && <WalletSection />}

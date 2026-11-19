@@ -311,6 +311,7 @@
   "settings.navToolProviders": "工具提供商",
   "settings.navConnectors": "连接器",
   "settings.navMcp": "MCP 集成",
+  "settings.navRemoteExec": "远程执行 / SSH",
   "settings.navLocalCli": "本机 CLI",
   "settings.navByok": "API 密钥",
   "settings.navGeneration": "生成参数",

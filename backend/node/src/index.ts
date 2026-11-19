@@ -46,6 +46,7 @@ import catalogRouter from './routes/projects/catalog';
 import { createMemoryBankRouter } from './memory-bank/routes';
 // 单后端迁移第三批（2026-11-18）— settings 缺口端点 + sessions
 import settingsExtRouter from './routes/system/settings-ext';
+import remoteExecRouter from './routes/system/remote-exec';
 import sessionsRouter from './routes/runs/sessions';
 // 单后端迁移第三批 — schedules 5 端点 + 调度引擎（sched-impl 4ae8bdca）
 import schedulesRouter from './routes/runs/schedules';
@@ -196,6 +197,8 @@ app.use('/api/settings', settingsRouter);
 // /appearance /byok /byok/models /media /preferences 已覆盖路径先被旧 router
 // 吃掉，ext 只接新形状端点，避免路由冲突。
 app.use('/api/settings', settingsExtRouter);
+// 远程执行（SSH）：配置 + 连通性自检 + 远端跑命令（2026-11-19）
+app.use('/api/remote-exec', remoteExecRouter);
 // sessions（context/report/checkpoint，存储为进程内 TTL Map，与 Python 同构）
 app.use('/api/sessions', sessionsRouter);
 // schedules（sched-impl 4ae8bdca）— 条件挂载：仅 single 模式由 Node 接管并

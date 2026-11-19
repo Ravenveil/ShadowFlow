@@ -311,6 +311,7 @@
   "settings.navToolProviders": "Tool Providers",
   "settings.navConnectors": "Connectors",
   "settings.navMcp": "MCP Integrations",
+  "settings.navRemoteExec": "Remote Exec / SSH",
   "settings.navLocalCli": "Local CLI",
   "settings.navByok": "API Keys",
   "settings.navGeneration": "Generation Settings",
