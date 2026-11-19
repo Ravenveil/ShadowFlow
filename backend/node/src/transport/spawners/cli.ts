@@ -67,14 +67,21 @@ export async function* runCliSpawn(
   // differently; for now we concatenate with a separator that 99% of LLM
   // CLIs treat sensibly (the prompt itself is what ShadowFlow's skill author
   // designed — embedded `<sf:*>` tags drive the parser).
-  const fullPrompt = input.system_prompt
-    ? `${input.system_prompt}\n\n---\n\nUser goal: ${input.prompt}\n`
-    : input.prompt;
+  //
+  // bare_prompt（管线型 CLI，如 AutoResearchClaw）：只传课题本身。这类 CLI 的
+  // 输入是研究主题，会被逐阶段消费；把 agent 人格/system_prompt 灌进
+  // `--topic` 等于把人格设定当成课题的一部分，污染整条管线。
+  const fullPrompt = desc.bare_prompt
+    ? input.prompt
+    : input.system_prompt
+      ? `${input.system_prompt}\n\n---\n\nUser goal: ${input.prompt}\n`
+      : input.prompt;
 
   console.log(
     `[cli:${cliId}] spawn binary="${desc.binary}" args=${JSON.stringify(desc.extra_args ?? [])}` +
       ` cwd="${input.cwd}" prompt_len=${fullPrompt.length}` +
-      (desc.prompt_mode ? ` prompt_mode=${desc.prompt_mode}` : ' prompt_mode=stdin'),
+      (desc.prompt_mode ? ` prompt_mode=${desc.prompt_mode}` : ' prompt_mode=stdin') +
+      ` env_defaults=${JSON.stringify(desc.env_defaults ?? {})}`,
   );
 
   // ClawHub（2026-10-30）：prompt_mode='argv-<flag>' → prompt 以 `<flag>
@@ -90,7 +97,8 @@ export async function* runCliSpawn(
     }
     child = spawn(desc.binary, spawnArgs, {
       cwd: input.cwd,
-      env: { ...process.env, ...(input.env ?? {}) },
+      // 注册表默认值先铺，调用方 input.env 可覆盖（同 id 以 input.env 为准）。
+      env: { ...process.env, ...(desc.env_defaults ?? {}), ...(input.env ?? {}) },
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: false,
       windowsHide: true,
@@ -107,14 +115,16 @@ export async function* runCliSpawn(
     return;
   }
 
-  // Send prompt via stdin (avoid argv length limits) — argv 模式下跳过
-  // （prompt 已在命令行上；写 stdin 反而可能干扰子进程）。
-  if (child.stdin && !argvPrompt) {
+  // 始终关闭 stdin。stdio[0]='pipe' 意味着子进程的 stdin 是一个**打开着的**
+  // 管道；argv 模式下 prompt 已在命令行上，但若 stdin 一直挂着不关，argparse
+  // 系（Python）CLI 可能等 stdin EOF 才继续/退出 —— 表现为「输出完了但进程不
+  // 退、SSE 不结束」。argv 模式只需 end()，无 argv 模式 end(fullPrompt)。
+  if (child.stdin) {
     child.stdin.on('error', () => {
       // Some CLIs close stdin early; ignore EPIPE.
     });
     try {
-      child.stdin.end(fullPrompt);
+      child.stdin.end(argvPrompt ? undefined : fullPrompt);
     } catch {
       // ignore — child may have died already
     }

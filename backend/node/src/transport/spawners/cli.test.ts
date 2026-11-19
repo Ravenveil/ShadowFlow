@@ -16,6 +16,7 @@ import { Readable } from 'node:stream';
 import { dispatchSkillRunner } from './index';
 import type { RunnerInput } from './types';
 import { runCliSpawn } from './cli';
+import { KNOWN_CLIS, type CliDescriptor } from '../../detectors/cli-registry';
 import { parsePlainLine } from '../../parsers/cli-streams/plain-line';
 import type { SseEvent } from '../../parsers/parser';
 import os from 'node:os';
@@ -229,6 +230,117 @@ async function main(): Promise<void> {
       'runCliSpawn yields CLI_UNKNOWN for unregistered id',
       events.some((e) => e.event === 'error' && (e.data as { code?: string }).code === 'CLI_UNKNOWN'),
     );
+  }
+
+  // ─── 10-12. 管线型 CLI 描述符开关（bare_prompt / env_defaults / argv stdin EOF）──
+  // 真机 spawn `node -e <script>`：注册一条临时描述符（KNOWN_CLIS 追加，收尾
+  // 删除），断言只看子进程实际收到的 argv / env / stdin 行为。
+  console.log('\n── cli descriptor switches (bare_prompt / env_defaults / argv stdin) ──');
+  const TEST_CLI_IDS: string[] = [];
+  function registerTestCli(desc: Omit<CliDescriptor, 'version_arg' | 'install_cmd' | 'stream_format'> & Partial<CliDescriptor>): CliDescriptor {
+    const full: CliDescriptor = {
+      version_arg: '--version',
+      install_cmd: 'test-only',
+      stream_format: 'plain-line',
+      ...desc,
+    };
+    KNOWN_CLIS.push(full);
+    TEST_CLI_IDS.push(full.id);
+    return full;
+  }
+
+  /** 驱动 runCliSpawn 直到子进程收尾；超时则 abort（避免用例挂死）。 */
+  async function drainCli(
+    cliId: string,
+    overrides: Partial<RunnerInput>,
+    timeoutMs = 8000,
+  ): Promise<SseEvent[]> {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    const events: SseEvent[] = [];
+    try {
+      for await (const evt of runCliSpawn(
+        {
+          system_prompt: 'PERSONA-SHOULD-BE-IGNORED',
+          prompt: 'TOPIC-ABC',
+          session_id: 'sess-cli-switch',
+          cwd: tmpCwd,
+          signal: ac.signal,
+          ...overrides,
+        },
+        cliId,
+      )) {
+        events.push(evt);
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    return events;
+  }
+
+  const textOf = (events: SseEvent[]): string =>
+    events
+      .filter((e) => e.event === 'text')
+      .map((e) => (e.data as { text?: string }).text ?? '')
+      .join('');
+
+  // 10. bare_prompt：prompt 原样进 argv，system_prompt 不参与。
+  // 注：测试二进制是 node，`-topic` 这类单横线参数会被 node 当未知选项拒收，
+  // 故这里用不带横线的 argv flag（registration 侧的拼法由 prompt_mode 决定，
+  // 与本用例要验的 bare_prompt 无关）。
+  registerTestCli({
+    id: 'sf-test-bare',
+    binary: 'node',
+    extra_args: ['-e', 'process.stdout.write("ARGV:" + process.argv.slice(1).join("|"));'],
+    prompt_mode: 'argv-TOPIC',
+    bare_prompt: true,
+  });
+  {
+    const out = textOf(await drainCli('sf-test-bare', {}));
+    check('bare_prompt: argv 收到原始 prompt', out.includes('ARGV:TOPIC|TOPIC-ABC'), out);
+    check('bare_prompt: 不出现 User goal 前缀', !out.includes('User goal:'), out);
+    check('bare_prompt: 不注入 system_prompt', !out.includes('PERSONA-SHOULD-BE-IGNORED'), out);
+  }
+
+  // 11. env_defaults 生效，且 input.env 可覆盖。
+  registerTestCli({
+    id: 'sf-test-env',
+    binary: 'node',
+    extra_args: ['-e', 'process.stdout.write("ENV:" + (process.env.SF_TEST_ENV || "unset"));'],
+    env_defaults: { SF_TEST_ENV: 'from-default' },
+  });
+  {
+    const def = textOf(await drainCli('sf-test-env', {}));
+    check('env_defaults: 默认值传入子进程', def.includes('ENV:from-default'), def);
+    const over = textOf(await drainCli('sf-test-env', { env: { SF_TEST_ENV: 'overridden' } }));
+    check('env_defaults: input.env 覆盖默认值', over.includes('ENV:overridden'), over);
+  }
+
+  // 12. argv 模式也必须 end stdin：子进程等到 stdin EOF 才输出/退出。
+  registerTestCli({
+    id: 'sf-test-stdin-eof',
+    binary: 'node',
+    extra_args: [
+      '-e',
+      'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>process.stdout.write("STDIN_EOF:" + (d.length ? "HAS_DATA" : "EMPTY")));',
+    ],
+    prompt_mode: 'argv-TOPIC',
+    bare_prompt: true,
+  });
+  {
+    const events = await drainCli('sf-test-stdin-eof', {});
+    const out = textOf(events);
+    check('argv 模式 stdin 被 end（子进程收到 EOF 并退出）', out.includes('STDIN_EOF:EMPTY'), out);
+    check(
+      'argv 模式未被当成超时 kill（子进程正常退出）',
+      !events.some((e) => e.event === 'error'),
+      events.filter((e) => e.event === 'error'),
+    );
+  }
+
+  for (const id of TEST_CLI_IDS) {
+    const idx = KNOWN_CLIS.findIndex((c) => c.id === id);
+    if (idx >= 0) KNOWN_CLIS.splice(idx, 1);
   }
 
   // Clean up tmp
