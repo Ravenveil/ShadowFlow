@@ -39,6 +39,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import * as store from '../../storage/groups-store';
+import { resolveChatWorkspace } from '../../lib/chat-workspace';
 
 const router = Router();
 
@@ -54,6 +55,31 @@ const MAX_FANOUT_AGENTS = 5;
 /** 标准信封（对齐 Python _envelope：{ data, meta }）。 */
 function envelope(data: unknown, meta: Record<string, unknown> = {}) {
   return { data, meta };
+}
+
+/**
+ * 读时补全 `workspace_dir`（2026-11-20）。
+ *
+ * 背景：群没显式选目录时，agent 的产物其实会落到 `resolveChatWorkspace(...)`
+ * 的 scratch 目录（`~/.shadowflow-chat/chat-workspaces/<groupId>`），但记录里
+ * `workspace_dir` 是 null → 前端右侧产出面板拿不到目录、只能看用户的默认项目
+ * 文件夹 → **agent 写了东西却「看不到产出」**。
+ *
+ * 这里在响应投影里补上真实目录（与网关同源，不复制一份算法），库里仍存 null：
+ * null 的语义保持「用户没选」，未被悄悄改写。副作用是首次 list 会 mkdir 该目录
+ * —— 幂等且正是网关下一步要做的事。
+ */
+function withEffectiveWorkspace<
+  T extends { group_id: string; workspace_dir?: string | null },
+>(rec: T): T {
+  const picked = typeof rec.workspace_dir === 'string' ? rec.workspace_dir.trim() : '';
+  if (picked) return rec;
+  try {
+    return { ...rec, workspace_dir: resolveChatWorkspace(rec.group_id, null) };
+  } catch {
+    // 目录不可建（权限/盘满）→ 保持 null，前端回落到默认目录，不 500
+    return rec;
+  }
 }
 
 /** 404 群（对齐 Python _group_not_found 的 detail.error 信封）。 */
@@ -185,7 +211,7 @@ router.get('/', (req: Request, res: Response) => {
     workspace_id: workspaceId,
     kinds,
     include_archived: includeArchived,
-  });
+  }).map(withEffectiveWorkspace);
 
   res.json({
     data: records,
@@ -202,7 +228,7 @@ router.get('/:id', (req: Request, res: Response) => {
     groupNotFound(res, req.params.id);
     return;
   }
-  res.json(envelope(rec));
+  res.json(envelope(withEffectiveWorkspace(rec)));
 });
 
 // ── PATCH /api/groups/:id ─────────────────────────────────────────────────────
@@ -280,6 +306,8 @@ router.patch('/:id', (req: Request, res: Response) => {
     groupNotFound(res, req.params.id);
     return;
   }
+  // 写回执保持库内真值（清空 workspace_dir 就该回 null，对齐 Python 契约）；
+  // 「有效工作目录」的补全只发生在读路径（list / get），见 withEffectiveWorkspace。
   res.json(envelope(rec));
 });
 

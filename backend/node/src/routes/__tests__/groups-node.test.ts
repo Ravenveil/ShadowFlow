@@ -268,6 +268,28 @@ describe('PATCH /api/groups/:id', () => {
     expect(r.body.data.workspace_dir).toBeNull();
   });
 
+  // 2026-11-20：读路径补全有效工作目录。没选目录的群，agent 产物其实落在
+  // resolveChatWorkspace 的 scratch 目录，若响应里恒为 null，前端右侧产出面板
+  // 就跟随不到 → 「agent 写了东西却看不到产出」。写回执仍回库内真值。
+  it('GET /:id 补全有效 workspace_dir（未选目录 → scratch 目录）', async () => {
+    const c = await req(port, 'POST', '/api/groups', { name: 'NoDir' });
+    expect(c.body.group_id).toBeTruthy();
+
+    const g = await req(port, 'GET', `/api/groups/${c.body.group_id}`);
+    expect(typeof g.body.data.workspace_dir).toBe('string');
+    expect(g.body.data.workspace_dir.length).toBeGreaterThan(0);
+    // 指向 chat scratch 目录，而不是仓库内或某个随机路径
+    expect(g.body.data.workspace_dir).toContain('chat-workspaces');
+  });
+
+  it('GET / 列表同样补全（右栏/列表页据此跟随目录）', async () => {
+    await req(port, 'POST', '/api/groups', { name: 'ListNoDir' });
+    const list = await req(port, 'GET', '/api/groups');
+    const row = (list.body.data as Array<{ name: string; workspace_dir: string | null }>)
+      .find((x) => x.name === 'ListNoDir');
+    expect(row?.workspace_dir).toContain('chat-workspaces');
+  });
+
   it('404 on missing group', async () => {
     const r = await req(port, 'PATCH', '/api/groups/nope', { name: 'X' });
     expect(r.status).toBe(404);
