@@ -12,6 +12,12 @@ export interface FsDirEntry {
   name: string;
   path: string;
   isDir: boolean;
+  /** 仅 isDir === false 的文件项才有（后端 ?include=files 时返回）。 */
+  size?: number;
+  /** 毫秒时间戳，同上。 */
+  mtime?: number;
+  /** 小写扩展名（含点，如 '.png'），同上。 */
+  ext?: string;
 }
 
 export interface FsListDirsResult {
@@ -19,8 +25,16 @@ export interface FsListDirsResult {
   parent: string | null;
   isRoot: boolean;
   entries: FsDirEntry[];
+  /** 单目录文件数超过后端上限（500）时只返回前 500 个，标记被截断。 */
+  truncated?: boolean;
 }
 
+/**
+ * 列出某目录下的文件（隐藏 dotfile）。
+ *
+ * 文件树已改由 `listDirs()`（后端 `?include=files`）单请求返回目录 + 文件，
+ * 此函数保留给只需要文件列表的调用方（`GET /api/fs/files` 端点仍在）。
+ */
 export async function listFiles(
   dir: string,
 ): Promise<{ dir: string; files: FsFile[] }> {
@@ -99,10 +113,17 @@ export async function uploadChatAttachment(
   return j.data as { path: string; name: string; size: number; url: string };
 }
 
-/** 列出某目录下的子目录（及全部条目）。path 省略=home；'ROOT'=盘符列表。 */
+/**
+ * 列出某目录下的条目。path 省略=home；'ROOT'=盘符列表。
+ *
+ * 带 `include=files`：后端一次返回目录 + 文件，目录在前文件在后（工作空间文件树
+ * 需要看到产出文件，只会列目录的话右侧预览永远是空态）。文件项带 size/mtime/ext。
+ */
 export async function listDirs(path?: string): Promise<FsListDirsResult | null> {
   try {
-    const qs = path ? `?path=${encodeURIComponent(path)}` : '';
+    const qs = path
+      ? `?path=${encodeURIComponent(path)}&include=files`
+      : '?include=files';
     const r = await fetch(`${getApiBase()}/api/fs/list${qs}`);
     if (!r.ok) return null;
     const j = await r.json();

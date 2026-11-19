@@ -5,10 +5,11 @@
  * cwd 需要一个真实路径。Node 后端就跑在用户本机,能读磁盘 —— 所以由后端列目录、
  * 前端逐层点选、回传绝对路径,是纯网页能拿到真路径的唯一方案。
  *
- * 只读、只列目录(不返回文件内容)。单机单用户场景,列目录是预期功能。
+ * 只读(不返回文件内容)。单机单用户场景,列目录是预期功能。
  *
  *   GET /api/fs/list?path=<abs>   列出 <path> 下的子目录;path 省略 → 用户 home。
  *                                  path='ROOT' → 列盘符(Windows)或 '/'(POSIX)。
+ *                                  include=files → 条目里同时返回文件项(见下)。
  *   GET /api/fs/home              返回 { home, sep }(前端初始化用)。
  */
 import express, { Router, type Request, type Response } from 'express';
@@ -62,8 +63,23 @@ router.get('/home', (_req: Request, res: Response) => {
   res.json({ data: { home: homedir(), sep: path.sep, isWindows: IS_WIN } });
 });
 
+/** 单目录内文件条目上限（仅在 include=files 时生效）。 */
+const MAX_LIST_FILES = 500;
+
+/**
+ * GET /api/fs/list?path=<absDir>&include=files — 列目录条目,2026-05-30 / 2026-11-19。
+ *
+ * 默认只返回子目录（目录选择器依赖「entries 全是目录」的语义,不能变）。
+ * `include=files` 时 entries 里同时 push 文件项 `{ name, path, isDir: false, size, mtime, ext }`
+ * —— 工作空间文件树（左树 + 右预览）需要一次请求拿到目录和文件,否则只能点进目录、
+ * 永远点不到文件。目录项在前、文件项在后,各自按名字排序。
+ * 单目录文件数超过 MAX_LIST_FILES 时只取前 500（按名字排序后）并回 `truncated: true`,
+ * 避免展开 node_modules 这类超大目录卡死前端；目录项不受此限制。
+ */
 router.get('/list', (req: Request, res: Response) => {
   const raw = typeof req.query.path === 'string' ? req.query.path : '';
+  const include = typeof req.query.include === 'string' ? req.query.include : '';
+  const withFiles = include.split(',').includes('files');
 
   // Special sentinel → drive/root listing.
   if (raw === 'ROOT') {
@@ -88,26 +104,50 @@ router.get('/list', (req: Request, res: Response) => {
     return;
   }
 
-  const entries: Array<{ name: string; path: string; isDir: boolean }> = [];
+  type ListEntry = { name: string; path: string; isDir: boolean; size?: number; mtime?: number; ext?: string };
+  const dirs: ListEntry[] = [];
+  const files: ListEntry[] = [];
   for (const name of names) {
     if (name.startsWith('.')) continue; // hide dotfiles/dirs by default
     const full = path.join(target, name);
     try {
-      if (statSync(full).isDirectory()) {
-        entries.push({ name, path: full, isDir: true });
+      const st = statSync(full);
+      if (st.isDirectory()) {
+        dirs.push({ name, path: full, isDir: true });
+      } else if (withFiles && st.isFile()) {
+        files.push({
+          name,
+          path: full,
+          isDir: false,
+          size: st.size,
+          mtime: st.mtimeMs,
+          ext: path.extname(name).toLowerCase(),
+        });
       }
     } catch {
       /* unreadable entry (permissions / broken link) — skip */
     }
   }
-  entries.sort((a, b) => a.name.localeCompare(b.name));
+  dirs.sort((a, b) => a.name.localeCompare(b.name));
+  files.sort((a, b) => a.name.localeCompare(b.name));
+
+  const truncated = files.length > MAX_LIST_FILES;
+  if (truncated) files.length = MAX_LIST_FILES;
+  const entries: ListEntry[] = dirs.concat(files);
 
   // parent: at a Windows drive root (D:\) dirname returns itself → expose ROOT
   // sentinel so the UI can step up to the drive list.
   let parent = parentOf(target);
   if (parent === null && IS_WIN) parent = 'ROOT';
 
-  res.json({ data: { path: target, parent, isRoot: false, entries } });
+  const data: { path: string; parent: string | null; isRoot: boolean; entries: ListEntry[]; truncated?: true } = {
+    path: target,
+    parent,
+    isRoot: false,
+    entries,
+  };
+  if (truncated) data.truncated = true;
+  res.json({ data });
 });
 
 /**
