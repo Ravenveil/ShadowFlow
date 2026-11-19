@@ -1,227 +1,185 @@
 /**
- * routes/memory/memory-profiles.ts — 单后端迁移：Memory API（Story 9.3 AC4）
+ * memory-profiles.ts — Memory Profile 路由的 Web 适配层（薄壳）
  *
- * 移植自 python backend/python/shadowflow/api/memory/memory.py：
- *   POST   /profiles            → 201 {data:profile, meta:{created_at}}
- *   GET    /profiles            → {data:按 updated_at 倒序, meta:{count}}
- *   GET    /profiles/:id        → {data:profile, meta:{}}
- *   PATCH  /profiles/:id        → {data:profile, meta:{}}
- *   DELETE /profiles/:id        → 204 无体
- *   POST   /writeback/:run_id   → 202 stub（Story 9.4 前占位，文案照抄）
- *   GET    /stats?agent_id=     → placeholder 结构（Story 14.1 模式，文案照抄）
+ * POST   /profiles            → 201 {data,meta:{created_at}}
+ * GET    /profiles            → {data:updated_at 倒序, meta:{count}}
+ * GET    /profiles/:id        → {data,meta:{}}
+ * PATCH  /profiles/:id        → {data,meta:{}}
+ * DELETE /profiles/:id        → 204
+ * POST   /writeback/:run_id   → 202 stub
+ * GET    /stats?agent_id=     → placeholder
  *
- * 响应走 {data, meta} 信封；错误体特殊：顶层 {code, message}，无 error 包装
- * （FastAPI HTTPException(detail={code,message}) 的透传形状）：
- *   400 INVALID_PROFILE_ID / 404 PROFILE_NOT_FOUND / 422 字段越界。
+ * 职责：解析 HTTP → 调用用例 → {data,meta} 信封 + 错误码映射。
+ * 业务规则（数值下限/枚举/默认值）在 profiles-model，数据访问在 infra/sqlite-profile。
  */
 
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import { SqliteProfileRepository } from '../infra/sqlite-profile.repository';
 import {
-  createProfile,
-  deleteProfile,
-  getProfile,
-  listProfiles,
-  updateProfile,
-  UUID_RE,
+  makeCreateProfile,
+  makeListProfiles,
+  makeGetProfile,
+  makeUpdateProfile,
+  makeDeleteProfile,
+} from '../use_cases/profiles';
+import {
   FieldViolationError,
+  UUID_RE,
+  NUM_CONSTRAINTS,
+  DEFAULTS,
   type ProfilePatch,
-} from '../../../storage/memory-profile-configs';
+} from '../profiles-model';
 
-const router = Router();
+const NUM_FIELDS = NUM_CONSTRAINTS.map((c) => c.field);
+const ENUM_FIELDS = ['writeback_policy', 'state_sync_policy', 'compression_policy'] as const;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+/** 工厂：接收 repo，依赖倒置。 */
+export function createMemoryProfilesRouter(repo: SqliteProfileRepository): Router {
+  const router = Router();
+  const deps = { newId: () => randomUUID() };
+  const create = makeCreateProfile(repo, deps);
+  const list = makeListProfiles(repo);
+  const get = makeGetProfile(repo);
+  const update = makeUpdateProfile(repo, {});
+  const remove = makeDeleteProfile(repo);
 
-/** memory.py _check_profile_id 同构：400 INVALID_PROFILE_ID，顶层 {code,message}。 */
-function checkProfileId(res: Response, profileId: string): boolean {
-  if (!UUID_RE.test(profileId)) {
-    res.status(400).json({ code: 'INVALID_PROFILE_ID', message: 'profile_id must be a UUID' });
-    return false;
-  }
-  return true;
-}
-
-/** memory.py _get_or_404 同构：先校验 id，再查库，缺 → 404 PROFILE_NOT_FOUND。 */
-function getOr404(res: Response, profileId: string): boolean {
-  if (!checkProfileId(res, profileId)) return false;
-  if (!getProfile(profileId)) {
-    res
-      .status(404)
-      .json({ code: 'PROFILE_NOT_FOUND', message: `profile ${profileId} not found` });
-    return false;
-  }
-  return true;
-}
-
-// ── POST /profiles → 201 ─────────────────────────────────────────────────────
-
-router.post('/profiles', (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  // CreateProfileRequest 同形：数字档位必须为整数（Pydantic int 语义）；
-  // 越界/非法档位 → 422（FastAPI RequestValidationError 状态码）。
-  for (const field of [
-    'working_memory_limit',
-    'episodic_retention_days',
-    'semantic_retrieval_top_k',
-    'compression_top_k',
-  ] as const) {
-    const v = body[field];
-    if (v !== undefined && (typeof v !== 'number' || !Number.isInteger(v))) {
-      res.status(422).json({ code: 'FIELD_INVALID', message: `${field} must be an integer` });
-      return;
+  function checkProfileId(res: Response, profileId: string): boolean {
+    if (!UUID_RE.test(profileId)) {
+      res.status(400).json({ code: 'INVALID_PROFILE_ID', message: 'profile_id must be a UUID' });
+      return false;
     }
+    return true;
   }
-  for (const field of ['writeback_policy', 'state_sync_policy', 'compression_policy'] as const) {
-    const v = body[field];
-    if (v !== undefined && typeof v !== 'string') {
-      res.status(422).json({ code: 'FIELD_INVALID', message: `${field} must be a string` });
-      return;
+
+  function getOr404(res: Response, profileId: string): boolean {
+    if (!checkProfileId(res, profileId)) return false;
+    if (!get(profileId)) {
+      res.status(404).json({ code: 'PROFILE_NOT_FOUND', message: `profile ${profileId} not found` });
+      return false;
     }
+    return true;
   }
-  try {
-    const profile = createProfile({
-      working_memory_limit: body.working_memory_limit as ProfilePatch['working_memory_limit'],
-      episodic_retention_days: body.episodic_retention_days as ProfilePatch['episodic_retention_days'],
-      semantic_retrieval_top_k: body.semantic_retrieval_top_k as ProfilePatch['semantic_retrieval_top_k'],
-      compression_top_k: body.compression_top_k as ProfilePatch['compression_top_k'],
-      writeback_policy: body.writeback_policy as ProfilePatch['writeback_policy'],
-      state_sync_policy: body.state_sync_policy as ProfilePatch['state_sync_policy'],
-      compression_policy: body.compression_policy as ProfilePatch['compression_policy'],
-    });
-    res.status(201).json({ data: profile, meta: { created_at: new Date().toISOString() } });
-  } catch (err) {
-    if (err instanceof FieldViolationError) {
-      res.status(422).json({ code: 'FIELD_INVALID', message: err.message });
-      return;
-    }
-    throw err;
-  }
-});
 
-// ── GET /profiles → 列表（updated_at 倒序） ──────────────────────────────────
-
-router.get('/profiles', (_req: Request, res: Response) => {
-  const profiles = listProfiles();
-  res.json({ data: profiles, meta: { count: profiles.length } });
-});
-
-// ── GET /profiles/:id ────────────────────────────────────────────────────────
-
-router.get('/profiles/:profile_id', (req: Request, res: Response) => {
-  const { profile_id: pid } = req.params;
-  if (!getOr404(res, pid)) return;
-  res.json({ data: getProfile(pid), meta: {} });
-});
-
-// ── PATCH /profiles/:id ──────────────────────────────────────────────────────
-
-router.patch('/profiles/:profile_id', (req: Request, res: Response) => {
-  const { profile_id: pid } = req.params;
-  if (!getOr404(res, pid)) return;
-  const body = (req.body ?? {}) as Record<string, unknown>;
-  const allowedNum = [
-    'working_memory_limit',
-    'episodic_retention_days',
-    'semantic_retrieval_top_k',
-    'compression_top_k',
-  ] as const;
-  const allowedEnum = ['writeback_policy', 'state_sync_policy', 'compression_policy'] as const;
-  // 未知字段直接丢弃（FastAPI BaseModel 默认忽略 extra）；
-  // 出现的数字字段必须为整数、枚举字段必须为字符串（类型错 → 422）。
-  for (const field of allowedNum) {
-    const v = body[field];
-    if (v !== undefined && (typeof v !== 'number' || !Number.isInteger(v))) {
-      res.status(422).json({ code: 'FIELD_INVALID', message: `${field} must be an integer` });
-      return;
-    }
-  }
-  for (const field of allowedEnum) {
-    const v = body[field];
-    if (v !== undefined && typeof v !== 'string') {
-      res.status(422).json({ code: 'FIELD_INVALID', message: `${field} must be a string` });
-      return;
-    }
-  }
-  try {
-    const updated = updateProfile(pid, {
-      working_memory_limit: body.working_memory_limit as ProfilePatch['working_memory_limit'],
-      episodic_retention_days: body.episodic_retention_days as ProfilePatch['episodic_retention_days'],
-      semantic_retrieval_top_k: body.semantic_retrieval_top_k as ProfilePatch['semantic_retrieval_top_k'],
-      compression_top_k: body.compression_top_k as ProfilePatch['compression_top_k'],
-      writeback_policy: body.writeback_policy as ProfilePatch['writeback_policy'],
-      state_sync_policy: body.state_sync_policy as ProfilePatch['state_sync_policy'],
-      compression_policy: body.compression_policy as ProfilePatch['compression_policy'],
-    });
-    if (!updated) {
-      res.status(404).json({ code: 'PROFILE_NOT_FOUND', message: `profile ${pid} not found` });
-      return;
-    }
-    res.json({ data: updated, meta: {} });
-  } catch (err) {
-    if (err instanceof FieldViolationError) {
-      res.status(422).json({ code: 'FIELD_INVALID', message: err.message });
-      return;
-    }
-    throw err;
-  }
-});
-
-// ── DELETE /profiles/:id → 204 ───────────────────────────────────────────────
-
-router.delete('/profiles/:profile_id', (req: Request, res: Response) => {
-  const { profile_id: pid } = req.params;
-  if (!getOr404(res, pid)) return;
-  deleteProfile(pid);
-  res.status(204).end();
-});
-
-// ── POST /writeback/:run_id → 202（stub — 文案照抄 memory.py） ───────────────
-
-router.post('/writeback/:run_id', (req: Request, res: Response) => {
-  const runId = req.params.run_id;
-  // logger.info("manual_writeback requested for run_id=%s (stub — full impl in Story 9.4)")
-  console.log(
-    `manual_writeback requested for run_id=${runId} (stub — full impl in Story 9.4)`,
-  );
-  res.status(202).json({
-    data: {
-      run_id: runId,
-      status: 'writeback_triggered',
-      // 14-1: stub — non-zero when Story 9.4 writeback lands
-      memories_recalled: 0,
-    },
-    meta: {
-      triggered_at: new Date().toISOString(),
-      note: 'stub — ContextBuilder integration in Story 9.4',
-    },
-  });
-});
-
-// ── GET /stats?agent_id= — placeholder（文案照抄 memory.py） ─────────────────
-
-router.get('/stats', (req: Request, res: Response) => {
-  const agentId = typeof req.query.agent_id === 'string' ? req.query.agent_id : undefined;
-  let profile: ReturnType<typeof getProfile> = null;
-  if (agentId) {
-    for (const p of listProfiles()) {
-      if (p.profile_id === agentId) {
-        profile = p;
-        break;
+  /** HTTP 层字段类型校验（整数 / 字符串），越界交给 model 的 FieldViolationError。 */
+  function fieldTypeOk(res: Response, body: Record<string, unknown>): boolean {
+    for (const field of NUM_FIELDS) {
+      const v = body[field];
+      if (v !== undefined && (typeof v !== 'number' || !Number.isInteger(v))) {
+        res.status(422).json({ code: 'FIELD_INVALID', message: `${field} must be an integer` });
+        return false;
       }
     }
+    for (const field of ENUM_FIELDS) {
+      const v = body[field];
+      if (v !== undefined && typeof v !== 'string') {
+        res.status(422).json({ code: 'FIELD_INVALID', message: `${field} must be a string` });
+        return false;
+      }
+    }
+    return true;
   }
 
-  const wml = profile ? profile.working_memory_limit : 4096;
-  const erd = profile ? profile.episodic_retention_days : 30;
+  function patchFrom(body: Record<string, unknown>): ProfilePatch {
+    return {
+      working_memory_limit: body.working_memory_limit as ProfilePatch['working_memory_limit'],
+      episodic_retention_days: body.episodic_retention_days as ProfilePatch['episodic_retention_days'],
+      semantic_retrieval_top_k: body.semantic_retrieval_top_k as ProfilePatch['semantic_retrieval_top_k'],
+      compression_top_k: body.compression_top_k as ProfilePatch['compression_top_k'],
+      writeback_policy: body.writeback_policy as ProfilePatch['writeback_policy'],
+      state_sync_policy: body.state_sync_policy as ProfilePatch['state_sync_policy'],
+      compression_policy: body.compression_policy as ProfilePatch['compression_policy'],
+    };
+  }
 
-  res.json({
-    data: {
-      working_memory_limit: wml,
-      episodic_retention_days: erd,
-      semantic_skills_count: 0,
-      _note: 'Live counts pending Story 9.4 writeback implementation',
-    },
-    meta: { mode: 'placeholder' },
+  router.post('/profiles', (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (!fieldTypeOk(res, body)) return;
+    try {
+      const profile = create(patchFrom(body));
+      res.status(201).json({ data: profile, meta: { created_at: new Date().toISOString() } });
+    } catch (err) {
+      if (err instanceof FieldViolationError) {
+        res.status(422).json({ code: 'FIELD_INVALID', message: err.message });
+        return;
+      }
+      throw err;
+    }
   });
-});
 
+  router.get('/profiles', (_req: Request, res: Response) => {
+    const profiles = list();
+    res.json({ data: profiles, meta: { count: profiles.length } });
+  });
+
+  router.get('/profiles/:profile_id', (req: Request, res: Response) => {
+    const pid = req.params.profile_id;
+    if (!getOr404(res, pid)) return;
+    res.json({ data: get(pid), meta: {} });
+  });
+
+  router.patch('/profiles/:profile_id', (req: Request, res: Response) => {
+    const pid = req.params.profile_id;
+    if (!getOr404(res, pid)) return;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (!fieldTypeOk(res, body)) return;
+    try {
+      const updated = update(pid, patchFrom(body));
+      if (!updated) {
+        res.status(404).json({ code: 'PROFILE_NOT_FOUND', message: `profile ${pid} not found` });
+        return;
+      }
+      res.json({ data: updated, meta: {} });
+    } catch (err) {
+      if (err instanceof FieldViolationError) {
+        res.status(422).json({ code: 'FIELD_INVALID', message: err.message });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  router.delete('/profiles/:profile_id', (req: Request, res: Response) => {
+    const pid = req.params.profile_id;
+    if (!getOr404(res, pid)) return;
+    remove(pid);
+    res.status(204).end();
+  });
+
+  router.post('/writeback/:run_id', (req: Request, res: Response) => {
+    const runId = req.params.run_id;
+    console.log(`manual_writeback requested for run_id=${runId} (stub — full impl in Story 9.4)`);
+    res.status(202).json({
+      data: { run_id: runId, status: 'writeback_triggered', memories_recalled: 0 },
+      meta: { triggered_at: new Date().toISOString(), note: 'stub — ContextBuilder integration in Story 9.4' },
+    });
+  });
+
+  router.get('/stats', (req: Request, res: Response) => {
+    const agentId = typeof req.query.agent_id === 'string' ? req.query.agent_id : undefined;
+    let profile = null;
+    if (agentId) {
+      for (const p of list()) {
+        if (p.profile_id === agentId) {
+          profile = p;
+          break;
+        }
+      }
+    }
+    res.json({
+      data: {
+        working_memory_limit: profile ? profile.working_memory_limit : DEFAULTS.working_memory_limit,
+        episodic_retention_days: profile ? profile.episodic_retention_days : DEFAULTS.episodic_retention_days,
+        semantic_skills_count: 0,
+        _note: 'Live counts pending Story 9.4 writeback implementation',
+      },
+      meta: { mode: 'placeholder' },
+    });
+  });
+
+  return router;
+}
+
+/** 过渡装配：默认导出 Router 实例，index.ts 与兼容存根零改动。 */
+const router = createMemoryProfilesRouter(new SqliteProfileRepository());
 export default router;
