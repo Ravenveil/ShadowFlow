@@ -101,12 +101,14 @@ describe('checkRemoteCommand（基线表 + 远端专属）', () => {
     expect(checkRemoteCommand('rm -rf build')).toBe('rm -r/-f');
   });
 
-  it('已知缺口（原表如此）：裸 /etc 路径命不中基线表那条规则', () => {
-    // 基线表原规则是 /\b\/etc\/(passwd|shadow|...)/ —— `\b` 前必须是单词字符，
-    // 所以 "cat /etc/shadow" 一直命不中。抽出按「行为零变化」保留原样；
-    // 远端侧已在 REMOTE_ONLY_BLOCKED 用正确写法补上（见下一个用例）。
-    // 若将来决定修基线表，这条断言会变红 —— 那时是**有意的**行为变更。
-    expect(checkLocalCommand('cat /etc/shadow')).toBeNull();
+  it('裸 /etc 路径也命中（2026-11-20 修正 \\b 写法造成的历史缺口）', () => {
+    // 原规则 /\b\/etc\/(passwd|shadow|...)/ 的 `\b` 前必须是单词字符，而路径前
+    // 通常是空格/行首 → "cat /etc/shadow" 一直能绕过。这里改成
+    // `(^|[\s;&|'"`(])\/etc\/…` 后补上，属于**有意的行为变更**：
+    // 之前那条「已知缺口」断言（期望 null）就是被这条取代的。
+    expect(checkLocalCommand('cat /etc/shadow')).toBe('/etc sensitive file');
+    expect(checkLocalCommand('cat /etc/passwd')).toBe('/etc sensitive file');
+    expect(checkLocalCommand('/etc/sudoers')).toBe('/etc sensitive file');
   });
 
   it('集群凭据文件：基线表的历史缺口在远端被补上', () => {

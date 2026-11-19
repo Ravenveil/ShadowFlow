@@ -54,7 +54,9 @@ export const BLOCKED_PATTERNS: BlockedPattern[] = [
   { re: /\bbase64\s+(-d|--decode)\b[^\n]*\|\s*(sh|bash|zsh)/i, reason: 'base64 | sh' },
   { re: /\bnc\b\s+-[a-z]*l/i, reason: 'netcat listen' },
   { re: /\bncat\b\s+-[a-z]*l/i, reason: 'ncat listen' },
-  { re: /\b\/etc\/(passwd|shadow|sudoers|hosts)\b/i, reason: '/etc sensitive file' },
+  // 2026-11-20 修正：原写法 /\b\/etc\/(passwd|…)/ 里 `\b` 前必须是单词字符，
+  // 而路径前通常是空格/行首，导致 `cat /etc/shadow` 一直命不中（历史缺口）。
+  { re: /(^|[\s;&|'"`(])\/etc\/(passwd|shadow|sudoers|hosts)\b/i, reason: '/etc sensitive file' },
   { re: /\b\/dev\/(sd[a-z]|nvme|hd[a-z]|mem|kmem)\b/i, reason: '/dev block/raw device' },
   { re: /\bcrontab\s+(-r|-e)\b/i, reason: 'crontab modify' },
   { re: /\bsystemctl\s+(disable|enable|stop|start|mask|unmask)\b/i, reason: 'systemctl service' },

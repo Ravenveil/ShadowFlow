@@ -25,13 +25,14 @@
  * Persistence is delegated to Python (not direct JSON writes) so atomic-write,
  * schema, path-validation and single-writer invariants stay in one process.
  */
-import { mkdirSync, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
-import { homedir } from 'node:os';
 import { Router, type Request, type Response } from 'express';
 import { getGroupsBackend } from '../../storage/groups-backend';
 import { isSingleBackend } from '../../config/backend-mode';
 import { readAgentFile } from '../../lib/agent-store';
+// 工作目录解析与远端产出回传（POST /remote-exec/sync）共用同一实现，防漂移
+import { resolveChatWorkspace as resolveChatWorkspaceShared } from '../../lib/chat-workspace';
+// 远端执行工具（remote_shell）只在设置了 SSH 主机时才进入 agent 白名单
+import { readSshConfig } from '../../lib/ssh-exec';
 import { publishGroupEvent } from './groups-event-bus';
 import { resolveCallable } from '../../transport/dispatcher';
 import { ApiClientCallable, trackUsage } from '../../transport/ApiClientCallable';
@@ -793,8 +794,16 @@ export function emitToolChunk(gw: ToolGw, chunk: TurnChunk, who?: ToolOwner): vo
 // 权限是 deny，群聊又没有 toolApprovals 审批通道，贸然放开等于给模型一个
 // 无人看守的 shell。
 
+// 第二批：远端执行（2026-11-20）。shell_exec 仍然不接 —— 那是本机无人看守的
+// shell；远端反而是更安全的路径：命令钉死在 remoteDir 内、有远端专属黑名单
+// （包管理/横向跳机器/外带数据全禁）、可见于 tool_call 卡。
+//
+// 关键设计：**只有在设置里配好了 SSH 主机（settings KV `remote.ssh`）时，
+// remote_shell 才进入白名单**。没配时 agent 连这个工具名都看不到，不会拿着
+// 一个必然失败的工具反复重试烧 token。
+
 /** 第一批白名单：全部是 workspace 沙箱内的文件类工具。 */
-const AGENT_FILE_TOOL_NAMES = [
+export const AGENT_FILE_TOOL_NAMES = [
   'read_file',
   'write_file',
   'edit_file',
@@ -803,8 +812,20 @@ const AGENT_FILE_TOOL_NAMES = [
   'grep',
 ] as const;
 
-/** 白名单的 Set 视图（既用于挑 ToolSpec，也作为执行器 scope 的 allowedTools）。 */
-const AGENT_FILE_TOOL_SET: ReadonlySet<string> = new Set(AGENT_FILE_TOOL_NAMES);
+/** 远端执行工具名（配置了 SSH 主机时才启用）。 */
+export const AGENT_REMOTE_TOOL_NAME = 'remote_shell';
+
+/**
+ * 本轮对 agent 可见的工具名（纯函数，便于单测）。
+ *
+ * 每次 turn 现算而不是模块级常量：用户可能在会话进行中去设置页配好主机，
+ * 下一轮就该生效（readSshConfig 只是读一个小 JSON，代价可忽略）。
+ */
+export function agentToolNames(hasRemote: boolean): readonly string[] {
+  return hasRemote
+    ? [...AGENT_FILE_TOOL_NAMES, AGENT_REMOTE_TOOL_NAME]
+    : AGENT_FILE_TOOL_NAMES;
+}
 
 /**
  * 单节点工具循环上限。ConversationRuntime 默认 50 是组装场景（一条 goal 走完
@@ -867,16 +888,18 @@ interface RunAgentTurnArgs {
  */
 function buildAgentToolLoopStream(a: RunAgentTurnArgs): AsyncGenerator<TurnChunk> {
   ensureBuiltinExecutors();
+  // 本轮可见工具（配置了 SSH 主机才会多出 remote_shell）
+  const toolNames = agentToolNames(Boolean(readSshConfig()));
+  const toolNameSet: ReadonlySet<string> = new Set(toolNames);
   // 按白名单从 builtinTools 里挑「真实 spec」（带完整 input_schema）。
   // 不要学 assembler.ts 的 permissive 空 schema —— 那会让模型瞎填参数。
-  const specs = builtinTools.filter((t) => AGENT_FILE_TOOL_SET.has(t.name));
+  const specs = builtinTools.filter((t) => toolNameSet.has(t.name));
   // 群聊没有 toolApprovals 通道：'prompt' 会在 tool-runner 里降级成 deny
-  // （等于没接），所以这 6 个文件工具全部显式 allow。
+  // （等于没接），所以白名单里的工具全部显式 allow。
+  // remote_shell 的额外防线在执行器自身：路径钉死 remoteDir + 远端专属黑名单。
   const policy = new PermissionPolicyV2({
-    allowedTools: [...AGENT_FILE_TOOL_NAMES],
-    defaults: Object.fromEntries(
-      AGENT_FILE_TOOL_NAMES.map((n) => [n, 'allow'] as const),
-    ),
+    allowedTools: [...toolNames],
+    defaults: Object.fromEntries(toolNames.map((n) => [n, 'allow'] as const)),
   });
   const toolRunner = new ToolRunner(new ToolRegistry(specs), policy);
   // 成本流水：ApiClientCallable.turn() 内部会包 trackUsage，tool 循环直接拿
@@ -897,7 +920,7 @@ function buildAgentToolLoopStream(a: RunAgentTurnArgs): AsyncGenerator<TurnChunk
     history: [...a.history],
     signal: a.signal,
     workspace: a.workspace,
-    allowedTools: AGENT_FILE_TOOL_SET,
+    allowedTools: toolNameSet,
   });
 }
 
@@ -965,34 +988,15 @@ async function runAgentTurn(a: RunAgentTurnArgs): Promise<{ text: string; error?
 /**
  * Resolve the CLI/ACP/MCP working directory (cwd) for a group.
  *
- * Priority (2026-05-30):
- *   1. group.workspace_dir — user-picked absolute path (group settings DirPicker).
- *      Used verbatim if it's an existing absolute directory. The bypassed CLI
- *      can read/write here, so it's the user's explicit choice.
- *   2. Fallback scratch dir OUTSIDE the repo:
- *      `$SHADOWFLOW_CHAT_DIR | ~/.shadowflow-chat`/chat-workspaces/<groupId>.
- *      Previously this lived under the repo (`process.cwd()/.shadowflow/...`),
- *      which let `claude` follow the git root and read the whole ShadowFlow
- *      codebase — `bypassPermissions + cwd-in-repo` is the dangerous combo we
- *      avoid here (see docs/architecture/chat-cli-cwd-and-permissions.md).
+ * 实现已抽到 `lib/chat-workspace.ts`（远端产出回传 POST /remote-exec/sync 需要
+ * 落回**同一个目录**，复制一份必然漂移）。优先级与语义见该模块头部注释：
+ *   1. group.workspace_dir — 用户在群设置里选的绝对目录（存在则原样用）；
+ *   2. 否则回落到 repo 之外的 scratch：`~/.shadowflow-chat/chat-workspaces/<groupId>`。
+ *      （刻意不放 repo 内：bypassPermissions + cwd-in-repo 会让 CLI 顺着 git root
+ *      读到整个代码库，见 docs/architecture/chat-cli-cwd-and-permissions.md。）
  */
 function resolveChatWorkspace(groupId: string, userDir?: string): string {
-  if (userDir && userDir.trim() && isAbsolute(userDir.trim())) {
-    const p = userDir.trim();
-    try {
-      if (statSync(p).isDirectory()) return p;
-    } catch {
-      /* user dir gone / unreadable — fall through to default scratch */
-    }
-  }
-  const root = process.env.SHADOWFLOW_CHAT_DIR?.trim() || join(homedir(), '.shadowflow-chat');
-  const dir = join(root, 'chat-workspaces', groupId.replace(/[^\w-]/g, '_'));
-  try {
-    mkdirSync(dir, { recursive: true });
-  } catch {
-    /* best-effort; spawn will surface a clearer error if it truly can't run */
-  }
-  return dir;
+  return resolveChatWorkspaceShared(groupId, userDir);
 }
 
 /** Resolve executor → callable opts (key only for byok:/anthropic-direct). */
