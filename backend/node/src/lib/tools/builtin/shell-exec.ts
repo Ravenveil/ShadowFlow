@@ -37,6 +37,7 @@
 import { spawn } from 'child_process';
 import type { ToolSpec } from '../../tool-spec';
 import { SHELL_TIMEOUT_MS } from './sandbox-utils';
+import { checkLocalCommand } from '../../remote-safety';
 import type { BuiltinToolExecutor, BuiltinToolContext } from './types';
 
 export const shellExecTool: ToolSpec = {
@@ -73,51 +74,10 @@ function isShellExecInput(x: unknown): x is ShellExecInput {
 const MAX_OUTPUT_BYTES = 256 * 1024;
 
 /**
- * Patterns that are blocked unconditionally. Order matters — first match wins
- * the error message. We're deliberately liberal: false positives on
- * legitimate commands are easier to debug than a hole.
+ * 命令黑名单在 2026-11-20 抽到 `lib/remote-safety.ts`（`BLOCKED_PATTERNS` /
+ * `checkLocalCommand`），与远端 `remote_shell` 共用同一张基线表 —— 改规则只改
+ * 一处，两条执行路径不会漏。本文件的行为**零变化**：命中即拒，文案同前。
  */
-const BLOCKED_PATTERNS: Array<{ re: RegExp; reason: string }> = [
-  { re: /(^|[\s;&|`(])sudo(\s|$)/i, reason: 'sudo' },
-  { re: /(^|[\s;&|`(])doas(\s|$)/i, reason: 'doas' },
-  { re: /(^|[\s;&|`(])su\s+-/i, reason: 'su -' },
-  { re: /rm\s+(-[A-Za-z]*[rRfF][A-Za-z]*\s|--recursive\s|--force\s)/i, reason: 'rm -r/-f' },
-  { re: /rm\s+-rf?\s+\/(?!\s*$)/i, reason: 'rm -rf /' },
-  { re: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:/, reason: 'fork bomb' },
-  { re: /\bmkfs(\.\w+)?\b/i, reason: 'mkfs' },
-  { re: /\bdd\s+(if|of)=/i, reason: 'dd' },
-  { re: /\bshutdown\b/i, reason: 'shutdown' },
-  { re: /\breboot\b/i, reason: 'reboot' },
-  { re: /\bhalt\b/i, reason: 'halt' },
-  { re: /\bpoweroff\b/i, reason: 'poweroff' },
-  { re: /\binit\s+0\b/i, reason: 'init 0' },
-  { re: /\binsmod\b|\brmmod\b|\bmodprobe\b/i, reason: 'kernel module op' },
-  { re: /\bchmod\s+-R\s+777\b/i, reason: 'chmod -R 777' },
-  { re: /\bchown\s+-R\b/i, reason: 'chown -R' },
-  { re: /(curl|wget|fetch|iwr|Invoke-WebRequest)[^\n]*\|\s*(sh|bash|zsh|ksh|csh|tcsh|pwsh|powershell|python\b|perl|ruby|node|tee\s)/i, reason: 'pipe download to interpreter' },
-  { re: /(curl|wget)[^\n]*--?o[A-Za-z]*\s+\/(etc|bin|sbin|usr|var|root|boot|lib|dev|proc|sys)\//i, reason: 'download into system path' },
-  { re: /\s>\s*\/(etc|bin|sbin|usr|root|boot|lib|dev|proc|sys)\//i, reason: 'redirect into system path' },
-  { re: /\beval\s+["'`]?\$\(/i, reason: 'eval $(...)' },
-  { re: /\bbase64\s+(-d|--decode)\b[^\n]*\|\s*(sh|bash|zsh)/i, reason: 'base64 | sh' },
-  { re: /\bnc\b\s+-[a-z]*l/i, reason: 'netcat listen' },
-  { re: /\bncat\b\s+-[a-z]*l/i, reason: 'ncat listen' },
-  { re: /\b\/etc\/(passwd|shadow|sudoers|hosts)\b/i, reason: '/etc sensitive file' },
-  { re: /\b\/dev\/(sd[a-z]|nvme|hd[a-z]|mem|kmem)\b/i, reason: '/dev block/raw device' },
-  { re: /\bcrontab\s+(-r|-e)\b/i, reason: 'crontab modify' },
-  { re: /\bsystemctl\s+(disable|enable|stop|start|mask|unmask)\b/i, reason: 'systemctl service' },
-  { re: /\bservice\s+\w+\s+(stop|start|restart)\b/i, reason: 'service control' },
-  { re: /\biptables\b|\bnft\b|\bufw\b/i, reason: 'firewall op' },
-  { re: /\bRegistry::|\bReg(istry)?\s+(add|delete)\b|\bregedit\b/i, reason: 'registry op' },
-  { re: /\bformat\s+[A-Za-z]:/i, reason: 'format drive' },
-  { re: /\bDel\s+\/[A-Za-z]\s+\/[A-Za-z]/i, reason: 'recursive delete' },
-];
-
-function checkBlocked(cmd: string): string | null {
-  for (const { re, reason } of BLOCKED_PATTERNS) {
-    if (re.test(cmd)) return reason;
-  }
-  return null;
-}
 
 /** Build a minimal, sanitised env. PATH is required for shell to find utilities. */
 function buildSafeEnv(srcEnv?: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
@@ -161,7 +121,7 @@ export const shellExecExecutor: BuiltinToolExecutor = async (
     };
   }
 
-  const blockedReason = checkBlocked(cmd);
+  const blockedReason = checkLocalCommand(cmd);
   if (blockedReason) {
     return {
       output: { error: `shell_exec blocked: matches dangerous pattern (${blockedReason})` },

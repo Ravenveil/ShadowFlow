@@ -4,7 +4,7 @@
  * Covers the 8 provider-backed platform tools (send_email / im_read / im_send /
  * github_request / github_write / image_generate / video_generate / generate_3d)
  * and the web_search recency/wechat enhancement:
- *   - registry integrity: 17 builtins, executor/mode coverage, mode sanity
+ *   - registry integrity: 18 builtins, executor/mode coverage, mode sanity
  *   - stub contract: no provider configured → structured stub, no network I/O
  *   - provider mapping: URL / headers / body asserted via a mocked global fetch
  *   - input validation errors surface as isError results
@@ -81,10 +81,12 @@ afterEach(() => {
 // ─── registry integrity ─────────────────────────────────────────────────────
 
 describe('builtin registry (platform capability pack)', () => {
-  it('registers exactly the 17 builtin tools with unique names', () => {
-    expect(builtinTools).toHaveLength(17);
+  // 18 = 17 个平台能力包 + 2026-11-20 新增的 remote_shell（SSH 远端执行，默认 deny）。
+  // 计数从 17 变 18 不是回归：新增内置工具必然让「注册了恰好 N 个」的断言变红。
+  it('registers exactly the 18 builtin tools with unique names', () => {
+    expect(builtinTools).toHaveLength(18);
     const names = builtinTools.map((t) => t.name);
-    expect(new Set(names).size).toBe(17);
+    expect(new Set(names).size).toBe(18);
     for (const n of [
       'send_email', 'im_read', 'im_send', 'github_request', 'github_write',
       'image_generate', 'video_generate', 'generate_3d',
@@ -113,6 +115,8 @@ describe('builtin registry (platform capability pack)', () => {
     expect(builtinDefaultModes.github_request).toBe('allow');
     expect(builtinDefaultModes.image_generate).toBe('allow');
     expect(builtinDefaultModes.shell_exec).toBe('deny');
+    // 远端执行爆炸半径更大（共享集群）→ 同样默认 deny。
+    expect(builtinDefaultModes.remote_shell).toBe('deny');
   });
 });
 

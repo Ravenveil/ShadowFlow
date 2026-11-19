@@ -6,12 +6,20 @@
  *   PUT  /config  → 保存配置（host/user/port/keyPath/remoteDir）
  *   POST /test    → 连通性自检（echo + uname + pwd，20s 超时）
  *   POST /run     → 在远端项目目录跑一条命令（默认 120s，可传 timeoutMs）
+ *   POST /sync    → 把远端产出一键拉回本机（2026-11-20，见下）
+ *
+ * `/sync` 的定位：agent 在远端跑的产出（log / 图 / tex）必须落回**本机**，右栏
+ * 产出面板才看得见 —— 面板枚举的是本机文件系统（前端 NeoHost 跟随
+ * conversation.workspaceDir → GET /api/fs/list）。落点与群工作目录同源：
+ *   `<resolveChatWorkspace(group_id, group.workspace_dir)>/remote/<turn_id>`
+ * 传输方式与上限见 `lib/remote-sync.ts`（ssh | 本地 tar 流，200 MiB / 2000 文件）。
  *
  * 安全边界：命令由本机 ssh 客户端发到用户自己配置的主机，等同于用户手敲 ssh；
  * 本端点不落私钥内容（只存路径），也不支持密码认证（BatchMode=yes）。
  */
 
 import { Router, type Request, type Response } from 'express';
+import { join } from 'node:path';
 import {
   mergeSshConfig,
   readSshConfig,
@@ -22,6 +30,10 @@ import {
   SSH_CONFIG_KEY,
 } from '../../lib/ssh-exec';
 import { setSetting } from '../../storage/settings';
+import { getGroupsBackend } from '../../storage/groups-backend';
+import { resolveChatWorkspace } from '../../lib/chat-workspace';
+import { pullRemoteTree, RemoteSyncError } from '../../lib/remote-sync';
+import { assertInsideRemoteDir } from '../../lib/remote-safety';
 
 const router = Router();
 
@@ -157,6 +169,95 @@ router.post('/run', async (req: Request, res: Response) => {
     const code = (err as { code?: string }).code ?? 'SSH_RUN_FAILED';
     res.status(code === 'SSH_BINARY_MISSING' ? 500 : 502).json({
       error: { code, message: (err as Error).message },
+    });
+  }
+});
+
+router.post('/sync', async (req: Request, res: Response) => {
+  const cfg = readSshConfig();
+  if (!cfg) {
+    res.status(400).json({
+      error: { code: 'SSH_NOT_CONFIGURED', message: '还没有配置远程主机' },
+    });
+    return;
+  }
+
+  const body = (req.body ?? {}) as {
+    group_id?: unknown;
+    turn_id?: unknown;
+    remote_subdir?: unknown;
+  };
+  const groupId = typeof body.group_id === 'string' ? body.group_id.trim() : '';
+  const turnId = typeof body.turn_id === 'string' ? body.turn_id.trim() : '';
+
+  // turn_id 会直接拼进本机目录名 → 只允许安全字符（防 `..`/分隔符穿越）。
+  if (!groupId || !/^[A-Za-z0-9_-]+$/.test(groupId)) {
+    res.status(400).json({
+      error: { code: 'INVALID_GROUP_ID', message: 'group_id 必填且只允许字母/数字/下划线/连字符' },
+    });
+    return;
+  }
+  if (!turnId || !/^[A-Za-z0-9_-]+$/.test(turnId)) {
+    res.status(400).json({
+      error: { code: 'INVALID_TURN_ID', message: 'turn_id 必填且只允许字母/数字/下划线/连字符' },
+    });
+    return;
+  }
+  const remoteSubdir =
+    typeof body.remote_subdir === 'string' ? body.remote_subdir.trim() : '';
+  // 客户端给的远端子路径同样钉死在 remoteDir 内（拒绝绝对路径 / `..` / `~`）。
+  const subErr = assertInsideRemoteDir(remoteSubdir);
+  if (subErr) {
+    res.status(400).json({
+      error: { code: 'REMOTE_PATH_ESCAPE', message: `remote_subdir 非法：${subErr}` },
+    });
+    return;
+  }
+
+  let groupWorkspaceDir: string | null = null;
+  try {
+    const group = await getGroupsBackend().getGroup(groupId);
+    if (!group) {
+      res.status(404).json({
+        error: { code: 'GROUP_NOT_FOUND', message: `群不存在：${groupId}` },
+      });
+      return;
+    }
+    groupWorkspaceDir = group.workspace_dir ?? null;
+  } catch (err) {
+    // 群读取降级：拿不到 workspace_dir 时退回 scratch 目录（右栏面板同样跟随它），
+    // 产出依然可见 —— 拉回不能因为一次群查询失败就没收用户的产出。
+    console.warn(
+      `[remote-exec] /sync 群查询失败 group=${groupId.slice(0, 8)}: ${(err as Error).message}`,
+    );
+  }
+
+  const dest = join(resolveChatWorkspace(groupId, groupWorkspaceDir), 'remote', turnId);
+
+  try {
+    const r = await pullRemoteTree({
+      config: cfg,
+      destDir: dest,
+      ...(remoteSubdir ? { remoteSubdir } : {}),
+    });
+    res.json({
+      data: {
+        files: r.files,
+        bytes: r.bytes,
+        dest: r.dest,
+        remote_subdir: r.remoteSubdir,
+      },
+      meta: {},
+    });
+  } catch (err) {
+    if (err instanceof RemoteSyncError) {
+      res.status(err.code === 'REMOTE_SYNC_TOO_LARGE' ? 413 : 502).json({
+        error: { code: err.code, message: err.message },
+      });
+      return;
+    }
+    res.status(500).json({
+      error: { code: 'REMOTE_SYNC_FAILED', message: (err as Error).message },
     });
   }
 });

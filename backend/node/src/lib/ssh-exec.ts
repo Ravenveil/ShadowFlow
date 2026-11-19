@@ -143,15 +143,16 @@ function shellQuote(s: string): string {
 }
 
 /**
- * 执行远端命令。失败不抛异常（结构化返回 code/stderr），
- * 只有 ssh 二进制不存在这种环境错误才 reject —— 便于路由区分 500 与业务失败。
+ * 拼 ssh argv（2026-11-20 抽出为公开函数）。
+ *
+ * 抽出原因：产出回传要走 `ssh host 'tar -czf - …' | 本地 tar` 的**流式管道**
+ * （体积大、二进制，不能按 utf-8 收进字符串），那条路径在 `lib/remote-sync.ts`
+ * 里自己 spawn，需要与 `sshExec` 完全一致的连接参数 —— 复制一份必然漂移。
+ * `sshExec` 自身改为调用本函数，走的是同一份 argv，行为零变化。
+ *
+ * 命令经 argv 传参、不经本地 shell（避免注入）；远端仍是 shell 语义。
  */
-export function sshExec(
-  config: SshConfig,
-  command: string,
-  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
-): Promise<SshExecResult> {
-  const timeoutMs = Math.min(Math.max(opts.timeoutMs ?? 120_000, 1_000), MAX_TIMEOUT_MS);
+export function buildSshArgs(config: SshConfig, command: string): string[] {
   const args = [
     '-p', String(config.port),
     '-o', 'BatchMode=yes',
@@ -162,10 +163,21 @@ export function sshExec(
   if (config.keyPath) args.push('-i', expandHome(config.keyPath));
   args.push(`${config.user}@${config.host}`);
   // 远端：先 cd 到项目目录再跑命令（一个 argv，远端 shell 展开）
-  const remote = config.remoteDir
-    ? `cd ${shellQuote(config.remoteDir)} && ${command}`
-    : command;
-  args.push(remote);
+  args.push(config.remoteDir ? `cd ${shellQuote(config.remoteDir)} && ${command}` : command);
+  return args;
+}
+
+/**
+ * 执行远端命令。失败不抛异常（结构化返回 code/stderr），
+ * 只有 ssh 二进制不存在这种环境错误才 reject —— 便于路由区分 500 与业务失败。
+ */
+export function sshExec(
+  config: SshConfig,
+  command: string,
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<SshExecResult> {
+  const timeoutMs = Math.min(Math.max(opts.timeoutMs ?? 120_000, 1_000), MAX_TIMEOUT_MS);
+  const args = buildSshArgs(config, command);
 
   const started = Date.now();
   return new Promise<SshExecResult>((resolve, reject) => {

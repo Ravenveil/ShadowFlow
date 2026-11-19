@@ -1,5 +1,9 @@
 /**
- * builtin/index.ts — Default registry for the 17 ConversationRuntime builtins.
+ * builtin/index.ts — Default registry for the 18 ConversationRuntime builtins.
+ *
+ * 2026-11-20 — +1 `remote_shell`（SSH 远端执行，默认 deny）。17 → 18，不是回归：
+ * 新增工具必然让「注册了恰好 N 个」的计数断言变红，`__tests__/platform-tools.test.ts`
+ * 同步改成 18。
  *
  * 2026-11-07 — WorkBuddy 平台能力补齐: +8 provider-backed platform tools
  * (send_email / im_read / im_send / github_request / github_write /
@@ -62,6 +66,7 @@ import { imageGenerateTool, imageGenerateExecutor } from './image-generate';
 import { videoGenerateTool, videoGenerateExecutor } from './video-generate';
 import { generate3dTool, generate3dExecutor } from './three-d-generate';
 import { shellExecTool, shellExecExecutor } from './shell-exec';
+import { remoteShellTool, remoteShellExecutor } from './remote-shell';
 
 export const builtinTools: ToolSpec[] = [
   // read-tier (safe-by-default)
@@ -85,6 +90,9 @@ export const builtinTools: ToolSpec[] = [
   generate3dTool,
   // shell last
   shellExecTool,
+  // 2026-11-20 — 远端执行（SSH）。同样高风险，排在 shell_exec 之后。
+  // 追加进数组会让「17 个 builtin」的断言变 18（见 __tests__/platform-tools.test.ts）。
+  remoteShellTool,
 ];
 
 export const builtinExecutors: Record<string, BuiltinToolExecutor> = {
@@ -105,6 +113,7 @@ export const builtinExecutors: Record<string, BuiltinToolExecutor> = {
   video_generate: videoGenerateExecutor,
   generate_3d: generate3dExecutor,
   shell_exec: shellExecExecutor,
+  remote_shell: remoteShellExecutor,
 };
 
 /**
@@ -132,6 +141,11 @@ export const builtinDefaultModes: Record<string, PermissionMode> = {
   video_generate: 'prompt',
   generate_3d: 'prompt',
   shell_exec: 'deny',
+  // 远端执行爆炸半径更大（共享集群）→ 默认 deny。语义与 shell_exec 一致：
+  // agent/skill 的 allowed-tools 显式列出后即「listed→allow」放行；要人工审批
+  // 得在构造 PermissionPolicyV2 时显式给 defaults: { remote_shell: 'prompt' }
+  // （promptDefaultsForTools 只抬 'prompt' 项，不会替这里加闸）。
+  remote_shell: 'deny',
 };
 
 /**
