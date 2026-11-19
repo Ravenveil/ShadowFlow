@@ -23,7 +23,9 @@ from shadowflow.runtime.catalog_service import (
     RegisterPublishedAppRequest,
 )
 from shadowflow.runtime.catalog_templates import (
+    ARC_APP_ID,
     T04_APP_ID,
+    build_auto_research_cloud_blueprint,
     build_t04_hydrogen_team_blueprint,
     ensure_builtin_templates,
 )
@@ -76,16 +78,17 @@ def _team_files(tmp_path: Path):
 def test_seed_builtin_templates_idempotent(_isolated_stores):
     svc, _ = _isolated_stores
     seeded = ensure_builtin_templates(svc)
-    assert seeded == [T04_APP_ID]
+    assert seeded == [T04_APP_ID, ARC_APP_ID]
     # 第二次调用幂等跳过
     assert ensure_builtin_templates(svc) == []
 
     listing = svc.list_apps()
-    assert listing["total"] == 1
-    app0 = listing["apps"][0]
-    assert app0["app_id"] == T04_APP_ID
-    assert app0["mode"] == "team"
-    assert "氢能获客" in app0["name"]
+    assert listing["total"] == 2
+    by_id = {a["app_id"]: a for a in listing["apps"]}
+    assert by_id[T04_APP_ID]["mode"] == "team"
+    assert "氢能获客" in by_id[T04_APP_ID]["name"]
+    assert by_id[ARC_APP_ID]["mode"] == "team"
+    assert "论文专家团" in by_id[ARC_APP_ID]["name"]
 
 
 def test_t04_template_blueprint_valid_team_dag(_isolated_stores):
@@ -103,6 +106,61 @@ def test_t04_template_blueprint_valid_team_dag(_isolated_stores):
     # L6 人工审批门 + 驳回回炉边
     assert modes[("reviewer", "verifier")] == "approve"
     assert modes[("reviewer", "strategist")] == "conditional"
+
+
+def test_arc_blueprint_valid_team_dag(_isolated_stores):
+    bp = build_auto_research_cloud_blueprint()
+    assert bp.mode == "team"
+    assert len(bp.role_profiles) == 9
+    ids = [r.role_id for r in bp.role_profiles]
+    assert "role-coordinator" in ids and "role-verifier" in ids
+    for role in bp.role_profiles:
+        # persona 是真实中文 system prompt，且携带 ARC 团队使命
+        assert "Auto Research Cloud" in role.persona
+        assert "学术诚信" in role.persona
+        assert role.executor_provider == "zhipu"
+        assert role.executor_model.startswith("glm-")
+    dag = bp.metadata["team_dag"]
+    assert len(dag["nodes"]) == 9
+    modes = {(e["source"], e["target"]): e["mode"] for e in dag["edges"]}
+    # 两道人工审批门 + 审稿驳回回炉边
+    assert modes[("methodologist", "experimenter")] == "approve"
+    assert modes[("reviewer", "verifier")] == "approve"
+    assert modes[("reviewer", "writer")] == "conditional"
+
+
+def test_arc_fork_materializes_9_agents_and_team(_isolated_stores):
+    svc, tmp_path = _isolated_stores
+    svc.register_published_app(
+        RegisterPublishedAppRequest(
+            blueprint=build_auto_research_cloud_blueprint(),
+            author="ShadowFlow 模板库",
+            kit_type="custom",
+            app_id=ARC_APP_ID,
+        )
+    )
+    resp = client.post(f"/catalog/apps/{ARC_APP_ID}/fork")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    team = data["team"]
+    assert len(data["agents"]) == 9
+    assert len(team["agent_ids"]) == 9
+
+    agents = _agent_files(tmp_path)
+    assert set(agents.keys()) == set(team["agent_ids"])
+    for rec in agents.values():
+        assert rec["source"] == "catalog_fork"
+        assert "Auto Research Cloud" in rec["soul"]
+
+    stored = _team_files(tmp_path)[team["team_id"]]
+    node_agent_ids = [n["data"]["agentId"] for n in stored["workflow"]["nodes"]]
+    assert sorted(node_agent_ids) == sorted(team["agent_ids"])
+    edge_modes = {
+        (e["source"], e["target"]): e["data"]["mode"]
+        for e in stored["workflow"]["edges"]
+    }
+    assert edge_modes[("methodologist", "experimenter")] == "approve"
+    assert edge_modes[("reviewer", "writer")] == "conditional"
 
 
 # ---------------------------------------------------------------------------

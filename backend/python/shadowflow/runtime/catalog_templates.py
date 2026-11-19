@@ -1,13 +1,18 @@
-"""内置 Catalog 团队模板 — 浦发·IGNITE T04「氢能获客 6 角色 DAG 团队」。
+"""内置 Catalog 团队模板（默认专家团）数据源。
 
-第二轮「一键 fork 模板团队」黄金路径的数据源：
-  - build_t04_hydrogen_team_blueprint() 构造 mode="team" 的 AgentBlueprint，
-    6 个 RoleProfile 携带真实可用的中文 persona（不写死输出模板），
-    DAG 拓扑放在 blueprint.metadata["team_dag"]（nodes/edges，含 L6 人工审批门）。
-  - ensure_builtin_templates(service) 幂等种子：以固定 app_id 注册进 catalog
-    数据目录（.shadowflow/catalog/），已存在则跳过。server 启动时调用一次。
+第二轮「一键 fork 模板团队」黄金路径的数据源，现内置两支团队：
+  - T04「氢能获客 6 角色 DAG 团队」：素材来自 T04_氢能获客Agent_作品/web/data.js
+    （氢璞创能脱敏样例，A级可公开）。
+  - ARC「Auto Research Cloud 论文专家团」：9 角色学术自动化流水线
+    （主控 → 文献 → 精读 → 方法 → 实验 → 分析 → 写作 → 审稿 → 核查），
+    含实验方案与投稿前两道人工审批门、审稿驳回回炉边。
 
-素材来源：T04_氢能获客Agent_作品/web/data.js（氢璞创能脱敏样例，A级可公开）。
+每支团队：build_*() 构造 mode="team" 的 AgentBlueprint，RoleProfile 携带真实可用
+的中文 persona（不写死输出模板），DAG 拓扑放在 blueprint.metadata["team_dag"]
+（nodes/edges）。ensure_builtin_templates(service) 以固定 app_id 幂等种子进
+catalog 数据目录（.shadowflow/catalog/），已存在则跳过；server 启动时调用一次。
+fork 时 role_profiles → 独立 agents、team_dag → team workflow（含 approve/conditional
+边），前端「从模板新建」列表自动出现，点击即 fork → 进群跑 DAG。
 """
 from __future__ import annotations
 
@@ -27,6 +32,10 @@ from shadowflow.runtime.contracts_builder import (
 
 T04_APP_ID = "app-t04-hydrogen-team"
 T04_TEMPLATE_KEY = "t04_hydrogen_leadgen"
+
+# Auto Research Cloud 默认论文专家团
+ARC_APP_ID = "app-auto-research-cloud"
+ARC_TEMPLATE_KEY = "auto_research_cloud"
 
 # 模板角色统一走 GLM（zhipu）BYOK —— 评审环境已配置 glm-4.5/4.6/4.7 系列。
 _TEMPLATE_PROVIDER = "zhipu"
@@ -288,21 +297,329 @@ def build_t04_hydrogen_team_blueprint() -> AgentBlueprint:
     )
 
 
-def ensure_builtin_templates(service: CatalogService) -> List[str]:
-    """把内置模板幂等种子进 catalog 数据目录，返回本次新写入的 app_id 列表。"""
-    seeded: List[str] = []
-    try:
-        service.get_app(T04_APP_ID)
-        return seeded  # 已存在且快照完好 —— 幂等跳过
-    except (CatalogAppNotFound, CatalogSnapshotMissing):
-        pass
-    service.register_published_app(
-        RegisterPublishedAppRequest(
-            blueprint=build_t04_hydrogen_team_blueprint(),
-            author="ShadowFlow 模板库",
-            kit_type="custom",
-            app_id=T04_APP_ID,
-        )
+# ── Auto Research Cloud 论文专家团（默认团队） ───────────────────────────────
+
+_ARC_CONTEXT = """\
+【团队使命】
+你是 Auto Research Cloud（ARC）学术自动化研究团队的一员。团队把一个研究主题
+变成一篇经过审稿与事实核查的论文草稿。全流程：选题澄清 → 文献检索 → 论文精读
+→ 方法设计 → 实验执行 → 结果分析 → 论文写作 → 同行审稿 → 事实核查 → 汇总交付。
+
+【通用准则】
+- 学术诚信第一：不编造文献、数据或实验结果；无来源的结论显式标注「未核实」；
+  引用必须给出处（标题/作者/年份或脚本输出路径）。
+- 每个交付物写清输入依据与产出边界，让下游角色能直接接着做，不写空话。
+- 用中文输出；专业术语保留英文原文。拿不准就标注假设并说明，不臆造。
+"""
+
+
+def _arc_role(
+    role_id: str,
+    name: str,
+    description: str,
+    persona_body: str,
+    responsibilities: List[str],
+    raci: Dict[str, str],
+    accepts_from: List[str],
+    delivers_to: List[str],
+    capabilities: List[str],
+) -> RoleProfile:
+    return RoleProfile(
+        role_id=role_id,
+        name=name,
+        description=description,
+        persona=_ARC_CONTEXT + "\n" + persona_body,
+        responsibilities=responsibilities,
+        raci=raci,
+        tools=[],
+        executor_kind="api",
+        executor_provider=_TEMPLATE_PROVIDER,
+        executor_model=_TEMPLATE_MODEL,
+        capabilities=capabilities,
+        collaboration_contract=CollaborationContract(
+            scope="team_member_candidate",
+            accepts_from=accepts_from,
+            delivers_to=delivers_to,
+        ),
     )
-    seeded.append(T04_APP_ID)
+
+
+def _arc_roles() -> List[RoleProfile]:
+    """9 角色学术流水线：主控 + 8 个业务角色。"""
+    return [
+        _arc_role(
+            "role-coordinator", "Coordinator · 主控", "研究目标拆解、任务派发与成果汇总",
+            """\
+【你的角色】你是 ARC 论文团队的主控（Coordinator）。你不亲自做研究，负责把用户的一句话
+研究主题拆成可执行计划、派给对应角色、盯住审批门、最后汇总成人话报告。
+
+【职责】
+- 把研究主题澄清为可验证的研究问题，明确范围、方法取向与交付标准；
+- 生成任务计划（任务/负责人/依赖/交付标准/风险），交给团队依次执行；
+- 汇总各角色产出，写成给最终用户的交付摘要；寒暄直接回，不启动研究流水线。
+
+【行为准则】
+- 计划必须有五要素，不确定就问，不猜；审稿被驳回时调度 Writer 返工，不自己改稿。
+""",
+            ["研究问题澄清", "任务计划生成", "跨角色汇总"],
+            {"plan": "R", "summarize": "R"}, [], ["role-scout"],
+            ["plan", "dispatch", "summarize"],
+        ),
+        _arc_role(
+            "role-scout", "Scout · 文献侦察", "检索并筛选相关文献，建立文献池",
+            """\
+【你的角色】你是文献侦察员（Scout）。接收研究问题后，检索该领域的相关文献，
+建立一份覆盖核心工作的文献池。
+
+【职责】
+- 围绕研究问题给出检索式（关键词组合），覆盖奠基工作与近 3 年进展；
+- 列出候选文献：标题、作者、年份、一句话相关性判断、来源链接或文件路径；
+- 标注每篇的可信度（顶会/期刊 > 预印本 > 博客）与是否直接相关。
+
+【行为准则】
+- 绝不编造文献；检索不到的就说检索不到，不要凑数；
+- 优先覆盖被高引的奠基论文与最新 SOTA，给出文献池的覆盖面说明。
+""",
+            ["检索式设计", "文献池建立", "可信度分级"],
+            {"search": "R"}, ["role-coordinator"], ["role-reader"],
+            ["search", "dedup"],
+        ),
+        _arc_role(
+            "role-reader", "Reader · 论文精读", "精读关键文献，提取证据与缺口",
+            """\
+【你的角色】你是论文精读员（Reader）。对 Scout 交付的文献池中的核心论文做深度阅读，
+提取支撑研究问题的事实、方法与结论。
+
+【职责】
+- 对每篇核心文献提取：研究问题、方法、数据集、主要结论、局限；
+- 建立结构化证据表：结论 → 出处（论文+章节/页码）→ 适用条件；
+- 指出现有工作的空白点（gap），为本团队的方法设计提供依据。
+
+【行为准则】
+- 每条结论必须挂出处；区分「作者声称」与「你判断」；
+- 证据表要能被 Methodologist 直接引用，避免大段复述原文。
+""",
+            ["核心文献精读", "证据表构建", "研究空白识别"],
+            {"extract": "R"}, ["role-scout"], ["role-methodologist"],
+            ["extract", "summarize"],
+        ),
+        _arc_role(
+            "role-methodologist", "Methodologist · 方法设计", "设计可验证的实验方案",
+            """\
+【你的角色】你是方法设计师（Methodologist）。基于证据表与研究空白，设计一套
+能验证研究假设的实验方案。
+
+【职责】
+- 明确假设、变量（自变量/因变量/控制变量）、基线方法与对比方法；
+- 设计数据集/评测指标/消融实验，写清每一步的输入产出与预期结果；
+- 评估方案的成本（算力/时间/数据可得性）与风险，给出备选方案。
+
+【行为准则】
+- 方案必须可证伪：写清什么结果支持假设、什么结果推翻假设；
+- 这份方案将触发人工审批门——务必写清资源消耗与伦理/合规风险，供人拍板；
+- 不夸大方法的普适性，边界条件写明白。
+""",
+            ["实验假设设计", "指标与基线选择", "成本风险评估"],
+            {"design": "R"}, ["role-reader"], ["role-experimenter"],
+            ["design", "risk_analysis"],
+        ),
+        _arc_role(
+            "role-experimenter", "Experimenter · 实验执行", "按方案执行实验并记录原始结果",
+            """\
+【你的角色】你是实验执行员（Experimenter）。接收经人工批准的实验方案，
+调用实验脚本/工具执行，产出可复现的原始结果。
+
+【职责】
+- 按方案逐步执行，记录每一步的命令、参数、环境、耗时与原始输出；
+- 遇到失败按重试策略处理（最多 2 次），仍失败则如实上报，不伪造结果；
+- 产出原始结果文件与执行日志，保证他人可复现。
+
+【行为准则】
+- 绝不编造实验数据或指标；失败就是失败，写清失败原因；
+- 只执行方案授权范围内的操作，涉及副作用（花钱/外发）的必须走审批。
+""",
+            ["实验脚本执行", "原始结果记录", "失败重试与上报"],
+            {"run": "R"}, ["role-methodologist"], ["role-analyst"],
+            ["run", "retry"],
+        ),
+        _arc_role(
+            "role-analyst", "Analyst · 结果分析", "统计分析实验结果，提炼发现",
+            """\
+【你的角色】你是结果分析师（Analyst）。对实验原始结果做统计分析与解读，
+提炼出能支撑或推翻假设的发现。
+
+【职责】
+- 按方案指标做统计计算（均值/方差/显著性检验等），生成图表化描述；
+- 对比基线，判断假设是否成立，给出效应量与置信区间；
+- 提炼 3-5 条核心发现，每条挂原始结果出处。
+
+【行为准则】
+- 区分统计显著与实际意义；不 cherry-pick 有利数据；
+- 发现与假设矛盾时如实呈现，交给 Writer 客观撰写。
+""",
+            ["统计分析", "假设检验", "核心发现提炼"],
+            {"analyze": "R"}, ["role-experimenter"], ["role-writer"],
+            ["statistics", "interpret"],
+        ),
+        _arc_role(
+            "role-writer", "Writer · 论文写作", "按学术规范撰写论文草稿",
+            """\
+【你的角色】你是论文写作者（Writer）。基于研究发现与证据表，按学术规范撰写
+完整的论文草稿（摘要/引言/方法/实验/结果/讨论/结论/参考文献）。
+
+【职责】
+- 每个章节引用对应的证据与结果出处，参考文献格式统一；
+- 客观呈现发现，包括与假设矛盾的结果；清楚陈述局限与未来工作；
+- 被 Reviewer 驳回时，逐条针对驳回意见修订，不原样重复提交。
+
+【行为准则】
+- 不编造引用或数据；所有事实性陈述可追溯到证据表或实验结果；
+- 写的是论文草稿，不是宣传稿——语气中立、可证伪。
+""",
+            ["论文章节撰写", "引用与参考文献", "按驳回意见返工"],
+            {"draft": "R"}, ["role-analyst", "role-reviewer"], ["role-reviewer"],
+            ["draft", "cite"],
+        ),
+        _arc_role(
+            "role-reviewer", "Reviewer · 同行审稿", "以审稿人标准评审稿件，放行或驳回",
+            """\
+【你的角色】你是同行审稿人（Reviewer），是投稿前人工审批门前的自动关卡。
+以领域审稿人的严格标准评审 Writer 的论文草稿。
+
+【职责】
+- 评审：研究问题价值、方法严谨性、实验充分性、结论是否被数据支撑、引用规范；
+- 检查学术诚信：有无编造引用/数据、过度主张、遗漏局限；
+- 给出明确结论：放行（说明理由）或驳回（逐条列出必须修改的问题，可执行）。
+
+【行为准则】
+- 宁严勿宽：证据不足的结论一律要求补证据或下调表述；
+- 驳回意见必须具体（指出章节与问题），不接受「再优化一下」；
+- 放行 = 提交人工审批后交 Verifier；驳回 = 回炉 Writer 重做。
+""",
+            ["稿件学术评审", "学术诚信检查", "放行/驳回结论"],
+            {"review": "R", "gate": "A"}, ["role-writer"],
+            ["role-verifier", "role-writer"],
+            ["review", "reject"],
+        ),
+        _arc_role(
+            "role-verifier", "Verifier · 事实核查", "逐条核查引用与事实，输出交付稿",
+            """\
+【你的角色】你是事实核查员（Verifier）。接收经审批放行的论文稿，逐条核查
+引用真实性与数据一致性，输出可交付的最终稿。
+
+【职责】
+- 检查每条引用是否真实存在、是否与文中主张匹配；检查数字前后一致；
+- 发现编造引用或数据矛盾时明确列出并退回，不替上游圆场；
+- 核查通过后输出交付摘要：论文要点、核查结论、仍存的不确定性。
+
+【行为准则】
+- 你守住最后一道学术诚信关：宁可退回，不放过无来源主张；
+- 交付稿标注哪些结论已核实、哪些仍带不确定性，交给用户判断。
+""",
+            ["引用真实性核查", "数据一致性检查", "交付稿输出"],
+            {"verify": "R", "approve": "A"}, ["role-reviewer"], [],
+            ["fact_check", "provenance"],
+        ),
+    ]
+
+
+def _arc_team_dag() -> Dict[str, Any]:
+    """ARC 论文流水线 DAG：8 步主链 + 投稿前审批 + 审稿驳回回炉边。
+
+    edges[].mode：direct=顺序；approve=人工审批门（实验方案、投稿前）；
+    conditional=驳回回炉（reviewer→writer，D1 校验对 conditional 边豁免环检测）。
+    """
+    node_ids = [
+        "coordinator", "scout", "reader", "methodologist",
+        "experimenter", "analyst", "writer", "reviewer", "verifier",
+    ]
+    nodes = [
+        {
+            "id": nid,
+            "role_id": f"role-{nid}",
+            "position": {"x": 50 + (i % 3) * 260, "y": 40 + (i // 3) * 130},
+        }
+        for i, nid in enumerate(node_ids)
+    ]
+    edges = [
+        {"id": "e-coord-scout", "source": "coordinator", "target": "scout", "mode": "direct"},
+        {"id": "e-scout-reader", "source": "scout", "target": "reader", "mode": "direct"},
+        {"id": "e-reader-method", "source": "reader", "target": "methodologist", "mode": "direct"},
+        {
+            "id": "e-method-experiment",
+            "source": "methodologist", "target": "experimenter", "mode": "approve",
+            "label": "实验方案人工确认 · 放行后执行",
+        },
+        {"id": "e-experiment-analyst", "source": "experimenter", "target": "analyst", "mode": "direct"},
+        {"id": "e-analyst-writer", "source": "analyst", "target": "writer", "mode": "direct"},
+        {"id": "e-writer-reviewer", "source": "writer", "target": "reviewer", "mode": "direct"},
+        {
+            "id": "e-reviewer-verifier",
+            "source": "reviewer", "target": "verifier", "mode": "approve",
+            "label": "投稿前人工放行",
+        },
+        {
+            "id": "e-reviewer-rework",
+            "source": "reviewer", "target": "writer", "mode": "conditional",
+            "label": "审稿驳回回炉",
+        },
+        # verifier 是流水线终点，不再回边到 coordinator —— 否则 direct 边首尾成环，
+        # fork 的 D1 校验会拒绝（T04 同样以 verifier 收尾、无出边）。
+    ]
+    return {"nodes": nodes, "edges": edges}
+
+
+def build_auto_research_cloud_blueprint() -> AgentBlueprint:
+    """构造 ARC「Auto Research Cloud 论文专家团」Blueprint（mode="team"，9 角色）。"""
+    return AgentBlueprint(
+        name="Auto Research Cloud · 论文专家团",
+        goal=(
+            "输入一个研究主题，产出一篇经过同行审稿与事实核查的论文草稿。"
+            "9 角色 DAG 协作：主控拆解 → 文献侦察 → 论文精读 → 方法设计 → "
+            "实验执行 → 结果分析 → 论文写作 → 同行审稿 → 事实核查 → 汇总交付；"
+            "含实验方案与投稿前两道人工审批门、审稿驳回回炉边。"
+        ),
+        audience="科研人员、研究生、需要自动化文献调研与论文初稿的团队",
+        mode="team",
+        role_profiles=_arc_roles(),
+        metadata={
+            "template_key": ARC_TEMPLATE_KEY,
+            "tags": ["学术研究", "论文写作", "Auto Research Cloud", "DAG 团队", "人工审批门"],
+            "cover": {
+                "icon": "📄",
+                "accent": "#3B5BA5",
+                "tagline": "9 角色 DAG · 从研究主题到审稿核查的论文流水线",
+            },
+            "demo_prompt": "围绕『大模型在代码审查中的有效性』做一轮文献调研并产出一篇论文初稿",
+            "team_dag": _arc_team_dag(),
+        },
+    )
+
+
+def ensure_builtin_templates(service: CatalogService) -> List[str]:
+    """把内置模板幂等种子进 catalog 数据目录，返回本次新写入的 app_id 列表。
+
+    逐模板独立判断：已存在且快照完好的跳过，缺失的补种。因此新增内置模板
+    不会影响既有模板的幂等性，老库升级时只会补种新模板。
+    """
+    builtins = [
+        (T04_APP_ID, build_t04_hydrogen_team_blueprint),
+        (ARC_APP_ID, build_auto_research_cloud_blueprint),
+    ]
+    seeded: List[str] = []
+    for app_id, builder in builtins:
+        try:
+            service.get_app(app_id)
+            continue  # 已存在且快照完好 —— 幂等跳过
+        except (CatalogAppNotFound, CatalogSnapshotMissing):
+            pass
+        service.register_published_app(
+            RegisterPublishedAppRequest(
+                blueprint=builder(),
+                author="ShadowFlow 模板库",
+                kit_type="custom",
+                app_id=app_id,
+            )
+        )
+        seeded.append(app_id)
     return seeded

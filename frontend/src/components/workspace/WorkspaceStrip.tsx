@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '../../store/workspaceStore';
 // CreateWorkspaceModal 入口已迁到 /teams 新建团队流程（用户视角 ws=team 是同一回事）
 // 文件保留供 future 使用，但本组件不再 mount
 import { listTeams, type TeamRecord } from '../../api/teams';
+import { forkCatalogApp } from '../../api/catalog';
 import { CreateTeamModal } from './CreateTeamModal';
 import { ForkTeamTemplateModal } from './ForkTeamTemplateModal';
 import { useI18n } from '../../common/i18n';
@@ -42,6 +43,9 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
   // 2026-08-22 — T04 黄金路径：「从模板新建」打开 ForkTeamTemplateModal，
   // fork 内置团队模板（氢能获客 6 角色 DAG）→ Python 落库 agents+team。
   const [forkOpen, setForkOpen] = useState(false);
+  // 2026-11-19 — ARC 论文专家团「一键即用」：跳过模板选择，直接 fork 内置模板。
+  const [arcBusy, setArcBusy] = useState(false);
+  const [arcError, setArcError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -275,9 +279,54 @@ export function WorkspaceSelector({ collapsed }: WorkspaceSelectorProps) {
           }}>⚡</span>
           {t('workspace.forkTemplate', { defaultValue: '从模板新建' })}
         </button>
+        <button
+          type="button"
+          data-testid="workspace-fork-arc-team"
+          disabled={arcBusy}
+          onClick={() => { void handleForkArc(); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 8px', borderRadius: 7, cursor: arcBusy ? 'wait' : 'pointer',
+            border: '1px solid transparent', background: 'transparent',
+            width: '100%', textAlign: 'left', color: 'var(--t-fg-4)', fontSize: 12,
+          }}
+        >
+          <span style={{
+            width: 20, height: 20, borderRadius: 5,
+            background: 'rgba(59,91,165,0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, flexShrink: 0, color: '#3B5BA5',
+          }}>📄</span>
+          {arcBusy ? '正在创建论文专家团…' : '论文专家团 · 一键即用'}
+        </button>
+        {arcError && (
+          <div style={{ padding: '4px 8px', color: 'var(--t-danger, #dc3545)', fontSize: 11 }}>{arcError}</div>
+        )}
       </div>
     </div>
   );
+
+  // ARC 论文专家团一键 fork：内置 app_id 固定，后端 ensure_builtin_templates 保证存在。
+  async function handleForkArc() {
+    if (arcBusy) return;
+    setArcBusy(true);
+    setArcError(null);
+    try {
+      const result = await forkCatalogApp('app-auto-research-cloud', currentId || undefined);
+      if (!result.team) throw new Error('fork response missing team record');
+      setTeams((prev) => [...prev, result.team!]);
+      setCurrentTeam({
+        team_id: result.team.team_id,
+        name: result.team.name,
+        agent_ids: result.team.agent_ids ?? [],
+      });
+      setOpen(false);
+    } catch (err) {
+      setArcError(err instanceof Error ? err.message : '创建论文专家团失败');
+    } finally {
+      setArcBusy(false);
+    }
+  }
 
   // fork 成功：与 createTeamModal 同一收口 —— 追加进列表 + 选为 currentTeam。
   const forkTemplateModal = forkOpen
