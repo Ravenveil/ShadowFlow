@@ -34,9 +34,19 @@ import { isSingleBackend } from '../../config/backend-mode';
 import { readAgentFile } from '../../lib/agent-store';
 import { publishGroupEvent } from './groups-event-bus';
 import { resolveCallable } from '../../transport/dispatcher';
+import { ApiClientCallable } from '../../transport/ApiClientCallable';
 import { resolveProviderKey } from '../../transport/byokKey';
 import { isProviderId } from '../../transport/api-clients';
 import type { ConversationMessage } from '../../lib/conversation-types';
+// 2026-11-08 — 群聊/DAG 节点 agent 接通内置文件工具。此前的链路只有
+// `callable.turn()`（单次流式、tools 为空数组），byok:/anthropic-direct 的
+// agent 既看不见工具也写不出文件；这里补上「ConversationRuntime 多轮
+// tool_use 循环 + builtin 执行器 ALS workspace 注入」。
+import { ConversationRuntime } from '../../lib/conversation-runtime';
+import { ToolRegistry } from '../../lib/tool-spec';
+import { PermissionPolicyV2 } from '../../lib/permission-policy-v2';
+import { ToolRunner, registerToolExecutor } from '../../lib/tool-runner';
+import { builtinTools, registerBuiltinExecutors } from '../../lib/tools/builtin';
 import { buildTurnThread } from '../../lib/turn-thread';
 import { loadTeamForRun } from '../../lib/team-source';
 import { getPlan, isPlanGateBlocking, planGateNotice } from '../../lib/plan-gate';
@@ -767,6 +777,177 @@ export function emitToolChunk(gw: ToolGw, chunk: TurnChunk, who?: ToolOwner): vo
   }
 }
 
+// ─── 2026-11-08 · 节点 agent 的内置文件工具 ────────────────────────────────
+//
+// 背景：群聊/DAG 的 callAgent 此前只做 `callable.turn()`（LlmCallable 契约
+// = 一次流式往返），`tools` 恒为空数组，模型不可能产出 tool_use；即便产出，
+// 网关也只把它投影成 tool_call 卡（emitToolChunk）而不派发。结果：byok:/
+// anthropic-direct 的 agent 在群里永远写不出文件（只有 cli:* 靠子进程自带
+// 工具循环能落盘）。这里按 assembler.ts 的同一套零件（ToolRegistry +
+// PermissionPolicyV2 + ToolRunner + ConversationRuntime）把多轮 tool_use
+// 循环补进群聊链路。
+//
+// 第一批只接文件读写（read_file / write_file / edit_file / list_dir /
+// glob_files / grep）。shell_exec 与远端执行（SSH）另批接入：shell 的默认
+// 权限是 deny，群聊又没有 toolApprovals 审批通道，贸然放开等于给模型一个
+// 无人看守的 shell。
+
+/** 第一批白名单：全部是 workspace 沙箱内的文件类工具。 */
+const AGENT_FILE_TOOL_NAMES = [
+  'read_file',
+  'write_file',
+  'edit_file',
+  'list_dir',
+  'glob_files',
+  'grep',
+] as const;
+
+/** 白名单的 Set 视图（既用于挑 ToolSpec，也作为执行器 scope 的 allowedTools）。 */
+const AGENT_FILE_TOOL_SET: ReadonlySet<string> = new Set(AGENT_FILE_TOOL_NAMES);
+
+/**
+ * 单节点工具循环上限。ConversationRuntime 默认 50 是组装场景（一条 goal 走完
+ * 5 步流）的值；群聊一个 DAG 节点跑 50 轮会把 token 烧穿，10 轮足够
+ * 「读 → 改 → 写 → 复核」。
+ */
+const AGENT_TOOL_MAX_ITERATIONS = 10;
+
+/**
+ * builtin 执行器注册（进程内一次）。放进 callAgent 里会被并发 DAG 的每个
+ * 节点重复调用（Map set 幂等，但没必要），故用模块级 boolean 守卫。
+ * 注册后执行器仍需要 workspace context 才能工作 —— 那由
+ * ConversationRuntime.runTurn 的 `workspace` 参数经 ALS 注入。
+ */
+let builtinExecutorsRegistered = false;
+function ensureBuiltinExecutors(): void {
+  if (builtinExecutorsRegistered) return;
+  registerBuiltinExecutors(registerToolExecutor);
+  builtinExecutorsRegistered = true;
+}
+
+interface RunAgentTurnArgs {
+  /** 已由调用方 resolve 好的 transport（各路径 usageCtx/workspace 口径不同）。 */
+  callable: ReturnType<typeof resolveCallable>;
+  agentId: string;
+  agentName: string;
+  /**
+   * 本轮该 agent 的工具工作目录 = `wt?.dir ?? workspace`：
+   *   - git 仓库：每 agent 一个 worktree（prepareWorktree），工具读写只在该
+   *     分支目录内，天然隔离，回合末由 commitAndEvidence 提交成证据卡；
+   *   - 非 git 仓库 / 未建 worktree：回落到群 workspace（group.workspace_dir
+   *     优先，否则 ~/.shadowflow-chat/chat-workspaces/<groupId>）。
+   *     ⚠️ 已知限制：这种情况下同层并行的多个节点共享同一目录，工具写盘是
+   *     **最后写入者胜**（同名文件互相覆盖）。要更强的隔离得先把群 workspace
+   *     变成 git 仓库（worktree 才生效），或等后续按 node 派生独立子目录。
+   */
+  workspace: string;
+  system: string;
+  prompt: string;
+  history: ConversationMessage[];
+  model?: string;
+  signal: AbortSignal;
+  /** B3 过程卡（外层已 emit thinking 占位）：流式片段就地点亮用。 */
+  gw?: GwLike;
+  thinkingId?: string;
+  thinkStream: ReturnType<typeof createThinkingTagStream>;
+}
+
+/**
+ * agent 具备文件工具时，把「一次流式往返」升级成「多轮 tool_use 循环」。
+ * 只在 callable 是 ApiClientCallable（byok:* / anthropic-direct）时启用 ——
+ * CLI/ACP/MCP 后端在自己的子进程里已有工具循环，不该被包一层。
+ */
+function buildAgentToolLoopStream(a: RunAgentTurnArgs): AsyncGenerator<TurnChunk> {
+  ensureBuiltinExecutors();
+  // 按白名单从 builtinTools 里挑「真实 spec」（带完整 input_schema）。
+  // 不要学 assembler.ts 的 permissive 空 schema —— 那会让模型瞎填参数。
+  const specs = builtinTools.filter((t) => AGENT_FILE_TOOL_SET.has(t.name));
+  // 群聊没有 toolApprovals 通道：'prompt' 会在 tool-runner 里降级成 deny
+  // （等于没接），所以这 6 个文件工具全部显式 allow。
+  const policy = new PermissionPolicyV2({
+    allowedTools: [...AGENT_FILE_TOOL_NAMES],
+    defaults: Object.fromEntries(
+      AGENT_FILE_TOOL_NAMES.map((n) => [n, 'allow'] as const),
+    ),
+  });
+  const toolRunner = new ToolRunner(new ToolRegistry(specs), policy);
+  const runtime = new ConversationRuntime({
+    apiClient: (a.callable as ApiClientCallable).getApiClient(),
+    toolRunner,
+    maxIterations: AGENT_TOOL_MAX_ITERATIONS,
+  });
+  return runtime.runTurn({
+    system_prompt: a.system,
+    user_message: a.prompt,
+    // 必须传副本：runTurn 会 in-place push user/assistant/tool 消息。
+    history: [...a.history],
+    signal: a.signal,
+    workspace: a.workspace,
+    allowedTools: AGENT_FILE_TOOL_SET,
+  });
+}
+
+/**
+ * 跑一个 agent 的一次发言（DAG 节点 / 串行 fan-out 共用）。
+ *
+ * 两条分支：
+ *   - `ApiClientCallable` → 文件工具多轮循环（buildAgentToolLoopStream）；
+ *   - 其它（cli:/acp:/mcp: 以及测试里注入的裸 `{turn}` fake）→ 原样
+ *     `callable.turn()`。**这个守卫必须保留**：6 个既有群聊测试都 mock
+ *     `resolveCallable` 返回只有 `turn` 的对象，无守卫直接取 ApiClient 会
+ *     全部 TypeError。
+ *
+ * 返回未剥离思考标签的原始文本（stripThinking / applyCraftMarkers 由调用方
+ * 按各自语义处理）。
+ */
+async function runAgentTurn(a: RunAgentTurnArgs): Promise<{ text: string; error?: string }> {
+  let buf = '';
+  let errMsg = '';
+  try {
+    const stream: AsyncGenerator<TurnChunk> =
+      a.callable instanceof ApiClientCallable
+        ? buildAgentToolLoopStream(a)
+        : a.callable.turn({
+            system: a.system,
+            prompt: a.prompt,
+            history: a.history,
+            signal: a.signal,
+            model: a.model,
+          });
+    for await (const chunk of stream) {
+      if (chunk.type === 'text-delta') {
+        const piece = sseWireToText(chunk.value);
+        buf += piece;
+        // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
+        if (a.gw && a.thinkingId && piece) {
+          const shown = a.thinkStream.push(piece);
+          if (shown) {
+            a.gw.emitPatch?.({ id: a.thinkingId, op: 'thinking_append_body', chunk: shown });
+          }
+        }
+      } else if (chunk.type === 'thinking-delta') {
+        // 2026-11-04 — API 路结构化思考通道：只点亮过程卡，不进 buf。
+        if (a.gw && a.thinkingId && chunk.value) {
+          a.gw.emitPatch?.({ id: a.thinkingId, op: 'thinking_append_body', chunk: chunk.value });
+        }
+      } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
+        // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡），带 agent 归属。
+        emitToolChunk(a.gw ?? null, chunk, {
+          agentId: a.agentId,
+          agentName: a.agentName,
+        });
+      } else if (chunk.type === 'error') {
+        errMsg = chunk.error?.message ?? 'stream error';
+        break;
+      }
+      // 'usage' / 'done' 无 UI 语义，忽略（usage 已由 transport 层落 token_usage）。
+    }
+  } catch (e) {
+    errMsg = e instanceof Error ? e.message : String(e);
+  }
+  return errMsg ? { text: buf, error: errMsg } : { text: buf };
+}
+
 /**
  * Resolve the CLI/ACP/MCP working directory (cwd) for a group.
  *
@@ -1468,38 +1649,25 @@ async function runFanout(
                   project_id: getConversationByGroup(groupId)?.project_id ?? '',
                 },
               });
-              for await (const chunk of callable.turn({
+              // 2026-11-08 — 统一入口：API 执行器走文件工具循环，其余原样 turn()。
+              const agentTurn = await runAgentTurn({
+                callable,
+                agentId,
+                agentName: name,
+                // 工具沙箱目录 = 该节点 worktree（git 仓库时）或群 workspace。
+                workspace: wt?.dir ?? workspace,
                 // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验。
                 system: soul + chatLessonsBlock(agentId),
                 prompt: turnPrompt + kbText + upstreamText,
                 history: turnHistory,
-                signal,
                 model,
-              })) {
-                if (chunk.type === 'text-delta') {
-                  const piece = sseWireToText(chunk.value);
-                  buf += piece;
-                  // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
-                  if (gw && thinkingId && piece) {
-                    const shown = thinkStream.push(piece);
-                    if (shown) {
-                      gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
-                    }
-                  }
-                } else if (chunk.type === 'thinking-delta') {
-                  // 2026-11-04 — API 路结构化思考通道：只点亮过程卡，不进 buf。
-                  if (gw && thinkingId && chunk.value) {
-                    gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
-                  }
-                } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
-                  // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）；
-                  // 2026-11-06 检查器 — 带 agent 归属（按 agent 筛后台活动）。
-                  emitToolChunk(gw, chunk, { agentId: agentId, agentName: name });
-                } else if (chunk.type === 'error') {
-                  errMsg = chunk.error?.message ?? 'stream error';
-                  break;
-                }
-              }
+                signal,
+                gw,
+                thinkingId,
+                thinkStream,
+              });
+              buf = agentTurn.text;
+              errMsg = agentTurn.error ?? '';
             } catch (e) {
               errMsg = e instanceof Error ? e.message : String(e);
             }
@@ -1741,39 +1909,26 @@ async function runFanout(
             project_id: getConversationByGroup(groupId)?.project_id ?? '',
           },
         });
-        for await (const chunk of callable.turn({
+        // 2026-11-08 — 统一入口（与 DAG 节点同一函数）：API 执行器走文件工具
+        // 循环，CLI/ACP/MCP 与测试 fake 原样 turn()。
+        const agentTurn = await runAgentTurn({
+          callable,
+          agentId,
+          agentName,
+          // 工具沙箱目录 = 该 agent 的 worktree（git 仓库时）或群 workspace。
+          workspace: wt?.dir ?? workspace,
           // 2026-11-07 记忆闭环 — soul 后附该 agent 可召回的过往经验（DM 同款）。
           system: soul + chatLessonsBlock(agentId),
           prompt: turnPrompt + kbText,
           history: turnHistory,
-          signal: ctrl.signal,
           model,
-        })) {
-          if (chunk.type === 'text-delta') {
-            const piece = sseWireToText(chunk.value);
-            buf += piece;
-            // B3 — 流式片段就地点亮（现有解析粒度 = event:text 的干净文本）。
-            if (gw && thinkingId && piece) {
-              const shown = thinkStream.push(piece);
-              if (shown) {
-                gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: shown });
-              }
-            }
-          } else if (chunk.type === 'thinking-delta') {
-            // 2026-11-04 — API 路结构化思考通道（ApiClientCallable reasoning_content
-            // → thinking-delta）：就近点亮过程卡，绝不混进最终回复 buf。
-            if (gw && thinkingId && chunk.value) {
-              gw.emitPatch({ id: thinkingId, op: 'thinking_append_body', chunk: chunk.value });
-            }
-          } else if (chunk.type === 'tool-use' || chunk.type === 'tool-result') {
-            // G1 — 工具调用/结果就地点亮（tool_call/tool_echo 卡）；
-            // 2026-11-06 检查器 — 带 agent 归属（串行路径同样可按 agent 筛）。
-            emitToolChunk(gw, chunk, { agentId: agentId, agentName: agentName });
-          } else if (chunk.type === 'error') {
-            errMsg = chunk.error?.message ?? 'stream error';
-            break;
-          }
-        }
+          signal: ctrl.signal,
+          gw,
+          thinkingId,
+          thinkStream,
+        });
+        buf = agentTurn.text;
+        errMsg = agentTurn.error ?? '';
       } catch (e) {
         errMsg = e instanceof Error ? e.message : String(e);
       }

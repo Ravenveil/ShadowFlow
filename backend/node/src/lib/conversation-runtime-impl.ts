@@ -72,6 +72,12 @@ import type {
 } from './conversation-types';
 import { LlmCallError, type TurnChunk } from '../workflow/types';
 import type { ToolRunner } from './tool-runner';
+// 2026-11-08 — 工具执行器的 workspace 上下文注入（builtin/index.ts 的
+// AsyncLocalStorage）。此前**没有**任何调用点，导致注册到 tool-runner 的
+// 内置工具在执行时一律返回 "invoked outside runWithBuiltinContext scope"。
+// 在这里（每条 tool_use 派发处）包一层是唯一正确位置：scope 必须覆盖
+// `toolRunner.dispatch()` 的整段异步区间。
+import { runWithBuiltinContext } from './tools/builtin';
 
 /** Initial zeroed usage. Stored cumulatively across turns within one runTurn. */
 function zeroUsage(): TokenUsage {
@@ -121,6 +127,20 @@ export interface ConversationRuntimeOptions {
 export interface RunTurnArgs {
   system_prompt: string;
   user_message: string;
+  /**
+   * 2026-11-08 — 工具沙箱工作目录。builtin 执行器（read_file / write_file /
+   * grep / …）全部把路径沙箱在 workspace 内，而这个值由 runtime 通过
+   * `runWithBuiltinContext` 注入（builtin/index.ts 的 AsyncLocalStorage）。
+   * 缺省回退 `process.cwd()`（旧调用方零改动）；群聊/DAG 路径传该节点的
+   * worktree 目录（git 仓库时）或群 workspace。
+   */
+  workspace?: string;
+  /**
+   * 2026-11-08 — 本 turn 允许的 builtin 工具名。透传到执行器 scope
+   * （`shell_exec` 之类的二道闸会据此二次校验）。不传 = 不做 scope 级限制，
+   * 权限仍由 ToolRunner 的 PermissionPolicyV2 裁定（deny-by-default）。
+   */
+  allowedTools?: ReadonlySet<string>;
   /**
    * Optional rolling history. Defaults to `[]`. The runtime appends the new
    * user/assistant/tool messages produced by this turn. If the caller wants
@@ -301,9 +321,15 @@ export class ConversationRuntime {
           return;
         }
 
-        const dispatch = await this.toolRunner.dispatch(
-          { name: t.name, input: t.input },
-          args.signal,
+        // 2026-11-08 — builtin 执行器需要 workspace / allowedTools 上下文，
+        // 由 AsyncLocalStorage 传递（ToolExecutor 的签名只有 input + signal）。
+        // scope 必须包住 dispatch 的整个异步区间，否则执行器读不到 store。
+        const dispatch = await runWithBuiltinContext(
+          {
+            workspace: args.workspace ?? process.cwd(),
+            allowedTools: args.allowedTools,
+          },
+          () => this.toolRunner.dispatch({ name: t.name, input: t.input }, args.signal),
         );
 
         // Tool-emitted SSE (e.g. permission_check) is surfaced as a
