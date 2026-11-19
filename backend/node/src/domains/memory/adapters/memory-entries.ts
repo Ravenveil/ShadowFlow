@@ -1,5 +1,5 @@
 /**
- * memory-entries.ts — Story 16.1 — REST routes for River Memory CRUD
+ * memory-entries.ts — River Memory CRUD 的 Web 适配层（薄壳）
  *
  * GET    /api/memory-entries              → list (optional ?scope=user|project|session)
  * POST   /api/memory-entries              → create → 201
@@ -8,109 +8,90 @@
  * PATCH  /api/memory-entries/:id          → partial update
  * DELETE /api/memory-entries/:id          → 204
  *
- * IMPORTANT: /settings routes are registered BEFORE /:id so Express doesn't
- * treat the literal string "settings" as an id parameter.
+ * 职责：解析 HTTP → 调用例 → 把 Result 映射成状态码。
+ * 不含业务规则（在 model）、不含数据访问（在 infra）、不含编排（在 use_case）。
+ *
+ * IMPORTANT: /settings registered BEFORE /:id so Express doesn't read it as an id.
  */
 
 import { Router, Request, Response } from 'express';
+import type { MemoryEntryRepository } from '../repository';
+import { JsonMemoryEntryRepository } from '../infra/json-memory-entry.repository';
 import {
-  listEntries,
-  createEntry,
-  updateEntry,
-  deleteEntry,
-  getSettings,
-  updateSettings,
-  isValidId,
-} from '../../../storage/memory-entries';
-import type { MemoryScope } from '../../../storage/memory-entries';
+  makeCreateEntry,
+  makeDeleteEntry,
+  makeGetSettings,
+  makeListEntries,
+  makeUpdateEntry,
+  makeUpdateSettings,
+  type Result,
+} from '../use_cases/entries';
 
-const router = Router();
-
-// ── Collection ────────────────────────────────────────────────────────────────
-
-router.get('/', (req: Request, res: Response) => {
-  const { scope } = req.query;
-  const validScopes: MemoryScope[] = ['user', 'project', 'session'];
-  const scopeFilter =
-    typeof scope === 'string' && validScopes.includes(scope as MemoryScope)
-      ? (scope as MemoryScope)
-      : undefined;
-  res.json(listEntries(scopeFilter));
-});
-
-router.post('/', (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { scope?: unknown; title?: unknown; content?: unknown };
-  if (typeof body.scope !== 'string' || typeof body.title !== 'string') {
-    res.status(400).json({ error: { code: 'INVALID_BODY', message: 'scope and title are required' } });
-    return;
-  }
-  try {
-    const entry = createEntry({
-      scope: body.scope as MemoryScope,
-      title: body.title,
-      content: typeof body.content === 'string' ? body.content : '',
-    });
-    res.status(201).json(entry);
-  } catch (err) {
-    const code = (err as Error).message;
-    res.status(400).json({ error: { code, message: code } });
-  }
-});
-
-// ── Settings — MUST be before /:id ────────────────────────────────────────────
-
-router.get('/settings', (_req: Request, res: Response) => {
-  res.json(getSettings());
-});
-
-router.put('/settings', (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { enabled?: unknown };
-  if (typeof body.enabled !== 'boolean') {
-    res.status(400).json({ error: { code: 'INVALID_BODY', message: 'enabled (boolean) is required' } });
-    return;
-  }
-  res.json(updateSettings({ enabled: body.enabled }));
-});
-
-// ── Single entry ──────────────────────────────────────────────────────────────
-
-router.patch('/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!isValidId(id)) {
-    res.status(400).json({ error: { code: 'INVALID_ID', message: 'id must be a valid UUID' } });
-    return;
-  }
-  const body = (req.body ?? {}) as { scope?: unknown; title?: unknown; content?: unknown };
-  const patch: Parameters<typeof updateEntry>[1] = {};
-  if (body.scope !== undefined) patch.scope = body.scope as MemoryScope;
-  if (body.title !== undefined) patch.title = body.title as string;
-  if (body.content !== undefined) patch.content = body.content as string;
-
-  try {
-    const updated = updateEntry(id, patch);
-    if (!updated) {
+/** 把用例 Result 统一映射成 HTTP 响应；业务层不认识 status code。 */
+function sendResult<T>(
+  res: Response,
+  result: Result<T>,
+  okStatus: number,
+  present: (value: T) => void = (value) => res.json(value),
+): void {
+  switch (result.kind) {
+    case 'ok':
+      res.status(okStatus);
+      present(result.value);
+      break;
+    case 'not_found':
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Entry not found' } });
-      return;
-    }
-    res.json(updated);
-  } catch (err) {
-    const code = (err as Error).message;
-    res.status(400).json({ error: { code, message: code } });
+      break;
+    case 'invalid':
+      res.status(400).json({ error: { code: result.code, message: result.code } });
+      break;
   }
-});
+}
 
-router.delete('/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!isValidId(id)) {
-    res.status(400).json({ error: { code: 'INVALID_ID', message: 'id must be a valid UUID' } });
-    return;
-  }
-  const ok = deleteEntry(id);
-  if (!ok) {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Entry not found' } });
-    return;
-  }
-  res.status(204).send();
-});
+/**
+ * 工厂：接收 repository（依赖倒置），装配出路由。
+ * 装配根决定注入哪个实现；路由本身不知道 JSON 还是 SQLite。
+ */
+export function createMemoryEntriesRouter(repo: MemoryEntryRepository): Router {
+  const router = Router();
+  const list = makeListEntries(repo);
+  const create = makeCreateEntry(repo);
+  const update = makeUpdateEntry(repo);
+  const remove = makeDeleteEntry(repo);
+  const getSettings = makeGetSettings(repo);
+  const updateSettings = makeUpdateSettings(repo);
 
+  router.get('/', (req: Request, res: Response) => {
+    res.json(list(req.query.scope));
+  });
+
+  router.post('/', (req: Request, res: Response) => {
+    sendResult(res, create(req.body), 201);
+  });
+
+  router.get('/settings', (_req: Request, res: Response) => {
+    res.json(getSettings());
+  });
+
+  router.put('/settings', (req: Request, res: Response) => {
+    sendResult(res, updateSettings(req.body), 200);
+  });
+
+  router.patch('/:id', (req: Request, res: Response) => {
+    sendResult(res, update(req.params.id, req.body), 200);
+  });
+
+  router.delete('/:id', (req: Request, res: Response) => {
+    sendResult(res, remove(req.params.id), 204, () => res.status(204).send());
+  });
+
+  return router;
+}
+
+/**
+ * 过渡装配：保持与重构前一致的默认导出（Router 实例），index.ts 与兼容存根零改动。
+ * 【待办·装配根收口】将来在 index.ts 统一 new JsonMemoryEntryRepository() 并注入；
+ * 届时本文件的默认装配删除，只保留 createMemoryEntriesRouter 工厂。
+ */
+const router = createMemoryEntriesRouter(new JsonMemoryEntryRepository());
 export default router;

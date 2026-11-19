@@ -1,147 +1,38 @@
 /**
- * memory-entries.ts — Story 16.1 — River Memory CRUD persistence
+ * 兼容层（2026-11-19 目录重构第 4 批 / DDD 样板）：
+ * memory-entries 已按 DDD 四件套重建到 domains/memory/{model,repository,infra,use_cases}。
  *
- * Storage: $CWD/.shadowflow/memory-entries.json
- * Write pattern: atomic tmp + rename (same as settings.ts)
+ * 本文件保留旧导出名，调用方零改动；确认全仓无引用后可单独删除本文件。
+ * 新结构：
+ *   - model.ts                               领域实体/值对象/不变量
+ *   - repository.ts                          MemoryEntryRepository 接口
+ *   - infra/json-memory-entry.repository.ts  JSON 持久化实现
+ *   - use_cases/entries.ts                   业务用例
  */
 
-import fs from 'fs';
-import path from 'path';
-import { randomUUID } from 'crypto';
+import { createMemoryEntry, type MemoryEntry, type MemoryScope } from '../domains/memory/model';
+import { JsonMemoryEntryRepository } from '../domains/memory/infra/json-memory-entry.repository';
 
-export type MemoryScope = 'user' | 'project' | 'session';
+export type { MemoryScope, MemoryEntry, MemoryStore } from '../domains/memory/model';
+export { isValidId } from '../domains/memory/model';
 
-export interface MemoryEntry {
-  id: string;
-  scope: MemoryScope;
-  title: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-}
+const repo = new JsonMemoryEntryRepository();
 
-export interface MemoryStore {
-  enabled: boolean;
-  entries: MemoryEntry[];
-}
-
-const TITLE_MAX = 120;
-const CONTENT_MAX = 4000;
-const UUID_RE = /^[0-9a-f-]{36}$/;
-
-function storagePaths() {
-  const dir = path.join(process.cwd(), '.shadowflow');
-  return { dir, file: path.join(dir, 'memory-entries.json') };
-}
-
-function load(): MemoryStore {
-  const { file } = storagePaths();
-  if (!fs.existsSync(file)) return { enabled: true, entries: [] };
-  let raw: string;
-  try {
-    raw = fs.readFileSync(file, 'utf-8');
-  } catch {
-    return { enabled: true, entries: [] };
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<MemoryStore>;
-    return {
-      enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : true,
-      entries: Array.isArray(parsed.entries) ? (parsed.entries as MemoryEntry[]) : [],
-    };
-  } catch {
-    return { enabled: true, entries: [] };
-  }
-}
-
-function persist(store: MemoryStore): void {
-  const { dir, file } = storagePaths();
-  fs.mkdirSync(dir, { recursive: true });
-  const tmp = `${file}.tmp.${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2), 'utf-8');
-  fs.renameSync(tmp, file);
-}
-
-export function isValidId(id: string): boolean {
-  return UUID_RE.test(id);
-}
-
-export function listEntries(scope?: MemoryScope): MemoryEntry[] {
-  const { entries } = load();
-  const list = scope ? entries.filter((e) => e.scope === scope) : entries;
-  return list.slice().sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-  );
-}
-
-export function createEntry(input: Pick<MemoryEntry, 'scope' | 'title' | 'content'>): MemoryEntry {
-  if (!['user', 'project', 'session'].includes(input.scope)) {
-    throw new Error('INVALID_SCOPE');
-  }
-  if (!input.title || input.title.trim().length === 0) throw new Error('INVALID_TITLE');
-  if (input.title.length > TITLE_MAX) throw new Error('TITLE_TOO_LONG');
-  if ((input.content ?? '').length > CONTENT_MAX) throw new Error('CONTENT_TOO_LONG');
-
-  const now = new Date().toISOString();
-  const entry: MemoryEntry = {
-    id: randomUUID(),
-    scope: input.scope,
-    title: input.title.trim(),
-    content: input.content ?? '',
-    created_at: now,
-    updated_at: now,
-  };
-  const store = load();
-  store.entries.push(entry);
-  persist(store);
+/** @deprecated 用 domains/memory/use_cases/entries 的 makeListEntries */
+export const listEntries = (scope?: MemoryScope): MemoryEntry[] => repo.list(scope);
+/** @deprecated 用 makeCreateEntry + model.createMemoryEntry */
+export const createEntry = (input: Parameters<typeof createMemoryEntry>[0]): MemoryEntry => {
+  const entry = createMemoryEntry(input);
+  repo.save(entry);
   return entry;
-}
-
-export function updateEntry(
-  id: string,
-  patch: Partial<Pick<MemoryEntry, 'scope' | 'title' | 'content'>>,
-): MemoryEntry | null {
-  const store = load();
-  const idx = store.entries.findIndex((e) => e.id === id);
-  if (idx === -1) return null;
-
-  const entry = { ...store.entries[idx] };
-  if (patch.scope !== undefined) {
-    if (!['user', 'project', 'session'].includes(patch.scope)) throw new Error('INVALID_SCOPE');
-    entry.scope = patch.scope;
-  }
-  if (patch.title !== undefined) {
-    if (!patch.title || patch.title.trim().length === 0) throw new Error('INVALID_TITLE');
-    if (patch.title.length > TITLE_MAX) throw new Error('TITLE_TOO_LONG');
-    entry.title = patch.title.trim();
-  }
-  if (patch.content !== undefined) {
-    if (patch.content.length > CONTENT_MAX) throw new Error('CONTENT_TOO_LONG');
-    entry.content = patch.content;
-  }
-  entry.updated_at = new Date().toISOString();
-  store.entries[idx] = entry;
-  persist(store);
-  return entry;
-}
-
-export function deleteEntry(id: string): boolean {
-  const store = load();
-  const before = store.entries.length;
-  store.entries = store.entries.filter((e) => e.id !== id);
-  if (store.entries.length === before) return false;
-  persist(store);
-  return true;
-}
-
-export function getSettings(): { enabled: boolean } {
-  const { enabled } = load();
-  return { enabled };
-}
-
-export function updateSettings(settings: { enabled: boolean }): { enabled: boolean } {
-  const store = load();
-  store.enabled = settings.enabled;
-  persist(store);
-  return { enabled: store.enabled };
-}
+};
+/** @deprecated 用 makeUpdateEntry */
+export const updateEntry = (id: string, patch: Parameters<typeof repo.update>[1]): MemoryEntry | null =>
+  repo.update(id, patch);
+/** @deprecated 用 makeDeleteEntry */
+export const deleteEntry = (id: string): boolean => repo.remove(id);
+/** @deprecated 用 makeGetSettings */
+export const getSettings = (): { enabled: boolean } => repo.getSettings();
+/** @deprecated 用 makeUpdateSettings */
+export const updateSettings = (settings: { enabled: boolean }): { enabled: boolean } =>
+  repo.updateSettings(settings);
