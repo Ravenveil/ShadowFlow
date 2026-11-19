@@ -6,14 +6,13 @@
  * index.ts 的 proxyFallback 挂载里，没有统一入口。本模块把它收口成一个
  * 一等公民模式：
  *
- *   SF_BACKEND_MODE=legacy   （默认）Node + Python 双后端，行为与今天完全一致
- *   SF_BACKEND_MODE=single   纯 Node 单后端：groups 走 Node、不启 Python、
+ *   SF_BACKEND_MODE=single   （默认）纯 Node 单后端：groups 走 Node、不启 Python、
  *                            proxyFallback 变成「显式缺口」404 而非静默转发
+ *   SF_BACKEND_MODE=legacy   Node + Python 双后端（逃生舱，仅显式设置时回退）
  *
- * 为什么默认仍是 legacy：勘察发现前端在用的后端端点里，约 25 个仍只有
- * Python 有（最重的是 /api/memory-bank，113KB 的 BM25+向量检索）。直接把
- * 默认切到 single 会让这些页面 503。single 是「可运行、可验证、可灰度的
- * 目标模式」，默认切换留给 gap 清零后的批次。
+ * 默认 single（2026-11-19 gap 清零后切换）：前端在用的后端端点已全部迁到
+ * Node，最终探针 112 个 GET 全部非 gap，/api/* 全由 Node 接管。legacy 保留
+ * 为逃生舱：仅当显式设置 SF_BACKEND_MODE=legacy 才回退到双后端行为。
  *
  * 本模块只做「读 env → 返回模式」，无副作用，方便单测。
  */
@@ -22,10 +21,10 @@ export type BackendMode = 'legacy' | 'single';
 
 export const BACKEND_MODE_VALUES: readonly BackendMode[] = ['legacy', 'single'] as const;
 
-/** 读取当前后端模式。未设或无法识别 → legacy（安全默认，行为零变化）。 */
+/** 读取当前后端模式。显式 legacy → 双后端；未设/无法识别/single → single（安全默认）。 */
 export function getBackendMode(env: NodeJS.ProcessEnv = process.env): BackendMode {
   const raw = (env.SF_BACKEND_MODE ?? '').trim().toLowerCase();
-  return raw === 'single' ? 'single' : 'legacy';
+  return raw === 'legacy' ? 'legacy' : 'single';
 }
 
 export function isSingleBackend(env: NodeJS.ProcessEnv = process.env): boolean {

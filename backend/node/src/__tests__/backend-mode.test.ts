@@ -1,7 +1,7 @@
 /**
  * backend-mode.test.ts — 单后端模式开关 + gap handler（2026-11-18 第一批）。
  *
- * 覆盖：默认 legacy 零变化 / single 强制 groups=node 且不挂 proxyFallback /
+ * 覆盖：默认 single / single 强制 groups=node 且不挂 proxyFallback /
  * gap handler 对未迁移端点返回结构化 404 并计数、/health/backend-gaps 可查。
  * 不碰数据库、不启真实服务，用 supertest 打内存 Express app。
  */
@@ -43,15 +43,16 @@ afterEach(() => {
 });
 
 describe('getBackendMode', () => {
-  it('默认（未设）→ legacy，行为零变化', () => {
-    expect(getBackendMode()).toBe('legacy');
-    expect(isSingleBackend()).toBe(false);
-    expect(shouldMountProxyFallback()).toBe(true);
+  it('默认（未设）→ single', () => {
+    expect(getBackendMode()).toBe('single');
+    expect(isSingleBackend()).toBe(true);
+    expect(groupsBackendEnv()).toBe('node');
+    expect(shouldMountProxyFallback()).toBe(false);
   });
 
-  it('无法识别的值 → legacy（安全默认）', () => {
+  it('无法识别的值 → single（安全默认）', () => {
     process.env.SF_BACKEND_MODE = 'banana';
-    expect(getBackendMode()).toBe('legacy');
+    expect(getBackendMode()).toBe('single');
   });
 
   it('single → 强制 groups=node、不挂 proxyFallback', () => {
@@ -68,7 +69,11 @@ describe('getBackendMode', () => {
     expect(groupsBackendEnv()).toBe('node');
   });
 
-  it('legacy 下沿用既有 SF_GROUPS_BACKEND', () => {
+  it('显式 legacy → 双后端，isSingleBackend false、挂 proxyFallback、沿用既有 SF_GROUPS_BACKEND', () => {
+    process.env.SF_BACKEND_MODE = 'legacy';
+    expect(getBackendMode()).toBe('legacy');
+    expect(isSingleBackend()).toBe(false);
+    expect(shouldMountProxyFallback()).toBe(true);
     process.env.SF_GROUPS_BACKEND = 'dual';
     expect(groupsBackendEnv()).toBe('dual');
     process.env.SF_GROUPS_BACKEND = 'node';
@@ -86,6 +91,7 @@ describe('gapPrefix', () => {
 
 describe('installSingleBackendGapHandler', () => {
   it('legacy 模式不安装', () => {
+    process.env.SF_BACKEND_MODE = 'legacy';
     const app = express();
     expect(installSingleBackendGapHandler(app)).toBe(false);
   });
