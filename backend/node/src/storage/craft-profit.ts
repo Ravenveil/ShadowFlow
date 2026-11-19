@@ -19,8 +19,29 @@
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
 import { getDb } from './sqlite';
+// 纯规则已迁至 domains/craft/profit-model.ts（盈利口径/校验/报表，单一真源，可独立单测）；
+// 本文件保留 DDL/migration/SQL 与装配，导出名原样保留，调用方零改动。
+import {
+  DAY_MS,
+  CraftProfitError,
+  parseText as text,
+  parseCents as cents,
+  parseQty as qty,
+  parseListLimit as capLimit,
+  parseDays,
+  profitPerUnit,
+  withProductProfit,
+  withSaleProfit,
+  buildOverview,
+  buildTimeseries,
+  type CraftProduct,
+  type CraftSale,
+  type AgentEvent,
+  type DayPoint,
+} from '../domains/craft/profit-model';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+export { CraftProfitError };
+export type { CraftProduct, CraftSale, AgentEvent, DayPoint };
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS cp_products (
@@ -82,64 +103,6 @@ function db(): Database.Database {
   return conn;
 }
 
-export class CraftProfitError extends Error {
-  status: number;
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
-
-// ── 输入校验（分项金额一律非负整数分）────────────────────────────────────────
-
-function text(v: unknown, max: number, field: string, required = false): string {
-  const s = typeof v === 'string' ? v.trim().slice(0, max) : '';
-  if (required && !s) throw new CraftProfitError(`${field} is required`);
-  return s;
-}
-
-function cents(v: unknown, field: string): number {
-  const n = typeof v === 'number' ? v : Number(v);
-  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-    throw new CraftProfitError(`${field} must be a non-negative integer (cents)`);
-  }
-  return n;
-}
-
-function qty(v: unknown): number {
-  const n = typeof v === 'number' ? v : Number(v ?? 1);
-  if (!Number.isInteger(n) || n < 1 || n > 999) {
-    throw new CraftProfitError('qty must be an integer between 1 and 999');
-  }
-  return n;
-}
-
-// ── 类型 ─────────────────────────────────────────────────────────────────────
-
-export interface CraftProduct {
-  id: string;
-  name: string;
-  price_cents: number;
-  cost_cents: number;
-  shipping_cents: number;
-  created_at: number;
-  /** 每件盈利 = 售价 − 成本 − 快递（后端算好，前端不自己减）。 */
-  profit_per_unit_cents: number;
-}
-
-export interface CraftSale {
-  id: string;
-  product_id: string;
-  product_name: string;
-  qty: number;
-  /** 单件快照金额（记账那一刻的商品口径）。 */
-  price_cents: number;
-  cost_cents: number;
-  shipping_cents: number;
-  profit_cents: number;
-  created_at: number;
-}
-
 // ── 商品（上架）──────────────────────────────────────────────────────────────
 
 export function createProduct(input: {
@@ -164,14 +127,6 @@ export function createProduct(input: {
     )
     .run(row.id, row.name, row.price_cents, row.cost_cents, row.shipping_cents, row.created_at);
   return { ...row, profit_per_unit_cents: profitPerUnit(row) };
-}
-
-function profitPerUnit(p: {
-  price_cents: number;
-  cost_cents: number;
-  shipping_cents: number;
-}): number {
-  return p.price_cents - p.cost_cents - p.shipping_cents;
 }
 
 export function listProducts(): CraftProduct[] {
@@ -213,13 +168,6 @@ export function createSale(input: { product_id?: unknown; qty?: unknown }): Craf
 
 // ── 运营动态（智能体活动流水）────────────────────────────────────────────────
 
-export interface AgentEvent {
-  id: string;
-  ts: number;
-  kind: 'marketing' | 'order' | 'shipping';
-  text: string;
-}
-
 export function insertAgentEvent(kind: AgentEvent['kind'], text: string, ts = Date.now()): AgentEvent {
   const ev: AgentEvent = { id: randomUUID(), ts, kind, text };
   db()
@@ -229,14 +177,14 @@ export function insertAgentEvent(kind: AgentEvent['kind'], text: string, ts = Da
 }
 
 export function listAgentEvents(limit = 20): AgentEvent[] {
-  const cap = Number.isFinite(limit) && limit > 0 ? Math.min(Math.round(limit), 500) : 20;
+  const cap = capLimit(limit);
   return db()
     .prepare(`SELECT * FROM cp_agent_events ORDER BY ts DESC, id DESC LIMIT ?`)
     .all(cap) as AgentEvent[];
 }
 
 export function listSales(limit = 20): CraftSale[] {
-  const cap = Number.isFinite(limit) && limit > 0 ? Math.min(Math.round(limit), 500) : 20;
+  const cap = capLimit(limit);
   const rows = db()
     .prepare(
       `SELECT s.*, COALESCE(p.name, '(商品已删除)') AS product_name
@@ -290,51 +238,14 @@ function sumBetween(from: number, to: number): Sums {
   return row;
 }
 
-/** 环比：上期为 0 时不编造增长率，两边都 0 记 0，从 0 涨起来记 null（前端显示「新增」）。 */
-function pctDelta(cur: number, prev: number): number | null {
-  if (prev === 0) return cur === 0 ? 0 : null;
-  return Math.round(((cur - prev) / Math.abs(prev)) * 1000) / 10;
-}
-
-/** 百分比份额：1 位小数；总额为 0 时全 0（不画假的 100%）。 */
-function share(part: number, total: number): number {
-  return total > 0 ? Math.round((part / total) * 1000) / 10 : 0;
-}
-
 export function overview(days = 30): CraftOverview {
-  const d = Math.min(Math.max(Math.round(days) || 30, 1), 365);
+  const d = parseDays(days);
   const to = Date.now();
   const from = to - d * DAY_MS;
   const cur = sumBetween(from, to);
   const prev = sumBetween(from - d * DAY_MS, from);
-
-  const cost = cur.cost_cents;
-  const profit = cur.revenue_cents - cost - cur.shipping_cents;
-  const prevProfit = prev.revenue_cents - prev.cost_cents - prev.shipping_cents;
-
-  return {
-    days: d,
-    window: { from, to },
-    sales_count: cur.sales_count,
-    units: cur.units,
-    revenue_cents: cur.revenue_cents,
-    cost_cents: cur.cost_cents,
-    shipping_cents: cur.shipping_cents,
-    profit_cents: profit,
-    margin_pct: cur.revenue_cents > 0 ? Math.round((profit / cur.revenue_cents) * 1000) / 10 : null,
-    per100: {
-      cost: share(cur.cost_cents, cur.revenue_cents),
-      shipping: share(cur.shipping_cents, cur.revenue_cents),
-      profit: share(profit, cur.revenue_cents),
-    },
-    delta_pct: {
-      profit: pctDelta(profit, prevProfit),
-      revenue: pctDelta(cur.revenue_cents, prev.revenue_cents),
-      units: pctDelta(cur.units, prev.units),
-    },
-  };
+  return buildOverview(days, { from, to }, cur, prev);
 }
-
 export interface ProductRow extends CraftProduct {
   sold_units: number;
   revenue_cents: number;
@@ -343,7 +254,7 @@ export interface ProductRow extends CraftProduct {
 
 /** 商品盈利排行：窗口内卖了多少、赚了多少，按总盈利从高到低。 */
 export function productBreakdown(days = 30): ProductRow[] {
-  const d = Math.min(Math.max(Math.round(days) || 30, 1), 365);
+  const d = parseDays(days);
   const to = Date.now();
   const from = to - d * DAY_MS;
   const rows = db()
@@ -362,24 +273,11 @@ export function productBreakdown(days = 30): ProductRow[] {
   return rows.map((r) => ({ ...r, profit_per_unit_cents: profitPerUnit(r) }));
 }
 
-export interface DayPoint {
-  day: number;
-  units: number;
-  revenue_cents: number;
-  profit_cents: number;
-}
-
 /** 每日盈利趋势：本地零点归桶（国内商家凌晨的单算前一天的生意），零值补齐。 */
 export function timeseries(days = 30): { days: number; series: DayPoint[] } {
-  const d = Math.min(Math.max(Math.round(days) || 30, 1), 365);
+  const d = parseDays(days);
   const to = Date.now();
   const from = to - d * DAY_MS;
-  const startOfDay = (ts: number): number => {
-    const x = new Date(ts);
-    x.setHours(0, 0, 0, 0);
-    return x.getTime();
-  };
-
   const rows = db()
     .prepare(
       `SELECT qty, price_cents, cost_cents, shipping_cents, created_at
@@ -393,22 +291,8 @@ export function timeseries(days = 30): { days: number; series: DayPoint[] } {
     shipping_cents: number;
     created_at: number;
   }>;
-
-  const map = new Map<number, DayPoint>();
-  for (const r of rows) {
-    const key = startOfDay(r.created_at);
-    const b = map.get(key) ?? { day: key, units: 0, revenue_cents: 0, profit_cents: 0 };
-    b.units += r.qty;
-    b.revenue_cents += r.qty * r.price_cents;
-    b.profit_cents += r.qty * profitPerUnit(r);
-    map.set(key, b);
-  }
-
-  const series: DayPoint[] = [];
-  for (let t = startOfDay(from); t <= startOfDay(to); t += DAY_MS) {
-    series.push(map.get(t) ?? { day: t, units: 0, revenue_cents: 0, profit_cents: 0 });
-  }
-  return { days: d, series };
+  // 零点归桶 + 零值补齐规则在 model.buildTimeseries（纯函数，可独立单测）
+  return buildTimeseries(days, { from, to }, rows);
 }
 
 // ── 演示数据（一批手工艺品 + 近 30 天销售）───────────────────────────────────

@@ -21,8 +21,18 @@ import {
   type AgentEvent,
 } from './craft-profit';
 import { getSetting, setSetting } from './settings';
-
-const AUTO_KEY = 'craft_profit.auto_ops';
+import {
+  AUTO_KEY,
+  readAutoOpsConfig,
+  normalizeAutoOpsInput,
+  pickIndex,
+  promoteCount as modelPromoteCount,
+  orderCount as modelOrderCount,
+  unitsPerOrder,
+  revenueText,
+  NO_PRODUCTS_NOTE,
+  AgentRoundError,
+} from '../domains/craft/agent-model';
 
 export class CraftAgentError extends CraftProfitError {}
 
@@ -45,15 +55,15 @@ let lastRunAt: number | null = null;
 export function runRound(rand: () => number = Math.random): RunRoundResult {
   const products = listProducts();
   if (products.length === 0) {
-    return { events: [], sales: 0, units: 0, note: '还没有商品，先上架商品或填演示数据' };
+    return { events: [], sales: 0, units: 0, note: NO_PRODUCTS_NOTE };
   }
-  const pick = <T>(arr: T[]): T => arr[Math.min(arr.length - 1, Math.floor(rand() * arr.length))];
+  const pick = <T>(arr: T[]): T => arr[pickIndex(rand, arr.length)];
   const events: AgentEvent[] = [];
 
   // ① 营销推广：挑 1-2 个商品做朋友圈 + 短视频推广
-  const promoteCount = 1 + Math.floor(rand() * 2);
+  const promoteN = modelPromoteCount(rand);
   const promoted = new Set<string>();
-  for (let i = 0; i < promoteCount; i++) {
+  for (let i = 0; i < promoteN; i++) {
     const p = pick(products);
     if (promoted.has(p.id)) continue;
     promoted.add(p.id);
@@ -61,15 +71,15 @@ export function runRound(rand: () => number = Math.random): RunRoundResult {
   }
 
   // ② 买家出单：0-3 单，每单 1-3 件，按当时价格快照记账
-  const orderCount = Math.floor(rand() * 4);
+  const orderN = modelOrderCount(rand);
   let units = 0;
-  for (let i = 0; i < orderCount; i++) {
+  for (let i = 0; i < orderN; i++) {
     const p = pick(products);
-    const n = 1 + Math.floor(rand() * 3);
+    const n = unitsPerOrder(rand);
     const sale = createSale({ product_id: p.id, qty: n });
     units += n;
     events.push(
-      insertAgentEvent('order', `「${p.name}」售出 ${n} 件，入账 ¥${((sale.price_cents * n) / 100).toFixed(2)}`),
+      insertAgentEvent('order', `「${p.name}」售出 ${n} 件，入账 ${revenueText(sale.price_cents, n)}`),
     );
     // ③ 联系快递员上门取件寄出
     events.push(insertAgentEvent('shipping', `已联系快递员上门取件，寄出「${p.name}」×${n}`));
@@ -77,7 +87,7 @@ export function runRound(rand: () => number = Math.random): RunRoundResult {
 
   rounds += 1;
   lastRunAt = Date.now();
-  return { events, sales: orderCount, units };
+  return { events, sales: orderN, units };
 }
 
 /** 最近运营动态（时间倒序）。 */
@@ -95,12 +105,7 @@ export interface AutoOpsState {
 }
 
 function readState(): { enabled: boolean; interval_min: number } {
-  const raw = getSetting(AUTO_KEY) as { enabled?: unknown; interval_min?: unknown } | undefined;
-  const n = Number(raw?.interval_min);
-  return {
-    enabled: raw?.enabled === true,
-    interval_min: Number.isFinite(n) && n >= 1 ? Math.round(n) : 30,
-  };
+  return readAutoOpsConfig(getSetting(AUTO_KEY));
 }
 
 function schedule(): void {
@@ -122,19 +127,16 @@ function schedule(): void {
 
 /** 开/关自动运营、调间隔（1-1440 分钟）。settings 持久化，重启续跑。 */
 export function setAutoOps(input: { enabled?: unknown; interval_min?: unknown }): AutoOpsState {
-  const cur = readState();
-  const enabled = input.enabled === undefined ? cur.enabled : Boolean(input.enabled);
-  let interval = cur.interval_min;
-  if (input.interval_min !== undefined) {
-    const n = Number(input.interval_min);
-    if (!Number.isFinite(n) || n < 1 || n > 1440) {
-      throw new CraftAgentError('interval_min 填 1 到 1440 的整数（分钟）');
-    }
-    interval = Math.round(n);
+  let normalized;
+  try {
+    normalized = normalizeAutoOpsInput(input, readState());
+  } catch (err) {
+    if (err instanceof AgentRoundError) throw new CraftAgentError(err.message);
+    throw err;
   }
-  setSetting(AUTO_KEY, { enabled, interval_min: interval });
+  setSetting(AUTO_KEY, { enabled: normalized.enabled, interval_min: normalized.interval_min });
   schedule();
-  return { enabled, interval_min: interval, last_run_at: lastRunAt, rounds };
+  return { enabled: normalized.enabled, interval_min: normalized.interval_min, last_run_at: lastRunAt, rounds };
 }
 
 export function autoStatus(): AutoOpsState {
