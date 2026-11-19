@@ -82,6 +82,21 @@ describe('registry — AutoResearchClaw 注册项（2026-10-30 校准后）', ()
     expect(arc?.category).toBe('research');
   });
 
+  it('autoresearchclaw 管线开关：bare_prompt/env/long_running/no_worktree + 跳过抖动 preflight', () => {
+    const arc = findCli('autoresearchclaw');
+    // 课题不能被 agent 人格污染（--topic 直接吃用户原话）
+    expect(arc?.bare_prompt).toBe(true);
+    // Python 块缓冲 → 长管线前几分钟无输出
+    expect(arc?.env_defaults?.PYTHONUNBUFFERED).toBe('1');
+    // 23 阶段分钟级：群聊 DAG 不得用 120s 超时 + 重试
+    expect(arc?.long_running).toBe(true);
+    // 产物要落群工作区，不能塞进 worktrees/<agent>
+    expect(arc?.no_worktree).toBe(true);
+    // preflight 对 reasoning 模型只给 64 token，实测 5 次 4 次空 content
+    expect(arc?.extra_args).toContain('--skip-preflight');
+    expect(arc?.extra_args).toContain('--auto-approve');
+  });
+
   it('既有 claw 条目零破坏 —— openclaw/hermes 补展示字段', () => {
     const openclaw = findCli('openclaw');
     expect(openclaw?.is_claw).toBe(true);

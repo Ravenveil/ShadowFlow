@@ -475,6 +475,13 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     extra_args: [
       'run',
       '--auto-approve',
+      // --skip-preflight（2026-11-20 实测）：ARC 的 preflight 只发 "ping" 并给
+      // reasoning 模型 64 token 预算（`llm/client.py:315`），而智谱 coding 端点
+      // 即便传 thinking:disabled 仍产出 reasoning_content。实测 5 次里 4 次
+      // finish_reason=length + 空 content → preflight 报 "All models failed"，
+      // 整条管线在真正开始前就退出。跳过这个抖动探针，真实阶段失败时会有
+      // 明确的 stage 级报错，信息量更大。
+      '--skip-preflight',
       '--config', 'C:/Users/jy/AutoResearchClaw/config.arc.yaml',
     ],
     fallback_bins: [],
