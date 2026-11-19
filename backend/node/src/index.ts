@@ -97,7 +97,7 @@ import {
   groupsBackendEnv,
   shouldMountProxyFallback,
 } from './config/backend-mode';
-import { installSingleBackendGapHandler } from './config/backend-gap';
+import { installSingleBackendGapHandler, installRootGapHandler } from './config/backend-gap';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
 import { sweepOrphanHops } from './storage/agent-hops';
@@ -369,6 +369,13 @@ app.use('/projects', express.static(projectsRoot, {
   },
 }));
 console.log(`[index] static /projects → ${projectsRoot}`);
+
+// 裸路径 gap handler（gap-ext-worker d02cab8d）— 挂在 static /projects 之后、
+// 404 catch-all 之前：single 默认下任何未迁移的裸路径端点（/workflow/*、
+// /builder/* 等）返回结构化 BACKEND_GAP 而非静默 404；/health、/projects/*、
+// /api/*、SPA 页面路由、静态资源一律放行。内部自行 isSingleBackend 门控，
+// legacy 下不安装（行为零变化）。
+installRootGapHandler(app);
 
 // 404 catch-all
 app.use((_req, res) => {
