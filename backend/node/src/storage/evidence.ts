@@ -46,8 +46,33 @@ import {
   type ProfileConflict,
 } from './memory-handoff';
 import { getDb } from './sqlite';
+// 报告口径已迁至 domains/analytics/evidence-model.ts（金额/时间/Markdown/CSV/文件名，
+// 纯函数可独立单测）；本文件保留 SQL 取数与报告拼装，导出名原样保留。
+import {
+  ACTION_LABEL,
+  capNum,
+  CSV_ROW_CAP,
+  csvText,
+  evidenceFilename,
+  HOP_ABNORMAL,
+  HOP_STATUS_LABEL,
+  mdCell,
+  stamp,
+  STATUS_LABEL,
+  STEP_LABEL,
+  windowLabel,
+  yuan,
+} from '../domains/analytics/evidence-model';
 
-const CSV_ROW_CAP = 5000;
+export {
+  csvText,
+  evidenceFilename,
+  mdCell,
+  stamp,
+  windowLabel,
+  yuan,
+};
+
 const ORDER_PAGE = 500;
 
 type Db = ReturnType<typeof getDb>;
@@ -234,7 +259,7 @@ export interface CollaborationTrail {
   events: HopEvent[];
 }
 
-const HOP_ABNORMAL = ['failed', 'timeout', 'denied', 'aborted', 'empty'];
+/** 异常 hop 状态清单——单一真源在 evidence-model。 */
 
 /** 协作 DAG 留痕只读汇总；表不存在时返回空快照，不让导出 500。 */
 function readCollaboration(
@@ -283,7 +308,7 @@ function readCollaboration(
     total += r.n;
     settled += r.settled;
     open += r.open;
-    if (HOP_ABNORMAL.includes(r.status)) failures += r.n;
+    if ((HOP_ABNORMAL as readonly string[]).includes(r.status)) failures += r.n;
     reworks += r.reworks;
     approval_rejections += r.approval_rejections;
   }
@@ -344,28 +369,7 @@ export interface EvidenceInput {
   limit?: unknown;
 }
 
-function capNum(v: unknown, fallback: number, max: number): number {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.min(Math.trunc(n), max) : fallback;
-}
-
-/** 分 → ¥。金额一律整数分，只有展示时换算。 */
-export function yuan(cents: number): string {
-  return `¥${(cents / 100).toFixed(2)}`;
-}
-
-/** 本地时间，不用 UTC —— 国内演示场景 UTC 会把早上 8 点前的单算到昨天。 */
-export function stamp(ts: number | null | undefined): string {
-  if (ts === null || ts === undefined || !Number.isFinite(ts)) return '—';
-  const d = new Date(ts);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
-function windowLabel(from: number | null, to: number | null): string {
-  if (from === null && to === null) return '全部（开张至今）';
-  return `${stamp(from)} ~ ${to === null ? '现在' : stamp(to)}`;
-}
+/** 条数上限/金额/时间/窗口文案——全部委托 evidence-model（单一真源）。 */
 
 /** 取全量订单：listOrders 单页封顶 500，导出不能悄悄只给前 500 行。 */
 function allOrders(start: unknown, end: unknown): { items: OrderRow[]; total: number; truncated: boolean } {
@@ -478,13 +482,6 @@ export function buildEvidence(input: EvidenceInput = {}): EvidenceReport {
   };
 }
 
-function mdCell(v: unknown): string {
-  return String(v ?? '')
-    .replace(/\|/g, '\\|')
-    .replace(/\r?\n/g, ' ')
-    .slice(0, 160);
-}
-
 /** 七章报告与评委速览共用同一套表格写法，避免两份材料的转义/截断口径漂移。 */
 function appendTable(lines: string[], head: string[], rows: string[][]): void {
   lines.push(`| ${head.join(' | ')} |`);
@@ -492,40 +489,7 @@ function appendTable(lines: string[], head: string[], rows: string[][]): void {
   for (const row of rows) lines.push(`| ${row.map(mdCell).join(' | ')} |`);
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  created: '待支付',
-  paid: '已支付',
-  refunded: '已退款',
-};
-
-const ACTION_LABEL: Record<string, string> = {
-  create: '新建',
-  update: '更新',
-  conflict: '冲突留痕（待人裁决）',
-  keep: '低置信保留原值',
-  override: '人工采纳',
-  dismiss: '人工驳回',
-};
-
-const STEP_LABEL: Record<string, string> = {
-  visit_landed: '落地页到访',
-  order_created: '下单',
-  order_paid: '支付成功',
-  ledger_income: '记入流水',
-  dashboard_visible: '看板可见',
-};
-
-/** agent_hops 状态的中文化，报告里不直接甩英文枚举给评委。 */
-const HOP_STATUS_LABEL: Record<string, string> = {
-  pending: '待开始',
-  running: '执行中',
-  done: '完成',
-  failed: '失败',
-  timeout: '超时',
-  empty: '空产出',
-  denied: '拒绝 / 策略拦截',
-  aborted: '已中止',
-};
+/** 状态/动作/步骤/hop 中文标签——单一真源在 evidence-model。 */
 
 /**
  * 评委速览正文（七章报告卷首与独立一页共用同一份，避免两处口径漂移）。
@@ -840,16 +804,7 @@ export function evidenceMarkdown(report: EvidenceReport): string {
   return `${lines.join('\n')}\n`;
 }
 
-/**
- * CSV 单元格：Excel 会把以 = + - @ 开头的文本当公式执行（CSV 注入），
- * 因此文本列统一加双引号并对这些前缀补一个单引号。数字列不走这里，
- * 否则负数金额会被改成文本，导出来没法直接求和。
- */
-function csvText(v: unknown): string {
-  let s = String(v ?? '').replace(/\r?\n/g, ' ');
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return `"${s.replace(/"/g, '""')}"`;
-}
+/** CSV 单元格转义（含公式注入防护）——单一真源在 evidence-model。 */
 
 /** 订单明细 CSV：UTF-8 BOM 让 Excel 直接认中文，不乱码。 */
 export function evidenceOrdersCsv(input: EvidenceInput = {}): string {
@@ -877,11 +832,4 @@ export function evidenceOrdersCsv(input: EvidenceInput = {}): string {
   return `\uFEFF${rows.join('\r\n')}\r\n`;
 }
 
-/** ASCII 文件名，避免 Content-Disposition 的中文编码在浏览器间不一致。 */
-export function evidenceFilename(kind: 'md' | 'csv' | 'scorecard', generatedAt = Date.now()): string {
-  const d = new Date(generatedAt);
-  const p = (n: number) => String(n).padStart(2, '0');
-  const tag = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-  const base = kind === 'scorecard' ? 'shadowflow-scorecard' : 'shadowflow-evidence';
-  return `${base}-${tag}.${kind === 'csv' ? 'csv' : 'md'}`;
-}
+/** ASCII 文件名（避免 Content-Disposition 中文编码跨浏览器不一致）——单一真源在 evidence-model。 */

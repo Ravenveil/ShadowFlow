@@ -21,6 +21,18 @@
 
 import { randomUUID } from 'crypto';
 import { getDb } from './sqlite';
+// 纯规则已迁至 domains/collaboration/groups-model.ts（reactions/置顶/DM 匹配/kind 归一，
+// 可独立单测）；本文件保留 DDL/SQL/事务与装配，导出名原样保留。
+import {
+  defaultUserSetting,
+  isDmForAgent,
+  nextPinned,
+  normalizeGroupKind,
+  normalizeSenderKind,
+  parseJsonSafe,
+  resolveKindsFilter,
+  toggleReaction,
+} from '../domains/collaboration/groups-model';
 
 // ── id / 时间 helpers ────────────────────────────────────────────────────────
 
@@ -130,15 +142,8 @@ export interface UserGroupSetting {
   my_nickname: string | null;
 }
 
-function defaultUserSetting(): UserGroupSetting {
-  return {
-    muted: false,
-    pinned: false,
-    folded: false,
-    show_nickname: true,
-    my_nickname: null,
-  };
-}
+/** 用户偏好默认值——单一真源在 groups-model，此处转出兼容。 */
+export { defaultUserSetting };
 
 // ── 行 ↔ record 映射 ─────────────────────────────────────────────────────────
 
@@ -174,20 +179,14 @@ interface MessageRow {
   pinned: number; // 0/1
 }
 
-function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (raw == null || raw === '') return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
+/** 容错 JSON 解析——单一真源在 groups-model。 */
+const parseJson = parseJsonSafe;
 
 function toMessageItem(row: MessageRow): MessageItem {
   return {
     message_id: row.message_id,
     sender_name: row.sender_name,
-    sender_kind: (row.sender_kind || 'user') as SenderKind,
+    sender_kind: normalizeSenderKind(row.sender_kind),
     content: row.content,
     timestamp: row.timestamp,
     reply_to: row.reply_to ?? null,
@@ -217,7 +216,7 @@ function toGroupRecord(row: GroupRow): GroupRecord {
     workspace_id: row.workspace_id ?? null,
     workspace_dir: row.workspace_dir ?? null,
     team_id: row.team_id ?? null,
-    kind: (row.kind || 'group') as GroupKind,
+    kind: normalizeGroupKind(row.kind),
     conversation_id: row.conversation_id ?? null,
     announcement: row.announcement ?? null,
     archived: !!row.archived,
@@ -377,7 +376,7 @@ export function getGroup(groupId: string): GroupRecord | null {
  *   - include_archived：默认 false → 隐藏 archived=true。
  */
 export function listGroups(opts: ListGroupsOptions = {}): GroupRecord[] {
-  const kinds = opts.kinds && opts.kinds.length > 0 ? opts.kinds : ['group'];
+  const kinds = resolveKindsFilter(opts.kinds);
   const placeholders = kinds.map(() => '?').join(', ');
 
   // workspace_id：undefined = 不过滤；null/string = 严格相等（null 只匹配 NULL 行）。
@@ -551,7 +550,7 @@ export function resolveDmGroup(
     include_archived: true,
   });
   for (const rec of candidates) {
-    if (rec.agent_ids.length === 1 && rec.agent_ids[0] === agentId) {
+    if (isDmForAgent(rec.agent_ids, agentId)) {
       return rec;
     }
   }
@@ -581,18 +580,12 @@ export function setReaction(
   const row = getMessageRow(groupId, messageId);
   if (!row) return null;
 
-  const reactions = parseJson<Record<string, string[]>>(row.reactions, {});
-  const users = new Set(reactions[emoji] ?? []);
-  if (on) {
-    users.add(userId);
-  } else {
-    users.delete(userId);
-  }
-  if (users.size > 0) {
-    reactions[emoji] = Array.from(users);
-  } else {
-    delete reactions[emoji];
-  }
+  const reactions = toggleReaction(
+    parseJson<Record<string, string[]>>(row.reactions, {}),
+    emoji,
+    userId,
+    on,
+  );
   getDb()
     .prepare(
       `UPDATE group_messages SET reactions = ? WHERE group_id = ? AND message_id = ?`,
@@ -612,7 +605,7 @@ export function setPinned(
 ): boolean | null {
   const row = getMessageRow(groupId, messageId);
   if (!row) return null;
-  const newVal = pinned === undefined ? !row.pinned : pinned;
+  const newVal = nextPinned(!!row.pinned, pinned);
   getDb()
     .prepare(
       `UPDATE group_messages SET pinned = ? WHERE group_id = ? AND message_id = ?`,

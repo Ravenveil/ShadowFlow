@@ -16,26 +16,27 @@
 import { randomUUID } from 'crypto';
 import { getDb } from '../../../../storage/sqlite';
 import { getSetting } from '../../../../storage/settings';
+// 成本/聚合口径已迁至 domains/analytics/usage/usage-model.ts（纯规则，可独立单测）；
+// 本文件保留 SQL 与装配，导出名原样保留。
+import {
+  bucketByDay,
+  estimateCostUsd,
+  normalizeDimension,
+  normalizeDurationMs,
+  normalizeLimit,
+  normalizeTokens,
+  parsePriceTable,
+  PRICE_TABLE_KEY,
+  startOfDay,
+  type ModelPrice,
+} from '../usage-model';
 
-/** settings.llm.priceTable 的 settings key（model → {input,output} 每百万 token 美元价）。 */
-export const PRICE_TABLE_KEY = 'llm.priceTable';
+/** settings.llm.priceTable 的 settings key */
+export { PRICE_TABLE_KEY };
 
 /** 读单价表（缺失/损坏返回 undefined，成本按 0 计——宁可少算不虚报）。 */
 export function readPriceTable(): Record<string, ModelPrice> | undefined {
-  const raw = getSetting(PRICE_TABLE_KEY);
-  if (!raw || typeof raw !== 'object') return undefined;
-  const out: Record<string, ModelPrice> = {};
-  for (const [model, p] of Object.entries(raw as Record<string, unknown>)) {
-    if (
-      p &&
-      typeof p === 'object' &&
-      typeof (p as Record<string, unknown>).input === 'number' &&
-      typeof (p as Record<string, unknown>).output === 'number'
-    ) {
-      out[model] = { input: (p as ModelPrice).input, output: (p as ModelPrice).output };
-    }
-  }
-  return Object.keys(out).length ? out : undefined;
+  return parsePriceTable(getSetting(PRICE_TABLE_KEY));
 }
 
 export interface TokenUsageRecord {
@@ -56,11 +57,8 @@ export interface TokenUsageRecord {
   duration_ms: number;
 }
 
-/** 每百万 token 美元单价（settings.llm.priceTable 的条目形状）。 */
-export interface ModelPrice {
-  input: number;
-  output: number;
-}
+/** 每百万 token 美元单价（settings.llm.priceTable 的条目形状）——单一真源在 usage-model。 */
+export type { ModelPrice };
 
 /**
  * 归属戳（2026-11-07 T12/BE-07）— 一次模型调用关联到 run/agent/project，
@@ -87,14 +85,10 @@ export interface UsageToRecord extends UsageStamp {
  */
 export function recordUsage(usage: UsageToRecord, priceTable?: Record<string, ModelPrice>): void {
   try {
-    const input = Math.max(0, Math.round(Number(usage.input_tokens) || 0));
-    const output = Math.max(0, Math.round(Number(usage.output_tokens) || 0));
+    const input = normalizeTokens(usage.input_tokens);
+    const output = normalizeTokens(usage.output_tokens);
     const model = usage.model || '';
-    const price = (priceTable ?? readPriceTable())?.[model];
-    const cost =
-      price && (input || output)
-        ? (input * price.input + output * price.output) / 1_000_000
-        : 0;
+    const cost = estimateCostUsd(input, output, model, priceTable ?? readPriceTable());
     getDb()
       .prepare(
         `INSERT INTO token_usage (id, ts, session_id, model, input_tokens, output_tokens, cost_est_usd,
@@ -112,7 +106,7 @@ export function recordUsage(usage: UsageToRecord, priceTable?: Record<string, Mo
         usage.run_id || '',
         usage.agent_id || '',
         usage.project_id || '',
-        Math.max(0, Math.round(Number(usage.duration_ms) || 0)),
+        normalizeDurationMs(usage.duration_ms),
       );
   } catch {
     /* best-effort — 统计流水绝不影响主链路 */
@@ -161,19 +155,7 @@ export function usageDailyBetween(fromTs: number, toTs: number): Array<{
        FROM token_usage WHERE ts >= ? AND ts < ? ORDER BY ts`,
     )
     .all(fromTs, toTs) as Array<Pick<TokenUsageRecord, 'ts' | 'input_tokens' | 'output_tokens' | 'cost_est_usd'>>;
-  const byDay = new Map<number, { calls: number; input_tokens: number; output_tokens: number; cost_est_usd: number }>();
-  for (const r of rows) {
-    const day = startOfDay(r.ts);
-    const bucket = byDay.get(day) ?? { calls: 0, input_tokens: 0, output_tokens: 0, cost_est_usd: 0 };
-    bucket.calls += 1;
-    bucket.input_tokens += r.input_tokens;
-    bucket.output_tokens += r.output_tokens;
-    bucket.cost_est_usd += r.cost_est_usd;
-    byDay.set(day, bucket);
-  }
-  return [...byDay.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([day, v]) => ({ day, ...v }));
+  return bucketByDay(rows);
 }
 
 /** 按维度 TopN（model / session / run / agent / project）。 */
@@ -183,7 +165,8 @@ export function usageBreakdown(
   by: 'model' | 'session_id' | 'run_id' | 'agent_id' | 'project_id',
   limit = 10,
 ): Array<{ key: string; calls: number; input_tokens: number; output_tokens: number; cost_est_usd: number }> {
-  const col = by === 'session_id' || by === 'run_id' || by === 'agent_id' || by === 'project_id' ? by : 'model';
+  const col = normalizeDimension(by);
+  const cap = normalizeLimit(limit, 10);
   return getDb()
     .prepare(
       `SELECT COALESCE(${col}, '') AS key,
@@ -196,7 +179,7 @@ export function usageBreakdown(
        ORDER BY input_tokens + output_tokens DESC
        LIMIT ?`,
     )
-    .all(fromTs, toTs, limit) as Array<{
+    .all(fromTs, toTs, cap) as Array<{
     key: string;
     calls: number;
     input_tokens: number;
@@ -205,8 +188,5 @@ export function usageBreakdown(
   }>;
 }
 
-export function startOfDay(ts: number): number {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
+/** 本地零点——单一真源在 usage-model，此处转出兼容。 */
+export { startOfDay };

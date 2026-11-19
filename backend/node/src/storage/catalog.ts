@@ -20,6 +20,19 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { repoDataFile } from './repo-root';
+// 纯规则已迁至 domains/catalog/model.ts（脱敏/app_id 白名单/契约校验/摘要视图，
+// 可独立单测）；本文件保留文件 I/O 与 fork 装配，导出名原样保留。
+import {
+  isValidAppId,
+  redactBlueprintSnapshot,
+  summaryOf,
+  validateBlueprintContract,
+  type BlueprintValidationErrors,
+  type CatalogSummaryShape,
+} from '../domains/catalog/model';
+
+export { isValidAppId, redactBlueprintSnapshot, summaryOf, validateBlueprintContract };
+export type { BlueprintValidationErrors };
 
 // ---------------------------------------------------------------------------
 // Errors (AC7)
@@ -53,102 +66,10 @@ export class CatalogBlueprintInvalidError extends CatalogError {
 }
 
 // ---------------------------------------------------------------------------
-// Sensitive-field redaction (AC3) — 逐行移植 redact_blueprint_snapshot
+// Sensitive-field redaction (AC3) —— 实现已迁至 domains/catalog/model.ts
 // ---------------------------------------------------------------------------
 
-const SENSITIVE_TOP_LEVEL = new Set([
-  'system_prompt',
-  'private_key',
-  'byok',
-  'byok_token',
-  'api_key',
-  'provider_credentials',
-  'credentials',
-  'secret',
-  'secrets',
-]);
-
-const SENSITIVE_METADATA = new Set([
-  'system_prompt',
-  'private_key',
-  'byok',
-  'byok_token',
-  'api_key',
-  'provider_credentials',
-  'credentials',
-  'secret',
-  'secrets',
-  '0g_private_key',
-]);
-
 type Obj = Record<string, unknown>;
-
-function scrubMetadata(meta: unknown): Obj {
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {};
-  const out: Obj = {};
-  for (const [k, v] of Object.entries(meta as Obj)) {
-    if (!SENSITIVE_METADATA.has(k.toLowerCase())) out[k] = v;
-  }
-  return out;
-}
-
-function redactRole(role: Obj): Obj {
-  const safe: Obj = {};
-  for (const [k, v] of Object.entries(role)) {
-    if (!SENSITIVE_TOP_LEVEL.has(k)) safe[k] = v;
-  }
-  safe['metadata'] = scrubMetadata(safe['metadata']);
-  const subAgents = Array.isArray(safe['sub_agents']) ? safe['sub_agents'] : [];
-  safe['sub_agents'] = subAgents
-    .filter((s): s is Obj => !!s && typeof s === 'object' && !Array.isArray(s))
-    .map((s) => redactRole(s));
-  return safe;
-}
-
-function redactToolPolicy(tp: Obj): Obj {
-  const safe = { ...tp };
-  if (safe['credentials_ref']) safe['credentials_ref'] = '[redacted]';
-  safe['metadata'] = scrubMetadata(safe['metadata']);
-  return safe;
-}
-
-/**
- * 返回快照的脱敏副本（对线安全）：在每一层（root / metadata / role /
- * role.metadata / role.sub_agents.* / tool_policies.*）剥掉 _SENSITIVE_TOP_LEVEL。
- */
-export function redactBlueprintSnapshot(snapshot: unknown): Obj {
-  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return {};
-  const src = snapshot as Obj;
-  const safe: Obj = {};
-  for (const [k, v] of Object.entries(src)) {
-    if (!SENSITIVE_TOP_LEVEL.has(k)) safe[k] = v;
-  }
-  safe['metadata'] = scrubMetadata(safe['metadata']);
-
-  const roles = Array.isArray(safe['role_profiles']) ? safe['role_profiles'] : [];
-  safe['role_profiles'] = roles
-    .filter((r): r is Obj => !!r && typeof r === 'object' && !Array.isArray(r))
-    .map((r) => redactRole(r));
-
-  const toolPolicies = Array.isArray(safe['tool_policies']) ? safe['tool_policies'] : [];
-  safe['tool_policies'] = toolPolicies
-    .filter((tp): tp is Obj => !!tp && typeof tp === 'object' && !Array.isArray(tp))
-    .map((tp) => redactToolPolicy(tp));
-
-  const kbList = Array.isArray(safe['knowledge_bindings']) ? safe['knowledge_bindings'] : [];
-  safe['knowledge_bindings'] = kbList
-    .filter((kb): kb is Obj => !!kb && typeof kb === 'object' && !Array.isArray(kb))
-    .map((kb) => {
-      const cleaned: Obj = {};
-      for (const [k, v] of Object.entries(kb)) {
-        if (!SENSITIVE_TOP_LEVEL.has(k)) cleaned[k] = v;
-      }
-      cleaned['metadata'] = scrubMetadata(kb['metadata']);
-      return cleaned;
-    });
-
-  return safe;
-}
 
 // ---------------------------------------------------------------------------
 // 存储路径与读写
@@ -162,18 +83,7 @@ function ensureDir(): void {
   fs.mkdirSync(catalogDir(), { recursive: true });
 }
 
-/** app_id 白名单字符（禁止路径穿越），对齐 Python _path_for 的拒绝集合。 */
-export function isValidAppId(appId: string): boolean {
-  return (
-    typeof appId === 'string' &&
-    appId.length > 0 &&
-    !appId.includes('/') &&
-    !appId.includes('\\') &&
-    !appId.includes('..') &&
-    !appId.includes(' ') &&
-    !appId.includes('\x00')
-  );
-}
+/** app_id 白名单校验——单一真源在 domains/catalog/model.ts。 */
 
 function pathFor(appId: string): string {
   if (!isValidAppId(appId)) {
@@ -232,25 +142,8 @@ function iterRecords(): Obj[] {
 // 视图构建（_summary_of / get_app 视图）
 // ---------------------------------------------------------------------------
 
-export interface CatalogSummary {
-  app_id: string;
-  name: string;
-  goal: string;
-  kit_type: string;
-  author: string;
-  published_at: string;
-  fork_count: number;
-  forked_from: string | null;
-  template_id: string;
-  workflow_id: string;
-  blueprint_id: string;
-  /** 团队模板标记：快照 mode 透传，供前端模板入口过滤 */
-  mode?: string;
-  /** Story 13.5：存在才写，保持 payload 干净 */
-  scope_hint?: string;
-  /** Story 13.6 D2-b：第一个 role 的 collaboration_contract */
-  collaboration_contract?: Obj;
-}
+/** 目录摘要视图的形状与构造——单一真源在 domains/catalog/model.ts。 */
+export type CatalogSummary = CatalogSummaryShape;
 
 export interface CatalogDetail extends CatalogSummary {
   mode: string;
@@ -260,39 +153,7 @@ export interface CatalogDetail extends CatalogSummary {
   blueprint_snapshot: Obj;
 }
 
-/** summary_of(rec)（@staticmethod 同名移植）：字段名与 Python wire 完全一致。 */
-export function summaryOf(rec: Obj): CatalogSummary {
-  const summary: CatalogSummary = {
-    app_id: String(rec['app_id'] ?? ''),
-    name: String(rec['name'] ?? ''),
-    goal: String(rec['goal'] ?? ''),
-    kit_type: String(rec['kit_type'] ?? 'custom'),
-    author: String(rec['author'] ?? 'anonymous'),
-    published_at: String(rec['published_at'] ?? ''),
-    fork_count: Number(rec['fork_count'] ?? 0) || 0,
-    forked_from: (rec['forked_from'] ?? null) as string | null,
-    template_id: String(rec['template_id'] ?? '') || '',
-    workflow_id: String(rec['workflow_id'] ?? '') || '',
-    blueprint_id: String(rec['blueprint_id'] ?? '') || '',
-  };
-  const scopeHint = rec['scope_hint'];
-  if (scopeHint !== null && scopeHint !== undefined) {
-    summary['scope_hint'] = scopeHint as string;
-  }
-  const snap = rec['blueprint_snapshot'];
-  if (snap && typeof snap === 'object' && !Array.isArray(snap)) {
-    const s = snap as Obj;
-    summary['mode'] = String(s['mode'] ?? 'single');
-    const roles = Array.isArray(s['role_profiles']) ? s['role_profiles'] : [];
-    if (roles.length > 0 && roles[0] && typeof roles[0] === 'object' && !Array.isArray(roles[0])) {
-      const cc = (roles[0] as Obj)['collaboration_contract'];
-      if (cc && typeof cc === 'object' && !Array.isArray(cc)) {
-        summary['collaboration_contract'] = cc as Obj;
-      }
-    }
-  }
-  return summary;
-}
+/** summary_of(rec)——实现已迁至 domains/catalog/model.ts（单一真源）。 */
 
 // ---------------------------------------------------------------------------
 // 读 API：list_apps / get_app
@@ -389,51 +250,6 @@ export function getApp(appId: string): CatalogDetail {
 // fork 前置合同校验（对齐 Python AgentBlueprint.model_validate 的必需约束）
 // ---------------------------------------------------------------------------
 
-export interface BlueprintValidationErrors {
-  /** 顶层字段错误（缺 name/goal、mode 矛盾） */
-  top: string[];
-  /** 每个 role 的字段错误（缺 role_id/name 等） */
-  roles: string[];
-}
-
-/**
- * 对 Python AgentBlueprint 契约里"会导致 model_validate 抛 ValidationError"的
- * 硬约束做等价校验：顶层 name/goal 必填、mode='single' 至少一个 role、
- * 每个 RoleProfile 的 role_id/name 必填。其余子对象缺省全兼容。
- */
-export function validateBlueprintContract(snapshot: unknown): BlueprintValidationErrors {
-  const errs: BlueprintValidationErrors = { top: [], roles: [] };
-  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
-    errs.top.push('blueprint snapshot must be an object');
-    return errs;
-  }
-  const bp = snapshot as Obj;
-  if (typeof bp['name'] !== 'string' || bp['name'] === '') {
-    errs.top.push("field required: 'name'");
-  }
-  if (typeof bp['goal'] !== 'string' || bp['goal'] === '') {
-    errs.top.push("field required: 'goal'");
-  }
-  const mode = typeof bp['mode'] === 'string' && bp['mode'] === 'team' ? 'team' : 'single';
-  const roles = Array.isArray(bp['role_profiles']) ? bp['role_profiles'] : [];
-  if (mode === 'single' && roles.length < 1) {
-    errs.top.push("mode='single' requires at least one role_profile");
-  }
-  roles.forEach((r, i) => {
-    if (!r || typeof r !== 'object' || Array.isArray(r)) {
-      errs.roles.push(`role_profiles[${i}] must be an object`);
-      return;
-    }
-    const role = r as Obj;
-    if (typeof role['role_id'] !== 'string' || role['role_id'] === '') {
-      errs.roles.push(`role_profiles[${i}]: field required: 'role_id'`);
-    }
-    if (typeof role['name'] !== 'string' || role['name'] === '') {
-      errs.roles.push(`role_profiles[${i}]: field required: 'name'`);
-    }
-  });
-  return errs;
-}
 
 // ---------------------------------------------------------------------------
 // fork（AC6）—— 克隆快照为新 Blueprint
