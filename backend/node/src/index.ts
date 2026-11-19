@@ -107,6 +107,7 @@ import {
   reloadDesignSystems,
   seedBuiltinDesignSystems,
 } from './loaders/design-systems';
+import { ensureBuiltinCatalogTemplates } from './lib/catalog-builtin';
 
 const PORT = Number(process.env.PORT ?? 8002);
 // 公网部署可配多来源（逗号分隔）：FRONTEND_ORIGIN=https://a.example.com,https://b.example.com
@@ -389,6 +390,16 @@ app.use((_req, res) => {
   const { reloaded, errors } = reloadSkills();
   if (reloaded > 0 || errors.length > 0) {
     console.log(`[index] skill-loader: ${reloaded} loaded, ${errors.length} error(s)`);
+  }
+}
+
+// ── 内置 Catalog 团队模板种子（2026-11-19）────────────────────────────────────
+// 单后端不启 Python 时，内置团队（ARC 论文专家团 / T04 氢能团）没有种子就会
+// 404，前端「一键即用」直接失效。这里从仓库内 JSON 数据文件幂等补种。
+{
+  const seeded = ensureBuiltinCatalogTemplates();
+  if (seeded.length > 0) {
+    console.log(`[index] catalog: seeded builtin team templates ${seeded.join(', ')}`);
   }
 }
 

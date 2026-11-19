@@ -36,6 +36,7 @@ import {
   type AgentOverrideField,
 } from '../../lib/agent-overrides';
 import type { AgentRecord } from '../../storage/agents';
+import { listAgentFileIds, readAgentFile, toAgentWireRecord } from '../../lib/agent-store';
 
 const router = Router();
 
@@ -142,14 +143,31 @@ router.get('/', async (req: Request, res: Response) => {
     return;
   }
 
+  // 本地 JSON agent 库（Catalog fork 产物，与 Python store 同目录同格式）：
+  // 单后端不启 Python 时这是唯一真源，不合并的话 fork 出来的 9 个 ARC agent
+  // 在建群选人列表里看不到。
+  const localJsonAgents = listAgentFileIds()
+    .map((id) => readAgentFile(id))
+    .filter((a): a is NonNullable<typeof a> => !!a)
+    .filter((a) => !workspaceId || !a['workspace_id'] || a['workspace_id'] === workspaceId)
+    .map((a) => toAgentWireRecord(a) as unknown as AgentRecord);
+
+  const seen = new Set(pythonAgents.map((a) => a.agent_id));
+  const merged = [...pythonAgents];
+  for (const a of localJsonAgents) {
+    if (!seen.has(a.agent_id)) {
+      seen.add(a.agent_id);
+      merged.push(a);
+    }
+  }
+
   // Merge with local yaml templates. Python wins on id collision (defensive —
   // in practice they don't collide: Python uses `agent-*`, yaml uses semantic
   // names like "reader", "pm").
-  const pyIds = new Set(pythonAgents.map((a) => a.agent_id));
   const yamlAgents = yamlToRecordWithOverrides(workspaceId).filter(
-    (a) => !pyIds.has(a.agent_id),
+    (a) => !seen.has(a.agent_id),
   );
-  res.json({ data: [...pythonAgents, ...yamlAgents], meta: {} });
+  res.json({ data: [...merged, ...yamlAgents], meta: {} });
 });
 
 // ─── GET /api/agents/:id — Python first, fall back to local yaml template ───
@@ -166,6 +184,14 @@ router.get('/:id', async (req: Request, res: Response) => {
   // registry / routing-log 是 DAG 子路径资源，不属于单个 agent。
   if (id === 'registry' || id === 'routing-log') {
     res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });
+    return;
+  }
+
+  // 本地 JSON agent 库优先（Catalog fork 产物；单后端下 Python 不在，
+  // 这里是唯一真源）。命中即返回，避免 DAG/右栏灵魂 tab 掉 404。
+  const localRec = readAgentFile(id);
+  if (localRec) {
+    res.json({ data: toAgentWireRecord(localRec), meta: {} });
     return;
   }
 

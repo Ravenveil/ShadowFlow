@@ -30,6 +30,8 @@ import { isAbsolute, join } from 'node:path';
 import { homedir } from 'node:os';
 import { Router, type Request, type Response } from 'express';
 import { getGroupsBackend } from '../../storage/groups-backend';
+import { isSingleBackend } from '../../config/backend-mode';
+import { readAgentFile } from '../../lib/agent-store';
 import { publishGroupEvent } from './groups-event-bus';
 import { resolveCallable } from '../../transport/dispatcher';
 import { resolveProviderKey } from '../../transport/byokKey';
@@ -474,6 +476,20 @@ async function pyGet<T>(path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 取一条 agent 记录（DAG 调度与成员名解析共用）。
+ *
+ * 顺序：本地 JSON agent 库（Catalog fork 产物）→ 原有 Python HTTP 路径。
+ * 单后端下 Python 不在（fetch 立即失败），本地 JSON 是唯一真源，这样 fork
+ * 出来的 ARC 9 个 agent 才能被 DAG 真正调度（2026-11-19 修）。
+ * legacy 双后端场景本地无记录时仍走原 HTTP，行为零变化。
+ */
+async function getAgentRecord(agentId: string): Promise<AgentRecord | null> {
+  const local = readAgentFile(agentId);
+  if (local) return local as unknown as AgentRecord;
+  return pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
 }
 
 /**
@@ -1137,7 +1153,7 @@ async function runFanout(
   const planRoster: StrategyAgent[] = [];
   for (const id of allAgentIds) {
     try {
-      const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`);
+      const a = await getAgentRecord(id);
       rosterCandidates.push({ id, name: a?.name || id });
       planRoster.push({ id, name: a?.name || id, soul: a?.soul ?? '' });
     } catch {
@@ -1269,7 +1285,7 @@ async function runFanout(
         // 此处只解析 effTeam roster 供卡片名解析。
         const rosterEntries = await Promise.all(
           effTeam.members.map(async (id) => {
-            const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(id)}`).catch(() => null);
+            const a = await getAgentRecord(id).catch(() => null);
             return a ? { id, name: a.name || id, soul: a.soul ?? '' } : null;
           }),
         );
@@ -1358,7 +1374,7 @@ async function runFanout(
         const resolveAgentName = async (agentId: string): Promise<string> => {
           const hit = agentNameById.get(agentId);
           if (hit) return hit;
-          const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`).catch(() => null);
+          const a = await getAgentRecord(agentId).catch(() => null);
           const name = a?.name || agentId;
           agentNameById.set(agentId, name);
           return name;
@@ -1397,7 +1413,7 @@ async function runFanout(
             }).catch(() => {});
           },
           getAgent: async (agentId) => {
-            const a = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
+            const a = await getAgentRecord(agentId);
             return a ? { name: a.name || agentId, soul: a.soul ?? '' } : null;
           },
           callAgent: async ({ agentId, name, soul, upstream, signal }) => {
@@ -1657,7 +1673,7 @@ async function runFanout(
       // 反而与 prompt 重复。契约/测试见 lib/turn-thread.ts。
       const { history: turnHistory, prompt: turnPrompt } = buildTurnThread(history, prompt);
 
-      const agent = await pyGet<AgentRecord>(`/api/agents/${encodeURIComponent(agentId)}`);
+      const agent = await getAgentRecord(agentId);
       if (!agent) {
         await pyPostMessage(groupId, {
           content: `[chat] Agent '${agentId}' not found.`,

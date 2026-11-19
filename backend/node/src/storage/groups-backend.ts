@@ -23,6 +23,7 @@
  */
 
 import { PYTHON_BACKEND_URL } from '../python-backend';
+import { groupsBackendEnv } from '../config/backend-mode';
 import * as store from './groups-store';
 
 /** 网关消费的最小群形状（蛇形，与 Python record JSON 对齐）。 */
@@ -183,14 +184,15 @@ const dualBackend: GroupsBackend = {
 };
 
 /**
- * 按 `SF_GROUPS_BACKEND` 选后端：
- *   'node' → 直调 store（群完全留 Node）。
- *   'dual' → 阶段2 双写校验：写两边、读 Node 缺则回落 Python、后台 diff 报警。
- *   其余（含未设）→ Python HTTP（默认，零变化）。
+ * 按后端模式选实现：
+ *   single（默认）→ 强制 node：单后端必须让群读写都留在 Node，
+ *                   否则 chat 会在 Python 不在时读不到群（2026-11-19 修）。
+ *   legacy        → 沿用既有 SF_GROUPS_BACKEND（python 默认 / node / dual），
+ *                   保证双后端行为零变化。
  * 每次调用读 env（不缓存）——测试可在用例间切换，运行期 env 固定时开销可忽略。
  */
 export function getGroupsBackend(): GroupsBackend {
-  const mode = process.env.SF_GROUPS_BACKEND;
+  const mode = groupsBackendEnv();
   if (mode === 'node') return nodeBackend;
   if (mode === 'dual') return dualBackend;
   return pythonBackend;
