@@ -7,7 +7,7 @@
  *   - renderKnowledgeBlock：来源标注、单条截断、整块截断、零命中 ''
  *   - knowledgeBlock：fail-soft（全挂返回 ''，绝不抛）
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   coercePackIds,
   fetchMemoryBankHits,
@@ -15,9 +15,31 @@ import {
   knowledgeBlock,
 } from '../lib/memory-bank';
 
+// 这些用例通过 stubGlobal('fetch') 检验 lib/memory-bank 对 HTTP 响应的聚合 /
+// 清洗 / fail-soft 契约，必须强制走 HTTP 回退路径，与全局默认后端模式解耦：
+// 默认 single 时 isSingleBackend()=true，auto 模式本地失败后不再回退 HTTP，
+// 会导致 fetchMock 不被调用。显式 python 模式直连 HTTP，与实现分流无关。
+const ORIGINAL_ENV = {
+  SF_MEMORY_BANK_MODE: process.env.SF_MEMORY_BANK_MODE,
+  SF_BACKEND_MODE: process.env.SF_BACKEND_MODE,
+} as const;
+
+function restoreEnv() {
+  for (const key of ['SF_MEMORY_BANK_MODE', 'SF_BACKEND_MODE'] as const) {
+    const value = ORIGINAL_ENV[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
+beforeEach(() => {
+  process.env.SF_MEMORY_BANK_MODE = 'python';
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  restoreEnv();
 });
 
 function okJson(body: unknown) {
@@ -106,6 +128,19 @@ describe('fetchMemoryBankHits', () => {
 
     const hits = await fetchMemoryBankHits(['pk'], 'q');
     expect(hits).toEqual([{ text: '有效', source: 'pk', score: 0 }]);
+  });
+
+  it('defaults to single: never falls back to HTTP even when local lookup fails', async () => {
+    // 固化「默认 single 不回退 HTTP」契约：auto + single 下本地失败即 fail-soft，
+    // 绝不发 HTTP 请求（防止未来改动再次引入隐式回退）。
+    process.env.SF_BACKEND_MODE = 'single';
+    process.env.SF_MEMORY_BANK_MODE = 'auto';
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const hits = await fetchMemoryBankHits(['p1'], 'q');
+    expect(Array.isArray(hits)).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
