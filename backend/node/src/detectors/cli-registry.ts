@@ -69,6 +69,31 @@ export interface CliDescriptor {
    * 必须 argv 传。约定：spawn 前 prompt 以参数形式追加，不走 stdin。
    */
   prompt_mode?: string;
+  // ── 管线型 CLI 语义（2026-11-20）────────────────────────────────────────
+  /**
+   * true = prompt 原样当命令行参数，**不拼 system_prompt 前缀**。
+   * 用于「输入=课题、输出=全自动管线」的 CLI（AutoResearchClaw 等）：把 agent
+   * 的人格设定（soul/persona）灌进 `--topic` 会被当成课题的一部分灌给每个阶段，
+   * 污染研究主题。缺省 false（历史行为：`${system}\n\n---\n\nUser goal: ${prompt}`）。
+   */
+  bare_prompt?: boolean;
+  /**
+   * spawn 时追加的默认环境变量（`input.env` 覆盖它）。
+   * 典型用途：`{ PYTHONUNBUFFERED: '1' }` —— Python CLI 默认块缓冲，长管线
+   * 前几分钟 stdout 一个字节都不出，前端看着像挂了。
+   */
+  env_defaults?: Record<string, string>;
+  /**
+   * true = 该 CLI 是长任务（分钟~小时级）。群聊据此放宽 DAG 节点超时并关闭
+   * 自动重试（超时后重跑整条管线 = 白烧一遍额度和 GPU）。
+   */
+  long_running?: boolean;
+  /**
+   * true = 群聊不为此 CLI 建 git worktree 隔离。管线型 CLI 自己管理产物目录结构，
+   * 被塞进 `.shadowflow/worktrees/<agent>` 后用户找不到产物、按相对路径写死的
+   * config 也会失效。
+   */
+  no_worktree?: boolean;
   // ── ClawHub 增量字段（全部 optional，既有 21 条零改动向后兼容）──────────
   /** true = ClawHub 门面中的「Claw」（目录页置顶高亮 + 聊天选择器收录）。 */
   is_claw?: boolean;
@@ -462,6 +487,15 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     homepage: 'https://github.com/aiming-lab/AutoResearchClaw',
     // ARC 以 --topic 传 prompt（CLI 位置参数不收 stdin）。
     prompt_mode: 'argv---topic',
+    // 管线型 CLI 四开关（2026-11-20）：
+    //   bare_prompt  —— 课题只收用户原话，不拼 agent 人格（否则 23 阶段全被污染）
+    //   env_defaults —— Python 块缓冲会让长管线前几分钟无输出，看着像挂了
+    //   long_running —— 23 阶段分钟级，群聊 DAG 不得用 120s 超时/重试
+    //   no_worktree  —— 产物要落在群工作区，不能塞进 worktrees/<agent> 子目录
+    bare_prompt: true,
+    env_defaults: { PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
+    long_running: true,
+    no_worktree: true,
   },
 ];
 
