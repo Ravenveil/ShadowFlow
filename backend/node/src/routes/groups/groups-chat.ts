@@ -53,6 +53,10 @@ import { buildTurnThread } from '../../lib/turn-thread';
 import { loadTeamForRun } from '../../lib/team-source';
 import { getPlan, isPlanGateBlocking, planGateNotice } from '../../lib/plan-gate';
 import { runTeamDagFanout, type RunTeamDagDeps, type HopRecorder } from '../../lib/chat-dag/run-team-dag';
+// 2026-11-20 管线型 CLI（cli:autoresearchclaw 等）两个描述符开关：长任务要放宽
+// 节点超时/关闭自动重试，no_worktree 要把产物直接落群 workspace 而不是
+// worktrees/<agent>。查表实现复用 detectors 侧的 findCli，不在这里重抄 ID 表。
+import { findCli } from '../../detectors/cli-registry';
 import { computeDagLayers } from '../../lib/chat-dag/dag-layers';
 // 2026-11-05 @ 提及定向派活 — OpenBot「直接点名 = 定向 work assignment」：
 // 消息带 @成员 → 跳过 LLM 意图拆解，只路由被点名节点（DAG 收缩诱导子图 /
@@ -438,6 +442,65 @@ interface AgentRecord {
  */
 export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
   return !!group.team_id;
+}
+
+// ── 管线型 CLI 适配（2026-11-20）─────────────────────────────────────────
+// `cli:autoresearchclaw` 这类 23 阶段研究管线是分钟~小时级任务，与
+// claude/opencode 这类「一问一答秒回」的 CLI 完全不是一个时间尺度。两个纯
+// 判定函数把 cli-registry 的描述符字段翻成群聊调度语义，便于单测锁死。
+
+/**
+ * 长任务 CLI 的 DAG 单节点超时（2 小时）。
+ * 23 阶段管线含检索、实验、写作、编译，正常跑完就在 1 小时量级。
+ */
+export const LONG_RUNNING_NODE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * executor 是否指向一个 long_running CLI（`cli:<id>` 且 descriptor.long_running）。
+ *
+ * 只认 `cli:` 前缀：`byok:zhipu` / `anthropic-direct` / `cli:unknown` 一律
+ * false（未命中的 id → findCli 返回 undefined）。NeverThrow：任何异常都按
+ * false 处理，判定失败只是退回旧默认值（120s 超时），不能把聊天主链路打断。
+ */
+export function isLongRunningExecutor(executor: string): boolean {
+  try {
+    if (typeof executor !== 'string' || !executor.startsWith('cli:')) return false;
+    return findCli(executor.slice(4))?.long_running === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * executor 是否指向 no_worktree CLI（`cli:<id>` 且 descriptor.no_worktree）。
+ *
+ * 同上只认 `cli:` 前缀、NeverThrow。判定为真时群聊跳过 prepareWorktree，
+ * 工具沙箱目录直接用群 workspace —— 管线型 CLI 自己管理产物目录层级，
+ * 塞进 `.shadowflow/worktrees/<agent>` 后用户在右侧产出面板里找不到东西，
+ * 管线内按相对路径写死的配置也会失效。
+ */
+export function isNoWorktreeExecutor(executor: string): boolean {
+  try {
+    if (typeof executor !== 'string' || !executor.startsWith('cli:')) return false;
+    return findCli(executor.slice(4))?.no_worktree === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * DAG 调度参数按 executor 收敛：长任务 CLI → 放宽超时 + 关闭自动重试；
+ * 其余 → 返回空对象（调用点展开后不传，走 runTeamDagFanout 默认 120s / 1）。
+ *
+ * 为什么关重试：管线型 CLI 在 120s 处被砍会留下半成品目录，重跑等于从零
+ * 再烧一遍额度和 GPU；宁可让它超时后显式失败，也不要静默重跑两遍。
+ */
+export function dagTimeoutOptsFor(executor: string): {
+  nodeTimeoutMs?: number;
+  defaultMaxRetries?: number;
+} {
+  if (!isLongRunningExecutor(executor)) return {};
+  return { nodeTimeoutMs: LONG_RUNNING_NODE_TIMEOUT_MS, defaultMaxRetries: 0 };
 }
 
 /**
@@ -1551,9 +1614,12 @@ async function runFanout(
         // ── Polynoia worktree 隔离 ─────────────────────────────────────────
         // 仅当群 workspace 是 git 仓库时启用（每 agent 一分支一 worktree，回合
         // 起始重置）；scratch 共享目录 / 非 git → 行为与现状一致。
+        // 2026-11-20 — no_worktree CLI（cli:autoresearchclaw）直接走「非 git」
+        // 那条既有回落分支：不建 worktree，工具沙箱目录 = 群 workspace，产物
+        // 落在 resolveChatWorkspace(groupId, group.workspace_dir) 下可见。
         const runKey = `${groupId}-${Date.now()}`;
         const wtByAgent = new Map<string, PreparedWorktree>();
-        if (await isGitWorkable(workspace)) {
+        if (!isNoWorktreeExecutor(executor) && (await isGitWorkable(workspace))) {
           for (const id of effTeam.members) {
             const wt = await prepareWorktree(workspace, runKey, id).catch(() => null);
             if (wt) wtByAgent.set(id, wt);
@@ -1785,7 +1851,10 @@ async function runFanout(
           await runTeamDagFanout(effTeam, deps, userPrompt, {
             signal: dagController.signal,
             maxConcurrency: MAX_FANOUT_AGENTS,
-            // nodeTimeoutMs/defaultMaxRetries 用 runTeamDagFanout 默认值(120s / 1)。
+            // 常规 executor → 空对象展开，仍用 runTeamDagFanout 默认值(120s / 1)。
+            // 长任务 CLI（cli:autoresearchclaw 的 23 阶段管线）→ 2h 超时 / 0 重试：
+            // 管线型 CLI 超时后重跑 = 白烧一遍额度，宁可显式失败也不要静默跑两遍。
+            ...dagTimeoutOptsFor(executor),
           });
         } finally {
           // 仅当注册表里仍是本 controller 时才删(避免误删后来者)。
@@ -1830,13 +1899,15 @@ async function runFanout(
 
     // ── 串行降级路径的 worktree 隔离（无 team_id 时）──────────────────────
     // 每 agent 一个 worktree（git 仓库 workspace 时）；无 plan_card（单人无拆解）。
+    // 2026-11-20 — no_worktree CLI 跳过 prepareWorktree，同 DAG 分支口径：工具
+    // 沙箱目录回落到群 workspace，产物不落 worktrees/<agent>。
     const serialRunKey = `${groupId}-serial-${Date.now()}`;
     const serialWt = new Map<string, PreparedWorktree>();
     // 记忆交接沉淀收集器（2026-11-05）— 串行路径实际发言 agent（执行序）。
     const serialSpeakers: Array<{ id: string; name: string; excerpt: string }> = [];
     // 本轮派发 prompt（@ 清洗文本或用户原文最后一条；沉淀 summary 用）。
     let serialPrompt = '';
-    if (await isGitWorkable(workspace)) {
+    if (!isNoWorktreeExecutor(executor) && (await isGitWorkable(workspace))) {
       for (const id of agentIds) {
         const wt = await prepareWorktree(workspace, serialRunKey, id).catch(() => null);
         if (wt) serialWt.set(id, wt);
