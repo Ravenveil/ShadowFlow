@@ -102,6 +102,11 @@ export interface NeoHostProps {
     kind: string | null;
     teamId?: string | null;
     teamName?: string | null;
+    /**
+     * 2026-11-19 产出可见性修复：群的实际工作目录。agent/CLI/DAG 把产出写在这里，
+     * 右栏文件树必须跟到这个目录，否则用户翻遍 home 也看不到论文/图表。
+     */
+    workspaceDir?: string | null;
   } | null;
   /**
    * 2026-11-05 Task#11 — Agent 检查器（ZCode 后台运行式）：群聊里点某 agent

@@ -129,6 +129,8 @@ export function NeoApp() {
     kind: string | null;
     teamId: string | null;
     teamName: string | null;
+    /** 群的实际工作目录（产出落点）；右栏文件树跟随它。 */
+    workspaceDir: string | null;
   } | null>(null);
   // 2026-11-06 建群即建编队（heal）：已补过链的群（无论成败）—— 每群每会话
   // 只 find-or-create 一次，防 effect 重入（nav/inboxDMs 抖动）双跑建出两个团队。
@@ -142,7 +144,13 @@ export function NeoApp() {
     const dm = (inboxDMs ?? []).find((d) => d.group_id === nav.groupId);
     if (dm) {
       setConvAgent({ id: dm.agentId, name: dm.agentName });
-      setConvGroup({ groupId: nav.groupId, kind: 'dm', teamId: null, teamName: null });
+      setConvGroup({
+        groupId: nav.groupId,
+        kind: 'dm',
+        teamId: null,
+        teamName: null,
+        workspaceDir: null,
+      });
       return;
     }
     let alive = true;
@@ -152,7 +160,13 @@ export function NeoApp() {
         const kind = (g?.kind as string | undefined) ?? null;
         setConvGroup(
           g
-            ? { groupId: nav.groupId, kind, teamId: g.team_id ?? null, teamName: g.name ?? null }
+            ? {
+                groupId: nav.groupId,
+                kind,
+                teamId: g.team_id ?? null,
+                teamName: g.name ?? null,
+                workspaceDir: (g.workspace_dir as string | undefined) ?? null,
+              }
             : null,
         );
         if (g && kind === 'dm' && g.agent_ids && g.agent_ids.length > 0) {

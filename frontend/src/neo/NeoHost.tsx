@@ -135,10 +135,26 @@ function FileTypeIcon({ name }: { name: string }) {
   return <FileText size={13} strokeWidth={1.8} />;
 }
 
+/**
+ * 产出类扩展名：论文/图表/数据/文档。这些排在同级普通文件之前，
+ * 让「刚跑完的产出」在文件多的任务目录里也能第一眼看到（2026-11-19）。
+ */
+const OUTPUT_EXTS = new Set([
+  'md', 'markdown', 'tex', 'bib', 'pdf', 'ipynb',
+  'csv', 'xlsx', 'docx', 'pptx',
+  'png', 'jpg', 'jpeg', 'svg',
+]);
+
 function sortEntries(entries: FsDirEntry[]): FsDirEntry[] {
-  return [...entries].sort((a, b) =>
-    a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1,
-  );
+  return [...entries].sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    if (!a.isDir) {
+      const ao = OUTPUT_EXTS.has(extOf(a.name)) ? 0 : 1;
+      const bo = OUTPUT_EXTS.has(extOf(b.name)) ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+    }
+    return a.name.localeCompare(b.name);
+  });
 }
 
 function artifactFilename(rec: RunRecord): string {
@@ -253,6 +269,8 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
 
   // ── 工作空间：文件树 ──────────────────────────────────────────────────────
   const [rootPath, setRootPath] = useState<string | null>(null);
+  /** 当前文件树是否跟随会话任务目录（跟随态下用户手动换目录会解除）。 */
+  const [followsTask, setFollowsTask] = useState(false);
   const [children, setChildren] = useState<Record<string, FsDirEntry[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loadingDirs, setLoadingDirs] = useState<Record<string, boolean>>({});
@@ -303,10 +321,23 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
     return () => window.removeEventListener('resize', onResize);
   }, [activeTab]);
 
-  // ── 工作空间 root 解析（用户选过的目录优先，否则后端 home）────────────────
+  // ── 工作空间 root 解析（当前任务目录 → 用户选过的目录 → 后端 home）────────
+  // 2026-11-19 产出可见性修复：agent/CLI/DAG 把产出写在会话的 workspace_dir，
+  // 面板却固定看 localStorage/home → 用户翻不到论文与图表。改成任务目录优先。
+  const taskDir = conversation?.workspaceDir?.trim() || null;
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (taskDir) {
+        if (!cancelled) {
+          setRootPath(taskDir);
+          setFollowsTask(true);
+          setChildren({});
+          setExpanded({});
+        }
+        return;
+      }
+      setFollowsTask(false);
       let saved: string | null = null;
       try { saved = localStorage.getItem(LS_PROJECT_FOLDER); } catch { /* ssr */ }
       if (saved) {
@@ -317,7 +348,7 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
       if (!cancelled && r && r.path !== 'ROOT') setRootPath(r.path);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [taskDir]);
 
   const loadChildren = useCallback(async (dir: string) => {
     setLoadingDirs((m) => ({ ...m, [dir]: true }));
@@ -350,6 +381,7 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
     setSelected(null);
     setChildren({});
     setExpanded({});
+    setFollowsTask(false); // 用户主动换目录 → 解除跟随任务目录
     setRootPath(p);
   };
 
@@ -707,6 +739,26 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
         <span className="neo-host-ws-path" title={rootPath ?? ''}>
           {rootPath ?? t('neo.host.locating', { defaultValue: '定位目录…' })}
         </span>
+        {followsTask && (
+          <span
+            data-testid="neo-host-task-dir-badge"
+            title={t('neo.host.taskDirHint', {
+              defaultValue: '当前显示本会话的工作目录 —— 智能体产出的文件都在这里',
+            })}
+            style={{
+              flexShrink: 0,
+              padding: '1px 6px',
+              borderRadius: 6,
+              fontSize: 10,
+              lineHeight: '16px',
+              color: 'var(--t-accent, #4c8dff)',
+              background: 'color-mix(in srgb, var(--t-accent, #4c8dff) 14%, transparent)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('neo.host.taskDir', { defaultValue: '任务产出' })}
+          </span>
+        )}
         <button
           type="button"
           className="neo-host-icon-btn"
