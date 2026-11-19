@@ -785,7 +785,13 @@ export function NeoGroupChat({
       let executor: string | undefined;
       let model: string | undefined;
       try {
-        executor = localStorage.getItem('sf.defaultExecutor') || undefined;
+        // 群级 executor 优先（2026-11-20）：论文专家团这类「一个群固定跑某个
+        // CLI 管线」的场景，不能让全局默认执行器把它冲掉。写入方见
+        // NeoCreateGroupModal 的「论文专家团 · AutoResearchClaw」卡片。
+        executor =
+          localStorage.getItem(`sf.groupExecutor.${groupId}`) ||
+          localStorage.getItem('sf.defaultExecutor') ||
+          undefined;
         model = localStorage.getItem('sf.model') || undefined;
       } catch {
         /* localStorage 不可用 → 网关默认 executor */

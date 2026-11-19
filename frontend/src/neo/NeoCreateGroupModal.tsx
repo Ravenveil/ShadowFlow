@@ -13,10 +13,12 @@
  * 成功 → onCreated（父级跳群聊现场并刷新 inbox）；失败 → 模态内红条。
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Search, UsersRound, X } from 'lucide-react';
+import { Check, Loader2, Search, Sparkles, FlaskConical, UsersRound, X } from 'lucide-react';
 import { createGroup } from '../api/groupApi';
 import { listTeams, type TeamRecord } from '../api/teams';
 import { listAgents, type AgentRecord } from '../api/agents';
+import { forkCatalogApp, listCatalogApps, type CatalogAppSummary } from '../api/catalog';
+import { listDetectedClis } from '../api/cli';
 import { AgentAvatar } from '../components/agent/AgentAvatar';
 import { useI18n } from '../common/i18n';
 
@@ -26,9 +28,40 @@ export interface NeoCreateGroupModalProps {
   onCreated: (group: { groupId: string; name: string }) => void;
 }
 
+/**
+ * 默认推荐团队（Auto Research Cloud · 论文专家团）。
+ * 排在模板列表最前并打「默认」标：用户要的是「点一下就能开始写论文」，
+ * 不该在模板市场里翻找。
+ */
+const FEATURED_APP_ID = 'app-auto-research-cloud';
+
+/** AutoResearchClaw = 本机已注册的 23 阶段自动研究管线 CLI（GitHub 项目）。 */
+const ARC_CLI_ID = 'autoresearchclaw';
+/** 群级 executor 的 localStorage 键前缀（NeoGroupChat 发送时优先读它）。 */
+export const GROUP_EXECUTOR_KEY_PREFIX = 'sf.groupExecutor.';
+
 /** 错误文案：后端 detail 字符串优先，拿不到退回 err.message。 */
 function errorMessageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Catalog 错误的消息提取。CatalogApiError 的 message 是 "Catalog API error 400"，
+ * 真正有用的原因在 detail.error.message 里 —— 一键 fork 失败必须让用户看到
+ * 「到底哪一步不行」（缺快照？角色校验不过？），不能只显示状态码。
+ */
+function catalogErrorOf(err: unknown): string {
+  const detail = (err as { detail?: unknown })?.detail;
+  if (detail && typeof detail === 'object') {
+    const inner = (detail as Record<string, unknown>).error;
+    if (inner && typeof inner === 'object') {
+      const msg = (inner as Record<string, unknown>).message;
+      if (typeof msg === 'string' && msg) return msg;
+    }
+    const d = (detail as Record<string, unknown>).detail;
+    if (typeof d === 'string' && d) return d;
+  }
+  return errorMessageOf(err);
 }
 
 export function NeoCreateGroupModal({ workspaceId, onClose, onCreated }: NeoCreateGroupModalProps) {
@@ -41,6 +74,14 @@ export function NeoCreateGroupModal({ workspaceId, onClose, onCreated }: NeoCrea
   const [agents, setAgents] = useState<AgentRecord[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 团队模板（Catalog 里 mode==='team' 的条目）—— 一键建群用。 */
+  const [templates, setTemplates] = useState<CatalogAppSummary[] | null>(null);
+  /** 正在 fork 的模板 app_id（null = 空闲）。 */
+  const [forkingId, setForkingId] = useState<string | null>(null);
+  /** AutoResearchClaw CLI 的安装态（null = 还在检测）。 */
+  const [arcCli, setArcCli] = useState<{ installed: boolean; version: string | null } | null>(null);
+  /** 「论文专家团 · 一键开始」的忙碌态。 */
+  const [arcBusy, setArcBusy] = useState(false);
 
   // 团队 / Agent 列表独立结算：任一失败按空列表处理（空态兜底，不拖垮另一路）。
   useEffect(() => {
@@ -51,6 +92,30 @@ export function NeoCreateGroupModal({ workspaceId, onClose, onCreated }: NeoCrea
     listAgents(workspaceId ?? undefined)
       .then((rows) => { if (alive) setAgents(rows); })
       .catch(() => { if (alive) setAgents([]); });
+    // 团队模板：单后端下由 catalog-builtin 种子，legacy 下由 Python 提供；
+    // 取不到就当作没有模板（不弹错，注册流程不受影响）。
+    listCatalogApps()
+      .then((rows) => {
+        if (!alive) return;
+        const teamTpls = rows.filter((a) => a.mode === 'team');
+        // 论文专家团置顶：它是「默认团队」的落点
+        teamTpls.sort((a, b) => {
+          const fa = a.app_id === FEATURED_APP_ID ? 0 : 1;
+          const fb = b.app_id === FEATURED_APP_ID ? 0 : 1;
+          return fa - fb;
+        });
+        setTemplates(teamTpls);
+      })
+      .catch(() => { if (alive) setTemplates([]); });
+    // AutoResearchClaw（23 阶段研究管线）是否已装 —— 决定「论文专家团」卡片
+    // 是「一键开始」还是「去 ClawHub 装」。检测失败按未安装处理（不拦整体流程）。
+    listDetectedClis()
+      .then((r) => {
+        if (!alive) return;
+        const hit = (r.items ?? []).find((c) => c.id === ARC_CLI_ID);
+        setArcCli({ installed: Boolean(hit?.installed), version: hit?.version ?? null });
+      })
+      .catch(() => { if (alive) setArcCli({ installed: false, version: null }); });
     return () => { alive = false; };
   }, [workspaceId]);
 
@@ -131,6 +196,87 @@ export function NeoCreateGroupModal({ workspaceId, onClose, onCreated }: NeoCrea
     }
   }
 
+  /**
+   * 「论文专家团」一键开始（2026-11-20）。
+   *
+   * 与下面「团队模板」的区别：这里跑的是**真管线**——AutoResearchClaw
+   * （`researchclaw` CLI，23 阶段：选题→检索→精读→方法→实验→分析→写作→
+   * 审稿回炉），产物直接落在群目录，右侧产出面板立刻能看到。
+   *
+   * 为什么先 fork 再利用其中一个角色：单后端下 `POST /api/agents` 仍转发给
+   * Python（会 502），本地能落 agent 的唯一通路就是 catalog fork。fork 出 9 个
+   * 角色后只把主控拉进群（其余角色留着可随时另建群），群 executor 钉成
+   * `cli:autoresearchclaw`，避免全局默认执行器把它冲掉。
+   */
+  async function handleStartArc() {
+    if (busy || arcBusy || forkingId) return;
+    setArcBusy(true);
+    setError(null);
+    try {
+      const forked = await forkCatalogApp(FEATURED_APP_ID, workspaceId ?? undefined);
+      const leadId = forked.team?.agent_ids?.[0] ?? forked.agents?.[0]?.agent_id;
+      if (!leadId) {
+        throw new Error(zh ? '论文专家团模板不可用（未取到主控角色）' : 'paper team template has no lead role');
+      }
+      const group = await createGroup({
+        templateId: 'new-task',
+        groupTemplateId: '',
+        name: zh ? '论文专家团 · 自动研究' : 'Paper Team · AutoResearch',
+        agentIds: [leadId],
+        memberEmails: [],
+        policyMatrix: {},
+        workspaceId: workspaceId ?? undefined,
+      });
+      try {
+        // 群级 executor：这个群每一轮都走研究管线 CLI
+        localStorage.setItem(`${GROUP_EXECUTOR_KEY_PREFIX}${group.groupId}`, `cli:${ARC_CLI_ID}`);
+      } catch {
+        /* localStorage 不可用 → 回落全局默认 executor（仍可在模型选择器里手选） */
+      }
+      onCreated({ groupId: group.groupId, name: group.name });
+    } catch (err) {
+      setError(catalogErrorOf(err));
+      setArcBusy(false);
+    }
+  }
+
+  /**
+   * 一键使用团队模板：fork（落 agent + team）→ 建群绑 team_id → 直接进群开跑。
+   *
+   * 这是「论文专家团点一下就能用」的完整链路：用户不用先手动建 9 个 agent、
+   * 再逐个勾选，也不会撞上「勾选集合恰好等于 roster 才挂 team」的隐式规则。
+   */
+  async function handleUseTemplate(tpl: CatalogAppSummary) {
+    if (busy || forkingId) return;
+    setForkingId(tpl.app_id);
+    setError(null);
+    try {
+      const forked = await forkCatalogApp(tpl.app_id, workspaceId ?? undefined);
+      const team = forked.team;
+      const agentIds = team?.agent_ids?.length
+        ? team.agent_ids
+        : (forked.agents ?? []).map((a) => a.agent_id);
+      if (!team || agentIds.length === 0) {
+        // team 模板 fork 必须落出 team；缺了就是后端异常，暴露不掩盖
+        throw new Error(zh ? '模板已 fork，但没返回团队记录' : 'fork returned no team record');
+      }
+      const group = await createGroup({
+        templateId: 'new-task',
+        groupTemplateId: '',
+        name: team.name || tpl.name,
+        agentIds,
+        memberEmails: [],
+        policyMatrix: {},
+        workspaceId: workspaceId ?? undefined,
+        teamId: team.team_id,
+      });
+      onCreated({ groupId: group.groupId, name: group.name });
+    } catch (err) {
+      setError(catalogErrorOf(err));
+      setForkingId(null);
+    }
+  }
+
   return (
     <div
       className="neo-modal-mask"
@@ -149,6 +295,93 @@ export function NeoCreateGroupModal({ workspaceId, onClose, onCreated }: NeoCrea
         <h2 className="neo-modal-title">
           {t('neo.newGroup.title', { defaultValue: zh ? '发起群聊' : 'New Group' })}
         </h2>
+
+        {/* ── 论文专家团（默认团队）：一键跑 AutoResearchClaw 研究管线 ── */}
+        <div className="neo-ng-arc" data-testid="neo-ng-arc-card">
+          <div className="neo-ng-arc-main">
+            <div className="neo-ng-arc-title">
+              <FlaskConical size={14} strokeWidth={1.9} aria-hidden />
+              <span>{t('neo.newGroup.arcTitle', { defaultValue: zh ? '论文专家团' : 'Paper Team' })}</span>
+              <span className="neo-ng-template-badge">
+                {t('neo.newGroup.defaultTag', { defaultValue: zh ? '默认' : 'Default' })}
+              </span>
+            </div>
+            <div className="neo-ng-arc-desc">
+              {t('neo.newGroup.arcDesc', {
+                defaultValue: zh
+                  ? 'AutoResearchClaw 自动研究管线：给一个课题，跑完检索/精读/方法/实验/分析/写作/审稿，产出直接落到群目录（右侧文件树可见）。'
+                  : 'AutoResearchClaw pipeline: give it a topic and it runs scoping, reading, method, experiments, analysis, writing and review — outputs land in the group folder.',
+              })}
+            </div>
+            {arcCli && !arcCli.installed && (
+              <div className="neo-ng-arc-warn" data-testid="neo-ng-arc-missing">
+                {t('neo.newGroup.arcMissing', {
+                  defaultValue: zh
+                    ? '本机未检测到 researchclaw —— 到 设置 → ClawHub 安装后再一键开跑'
+                    : 'researchclaw not detected — install it from Settings → ClawHub first',
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="neo-ng-template-use"
+            disabled={busy || arcBusy || arcCli?.installed === false}
+            onClick={() => void handleStartArc()}
+            data-testid="neo-ng-arc-start"
+          >
+            {arcBusy && <Loader2 size={12} strokeWidth={2} className="neo-spin" aria-hidden />}
+            {arcBusy
+              ? t('neo.newGroup.templateForking', { defaultValue: zh ? '准备中…' : 'Preparing…' })
+              : t('neo.newGroup.arcStart', { defaultValue: zh ? '一键开始' : 'Start' })}
+          </button>
+        </div>
+
+        {/* ── 推荐团队：一键 fork + 建群（不依赖已有 agent，零 agent 也能用）── */}
+        {templates && templates.length > 0 && (
+          <div className="neo-ng-templates" data-testid="neo-ng-templates">
+            <div className="neo-ng-templates-head">
+              <Sparkles size={13} strokeWidth={1.9} aria-hidden />
+              <span>{t('neo.newGroup.templatesHead', { defaultValue: zh ? '推荐团队 · 一键开始' : 'Recommended teams' })}</span>
+            </div>
+            {templates.map((tpl) => {
+              const featured = tpl.app_id === FEATURED_APP_ID;
+              const working = forkingId === tpl.app_id;
+              return (
+                <div
+                  key={tpl.app_id}
+                  className={`neo-ng-template-row${featured ? ' featured' : ''}`}
+                  data-testid="neo-ng-template-row"
+                  data-app-id={tpl.app_id}
+                >
+                  <div className="neo-ng-template-main">
+                    <div className="neo-ng-template-name">
+                      {tpl.name}
+                      {featured && (
+                        <span className="neo-ng-template-badge" data-testid="neo-ng-template-default-badge">
+                          {t('neo.newGroup.defaultTag', { defaultValue: zh ? '默认' : 'Default' })}
+                        </span>
+                      )}
+                    </div>
+                    {tpl.goal && <div className="neo-ng-template-goal">{tpl.goal}</div>}
+                  </div>
+                  <button
+                    type="button"
+                    className="neo-ng-template-use"
+                    disabled={busy || forkingId !== null}
+                    onClick={() => void handleUseTemplate(tpl)}
+                    data-testid="neo-ng-template-use"
+                  >
+                    {working && <Loader2 size={12} strokeWidth={2} className="neo-spin" aria-hidden />}
+                    {working
+                      ? t('neo.newGroup.templateForking', { defaultValue: zh ? '准备中…' : 'Preparing…' })
+                      : t('neo.newGroup.templateUse', { defaultValue: zh ? '一键使用' : 'Use' })}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {loading ? (
           <div className="neo-modal-hint" data-testid="neo-create-group-loading">
