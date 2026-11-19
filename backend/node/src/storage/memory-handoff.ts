@@ -21,13 +21,24 @@
 import { createHash, randomUUID } from 'crypto';
 import { getDb } from './sqlite';
 import { recallLessons } from './memory-lessons';
+import {
+  DAY_MS,
+  MAX_TEXT,
+  PROFILE_EVENT_KEEP,
+  CONTEXT_READ_KEEP,
+  FEEDBACK_RULES,
+  decideWriteback,
+  assertConfidence,
+  matchFeedbackRules,
+  feedbackSnippet as modelFeedbackSnippet,
+  normalizeFeedbackInput,
+  capNum,
+  dedupHashInput,
+  parseJsonArray,
+} from '../domains/memory/handoff-model';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_TEXT = 600;
-/** 每个画像主体保留的流水条数上限；超出滚动删除最老的（当前值表不受影响）。 */
-const PROFILE_EVENT_KEEP = 200;
-/** 记忆消费留痕保留的最近条数上限；是访问日志性质，超出滚动删除最老的。 */
-const CONTEXT_READ_KEEP = 200;
+// 常量与纯规则已从 domains/memory/handoff-model.ts 提取（单一真源，可独立单测）；
+// 本文件保留 SQL、DDL 与装配。导出名原样保留，调用方零改动。
 
 export class MemoryHandoffError extends Error {
   status: number;
@@ -549,7 +560,9 @@ export function writeback(input: {
     throw new MemoryHandoffError('subject_id / key / value 不能为空');
   }
   const confidence = typeof input.confidence === 'number' ? input.confidence : 0.7;
-  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+  try {
+    assertConfidence(confidence);
+  } catch {
     throw new MemoryHandoffError('confidence 必须在 0~1 之间');
   }
   const source = (input.source || 'manual').slice(0, 64);
@@ -567,36 +580,29 @@ export function writeback(input: {
       | { value: string; confidence: number }
       | undefined;
     const now = Date.now();
-    let action: WritebackAction;
-    if (!cur) {
-      action = 'create';
+    // 置信度合并规则由 handoff-model.decideWriteback 统一裁决（纯函数，可独立单测）
+    const decision = decideWriteback(cur, { value, confidence, force });
+    const action = decision.action;
+    if (action === 'create') {
       db.prepare(
         `INSERT INTO memory_profile_values
          (subject_type, subject_id, key, value, confidence, source, evidence, updated_at)
          VALUES (?,?,?,?,?,?,?,?)`,
       ).run(subject_type, subject_id, key, value, confidence, source, evidence, now);
-    } else if (force) {
-      // 值没变就没事可做，别把「确认一次」记成一次覆盖
-      action = value === cur.value ? 'keep' : 'override';
-      if (action === 'override') {
-        db.prepare(
-          `UPDATE memory_profile_values
-           SET value = ?, confidence = ?, source = ?, evidence = ?, updated_at = ?
-           WHERE subject_type = ? AND subject_id = ? AND key = ?`,
-        ).run(value, Math.max(confidence, cur.confidence), source, evidence, now, subject_type, subject_id, key);
-      }
-    } else if (confidence > cur.confidence) {
-      action = 'update';
+    } else if (action === 'override') {
+      db.prepare(
+        `UPDATE memory_profile_values
+         SET value = ?, confidence = ?, source = ?, evidence = ?, updated_at = ?
+         WHERE subject_type = ? AND subject_id = ? AND key = ?`,
+      ).run(decision.value, decision.confidence, source, evidence, now, subject_type, subject_id, key);
+    } else if (action === 'update') {
       db.prepare(
         `UPDATE memory_profile_values
          SET value = ?, confidence = ?, source = ?, evidence = ?, updated_at = ?
          WHERE subject_type = ? AND subject_id = ? AND key = ?`,
       ).run(value, confidence, source, evidence, now, subject_type, subject_id, key);
-    } else if (confidence === cur.confidence && value !== cur.value) {
-      action = 'conflict'; // 同置信不同说法：不覆盖，只留痕（可用 force 裁决）
-    } else {
-      action = 'keep';
     }
+    // conflict / keep：不改当前值，只追加事件留痕
     db.prepare(
       `INSERT INTO memory_profile_events
        (subject_type, subject_id, key, old_value, new_value, old_confidence,
@@ -612,16 +618,7 @@ export function writeback(input: {
     // 长期跑下来（每个客户几百次写回）单表会拖慢 profile() 的历史查询。
     // 当前值在 memory_profile_values 里，裁剪历史不影响画像本身。
     trimProfileEvents(db, subject_type, subject_id);
-    return {
-      action,
-      value: action === 'create' || action === 'update' || action === 'override' ? value : cur!.value,
-      confidence:
-        action === 'create' || action === 'update'
-          ? confidence
-          : action === 'override'
-            ? Math.max(confidence, cur!.confidence)
-            : cur!.confidence,
-    };
+    return decision;
   });
   const r = run();
   return {
@@ -629,7 +626,7 @@ export function writeback(input: {
     subject_id,
     key,
     action: r.action,
-    changed: r.action === 'create' || r.action === 'update' || r.action === 'override',
+    changed: r.changed,
     value: r.value,
     confidence: r.confidence,
   };
@@ -849,13 +846,7 @@ export function profile(subjectId: string, subjectType = 'customer'): {
 }
 
 /** 规则词表：客户反馈进来自动提炼写回长期画像，零模型、零额度消耗。 */
-export const FEEDBACK_RULES: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ['preference', ['偏好', '喜欢', '更倾向', '不要', '别用', '排斥', '简洁']],
-  ['budget', ['预算', '价位', '报价', '多少钱', '价格接受']],
-  ['industry', ['行业', '主营', '做的是', '赛道']],
-  ['deadline', ['截止', 'deadline', '时限', '交期']],
-  ['weakness', ['返工', '投诉', '不满意', '反复', '太慢']],
-];
+export { FEEDBACK_RULES } from '../domains/memory/handoff-model';
 
 /**
  * 反馈自动写回队列（2026-11-06，功能线③「自动化」补齐）。
@@ -952,12 +943,7 @@ interface FeedbackRow {
 }
 
 function jsonArray(raw: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
+  return parseJsonArray(raw);
 }
 
 function hydrateFeedback(row: FeedbackRow): FeedbackQueueItem {
@@ -996,15 +982,10 @@ function feedbackReceipt(row: FeedbackRow, dedup: boolean): FeedbackReceipt {
  * 现在按标点切句取命中片段，零模型、结果确定，同一说法重复投递也能落成 keep。
  */
 function feedbackSnippet(text: string, words: readonly string[]): string {
-  const parts = text.split(/[，,。；;！!？?\n]+/).map((s) => s.trim()).filter(Boolean);
-  const hit = parts.find((p) => words.some((w) => p.includes(w)));
-  return (hit ?? text).trim().slice(0, 120);
+  return modelFeedbackSnippet(text, words);
 }
 
-function capNum(v: unknown, fallback: number, max: number): number {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.min(Math.trunc(n), max) : fallback;
-}
+// capNum / dedupHashInput / normalizeFeedbackInput / matchFeedbackRules 均从 handoff-model 导入。
 
 /**
  * 处理一条队列记录：已 processed/skipped 的直接返回（幂等，不再触发写回）。
@@ -1014,7 +995,7 @@ function capNum(v: unknown, fallback: number, max: number): number {
  */
 function processFeedbackRow(row: FeedbackRow): FeedbackRow {
   if (row.status === 'processed' || row.status === 'skipped') return row;
-  const matches = FEEDBACK_RULES.filter(([, words]) => words.some((w) => row.text.includes(w)));
+  const matches = matchFeedbackRules(row.text);
   const keys: string[] = [];
   const actions: string[] = [];
   let conflicts = 0;
@@ -1062,16 +1043,16 @@ export function submitFeedback(input: {
   source_ref?: string;
   actor?: string;
 }): FeedbackReceipt {
-  const text = (input.text ?? '').trim().slice(0, 1000);
-  const subject_id = (input.subject_id ?? '').trim();
-  if (!text || !subject_id) throw new MemoryHandoffError('subject_id / text 不能为空');
-  const subject_type = (input.subject_type || 'customer').trim().slice(0, 32) || 'customer';
-  const source = (input.source || 'api').trim().slice(0, 64) || 'api';
-  const sourceRef = (input.source_ref ?? '').trim().slice(0, 120);
-  const actor = (input.actor || 'system').trim().slice(0, 64) || 'system';
+  let normalized;
+  try {
+    normalized = normalizeFeedbackInput(input);
+  } catch {
+    throw new MemoryHandoffError('subject_id / text 不能为空');
+  }
+  const { subject_id, text, subject_type, source, source_ref: sourceRef, actor } = normalized;
   const db = feedbackDb();
   const textHash = createHash('sha256')
-    .update(`${subject_type}\u0000${subject_id}\u0000${text}`)
+    .update(dedupHashInput(subject_type, subject_id, text))
     .digest('hex')
     .slice(0, 32);
   const inserted = db
