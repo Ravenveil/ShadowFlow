@@ -21,55 +21,34 @@
 
 import fs from 'fs';
 import path from 'path';
-import {
-  validateDagDraft,
-  normalizeDraftEdgeMode,
-  type DagDraftEdge,
-  type DagDraftNode,
-} from '../lib/team-dag-draft';
 import { repoDataFile } from './repo-root';
+// 纯规则已迁至 domains/collaboration（D1/D2/D3），单一真源、可独立单测；
+// 本文件保留 JSON 文件 I/O（一队一文件、原子写）与装配，导出名原样保留。
+import {
+  UNASSIGNED_WORKSPACE,
+  isValidTeamId,
+  normalizeWorkspaceId,
+  defaultWorkflow,
+  workflowStoredAgentIds,
+  roleFromSoul,
+  type TeamWorkflowGraph,
+  type TeamRecord,
+  type LocalAgentSummary,
+} from '../domains/collaboration/teams-model';
+import { validateWorkflowStoredShape } from '../domains/collaboration/use_cases/teams';
 
-/** D3：pre-workspace 老记录的哨兵 workspace（Python UNASSIGNED_WORKSPACE）。 */
-export const UNASSIGNED_WORKSPACE = 'unassigned';
-
-/** 对齐 Python _TEAM_ID_RE：常见 id 字符，禁路径穿越。 */
-const TEAM_ID_RE = /^[a-zA-Z0-9_-]+$/;
-
-export function isValidTeamId(teamId: string): boolean {
-  return TEAM_ID_RE.test(teamId);
-}
-
-/** 缺失/空白 → 'unassigned' 哨兵；显式 id（含 legacy 字面 'default'）原样返回。 */
-export function normalizeWorkspaceId(workspaceId: string | null | undefined): string {
-  if (workspaceId === null || workspaceId === undefined || !workspaceId.trim()) {
-    return UNASSIGNED_WORKSPACE;
-  }
-  return workspaceId;
-}
+export {
+  UNASSIGNED_WORKSPACE,
+  isValidTeamId,
+  normalizeWorkspaceId,
+  defaultWorkflow,
+  workflowStoredAgentIds,
+  validateWorkflowStoredShape,
+};
+export type { TeamWorkflowGraph, TeamRecord, LocalAgentSummary };
 
 function teamFile(teamId: string): string {
   return repoDataFile('teams', `${teamId}.json`);
-}
-
-/** 团队工作流图的「存储形」——前端画布落库的原样包装。 */
-export interface TeamWorkflowGraph {
-  nodes: unknown[];
-  edges: unknown[];
-}
-
-export interface TeamRecord {
-  team_id: string;
-  name: string;
-  description: string;
-  workspace_id: string;
-  agent_ids: string[];
-  created_at: string;
-  updated_at: string;
-  workflow?: TeamWorkflowGraph;
-  policy_matrix?: Record<string, unknown>;
-  validation_hooks?: unknown[];
-  // 老记录可能带未知字段（Python json.dumps 原样落盘）——读写全量透传，不丢弃。
-  [key: string]: unknown;
 }
 
 export function loadTeamRecord(teamId: string): TeamRecord | null {
@@ -130,83 +109,9 @@ export function deleteTeamFile(teamId: string): boolean {
   }
 }
 
-/** GET …/workflow 无保存图时的缺省返回（对齐 Python teams.py:333）。 */
-export function defaultWorkflow(): TeamWorkflowGraph {
-  return { nodes: [], edges: [] };
-}
-
-// ---------------------------------------------------------------------------
-// 存储形 workflow ↔ 草案形展平（喂给 validateDagDraft 做 D1）
-// ---------------------------------------------------------------------------
-
-/** 从节点对象抽 (id, agentId)：兼容包装形 {id,data:{agentId}} 与裸形 {id,agentId}。 */
-function nodeIdentity(n: unknown): { id: string; agentId?: string } | null {
-  if (!n || typeof n !== 'object' || Array.isArray(n)) return null;
-  const o = n as Record<string, unknown>;
-  if (typeof o.id !== 'string') return null;
-  let agentId: string | undefined;
-  const data = o.data;
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const d = data as Record<string, unknown>;
-    if (typeof d.agentId === 'string' && d.agentId.trim()) agentId = d.agentId.trim();
-  }
-  if (!agentId && typeof o.agentId === 'string' && o.agentId.trim()) {
-    agentId = o.agentId.trim();
-  }
-  return { id: o.id, ...(agentId ? { agentId } : {}) };
-}
-
-function edgeIdentity(e: unknown): { source: string; target: string; mode: unknown } | null {
-  if (!e || typeof e !== 'object' || Array.isArray(e)) return null;
-  const o = e as Record<string, unknown>;
-  if (typeof o.source !== 'string' || typeof o.target !== 'string') return null;
-  const data = o.data;
-  const mode =
-    data && typeof data === 'object' && !Array.isArray(data)
-      ? (data as Record<string, unknown>).mode
-      : o.mode;
-  return { source: o.source, target: o.target, mode };
-}
-
-/**
- * D1（Python team_validation.validate_workflow 的存储形镜像）：结构错误返回
- * 错误串列表（空 = 合法），绝不抛。畸形节点静默跳过（端点缺失由边报错），
- * 与 Python 一致。
- */
-export function validateWorkflowStoredShape(workflow: TeamWorkflowGraph): string[] {
-  const nodes: DagDraftNode[] = [];
-  const edges: DagDraftEdge[] = [];
-  for (const n of workflow.nodes) {
-    const id = nodeIdentity(n);
-    if (id) nodes.push({ id: id.id, ...(id.agentId ? { agentId: id.agentId } : {}) });
-  }
-  for (const e of workflow.edges) {
-    const ee = edgeIdentity(e);
-    if (ee) edges.push({ source: ee.source, target: ee.target, mode: normalizeDraftEdgeMode(ee.mode) });
-  }
-  return validateDagDraft({ nodes, edges });
-}
-
-/** 抽取节点引用的非空 agentId（D2 用；coordinator 占位节点的空 agentId 跳过）。 */
-export function workflowStoredAgentIds(workflow: TeamWorkflowGraph): string[] {
-  const out: string[] = [];
-  for (const n of workflow.nodes) {
-    const id = nodeIdentity(n);
-    if (id?.agentId) out.push(id.agentId);
-  }
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // 本地 agent 库（D2 的存在性来源；也是 dag-draft roster 的本地化来源）
 // ---------------------------------------------------------------------------
-
-export interface LocalAgentSummary {
-  id: string;
-  name: string;
-  /** soul 首个非空行（对齐 Python /api/agents 把 soul 当 role 摘要带出）。 */
-  role?: string;
-}
 
 /**
  * 扫 repoDataFile('agents')/*.json 取 agent 摘要。Python 的 agent store
@@ -234,8 +139,7 @@ export function listLocalAgentSummaries(): LocalAgentSummary[] {
         ? rec.agent_id
         : name.slice(0, -'.json'.length);
     const rawName = typeof rec?.name === 'string' && rec.name ? rec.name : id;
-    const soul = typeof rec?.soul === 'string' ? rec.soul : '';
-    const role = soul.split('\n').find((l) => l.trim().length > 0)?.trim();
+    const role = roleFromSoul(rec?.soul);
     out.push({ id, name: rawName, ...(role ? { role } : {}) });
   }
   return out;
