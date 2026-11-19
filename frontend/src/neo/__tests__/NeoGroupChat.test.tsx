@@ -9,7 +9,7 @@
  *   - 气泡流：agent 消息出头像/名字/角色 badge，system 消息居中弱化条，
  *     用户消息右对齐行；pin/reactions 动作回调仍透传进 NeoTimeline。
  */
-import { render, screen, waitFor, fireEvent } from '../../test/utils';
+import { render, screen, waitFor, fireEvent, act } from '../../test/utils';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { TimelineMessage } from '../../components/run-session/timeline/types';
@@ -444,5 +444,76 @@ describe('NeoGroupChat — busy roster 三态（2026-11-07）', () => {
     const items = roster.querySelectorAll('.neo-gc-roster-item');
     expect(items[0]).toHaveAttribute('data-state', 'idle');
     expect(items[1]).toHaveAttribute('data-state', 'working');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 回合结束回调（2026-11-19）：busy true→false 才是「所有 agent 都回完」
+// ---------------------------------------------------------------------------
+
+describe('NeoGroupChat — onTurnSettled 回合结束回调（2026-11-19）', () => {
+  function renderWithSettled(onSettled: () => void) {
+    return (
+      <MemoryRouter>
+        <NeoGroupChat groupId="g1" embedded onTurnSettled={onSettled} />
+      </MemoryRouter>
+    );
+  }
+
+  it('busy true→false 后 debounce 600ms 触发一次；挂载即 busy 不算结束', async () => {
+    vi.useFakeTimers();
+    try {
+      timelineState.runs = [{ session_id: 's1', status: 'running' }];
+      const onSettled = vi.fn();
+      const { rerender } = render(renderWithSettled(onSettled));
+      await act(async () => {});
+      // 挂载时已有一轮在跑（prev=false）→ 不是「刚结束」，不回调
+      expect(onSettled).not.toHaveBeenCalled();
+
+      timelineState.runs = [];
+      rerender(renderWithSettled(onSettled));
+      await act(async () => {});
+      // 去抖窗口内不立即触发
+      expect(onSettled).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(700);
+      });
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('去抖合并连续 settle：600ms 内 busy 抖动只回调一次', async () => {
+    vi.useFakeTimers();
+    try {
+      const onSettled = vi.fn();
+      timelineState.runs = [{ session_id: 's1', status: 'running' }];
+      const { rerender } = render(renderWithSettled(onSettled));
+      await act(async () => {});
+
+      // 第一次 settle（排了一个 600ms 定时器）
+      timelineState.runs = [];
+      rerender(renderWithSettled(onSettled));
+      await act(async () => {});
+      // 200ms 后又起来再落（定时器被重置，仍只回调一次）
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      timelineState.runs = [{ session_id: 's1', status: 'running' }];
+      rerender(renderWithSettled(onSettled));
+      await act(async () => {});
+      timelineState.runs = [];
+      rerender(renderWithSettled(onSettled));
+      await act(async () => {});
+
+      act(() => {
+        vi.advanceTimersByTime(700);
+      });
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -113,8 +113,10 @@ const LS_PROJECT_FOLDER = 'sf.project-folder';
 
 const MD_EXTS = new Set(['md', 'markdown']);
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico']);
+/** 2026-11-19 预览分流：pdf/html 走 rawUrl + iframe（readFile 按 utf8 读二进制会乱码）。 */
+const HTML_EXTS = new Set(['html', 'htm']);
 
-type FileKind = 'markdown' | 'image' | 'code';
+type FileKind = 'markdown' | 'image' | 'pdf' | 'html' | 'code';
 
 function extOf(name: string): string {
   const i = name.lastIndexOf('.');
@@ -125,12 +127,15 @@ function kindOf(name: string): FileKind {
   const ext = extOf(name);
   if (MD_EXTS.has(ext)) return 'markdown';
   if (IMG_EXTS.has(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  if (HTML_EXTS.has(ext)) return 'html';
   return 'code';
 }
 
 function FileTypeIcon({ name }: { name: string }) {
   const kind = kindOf(name);
   if (kind === 'image') return <FileImage size={13} strokeWidth={1.8} />;
+  if (kind === 'pdf' || kind === 'html') return <FileText size={13} strokeWidth={1.8} />;
   if (kind === 'code') return <FileCode size={13} strokeWidth={1.8} />;
   return <FileText size={13} strokeWidth={1.8} />;
 }
@@ -213,7 +218,25 @@ function previewTypeOf(filename: string): ArtifactType {
   return 'markdown';
 }
 
-export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, onCloseInspectAgent, onNavigate }: NeoHostProps) {
+/**
+ * NeoHost 专有增量 prop（不进 types.ts 的公共 NeoHostProps：并行重构期只动
+ * neo 面板三件套自身，避免公共类型面漂移）。
+ * refreshKey：群聊一轮 settle 后 NeoApp 递增 → 重载工作空间根目录（首次挂载不触发）。
+ */
+interface NeoHostExtraProps {
+  refreshKey?: number;
+}
+
+export function NeoHost({
+  target,
+  runId,
+  soulAgent,
+  conversation,
+  inspectAgent,
+  onCloseInspectAgent,
+  onNavigate,
+  refreshKey,
+}: NeoHostProps & NeoHostExtraProps) {
   const { t } = useI18n();
 
   // ── ClawHub（2026-06，T08）：soulAgent 的完整记录（DiceBear 头像字段）────
@@ -367,12 +390,23 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
     if (next && !children[entry.path]) loadChildren(entry.path);
   };
 
-  const refreshTree = () => {
+  const refreshTree = useCallback(() => {
     if (!rootPath) return;
     setChildren({});
     setExpanded({});
     loadChildren(rootPath);
-  };
+  }, [rootPath, loadChildren]);
+
+  // 2026-11-19 回合结束自动刷新：NeoApp 在群聊一轮 settle 后递增 refreshKey，
+  // 这里重载根目录（收拾掉全部已有的子树缓存，等价于点工具条「刷新」）。
+  // 首次挂载不重复触发 —— useRef 记住上次值。
+  const lastRefreshKeyRef = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === undefined) return;
+    if (lastRefreshKeyRef.current === refreshKey) return;
+    lastRefreshKeyRef.current = refreshKey;
+    refreshTree();
+  }, [refreshKey, refreshTree]);
 
   const pickFolder = async () => {
     const p = await pickNativeFolder();
@@ -445,9 +479,12 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
       setFileError(false);
       return;
     }
-    if (kindOf(selected.name) === 'image') {
+    const kind = kindOf(selected.name);
+    // image / pdf / html 走 rawUrl 直链渲染，不拉 utf8 文本（pdf 二进制会乱码）。
+    if (kind === 'image' || kind === 'pdf' || kind === 'html') {
       setFileState(null);
       setFileError(false);
+      setFileLoading(false);
       return;
     }
     const reqId = ++fileReqRef.current;
@@ -951,6 +988,17 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
                       alt={selected.name}
                     />
                   </div>
+                ) : (kindOf(selected.name) === 'pdf' || kindOf(selected.name) === 'html') &&
+                  rootPath ? (
+                  // pdf / html 走 rawUrl 直链（后端 /api/fs/raw 的 MIME 表本就支持），
+                  // <iframe> 交给浏览器原生渲染；sandbox 不给 allow-scripts ——
+                  // html 静态内容可显示，脚本一律不执行（workspace 里的产物不可信）。
+                  <iframe
+                    className="neo-host-preview-frame"
+                    src={rawUrl(selected.path, rootPath)}
+                    title={selected.name}
+                    sandbox="allow-same-origin"
+                  />
                 ) : fileLoading ? (
                   // b_007：header 先渲染，内容区居中细圆环 spinner
                   <div className="neo-host-preview-loading">
@@ -1012,17 +1060,43 @@ export function NeoHost({ target, runId, soulAgent, conversation, inspectAgent, 
 
   // ── 产物 tab 内容（lineage 驱动，无数据时回落单 artifact 旧行为）──
   // W1-B 保活：hidden 期间暂停轮询（active 叠加 tab 可见性），切回时 effect 重跑拉新数据。
-  const artifactsContent = runId ? (
-    <ArtifactsView
-      runId={runId}
-      active={session.isStreaming && activeTab === 'artifacts'}
-      runRecord={runRecord}
-      onOpen={openLineageArtifactTab}
-      onOpenRecord={openRecordArtifactTab}
-    />
-  ) : (
-    runlessNote
-  );
+  // 2026-11-19 群聊去串台：群/团队会话里 runId 常常是别的 NeoChat run 残留
+  // （群聊 fan-out 根本不产 run 级 artifact —— routes/groups/* 无 artifact 概念），
+  // 直接展示 ArtifactsView 会让用户看到别人的产物。保守做法：isTeamConv 且
+  // runId 存在 → 空态 + 切到「工作空间」的按钮。
+  const artifactsContent =
+    isTeamConv && runId ? (
+      <div
+        className="neo-host-empty neo-host-empty--fill"
+        data-testid="neo-host-team-artifacts-note"
+      >
+        <Package size={20} strokeWidth={1.5} className="neo-host-empty-icon" />
+        <span>{t('neo.host.teamArtifacts', { defaultValue: '群聊的产出在「工作空间」里' })}</span>
+        <span className="neo-host-empty-sub">
+          {t('neo.host.teamArtifactsHint', {
+            defaultValue: '每个 Agent 写的文件都落在本会话的工作目录，去工作空间查看',
+          })}
+        </span>
+        <button
+          type="button"
+          className="neo-btn-primary"
+          data-testid="neo-host-go-workspace"
+          onClick={() => setActiveTab('workspace')}
+        >
+          {t('neo.host.openWorkspace', { defaultValue: '打开工作空间' })}
+        </button>
+      </div>
+    ) : runId ? (
+      <ArtifactsView
+        runId={runId}
+        active={session.isStreaming && activeTab === 'artifacts'}
+        runRecord={runRecord}
+        onOpen={openLineageArtifactTab}
+        onOpenRecord={openRecordArtifactTab}
+      />
+    ) : (
+      runlessNote
+    );
 
   // ── Loop tab 内容 ──
   const loopContent = (

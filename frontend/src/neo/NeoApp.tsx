@@ -106,6 +106,10 @@ export function NeoApp() {
     groupId: string;
   } | null>(null);
 
+  // 2026-11-19 回合结束自动刷新右栏文件树：群聊一轮 settle（NeoGroupChat
+  // onTurnSettled）→ 递增该 key → NeoHost 重载工作空间根目录。
+  const [wsRefreshKey, setWsRefreshKey] = useState(0);
+
   // 编排目标从 nav 派生（兜底目标态才有；conversation 里发言走群聊网关，
   // 不需要 target）。NeoHost 编队 tab 据此出现。
   const target = useMemo<NeoTarget | null>(() => {
@@ -141,34 +145,39 @@ export function NeoApp() {
       setConvGroup(null);
       return;
     }
-    const dm = (inboxDMs ?? []).find((d) => d.group_id === nav.groupId);
-    if (dm) {
-      setConvAgent({ id: dm.agentId, name: dm.agentName });
-      setConvGroup({
-        groupId: nav.groupId,
-        kind: 'dm',
-        teamId: null,
-        teamName: null,
-        workspaceDir: null,
-      });
-      return;
-    }
+    const groupId = nav.groupId;
+    const dm = (inboxDMs ?? []).find((d) => d.group_id === groupId);
+    // 2026-11-19 DM 也跟工作目录：inbox 命中只用来「提前」定 convAgent（灵魂
+    // tab / 标题即时可见），workspace_dir 和非 DM 分支走同一条 getGroup 取值——
+    // DM 在数据层同样是一条 group 记录，agent 产物落在它的 chat-workspaces/<id>。
+    if (dm) setConvAgent({ id: dm.agentId, name: dm.agentName });
     let alive = true;
-    getGroup(nav.groupId)
+    getGroup(groupId)
       .then((g) => {
         if (!alive) return;
         const kind = (g?.kind as string | undefined) ?? null;
-        setConvGroup(
-          g
-            ? {
-                groupId: nav.groupId,
-                kind,
-                teamId: g.team_id ?? null,
-                teamName: g.name ?? null,
-                workspaceDir: (g.workspace_dir as string | undefined) ?? null,
-              }
-            : null,
-        );
+        if (g) {
+          setConvGroup({
+            groupId,
+            kind,
+            teamId: g.team_id ?? null,
+            teamName: g.name ?? null,
+            workspaceDir: (g.workspace_dir as string | undefined) ?? null,
+          });
+        } else if (dm) {
+          // getGroup 返回空但 inbox 命中 → 保持 DM 形态，workspace 回落 null。
+          setConvGroup({
+            groupId,
+            kind: 'dm',
+            teamId: null,
+            teamName: null,
+            workspaceDir: null,
+          });
+        } else {
+          setConvGroup(null);
+        }
+        // DM：convAgent 已由 inbox 定下，getGroup 这趟只为补 workspace_dir。
+        if (dm) return;
         if (g && kind === 'dm' && g.agent_ids && g.agent_ids.length > 0) {
           setConvAgent({ id: g.agent_ids[0], name: g.name ?? '' });
         } else {
@@ -179,12 +188,12 @@ export function NeoApp() {
         // 否则编队 tab 拿不到 teamId 整块空白（用户反馈：创建群聊后编队不
         // 显示成员）。补链完成后回写 convGroup.teamId（group 级守卫，防止
         // 等待期间切走会话被误写）；失败不阻断聊天主链路。
-        if (g && kind !== 'dm' && !g.team_id && !healedGroupRef.current.has(nav.groupId)) {
-          healedGroupRef.current.add(nav.groupId);
+        if (g && kind !== 'dm' && !g.team_id && !healedGroupRef.current.has(groupId)) {
+          healedGroupRef.current.add(groupId);
           void ensureGroupTeam(g).then((tid) => {
             if (!tid) return;
             setConvGroup((prev) =>
-              prev && prev.groupId === nav.groupId && !prev.teamId
+              prev && prev.groupId === groupId && !prev.teamId
                 ? { ...prev, teamId: tid }
                 : prev,
             );
@@ -192,10 +201,21 @@ export function NeoApp() {
         }
       })
       .catch(() => {
-        if (alive) {
-          setConvAgent(null);
-          setConvGroup(null);
+        if (!alive) return;
+        if (dm) {
+          // getGroup 失败 → workspace 回落 null（DM 原有兜底），inbox 的
+          // convAgent 保留，聊天主链路不受影响。
+          setConvGroup({
+            groupId,
+            kind: 'dm',
+            teamId: null,
+            teamName: null,
+            workspaceDir: null,
+          });
+          return;
         }
+        setConvAgent(null);
+        setConvGroup(null);
       });
     return () => {
       alive = false;
@@ -516,6 +536,7 @@ export function NeoApp() {
             embedded
             onNavigate={navigate}
             onInspectAgent={setInspectAgent}
+            onTurnSettled={() => setWsRefreshKey((k) => k + 1)}
           />
         ) : nav.view === 'knowledge' ? (
           <KnowledgePage
@@ -553,6 +574,7 @@ export function NeoApp() {
               inspectAgent={inspectAgent}
               onCloseInspectAgent={() => setInspectAgent(null)}
               onNavigate={navigate}
+              refreshKey={wsRefreshKey}
             />
           </div>
           <button

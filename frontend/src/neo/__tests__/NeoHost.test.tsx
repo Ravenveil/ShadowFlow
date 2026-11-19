@@ -13,6 +13,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   listRunsMock: vi.fn(),
+  /** 工作空间数据源（pdf/html/refreshKey 用例按需改写实现）。 */
+  listDirsMock: vi.fn(),
+  readFileMock: vi.fn(),
+  /** ArtifactsView 实际挂载次数（群聊去串台用例断言 = 0）。 */
+  artifactsRenders: 0,
   /** ArtifactsView stub 捕获的最近一份 props（测试手动触发 onOpen / onOpenRecord）。 */
   artifactsViewProps: {} as {
     onOpen?: (item: { id: string; name: string; url: string | null }) => void;
@@ -28,10 +33,12 @@ vi.mock('../../core/hooks/useRunSession', () => {
   return { useRunSession: () => session };
 });
 vi.mock('../../api/fsFiles', () => ({
-  listDirs: vi.fn(() => Promise.resolve(null)),
+  listDirs: (...args: unknown[]) => h.listDirsMock(...args),
   pickNativeFolder: vi.fn(),
-  rawUrl: (p: string) => p,
-  readFile: vi.fn(),
+  // 与真实实现同形状：后端 raw 端点带 path/root 查询串。
+  rawUrl: (p: string, root: string) =>
+    `/api/fs/raw?path=${encodeURIComponent(p)}&root=${encodeURIComponent(root)}`,
+  readFile: (...args: unknown[]) => h.readFileMock(...args),
   uploadFile: vi.fn(),
   writeFile: vi.fn(),
 }));
@@ -43,6 +50,7 @@ vi.mock('../../api/runs', () => ({
 vi.mock('../projections/ProcessView', () => ({ ProcessView: () => null }));
 vi.mock('../projections/ArtifactsView', () => ({
   ArtifactsView: (props: Record<string, unknown>) => {
+    h.artifactsRenders += 1;
     h.artifactsViewProps = props as typeof h.artifactsViewProps;
     return null;
   },
@@ -60,6 +68,14 @@ vi.mock('../AgentSchedulesPanel', () => ({ AgentSchedulesPanel: () => null }));
 vi.mock('../../api/agents', () => ({ getAgent: vi.fn(() => Promise.resolve(null)) }));
 
 import { NeoHost } from '../NeoHost';
+
+beforeEach(() => {
+  h.listDirsMock.mockReset().mockResolvedValue(null);
+  h.readFileMock.mockReset().mockResolvedValue({ content: '', size: 0, truncated: false });
+  h.listRunsMock.mockReset().mockResolvedValue([]);
+  h.artifactsRenders = 0;
+  h.artifactsViewProps = {};
+});
 
 describe('NeoHost — 会话上下文分岔（W2）', () => {
   it('非 DM 会话 → 标题跟随群聊名称 + 编队 tab（三合一）', () => {
@@ -265,5 +281,127 @@ describe('NeoHost — 动态产物 tab（可关闭 / 去重聚焦）', () => {
     expect(
       container.querySelector('[data-tab="artifact:a1"]')!.className,
     ).toContain('neo-host-tab--on');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pdf / html 预览（2026-11-19）：rawUrl + iframe，不再按 utf8 读二进制
+// ---------------------------------------------------------------------------
+
+const WS_FILES = [
+  { name: 'notes.md', path: '/tmp/ws/notes.md', isDir: false },
+  { name: 'paper.pdf', path: '/tmp/ws/paper.pdf', isDir: false },
+  { name: 'report.html', path: '/tmp/ws/report.html', isDir: false },
+];
+
+describe('NeoHost — pdf / html 预览走 rawUrl + iframe（2026-11-19）', () => {
+  beforeEach(() => {
+    h.listDirsMock.mockImplementation((p?: string) =>
+      Promise.resolve(p === '/tmp/ws' ? { path: '/tmp/ws', entries: WS_FILES } : null),
+    );
+  });
+
+  function renderWs() {
+    return render(
+      <NeoHost
+        target={null}
+        runId={null}
+        soulAgent={null}
+        conversation={{
+          groupId: 'g-dm',
+          kind: 'dm',
+          teamId: null,
+          teamName: null,
+          workspaceDir: '/tmp/ws',
+        }}
+      />,
+    );
+  }
+
+  it('选中 .pdf → 出现 iframe（src 含 /api/fs/raw），不调 readFile', async () => {
+    renderWs();
+    fireEvent.click(await screen.findByText('paper.pdf'));
+    const frame = await screen.findByTitle('paper.pdf');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame.getAttribute('src')).toContain('/api/fs/raw');
+    expect(frame.getAttribute('src')).toContain(encodeURIComponent('/tmp/ws/paper.pdf'));
+    expect(h.readFileMock).not.toHaveBeenCalled();
+  });
+
+  it('选中 .html → 同样 iframe 渲染；markdown 仍走 readFile（旧行为不变）', async () => {
+    renderWs();
+    fireEvent.click(await screen.findByText('report.html'));
+    const frame = await screen.findByTitle('report.html');
+    expect(frame.tagName).toBe('IFRAME');
+    expect(frame.getAttribute('src')).toContain('/api/fs/raw');
+    expect(h.readFileMock).not.toHaveBeenCalled();
+    // markdown 分支保持 readFile
+    fireEvent.click(screen.getByText('notes.md'));
+    await waitFor(() =>
+      expect(h.readFileMock).toHaveBeenCalledWith('/tmp/ws/notes.md', '/tmp/ws'),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refreshKey（2026-11-19）：群聊回合结束 → NeoApp 递增 → 重载根目录
+// ---------------------------------------------------------------------------
+
+describe('NeoHost — refreshKey 自动刷新文件树（2026-11-19）', () => {
+  it('初次挂载只加载一次；refreshKey 0→1 再重载一次', async () => {
+    h.listDirsMock.mockResolvedValue({ path: '/tmp/ws', entries: [] });
+    const conv = {
+      groupId: 'g-dm',
+      kind: 'dm',
+      teamId: null,
+      teamName: null,
+      workspaceDir: '/tmp/ws',
+    };
+    const { rerender } = render(
+      <NeoHost target={null} runId={null} soulAgent={null} conversation={conv} refreshKey={0} />,
+    );
+    await waitFor(() => expect(h.listDirsMock).toHaveBeenCalledTimes(1));
+    // 同 key 重渲染不重复加载
+    rerender(
+      <NeoHost target={null} runId={null} soulAgent={null} conversation={conv} refreshKey={0} />,
+    );
+    await act(async () => {});
+    expect(h.listDirsMock).toHaveBeenCalledTimes(1);
+    // key 递增 → 重载
+    rerender(
+      <NeoHost target={null} runId={null} soulAgent={null} conversation={conv} refreshKey={1} />,
+    );
+    await waitFor(() => expect(h.listDirsMock).toHaveBeenCalledTimes(2));
+    expect(h.listDirsMock).toHaveBeenLastCalledWith('/tmp/ws');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 群聊「产物」tab 去串台（2026-11-19）：群聊不产 run 级 artifact
+// ---------------------------------------------------------------------------
+
+describe('NeoHost — 群聊产物 tab 去串台（2026-11-19）', () => {
+  it('isTeamConv && runId → 不渲染 ArtifactsView，显示空态 + 切工作空间按钮', async () => {
+    const { container } = render(
+      <NeoHost
+        target={null}
+        runId="r-stale"
+        soulAgent={null}
+        conversation={{ groupId: 'g1', kind: 'group', teamId: 't1', teamName: '论文小队' }}
+      />,
+    );
+    const note = await screen.findByTestId('neo-host-team-artifacts-note');
+    expect(note).toHaveTextContent('群聊的产出在「工作空间」里');
+    expect(h.artifactsRenders).toBe(0);
+    fireEvent.click(screen.getByTestId('neo-host-go-workspace'));
+    expect(container.querySelector('[data-tab="workspace"]')!.className).toContain(
+      'neo-host-tab--on',
+    );
+  });
+
+  it('非群聊会话 + runId → 仍渲染 ArtifactsView（旧行为不变）', async () => {
+    render(<NeoHost target={null} runId="r1" soulAgent={null} conversation={null} />);
+    await waitFor(() => expect(h.artifactsRenders).toBeGreaterThan(0));
+    expect(screen.queryByTestId('neo-host-team-artifacts-note')).not.toBeInTheDocument();
   });
 });

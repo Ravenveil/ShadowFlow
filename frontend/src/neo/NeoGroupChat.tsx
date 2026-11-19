@@ -372,6 +372,7 @@ export function NeoGroupChat({
   embedded = false,
   onNavigate,
   onInspectAgent,
+  onTurnSettled,
 }: {
   groupId?: string;
   embedded?: boolean;
@@ -381,6 +382,9 @@ export function NeoGroupChat({
   /** 2026-11-05 Task#11 — 点 agent 头像（气泡/顶栏成员栈）→ 右栏检查器。
    *  内嵌态由 NeoApp 下发；独立路由页缺省（无右栏壳）。 */
   onInspectAgent?: (agent: { agentId: string; name: string; groupId: string }) => void;
+  /** 2026-11-19 — 一轮群聊真正结束（busy true→false，所有 agent 都回完）时
+   *  回调一次（600ms 去抖合并连续触发）；NeoApp 用它递增 refreshKey 刷新右栏树。 */
+  onTurnSettled?: () => void;
 } = {}) {
   const params = useParams<{ groupId: string }>();
   const groupId = groupIdProp ?? params.groupId;
@@ -456,6 +460,22 @@ export function NeoGroupChat({
 
   // 活跃 run → composer 显示 Stop 视觉 + 顶栏 live 徽章
   const busy = timeline.runs.some((r) => r.status === 'running');
+
+  // ── 2026-11-19 回合结束自动刷新右栏树 ─────────────────────────────────────
+  // 一轮群聊真正「所有 agent 都回完」的信号 = timeline.runs 里再没有 running
+  // （busy true→false）。postGroupMessage 的 promise 只代表网关受理了消息
+  // （异步 fan-out 立即返回），不能当回合结束用。600ms 去抖合并连续
+  // settle（多阶段 DAG / 串行 handoff 期间 busy 会短暂抖动）。
+  const onTurnSettledRef = useRef(onTurnSettled);
+  onTurnSettledRef.current = onTurnSettled;
+  const prevBusySettleRef = useRef(false);
+  useEffect(() => {
+    const prev = prevBusySettleRef.current;
+    prevBusySettleRef.current = busy;
+    if (!prev || busy) return;
+    const timer = setTimeout(() => onTurnSettledRef.current?.(), 600);
+    return () => clearTimeout(timer);
+  }, [busy]);
 
   // ── 2026-11-05 OpenBot 对齐：ProgressRow + busy roster ──────────────────────
   // ProgressRow：pendingTurn 非 null（run 尚未被 /timeline 刷新发现）→ 流尾
