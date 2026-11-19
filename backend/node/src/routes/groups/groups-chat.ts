@@ -34,7 +34,7 @@ import { isSingleBackend } from '../../config/backend-mode';
 import { readAgentFile } from '../../lib/agent-store';
 import { publishGroupEvent } from './groups-event-bus';
 import { resolveCallable } from '../../transport/dispatcher';
-import { ApiClientCallable } from '../../transport/ApiClientCallable';
+import { ApiClientCallable, trackUsage } from '../../transport/ApiClientCallable';
 import { resolveProviderKey } from '../../transport/byokKey';
 import { isProviderId } from '../../transport/api-clients';
 import type { ConversationMessage } from '../../lib/conversation-types';
@@ -47,6 +47,7 @@ import { ToolRegistry } from '../../lib/tool-spec';
 import { PermissionPolicyV2 } from '../../lib/permission-policy-v2';
 import { ToolRunner, registerToolExecutor } from '../../lib/tool-runner';
 import { builtinTools, registerBuiltinExecutors } from '../../lib/tools/builtin';
+import type { UsageStamp } from '../../storage/token-usage';
 import { buildTurnThread } from '../../lib/turn-thread';
 import { loadTeamForRun } from '../../lib/team-source';
 import { getPlan, isPlanGateBlocking, planGateNotice } from '../../lib/plan-gate';
@@ -846,6 +847,13 @@ interface RunAgentTurnArgs {
   history: ConversationMessage[];
   model?: string;
   signal: AbortSignal;
+  /**
+   * 成本归属戳（T12/BE-07）。**必须传**：tool 循环里 runtime 直接调
+   * `callable.getApiClient().stream()`，绕开了 ApiClientCallable.turn() 内建的
+   * `trackUsage` 包装，不在这里补一层 token_usage 就断流水（群 agent 的成本会
+   * 记成 0，看板按 agent/项目核算全失真）。
+   */
+  usageCtx?: UsageStamp;
   /** B3 过程卡（外层已 emit thinking 占位）：流式片段就地点亮用。 */
   gw?: GwLike;
   thinkingId?: string;
@@ -871,8 +879,14 @@ function buildAgentToolLoopStream(a: RunAgentTurnArgs): AsyncGenerator<TurnChunk
     ),
   });
   const toolRunner = new ToolRunner(new ToolRegistry(specs), policy);
+  // 成本流水：ApiClientCallable.turn() 内部会包 trackUsage，tool 循环直接拿
+  // 裸 ApiClient，故这里补同样的包装（归属戳 = 调用方传的 run/agent/project）。
+  const rawClient = (a.callable as ApiClientCallable).getApiClient();
+  const apiClient = a.usageCtx
+    ? trackUsage(rawClient, () => ({ model: a.model ?? '', ...a.usageCtx }))
+    : rawClient;
   const runtime = new ConversationRuntime({
-    apiClient: (a.callable as ApiClientCallable).getApiClient(),
+    apiClient,
     toolRunner,
     maxIterations: AGENT_TOOL_MAX_ITERATIONS,
   });
@@ -1636,18 +1650,20 @@ async function runFanout(
             // 2026-11-07 流式标签剥离 — 卡体 append 前剥 <sf[:-]thinking> 定界符。
             const thinkStream = createThinkingTagStream();
             try {
+              // T12/BE-07 成本归属：run=群 turn、agent=被调 agent、session=群。
+              // 收尾（2026-11-07）— project_id 由群互链 conversation 反查。
+              // 提到 resolveCallable 之前：tool 循环分支也要复用同一份归属戳。
+              const usageCtx: UsageStamp = {
+                session_id: groupId,
+                run_id: gw?.turnId ?? '',
+                agent_id: agentId,
+                project_id: getConversationByGroup(groupId)?.project_id ?? '',
+              };
               const callable = resolveCallable(executor, {
                 apiKey,
                 model,
                 workspace: wt?.dir ?? workspace,
-                // T12/BE-07 成本归属：run=群 turn、agent=被调 agent、session=群。
-                // 收尾（2026-11-07）— project_id 由群互链 conversation 反查。
-                usageCtx: {
-                  session_id: groupId,
-                  run_id: gw?.turnId ?? '',
-                  agent_id: agentId,
-                  project_id: getConversationByGroup(groupId)?.project_id ?? '',
-                },
+                usageCtx,
               });
               // 2026-11-08 — 统一入口：API 执行器走文件工具循环，其余原样 turn()。
               const agentTurn = await runAgentTurn({
@@ -1662,6 +1678,7 @@ async function runFanout(
                 history: turnHistory,
                 model,
                 signal,
+                usageCtx,
                 gw,
                 thinkingId,
                 thinkStream,
@@ -1896,18 +1913,20 @@ async function runFanout(
       // worktree 隔离 — 该 agent 专属目录（git 仓库 workspace 时）。
       const wt = serialWt.get(agentId);
       try {
+        // T12/BE-07 成本归属：串行路径同口径（run=群 turn、agent=被调 agent）。
+        // 收尾（2026-11-07）— project_id 由群互链 conversation 反查。
+        // 提到 resolveCallable 之前：tool 循环分支也要复用同一份归属戳。
+        const usageCtx: UsageStamp = {
+          session_id: groupId,
+          run_id: gw?.turnId ?? '',
+          agent_id: agentId,
+          project_id: getConversationByGroup(groupId)?.project_id ?? '',
+        };
         const callable = resolveCallable(executor, {
           apiKey,
           model,
           workspace: wt?.dir ?? workspace,
-          // T12/BE-07 成本归属：串行路径同口径（run=群 turn、agent=被调 agent）。
-          // 收尾（2026-11-07）— project_id 由群互链 conversation 反查。
-          usageCtx: {
-            session_id: groupId,
-            run_id: gw?.turnId ?? '',
-            agent_id: agentId,
-            project_id: getConversationByGroup(groupId)?.project_id ?? '',
-          },
+          usageCtx,
         });
         // 2026-11-08 — 统一入口（与 DAG 节点同一函数）：API 执行器走文件工具
         // 循环，CLI/ACP/MCP 与测试 fake 原样 turn()。
@@ -1923,6 +1942,7 @@ async function runFanout(
           history: turnHistory,
           model,
           signal: ctrl.signal,
+          usageCtx,
           gw,
           thinkingId,
           thinkStream,
