@@ -1,8 +1,10 @@
 # memory 域（DDD 样板，2026-11-19 第 4 批）
 
 > 目录重构 + 代码重构拆分。本域是「真 DDD 分层」的样板域：
-> **entries 子域已按四件套重建**（model / repository / infra / use_cases），
-> lessons / handoff / profiles 的路由仍在 adapters（待按同法迁移）。
+> **entries / lessons / profiles 三个子域已按四件套重建**（model / repository / infra / use_cases / adapters）。
+> 按 [ARCHITECTURE.md](../../../../ARCHITECTURE.md) §5「渐进式边界」：
+> **handoff 只提纯规则层**（`handoff-model.ts`，1222 行的 SQL 装配仍留 storage），
+> **state 只有 adapter 薄壳**（无业务规则，不配四件套）。
 
 ## 归属
 
@@ -12,23 +14,29 @@
   - **有哪些用例** → `use_cases/*.ts`（动词命名，与 HTTP/SQL 无关）
   - **换存储改哪里** → 只改 `infra/*repository.ts`，application/web 零改动
 
-## 目录（entries 子域已落地）
+## 目录
 
 ```
 domains/memory/
-├── model.ts                              # 内部：MemoryEntry 实体、scope/标题/内容不变量、领域工厂
-├── repository.ts                         # 内部：MemoryEntryRepository 接口（依赖倒置点）
+├── model.ts                              # entries：MemoryEntry 实体、scope/标题/内容不变量、领域工厂
+├── repository.ts                         # entries：MemoryEntryRepository 接口（依赖倒置点）
+├── lessons-model.ts  lessons-repository.ts
+├── profiles-model.ts profiles-repository.ts
+├── handoff-model.ts                      # 规则层：交接包不变量（SQL 仍留 storage/handoff.ts）
 ├── infra/
-│   └── json-memory-entry.repository.ts   # 外部：JSON 文件实现（换 SQLite/PG 只换这里）
+│   ├── json-memory-entry.repository.ts   # 换存储只换这里
+│   ├── sqlite-lesson.repository.ts
+│   └── sqlite-profile.repository.ts
 ├── use_cases/
-│   ├── entries.ts                        # 用例：list/create/update/delete/settings 编排
-│   └── entries.test.ts                   # 单测：注入内存 repo，零 IO、不启 server
+│   ├── entries.ts   entries.test.ts      # 注入内存 repo，零 IO、不启 server
+│   ├── lessons.ts   lessons.test.ts
+│   └── profiles.ts  profiles.test.ts
 └── adapters/
     ├── memory-entries.ts                 # 薄壳：HTTP ↔ 用例 Result 映射（createRouter 工厂）
-    ├── memory-handoff.ts                 # 待迁移
-    ├── memory-lessons.ts                 # 待迁移
-    ├── memory-profiles.ts                # 待迁移
-    └── memory-state.ts                   # 待迁移
+    ├── memory-lessons.ts
+    ├── memory-profiles.ts
+    ├── memory-handoff.ts                 # 无 repository：直接调 storage 的 SQL 装配
+    └── memory-state.ts                   # 无 model：纯形状转换
 ```
 
 ## 依赖方向（依赖倒置已成立）
@@ -52,6 +60,9 @@ adapters(web) → use_cases → model
 
 ## 待办
 
-1. 装配根收口：index.ts 统一 `new JsonMemoryEntryRepository()` 注入，删除 adapter 内的过渡默认装配
-2. lessons / handoff(1222 行) / profiles / state 按同法迁移；handoff 单独 PR（回归高发）
-3. 全部迁完后，单独一步确认删除 `storage/memory-*` 与 `routes/memory/*` 存根
+1. 装配根收口：index.ts 统一 `new JsonMemoryEntryRepository()` / `new SqliteLessonRepository()` 注入，
+   删除 adapter 内的过渡默认装配
+2. **handoff 不拆四件套**（ARCHITECTURE.md §5）：它已提到 `handoff-model.ts` 作为规则层，
+   1222 行的 SQL/DDL 装配留在 `storage/handoff.ts`，只继续把纯规则往 model 收，不做 repository/infra 拆分
+3. `state` 无业务规则，永久维持 adapter 薄壳
+4. 全部稳定后，单独一步确认删除 `storage/memory-*` 与 `routes/memory/*` 存根

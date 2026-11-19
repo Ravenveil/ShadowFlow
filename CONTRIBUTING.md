@@ -3,7 +3,8 @@
 欢迎参与 ShadowFlow 开发！本文档面向协作者，是上手与日常开发的唯一入口：架构、目录结构、环境搭建、常见任务配方、测试、CI 与 PR 流程。
 
 > 用户视角的介绍（功能演示、Docker 快速上手）见 [README.md](README.md) / [README.zh.md](README.zh.md)。
-> 各层目录还有 `AGENTS.md`（给编码代理的局部约定，如 `server/src/routes/AGENTS.md`）——改哪层代码，先读哪层的 AGENTS.md。
+> **架构与目录的硬约束见 [ARCHITECTURE.md](ARCHITECTURE.md)**——新增代码放哪、领域包长什么样、哪些是红线，以那份为准；本文只讲怎么跑起来、怎么改。
+> 各层目录还有 `AGENTS.md`（给编码代理的局部约定，如 `backend/node/src/routes/AGENTS.md`）——改哪层代码，先读哪层的 AGENTS.md。
 
 ## 项目概览
 
@@ -11,53 +12,57 @@ ShadowFlow 是一个 **contract-first（契约优先）的多智能体工作流�
 
 ## 架构总览
 
-三个服务协同工作：
+三个服务协同工作（2026-11-07 仓库按语言拆分后：前端独立目录、两个后端各归其位）：
 
 | 服务 | 位置 | 技术栈 | 端口 | 职责 |
 |---|---|---|---|---|
-| Web UI | `src/` | React 18 + Vite + Zustand + ReactFlow | 3007 | 工作流编辑器、Neo 界面体系 |
-| Node 网关 | `server/` | Node + tsx + Express + better-sqlite3 | 8002 | RunSession API、技能编译、群聊 DAG、反向代理 |
-| Python API | `shadowflow/` | FastAPI + Uvicorn | 8000 | 编排内核、记忆、契约校验、领域服务 |
+| Web UI | `frontend/` | React 18 + Vite + Zustand + ReactFlow | 3007 | 工作流编辑器、Neo 界面体系 |
+| Node 网关 | `backend/node/` | Node + tsx + Express + better-sqlite3 | 8002 | RunSession API、技能编译、群聊 DAG、反向代理 |
+| Python API | `backend/python/` | FastAPI + Uvicorn | 8000 | 编排内核、记忆、契约校验、领域服务 |
 
 请求链路：**Vite (3007) → 代理 `/api/*` 到 Node (8002) → 未匹配路由反向代理到 Python (8000)**。
 
 配套组件：
 
 - `src-tauri/` — 可选桌面端（Tauri + Rust）
-- `examples/backend-poc/` — OPC OS 原型后端（早期独立验证项目，`shadowflow/services/opc_*` 的移植来源，与主链路无关，保留作参照）
+- `examples/backend-poc/` — OPC OS 原型后端（早期独立验证项目，`backend/python/shadowflow/services/opc_*` 的移植来源，与主链路无关，保留作参照）
 - `examples/ui-kits/` — 设计稿 HTML
 
 ## 目录结构
 
 ```
 ShadowFlow/
-├── src/                  # 前端（React 18 + Vite，端口 3007）
-│   ├── neo/              #   Neo 界面体系（NeoApp/NeoRail/NeoHost/NeoChat/Timeline + projections/）
-│   ├── core/  pages/     #   核心组件与设置 / 页面（Dashboard/Knowledge/Memory/Schedules/Settings…）
-│   ├── components/       #   通用组件（composer/、knowledge/、run-session/…）
-│   ├── api/  store/  lib/  config/  common/  #  API 客户端 / Zustand store / 工具库 / 配置
-│   └── AppRoutes.tsx     #   路由表
-├── server/               # Node 网关（Express + better-sqlite3，端口 8002）
-│   ├── src/routes/       #   REST 路由，每文件一个 prefix（清单见 src/routes/AGENTS.md）
-│   ├── src/lib/          #   业务内核（chat-dag 群聊 DAG、skill-compiler、tool-runner、team-yaml…）
-│   ├── src/storage/  src/exporters/  src/prompts/  src/workflow/  src/transport/ …  # 存储/导出/提示词/工作流/传输
-│   ├── src/index.ts      #   入口：路由挂载 + /api 兜底反代 Python
-│   └── Dockerfile        #   网关镜像（context 即 server/）
-├── shadowflow/           # Python 包（FastAPI，端口 8000）
-│   ├── server.py  api/   #   REST API（api/ 按域拆模块：agents/teams/groups/chat/memory/runs/schedules/opc…）
-│   ├── core/  assembly/  #   工作流图抽象（graph/node/topology）/ 编译激活（compile/activation/learner）
-│   ├── memory/           #   记忆体系（memory_bank、global_memory、session/user、layers、retrieval_profiles）
-│   ├── contracts/  runtime/  protocol/  llm/  services/  #  契约 / 运行时 / 协议 / 模型 / 领域服务
-│   └── mcp_server.py  mcp_servers/  #   MCP 支持
-├── docker/               # Dockerfile.api / Dockerfile.web / docker-compose.yml（compose 与 CI 共用）
-├── templates/            # 工作流模板（*.yaml）+ agent-packs（yaml manifest）
-├── examples/             # 运行时契约示例（yaml/ts）+ backend-poc/（OPC OS 原型）+ ui-kits/（设计稿 HTML）
-├── tests/                # Python 测试（pytest）
-├── scripts/              # dev.mjs 统一启动器、i18n、demo/、data/training（训练脚本与数据）
-├── config/               # 示例/默认配置（app.json、network.json、rules/）
-├── src-tauri/            # 可选桌面端（Tauri + Rust）
-├── .github/workflows/    # CI（ci.yml）
-└── pyproject.toml        # Python 包定义（可选依赖组见下）
+├── frontend/                     # 前端（React 18 + Vite，端口 3007）
+│   └── src/
+│       ├── neo/                  #   Neo 界面体系（NeoApp/NeoRail/NeoHost/NeoChat/Timeline + projections/）
+│       ├── core/  pages/         #   核心组件与设置 / 路由级页面（Dashboard/Knowledge/Memory/Schedules/Settings…）
+│       ├── components/           #   通用组件（composer/、knowledge/、run-session/…）
+│       ├── api/  store/  lib/    #   fetch 客户端 / Zustand store / 工具库
+│       └── AppRoutes.tsx         #   路由表
+├── backend/
+│   ├── node/                     # Node 网关（Express + better-sqlite3，端口 8002）
+│   │   ├── src/routes/           #   REST 路由，每文件一个 prefix（清单见 src/routes/AGENTS.md）
+│   │   ├── src/domains/          #   ★ 业务域（model/repository/infra/use_cases/adapters）——规范见 ARCHITECTURE.md
+│   │   ├── src/lib/              #   业务内核（chat-dag、skill-compiler、tool-runner、team-yaml…）
+│   │   ├── src/storage/          #   SQLite 落库 + 已迁移模块的兼容层
+│   │   ├── src/transport/  src/workflow/  src/assembly/  src/parsers/  src/prompts/  src/detectors/ …
+│   │   └── src/index.ts          #   入口：路由挂载 + /api 兜底反代 Python
+│   └── python/                   # Python 包（FastAPI，端口 8000）
+│       ├── shadowflow/api/       #   REST API（按域拆模块：agents/teams/groups/chat/memory/runs/schedules…）
+│       ├── shadowflow/core/      #   工作流图抽象（graph/node/topology）
+│       ├── shadowflow/assembly/  #   编译激活（compile/activation/learner）
+│       ├── shadowflow/memory/    #   记忆体系（memory_bank、global_memory、session/user、layers）
+│       └── shadowflow/contracts/ runtime/ protocol/ llm/ services/  #  契约 / 运行时 / 协议 / 模型 / 领域服务
+├── docker/                       # Dockerfile.api / Dockerfile.web / docker-compose.yml（compose 与 CI 共用）
+├── templates/                    # 工作流模板（*.yaml）+ agent-packs（yaml manifest）
+├── config/                       # 示例/默认配置（app.json、network.json、catalog-templates/…）
+├── examples/                     # 运行时契约示例（yaml/ts）+ backend-poc/（OPC OS 原型）+ ui-kits/（设计稿 HTML）
+├── tests/                        # 跨栈/端到端测试（Python 单测在 backend/python/tests）
+├── scripts/                      # dev.mjs 统一启动器、i18n、demo/、data/training（训练脚本与数据）
+├── src-tauri/                    # 可选桌面端（Tauri + Rust）
+├── .github/workflows/            # CI（ci.yml）
+├── ARCHITECTURE.md               # ★ 架构与目录规范（约束性，改代码前必读）
+└── pyproject.toml                # Python 包定义（可选依赖组见下）
 ```
 
 **有意不入库的目录**（克隆后没有是正常的，别重建）：`docs/`（内部设计文档）、`design-refs/`（界面参考截图）、`server/skills/BMAD-METHOD/`（第三方方法论，按需由 skill ingest 拉取）、`_local/`（本地收纳 hub——研究资料、PM 产物、设计证据、临时杂物统一放这里，`.gitignore` 已声明）、`demo-runtime/`、`_data/` 等本地运行目录。完整清单见 `.gitignore`。
@@ -104,31 +109,31 @@ npm run dev -- --no-python    # 只起网关 + 前端
 
 改代码前先定位到正确的层，不要跨界搬运逻辑。
 
-**前端 `src/`**：`neo/` 是主界面体系（`NeoApp` 总编排、`NeoRail` 左栏、`NeoHost` 宿主面板、`NeoChat`/`NeoGroupChat` 会话、`NeoTimeline` 过程流，`projections/` 把后端事件投影成展示模型，`secretary.ts` 内置秘书人格）；`pages/` 是路由级页面；`components/` 按域分子目录（composer/、knowledge/、run-session/…）；`api/` 是 fetch 客户端，`store/` 是 Zustand。
+**前端 `frontend/src/`**：`neo/` 是主界面体系（`NeoApp` 总编排、`NeoRail` 左栏、`NeoHost` 宿主面板、`NeoChat`/`NeoGroupChat` 会话、`NeoTimeline` 过程流，`projections/` 把后端事件投影成展示模型，`secretary.ts` 内置秘书人格）；`pages/` 是路由级页面；`components/` 按域分子目录（composer/、knowledge/、run-session/…）；`api/` 是 fetch 客户端，`store/` 是 Zustand。
 
-**Node 网关 `server/src/`**：`routes/` 只做 HTTP shape 转换；`lib/` 是业务内核——`chat-dag/`（群聊 DAG 与 @ 提及路由）、`skill-compiler/`（技能编译）、`tool-runner.ts`（工具执行）、`run-event-bus/store`（运行事件）、`team-yaml.ts`/`team-source.ts`（编队来源）、`worktree-manager.ts` 等；`storage/` 落 SQLite；`index.ts` 里路由必须挂在 `proxyFallback` 之前（未匹配的 `/api/*` 兜底转发 Python）。
+**Node 网关 `backend/node/src/`**：`domains/` 是业务域（分层规范见 [ARCHITECTURE.md](ARCHITECTURE.md)）；`routes/` 只做 HTTP shape 转换；`lib/` 是业务内核——`chat-dag/`（群聊 DAG 与 @ 提及路由）、`skill-compiler/`（技能编译）、`tool-runner.ts`（工具执行）、`run-event-bus/store`（运行事件）、`team-yaml.ts`/`team-source.ts`（编队来源）、`worktree-manager.ts` 等；`storage/` 落 SQLite（已迁移模块在此只剩兼容层）；`index.ts` 里路由必须挂在 `proxyFallback` 之前（未匹配的 `/api/*` 兜底转发 Python）。
 
-**Python 包 `shadowflow/`**：`api/` 按域拆 REST 模块；`core/` 是工作流图抽象（graph/node/topology/registry）；`assembly/` 负责编译与激活（compile/activation/learner）；`memory/` 是记忆体系（memory_bank 多模态记忆库、global_memory、session/user、layers、retrieval_profiles）；`contracts/` 契约校验；`services/` 领域服务（opc_*、scheduler、secretary_seed）；`mcp_server.py` + `mcp_servers/` 对接 MCP。
+**Python 包 `backend/python/shadowflow/`**：`api/` 按域拆 REST 模块；`core/` 是工作流图抽象（graph/node/topology/registry）；`assembly/` 负责编译与激活（compile/activation/learner）；`memory/` 是记忆体系（memory_bank 多模态记忆库、global_memory、session/user、layers、retrieval_profiles）；`contracts/` 契约校验；`services/` 领域服务（opc_*、scheduler、secretary_seed）；`mcp_server.py` + `mcp_servers/` 对接 MCP。
 
 ## 常见任务配方
 
 ### 新增一个 REST 路由（Node 网关）
 
-1. 在 `server/src/routes/<name>.ts` 写一个 Router，`export default router`
-2. `server/src/index.ts` 加 `import` + `app.use('/api/<name>', xRouter)`，**必须挂在 `proxyFallback` 之前**
-3. 路由文件只做 HTTP shape 转换（req.body → service args → res.json）；复杂业务放 `src/lib/` 或 `src/storage/`；不要在 routes 里直接读 yaml / 调 LLM SDK
-4. SSE 流用 `res.write('data: ...\n\n')` 模式（参考 `run-sessions.ts`）
+1. 在 `backend/node/src/routes/<域>/<name>.ts` 写一个 Router，`export default router`
+2. `backend/node/src/index.ts` 加 `import` + `app.use('/api/<name>', xRouter)`，**必须挂在 `proxyFallback` 之前**
+3. 路由文件只做 HTTP shape 转换（req.body → 用例入参 → res.json）；**业务规则进 `domains/<域>/model`，编排进 `use_cases`**（见 [ARCHITECTURE.md](ARCHITECTURE.md)）；不要在 routes 里直接读 yaml / 调 LLM SDK
+4. SSE 流用 `res.write('data: ...\n\n')` 模式（参考 `routes/runs/run-sessions/`）
 
-详见 `server/src/routes/AGENTS.md`。
+详见 `backend/node/src/routes/AGENTS.md`。
 
 ### 新增一个 Neo 导航页（前端）
 
 四步接线，不引新依赖（图表用 SVG 自绘）：
 
-1. `src/neo/types.ts`：`NeoNav` union 加变体
-2. `src/neo/NeoRail.tsx`：加导航行
-3. `src/neo/NeoApp.tsx`：`SECTION_BY_NAV` / `pageView` / 中栏渲染三处接线
-4. `src/AppRoutes.tsx`：加 Route
+1. `frontend/src/neo/types.ts`：`NeoNav` union 加变体
+2. `frontend/src/neo/NeoRail.tsx`：加导航行
+3. `frontend/src/neo/NeoApp.tsx`：`SECTION_BY_NAV` / `pageView` / 中栏渲染三处接线
+4. `frontend/src/AppRoutes.tsx`：加 Route
 
 ### 新增 UI 文案
 
@@ -136,21 +141,19 @@ npm run dev -- --no-python    # 只起网关 + 前端
 
 ### 新增跨栈功能（记忆 / 看板类）
 
-参考「经验记忆」既有链路：落库（SQLite 表）→ Node 路由暴露 `/api/...` → 前端 `src/api/` 加客户端 → Neo/页面加入口。行为开关放 `settings` 表（如 `memory.autoLearn`），成本类数据另附单价配置（如 `llm.priceTable`）。
+参考「经验记忆」既有链路：落库（SQLite 表）→ Node 路由暴露 `/api/...` → 前端 `frontend/src/api/` 加客户端 → Neo/页面加入口。行为开关放 `settings` 表（如 `memory.autoLearn`），成本类数据另附单价配置（如 `llm.priceTable`）。
 
 ## 测试
 
 ```bash
-# 前端（web project）
-npx vitest run src/               # 或 npm run test:run
-npx tsc --noEmit -p tsconfig.json
+# 前端（在 frontend/ 下）
+cd frontend && npx tsc --noEmit && npx vitest run
 
-# Node 网关（server project）——必须在仓库根目录跑！
-npx vitest run --project=server
-# ⚠️ 勿 cd server && npx vitest run：会误入 web project 且 REPO_ROOT 解析错
+# Node 网关（在 backend/node/ 下）
+cd backend/node && npx tsc --noEmit && npx vitest run
 
-# Python
-pytest tests/
+# Python（用仓库根的 .venv）
+cd backend/python && pytest tests/
 ruff check shadowflow/ && mypy shadowflow/   # mypy 为 advisory
 ```
 
@@ -193,10 +196,12 @@ ruff check shadowflow/ && mypy shadowflow/   # mypy 为 advisory
 
 - TypeScript strict 模式；`npm run format`（prettier）；UI 文案走 `react-i18next`（en + zh 双语）
 - Python：ruff 格式化，鼓励类型标注
+- **改代码前先想「这段逻辑属于哪一层」**：业务规则 → `domains/<域>/model`；多步编排 → `use_cases`；HTTP 形状 → `routes`/`adapters`；SQL/IO → `infra`。判定方法与红线见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 - `scripts/*.mjs` 锁了 `eol=lf`（.gitattributes）：Windows 上 CRLF checkout 会让 vite 动态 import 含中文模板串的 .mjs 报 `Invalid or unexpected token`——遇到先查行尾
 
 ## 领域速查（改前先看）
 
+- **架构与目录落位**：见 [ARCHITECTURE.md](ARCHITECTURE.md)——三条判据、域包四件套、三问自检、放置决策树、红线。样板域读 `backend/node/src/domains/memory/README.md`。
 - **Neo 前端接线**：见上文「新增一个 Neo 导航页」四步。
 - **群聊 DAG**：`backend/node/src/lib/chat-dag/mentions.ts`（@ 提及 = 定向派活，跳过 LLM 意图拆解；中文标点算 token 终结符）。
 - **hop 交接卡片**：`hopStore` 包装 SQLite 真源，播报 best-effort，绝不阻塞落库主链路。
