@@ -1,8 +1,10 @@
 /* ============================================================
-   ShadowFlow Paper · 双风格设计令牌
+   ShadowFlow Paper · 三套风格设计令牌
    ------------------------------------------------------------
-   一套类名，两套皮。切换方式：<html data-theme="ink|clean">。
-   规则：组件只允许吃变量，禁止写死颜色/圆角/阴影。
+   一套类名，三套皮。切换方式：<html data-theme="ink|clean|night">。
+   规则：组件里不写任何色值 —— 要么吃语义变量（--bg / --ink / --accent），
+   要么挂 data-tone="teal" 这类色调名（映射见 styles/base.css 末尾）。
+   改配色 = 只改这个文件。
    ============================================================ */
 
 /* ---------- 风格 A：墨橙（品牌营销风，来自落地页设计稿） ---------- */
@@ -37,6 +39,18 @@
   --warn-soft: #fdf1e0;
   --danger: #d6455e;
   --danger-soft: #fbe8ec;
+
+  /* 语义色调：装饰性色块（角色卡、流程图节点）只用 data-tone="x"，不写色值。
+     改这里就改了全站该色调；三套主题各有一组。 */
+  --tone-accent: var(--accent);
+  --tone-teal: #12a594;
+  --tone-violet: #7c5cff;
+  --tone-pink: #e0356b;
+  --tone-blue: #2777e8;
+  --tone-amber: #d97b38;
+  --tone-green: #57a04a;
+  --tone-red: #d6455e;
+  --tone-slate: #6b7280;
 
   --radius-xs: 2px;
   --radius-sm: 3px;
@@ -100,6 +114,16 @@
   --danger: #e05252;
   --danger-soft: #fcecec;
 
+  --tone-accent: var(--accent);
+  --tone-teal: #0ea5a4;
+  --tone-violet: #7c5cff;
+  --tone-pink: #e0356b;
+  --tone-blue: #2777e8;
+  --tone-amber: #d98324;
+  --tone-green: #16a06a;
+  --tone-red: #e05252;
+  --tone-slate: #6b7280;
+
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -160,6 +184,17 @@
   --warn-soft: rgba(230, 160, 74, 0.14);
   --danger: #f0727f;
   --danger-soft: rgba(240, 114, 127, 0.14);
+
+  /* 夜间色调整体提亮一档，否则深底上彩块发闷。 */
+  --tone-accent: var(--accent);
+  --tone-teal: #2ec4b6;
+  --tone-violet: #9b87ff;
+  --tone-pink: #ff6b9a;
+  --tone-blue: #5b9dff;
+  --tone-amber: #e6a04a;
+  --tone-green: #40c68c;
+  --tone-red: #f0727f;
+  --tone-slate: #8b8c98;
 
   --radius-xs: 3px;
   --radius-sm: 5px;

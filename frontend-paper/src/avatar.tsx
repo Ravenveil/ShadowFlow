@@ -1,124 +1,55 @@
 /**
- * avatar.tsx — Agent 头像真源（与 shadowflow-merge/frontend/src/avatar.tsx 同机制）
+ * avatar.tsx — Agent 头像渲染器（纯展示层）。
  *
- * 一致性要求：同一 agent 在任何视图必须是同一张脸 + 同一个 accent 色。
- *   - 本地生成（@dicebear/core + micah），离线可用、零网络请求；
- *   - 规范身份表把「名字 / 英文 id / 别名 / 截断写法」解析到同一种子；
- *   - 编制外角色按 label 稳定 hash 取种子与色（同 label 同脸）。
+ * 名单与色值都在 `src/data/identities.ts`，这里只做三件事：
+ *   1. 把 seed 画成 dicebear micah 的 SVG（本地生成，离线可用、零网络请求）；
+ *   2. 按 `size` 尺寸档渲染，底色取身份表；
+ *   3. `AvatarStack` 处理堆叠与「+N」。
  *
- * 主控沿用 shadowflow-merge 的 seed="CEO" / #ff5e3a，保证跨产品同脸。
+ * 想改某人的脸/色：改 identities.ts。想改头像尺寸档：改 AVATAR_SIZE。
  */
 import { useMemo } from 'react';
 import { createAvatar } from '@dicebear/core';
 import * as micah from '@dicebear/micah';
+import { agentIdentity, type AgentIdentity } from './data/identities';
 
-interface AgentIdentity {
-  seed: string;
-  color: string;
-}
+/** 尺寸档（px）。组件一律用档位，不写裸数字，改一处即全站统一。 */
+export const AVATAR_SIZE = {
+  xs: 13,
+  sm: 16,
+  /** 矩阵行头 / 团队抬头的小堆叠。 */
+  row: 18,
+  md: 20,
+  /** 会话卡里的头像（比 md 大一点点，标题才不显挤）。 */
+  list: 22,
+  /** 团队列表行。 */
+  team: 24,
+  base: 26,
+  lg: 30,
+  xl: 34,
+} as const;
 
-/** 规范身份表（键归一化：trim + 小写）。 */
-const IDENTITY_TABLE: { aliases: string[]; identity: AgentIdentity }[] = [
-  {
-    aliases: ['主控', '论文主控', '董事长', 'ceo', 'agent-shadow-secretary', '总经理'],
-    identity: { seed: 'CEO', color: '#ff5e3a' },
-  },
-  {
-    aliases: ['pi', '课题负责人', '负责人'],
-    identity: { seed: 'PI', color: '#f4511e' },
-  },
-  {
-    aliases: ['sectionwriter', '章节主笔', '主笔', '写作'],
-    identity: { seed: 'SectionWriter', color: '#2777e8' },
-  },
-  {
-    aliases: ['citationreviewer', '引用审查', '引用核查', '文献审查'],
-    identity: { seed: 'CitationReviewer', color: '#0ea5a4' },
-  },
-  {
-    aliases: ['methodreviewer', '方法复核', '方法审查'],
-    identity: { seed: 'MethodReviewer', color: '#7c5cff' },
-  },
-  {
-    aliases: ['editorialpolisher', '润色编辑', '润色', '编辑'],
-    identity: { seed: 'EditorialPolisher', color: '#e2603a' },
-  },
-  {
-    aliases: ['submissionmanager', '投稿管理', '投稿'],
-    identity: { seed: 'SubmissionManager', color: '#57a04a' },
-  },
-  {
-    aliases: ['市场分析师', 'ma'],
-    identity: { seed: '市场分析师', color: '#2777e8' },
-  },
-  {
-    aliases: ['品牌策划师', 'bp'],
-    identity: { seed: '品牌策划师', color: '#7c5cff' },
-  },
-  {
-    aliases: ['内容策划师', 'cc'],
-    identity: { seed: '内容策划师', color: '#e2603a' },
-  },
-  {
-    aliases: ['运营专员', 'ops'],
-    identity: { seed: '运营专员', color: '#0ea5a4' },
-  },
-  {
-    aliases: ['商务专员', 'bd'],
-    identity: { seed: '商务专员', color: '#57a04a' },
-  },
-  {
-    aliases: ['合规审核员', 'cr'],
-    identity: { seed: '合规审核员', color: '#d6455e' },
-  },
-];
+export type AvatarSize = number | keyof typeof AVATAR_SIZE;
 
-const ALIAS_INDEX: Map<string, AgentIdentity> = new Map(
-  IDENTITY_TABLE.flatMap((entry) =>
-    entry.aliases.map((alias) => [alias.trim().toLowerCase(), entry.identity] as const),
-  ),
-);
-
-/** 按别名长度降序扫描，防「主笔」抢「章节主笔」。 */
-const ALIAS_SCAN: { alias: string; identity: AgentIdentity }[] = IDENTITY_TABLE.flatMap((entry) =>
-  entry.aliases.map((alias) => ({ alias: alias.trim().toLowerCase(), identity: entry.identity })),
-).sort((a, b) => b.alias.length - a.alias.length);
-
-const FALLBACK_PALETTE = ['#ff5e3a', '#2777e8', '#d97b38', '#c64f7d', '#7c5cff', '#0ea5a4'];
-
-function hashIndex(key: string, mod: number): number {
-  let h = 0;
-  for (let i = 0; i < key.length; i += 1) h = (h * 31 + key.charCodeAt(i)) >>> 0;
-  return h % mod;
-}
-
-export function agentIdentity(label: string | null | undefined): AgentIdentity {
-  const raw = (label ?? '').trim();
-  const key = raw.toLowerCase();
-  const exact = ALIAS_INDEX.get(key);
-  if (exact) return exact;
-  if (key.length >= 2) {
-    for (const { alias, identity } of ALIAS_SCAN) {
-      if (alias.length >= 2 && (key.includes(alias) || alias.includes(key))) return identity;
-    }
-  }
-  return {
-    seed: raw || 'Agent',
-    color: FALLBACK_PALETTE[hashIndex(raw || 'Agent', FALLBACK_PALETTE.length)],
-  };
+function resolveSize(size: AvatarSize | undefined, small: boolean): number {
+  if (typeof size === 'number') return size;
+  if (size) return AVATAR_SIZE[size];
+  return small ? AVATAR_SIZE.md : AVATAR_SIZE.lg;
 }
 
 export interface AgentAvatarProps {
   label: string;
   small?: boolean;
-  size?: number;
+  /** 尺寸档（或显式像素）。 */
+  size?: AvatarSize;
   /** 是否显示右下角在线状态点（默认 true）。 */
   status?: boolean;
   className?: string;
 }
 
 export function AgentAvatar({ label, small = false, size, status = true, className }: AgentAvatarProps) {
-  const identity = useMemo(() => agentIdentity(label), [label]);
+  const identity: AgentIdentity = useMemo(() => agentIdentity(label), [label]);
+  const px = resolveSize(size, small);
 
   const face = useMemo(() => {
     try {
@@ -132,18 +63,12 @@ export function AgentAvatar({ label, small = false, size, status = true, classNa
     }
   }, [identity.seed, identity.color]);
 
-  const px = size ?? (small ? 20 : 28);
-  const style: React.CSSProperties = {
-    width: px,
-    height: px,
-    background: identity.color,
-  };
-
   return (
     <span
       className={`sf-avatar${className ? ` ${className}` : ''}`}
-      style={style}
+      style={{ width: px, height: px, background: identity.color }}
       data-agent={identity.seed}
+      data-tone={identity.tone}
       title={label}
     >
       {face ? (
@@ -160,24 +85,25 @@ export function AgentAvatar({ label, small = false, size, status = true, classNa
 export function AvatarStack({
   labels,
   max = 4,
-  size = 20,
+  size = AVATAR_SIZE.md,
   showRest = true,
 }: {
   labels: string[];
   max?: number;
-  size?: number;
+  size?: AvatarSize;
   /** 是否显示「+N」尾巴；窄卡片里关掉更干净。 */
   showRest?: boolean;
 }) {
   const shown = labels.slice(0, max);
   const rest = labels.length - shown.length;
+  const px = resolveSize(size, false);
   return (
     <span className="sf-avatar-stack">
       {shown.map((l) => (
-        <AgentAvatar key={l} label={l} size={size} status={false} />
+        <AgentAvatar key={l} label={l} size={px} status={false} />
       ))}
       {showRest && rest > 0 ? (
-        <span className="sf-avatar-more" style={{ width: size, height: size }}>
+        <span className="sf-avatar-more" style={{ width: px, height: px }}>
           +{rest}
         </span>
       ) : null}
@@ -185,4 +111,5 @@ export function AvatarStack({
   );
 }
 
+export { agentIdentity };
 export default AgentAvatar;

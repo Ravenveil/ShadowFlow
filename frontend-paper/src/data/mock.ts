@@ -154,12 +154,12 @@ export const MESSAGES: Message[] = [
 
 /** 右栏「编队」成员（策略举证的行/列头也用它，保证同一张脸）。 */
 export const ROSTER = [
-  { id: 'lead', name: '主控', role: '主控', short: '主控', note: '派活 · 盯闭环' },
-  { id: 'pi', name: 'PI', role: 'PI', short: 'PI', note: '论证主线' },
-  { id: 'sw', name: '程不宕', role: '章节主笔', short: '主笔', note: '4 section 已交' },
-  { id: 'cr', name: '闻引', role: '引用审查', short: '引用', note: '核 38 / 52 条' },
-  { id: 'mr', name: 'test-fix-worker', role: '方法复核', short: '复核', note: '消融已对齐' },
-  { id: 'ep', name: '顾清', role: '润色编辑', short: '润色', note: '文风与格式' },
+  { id: 'lead', name: '主控', role: '主控', short: '主控', note: '派活 · 盯闭环', state: 'busy' },
+  { id: 'pi', name: 'PI', role: 'PI', short: 'PI', note: '论证主线', state: 'idle' },
+  { id: 'sw', name: '程不宕', role: '章节主笔', short: '主笔', note: '4 section 已交', state: 'idle' },
+  { id: 'cr', name: '闻引', role: '引用审查', short: '引用', note: '核 38 / 52 条', state: 'busy' },
+  { id: 'mr', name: 'test-fix-worker', role: '方法复核', short: '复核', note: '消融已对齐', state: 'idle' },
+  { id: 'ep', name: '顾清', role: '润色编辑', short: '润色', note: '文风与格式', state: 'idle' },
 ] as const;
 
 /**
@@ -176,13 +176,15 @@ export const POLICY_SEED: PolicyMatrix = {
 };
 
 /** DAG 工作流（论文流水线；中间两步并行复核，最后一道是审批门）。 */
+export const DAG_CANVAS = { w: 308, h: 348 };
+
 export const DAG_NODES: DagNodeDef[] = [
-  { id: 'n1', label: '拆解选题', owner: 'pi', role: '定论点边界', status: 'done' },
-  { id: 'n2', label: '章节骨架', owner: 'pi', role: '字数配比', status: 'done' },
-  { id: 'n3', label: '并行撰写', owner: 'sw', role: '4 个 section', status: 'done' },
-  { id: 'n4', label: '引用核查', owner: 'cr', role: '证据链 · 38/52', status: 'running' },
-  { id: 'n5', label: '方法复核', owner: 'mr', role: '统计口径', status: 'wait' },
-  { id: 'n6', label: '合并成稿', owner: 'ep', role: '统一文风', status: 'wait' },
+  { id: 'n1', label: '拆解选题', owner: 'pi', role: '定论点边界', status: 'done', layout: { x: 84, y: 0, w: 140, h: 44 } },
+  { id: 'n2', label: '章节骨架', owner: 'pi', role: '字数配比', status: 'done', layout: { x: 84, y: 66, w: 140, h: 44 } },
+  { id: 'n3', label: '并行撰写', owner: 'sw', role: '4 个 section', status: 'done', layout: { x: 84, y: 132, w: 140, h: 44 } },
+  { id: 'n4', label: '引用核查', owner: 'cr', role: '证据链 · 38/52', status: 'running', layout: { x: 16, y: 206, w: 132, h: 44 } },
+  { id: 'n5', label: '方法复核', owner: 'mr', role: '统计口径', status: 'wait', layout: { x: 160, y: 206, w: 132, h: 44 } },
+  { id: 'n6', label: '合并成稿', owner: 'ep', role: '统一文风', status: 'wait', layout: { x: 84, y: 280, w: 140, h: 44 } },
 ];
 
 export const DAG_EDGES: DagEdgeDef[] = [
@@ -195,16 +197,18 @@ export const DAG_EDGES: DagEdgeDef[] = [
 ];
 
 export const PANEL: PanelSummary = {
+  runTitle: 'LLM Agent 角色分工综述',
+  elapsed: '12m 40s',
   contextPct: 62,
   tokensUsed: 158000,
   tokensCap: 256000,
   steps: [
-    { label: '核对 PiWorld 两组混合证据化综述', done: true },
-    { label: '绘制四张新配图', done: true },
-    { label: '重构 PPT 为 19 页', done: true },
-    { label: '逐页渲染检查', done: false },
-    { label: '重写讲解稿为逐页结构', done: false },
-    { label: '归档并交付', done: false },
+    { label: '核准综述范围与目标会议', done: true, agent: '主控', ms: 32000 },
+    { label: '拉出论证主线与章节边界', done: true, agent: 'PI', ms: 18000 },
+    { label: '并行撰写 4 个 section', done: true, agent: '章节主笔', ms: 96000 },
+    { label: '引用完整性与证据链核查', done: false, agent: '引用审查', ms: 41000 },
+    { label: '方法与统计口径复核', done: false, agent: '方法复核' },
+    { label: '统一文风并合并成稿', done: false, agent: '润色编辑' },
   ],
   artifacts: [
     { name: '综述骨架-v0.3.md', kind: 'paper', size: '24 KB' },
@@ -216,4 +220,8 @@ export const PANEL: PanelSummary = {
     { name: '引用审查', state: 'busy' },
     { name: '方法复核', state: 'off' },
   ],
+  approval: {
+    gate: '1 道审批门',
+    note: '「合并成稿」前需要你确认，其余节点主控自闭环。',
+  },
 };

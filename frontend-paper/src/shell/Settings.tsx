@@ -1,8 +1,16 @@
-import { useTheme, THEME_META, THEME_ORDER } from '../theme/ThemeProvider';
+/**
+ * Settings — 设置弹窗。风格切换的唯一入口。
+ *
+ * 文案见 `content/app.ts` 的 SETTINGS；风格卡片文案见 `theme/ThemeProvider.tsx` 的 THEME_META。
+ * 缩略图 `ThemePrev` 的色值故意写死在 settings.css 里 —— 它必须同时呈现三套主题，
+ * 不能跟随当前主题。
+ */
+import { SETTINGS } from '../content/app';
+import { THEME_META, THEME_ORDER } from '../content/theme';
+import { useTheme, type ThemeName } from '../theme/ThemeProvider';
 import { IconCheck } from './icons';
 
-/** 风格预览缩略图：颜色写死，不跟随当前主题，才能同时看到三种观感。 */
-function ThemePrev({ t }: { t: string }) {
+function ThemePrev({ t }: { t: ThemeName }) {
   return (
     <span className="tp" data-t={t}>
       <span className="tp-rail">
@@ -30,16 +38,10 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
 
   return (
     <div className="settings-mask" onClick={onClose}>
-      <div
-        className="settings"
-        role="dialog"
-        aria-modal="true"
-        aria-label="设置"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="settings" role="dialog" aria-modal="true" aria-label={SETTINGS.title} onClick={(e) => e.stopPropagation()}>
         <header className="settings-head">
-          <h2>设置</h2>
-          <button className="settings-x" onClick={onClose} aria-label="关闭">
+          <h2>{SETTINGS.title}</h2>
+          <button className="settings-x" onClick={onClose} aria-label={SETTINGS.close}>
             ✕
           </button>
         </header>
@@ -47,8 +49,8 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         <div className="settings-body">
           <section className="settings-sec">
             <div className="settings-sec-head">
-              <h3>外观风格</h3>
-              <p>切换后立即生效，并记住你的选择。</p>
+              <h3>{SETTINGS.appearanceTitle}</h3>
+              <p>{SETTINGS.appearanceNote}</p>
             </div>
 
             <div className="theme-grid">
@@ -78,39 +80,35 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
 
           <section className="settings-sec">
             <div className="settings-sec-head">
-              <h3>模型</h3>
-              <p>默认模型（每个会话可单独覆盖）。</p>
+              <h3>{SETTINGS.modelsTitle}</h3>
+              <p>{SETTINGS.modelsNote}</p>
             </div>
-            <div className="settings-row">
-              <span>默认对话模型</span>
-              <span className="settings-value">Claude Sonnet 4.6</span>
-            </div>
-            <div className="settings-row">
-              <span>写作/润色模型</span>
-              <span className="settings-value">Claude Sonnet 4.6</span>
-            </div>
+            {SETTINGS.models.map((m) => (
+              <div key={m.label} className="settings-row">
+                <span>{m.label}</span>
+                <span className="settings-value">{m.value}</span>
+              </div>
+            ))}
           </section>
 
           <section className="settings-sec">
             <div className="settings-sec-head">
-              <h3>协作偏好</h3>
-              <p>决定主控怎么派活。</p>
+              <h3>{SETTINGS.collabTitle}</h3>
+              <p>{SETTINGS.collabNote}</p>
             </div>
-            <div className="settings-row">
-              <span>群里默认只跟主控对话</span>
-              <span className="sf-badge sf-badge--ok">已开启</span>
-            </div>
-            <div className="settings-row">
-              <span>关键节点需人工确认</span>
-              <span className="sf-badge sf-badge--ok">已开启</span>
-            </div>
+            {SETTINGS.collab.map((c) => (
+              <div key={c.label} className="settings-row">
+                <span>{c.label}</span>
+                <span className="sf-badge sf-badge--ok">{c.state}</span>
+              </div>
+            ))}
           </section>
         </div>
 
         <footer className="settings-foot">
-          <span className="settings-hint">风格偏好保存在本地浏览器</span>
+          <span className="settings-hint">{SETTINGS.footHint}</span>
           <button className="sf-btn sf-btn--solid" onClick={onClose}>
-            完成
+            {SETTINGS.done}
           </button>
         </footer>
       </div>

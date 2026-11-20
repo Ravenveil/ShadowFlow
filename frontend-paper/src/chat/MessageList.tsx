@@ -1,4 +1,5 @@
-import { AgentAvatar } from '../avatar';
+import { AgentAvatar, AVATAR_SIZE } from '../avatar';
+import { DEMO } from '../content/app';
 import type { ArtifactPayload, Message } from '../data/types';
 import { IconFile, IconImage, IconCode, IconBook, IconGrid } from '../shell/icons';
 import { RunBlock } from './RunBlock';
@@ -48,7 +49,7 @@ function Bubble({ m }: { m: Message }) {
   return (
     <div className="sf-msg sf-msg--agent">
       <div className="sf-msg-gutter">
-        <AgentAvatar label={m.author ?? '主控'} size={26} />
+        <AgentAvatar label={m.author ?? DEMO.leadAuthor} size={AVATAR_SIZE.base} />
       </div>
       <div className="sf-msg-main">
         <div className="sf-msg-head">

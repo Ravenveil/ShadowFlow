@@ -1,7 +1,15 @@
+/**
+ * RunBlock — 聊天流里的「管道执行」块（默认收起，展开看逐步骤）。
+ * 文案见 `content/app.ts` 的 RUN / STEP_STATUS_TEXT。
+ */
 import { useState } from 'react';
-import { AgentAvatar } from '../avatar';
+import { AgentAvatar, AVATAR_SIZE } from '../avatar';
+import { RUN, STEP_STATUS_TEXT } from '../content/app';
 import type { RunPayload, StepStatus } from '../data/types';
 import { IconCheck, IconChevron, IconSparkle } from '../shell/icons';
+
+/** 收起态最多露几个步骤 chip，多出来的折成「+N」。 */
+const PREVIEW_CHIPS = 4;
 
 function fmtMs(ms?: number): string {
   if (!ms) return '';
@@ -11,13 +19,6 @@ function fmtMs(ms?: number): string {
   const r = s % 60;
   return r ? `${m}m ${r}s` : `${m}m`;
 }
-
-const STATUS_TEXT: Record<StepStatus, string> = {
-  done: '已完成',
-  running: '进行中',
-  wait: '等待中',
-  failed: '失败',
-};
 
 export function StepStatusMark({ status }: { status: StepStatus }) {
   if (status === 'done') {
@@ -36,11 +37,11 @@ export function StepStatusMark({ status }: { status: StepStatus }) {
   return <span className="sf-step-mark is-wait" />;
 }
 
-/** 管道执行块：默认收起，展开看到逐步骤（谁是执行者、耗时、状态）。 */
 export function RunBlock({ run }: { run: RunPayload }) {
   const [open, setOpen] = useState(false);
   const done = run.steps.filter((s) => s.status === 'done').length;
   const running = run.steps.some((s) => s.status === 'running');
+  const allDone = !running && done === run.steps.length;
 
   return (
     <div className="sf-run" data-open={open ? 'true' : undefined}>
@@ -51,8 +52,8 @@ export function RunBlock({ run }: { run: RunPayload }) {
         <span className="sf-run-title">{run.title}</span>
         <span className="sf-run-meta">
           {running ? <i className="sf-run-pulse" /> : null}
-          运行 {fmtMs(run.durationMs)} · {run.steps.length} 个步骤
-          {!running && done === run.steps.length ? ' · 全部完成' : ''}
+          {RUN.running} {fmtMs(run.durationMs)} · {RUN.steps(run.steps.length)}
+          {allDone ? ` · ${RUN.allDone}` : ''}
         </span>
         <span className="sf-run-chevron" data-open={open ? 'true' : undefined}>
           <IconChevron size={13} />
@@ -67,25 +68,25 @@ export function RunBlock({ run }: { run: RunPayload }) {
               <StepStatusMark status={s.status} />
               <span className="sf-run-step-title">{s.title}</span>
               <span className="sf-run-step-agent">
-                <AgentAvatar label={s.agent} size={16} status={false} />
+                <AgentAvatar label={s.agent} size={AVATAR_SIZE.sm} status={false} />
                 {s.agent}
               </span>
               <span className="sf-run-step-tail">
-                {s.status === 'running' ? STATUS_TEXT.running : fmtMs(s.ms)}
+                {s.status === 'running' ? STEP_STATUS_TEXT.running : fmtMs(s.ms)}
               </span>
             </li>
           ))}
         </ol>
       ) : (
         <div className="sf-run-preview">
-          {run.steps.slice(0, 4).map((s) => (
+          {run.steps.slice(0, PREVIEW_CHIPS).map((s) => (
             <span key={s.n} className="sf-run-chip" data-status={s.status}>
               <StepStatusMark status={s.status} />
               {s.agent}
             </span>
           ))}
-          {run.steps.length > 4 ? (
-            <span className="sf-run-chip is-more">+{run.steps.length - 4}</span>
+          {run.steps.length > PREVIEW_CHIPS ? (
+            <span className="sf-run-chip is-more">+{run.steps.length - PREVIEW_CHIPS}</span>
           ) : null}
         </div>
       )}

@@ -1,6 +1,5 @@
 /**
- * AgentPanel — 第四栏「执行详情」，形态对齐旧 neo 右栏（0W9k3xh 抓拍）：
- * 顶部 tab 条 + 下方 pane，而不是一列从头滚到尾。
+ * AgentPanel — 第四栏「执行详情」：顶部 tab 条 + 下方 pane。
  *
  * tab 顺序按「看现场 → 认人 → 定边界 → 看图 → 取件」排：
  *   执行   ACTIVE RUN 进度 + 步骤 + 用量
@@ -9,13 +8,14 @@
  *   工作流 DAG（竖排，中段并行复核 + 末段审批门，连线随策略染色）
  *   产物   本轮交付文件
  *
- * 策略改的是本地草稿，有 diff 才出现「保存策略」；工作流连线读同一份草稿，
- * 所以改格子能立刻看到连线变色 —— 与旧版矩阵↔画布联动一致。
+ * 组件不认识任何具体数据：步骤的执行者、耗时、审批门说明都从 panel 读，
+ * 文案从 `content/app.ts` 的 PANEL 读。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AgentAvatar } from '../avatar';
+import { AgentAvatar, AVATAR_SIZE } from '../avatar';
+import { PANEL as PANEL_COPY } from '../content/app';
 import type { PanelSummary, PolicyMatrix as Matrix } from '../data/types';
-import { DAG_EDGES, DAG_NODES, PANEL, POLICY_SEED, ROSTER } from '../data/mock';
+import { DAG_CANVAS, DAG_EDGES, DAG_NODES, PANEL, POLICY_SEED, ROSTER } from '../data/mock';
 import { PolicyMatrix } from '../panel/PolicyMatrix';
 import { DagFlow } from '../panel/DagFlow';
 import {
@@ -28,17 +28,17 @@ import {
   IconUsers,
 } from './icons';
 
-type TabId = 'run' | 'team' | 'policy' | 'dag' | 'artifacts';
+/** tab id 由 content 决定，组件不再重复声明一份枚举。 */
+type TabId = (typeof PANEL_COPY.tabs)[number]['id'];
 
-const TABS: { id: TabId; label: string; icon: (p: { size?: number }) => JSX.Element }[] = [
-  { id: 'run', label: '执行', icon: IconSparkle },
-  { id: 'team', label: '编队', icon: IconUsers },
-  { id: 'policy', label: '策略举证', icon: IconShield },
-  { id: 'dag', label: '工作流', icon: IconBranch },
-  { id: 'artifacts', label: '产物', icon: IconFile },
-];
-
-const STEP_MS = ['32s', '18s', '1m36s', '41s', '—', '—'];
+/** tab 的图标注册表；标签文案在 content 里，靠 id 对上。 */
+const TAB_ICON: Record<TabId, (p: { size?: number }) => JSX.Element> = {
+  run: IconSparkle,
+  team: IconUsers,
+  policy: IconShield,
+  dag: IconBranch,
+  artifacts: IconFile,
+};
 
 export function AgentPanel({
   panel = PANEL,
@@ -60,10 +60,7 @@ export function AgentPanel({
     [],
   );
 
-  const dirty = useMemo(
-    () => JSON.stringify(policy) !== JSON.stringify(saved),
-    [policy, saved],
-  );
+  const dirty = useMemo(() => JSON.stringify(policy) !== JSON.stringify(saved), [policy, saved]);
 
   const save = () => {
     setSaved(policy);
@@ -74,36 +71,39 @@ export function AgentPanel({
 
   const doneSteps = panel.steps.filter((s) => s.done).length;
   const pct = Math.round((doneSteps / panel.steps.length) * 100);
-  const running = panel.steps.find((s) => !s.done);
+  const running = panel.steps.some((s) => !s.done);
 
   return (
     <aside className="panel">
       <div className="panel-head">
-        <span className="panel-head-title">执行详情</span>
+        <span className="panel-head-title">{PANEL_COPY.title}</span>
         <span className="panel-head-live">
           <i aria-hidden />
-          {running ? '运行中' : '已完成'}
+          {running ? PANEL_COPY.liveRunning : PANEL_COPY.liveDone}
         </span>
         {onClose ? (
-          <button className="sf-icon-btn" onClick={onClose} title="收起面板" aria-label="收起面板">
+          <button className="sf-icon-btn" onClick={onClose} title={PANEL_COPY.close} aria-label={PANEL_COPY.close}>
             ✕
           </button>
         ) : null}
       </div>
 
-      <nav className="panel-tabbar" aria-label="面板分区">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className="panel-tab"
-            data-active={tab === id ? 'true' : undefined}
-            onClick={() => setTab(id)}
-          >
-            <Icon size={13} />
-            <span>{label}</span>
-          </button>
-        ))}
+      <nav className="panel-tabbar" aria-label={PANEL_COPY.tabsLabel}>
+        {PANEL_COPY.tabs.map(({ id, label }) => {
+          const Icon = TAB_ICON[id];
+          return (
+            <button
+              key={id}
+              type="button"
+              className="panel-tab"
+              data-active={tab === id ? 'true' : undefined}
+              onClick={() => setTab(id)}
+            >
+              <Icon size={13} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
       </nav>
 
       <div className="panel-scroll">
@@ -114,15 +114,13 @@ export function AgentPanel({
                 <span className="panel-run-bolt">
                   <IconSparkle size={11} />
                 </span>
-                <span className="panel-run-kicker">ACTIVE RUN</span>
+                <span className="panel-run-kicker">{PANEL_COPY.runKicker}</span>
                 <span className="panel-run-pct">{pct}%</span>
               </div>
-              <div className="panel-run-title">LLM Agent 角色分工综述</div>
+              <div className="panel-run-title">{panel.runTitle}</div>
               <div className="panel-run-meta">
-                <span>耗时 12m 40s</span>
-                <span>
-                  {doneSteps} / {panel.steps.length} 步已交
-                </span>
+                <span>{PANEL_COPY.elapsed(panel.elapsed)}</span>
+                <span>{PANEL_COPY.stepsDone(doneSteps, panel.steps.length)}</span>
               </div>
               <div className="panel-run-bar">
                 <i style={{ width: `${pct}%` }} />
@@ -130,9 +128,9 @@ export function AgentPanel({
             </div>
 
             <div className="panel-sec-head">
-              <span>步骤 · {panel.steps.length}</span>
+              <span>{PANEL_COPY.stepsSection(panel.steps.length)}</span>
               <button className="panel-sec-link" onClick={() => setTab('dag')}>
-                查看 DAG
+                {PANEL_COPY.viewDag}
               </button>
             </div>
             <ol className="panel-steps">
@@ -142,21 +140,27 @@ export function AgentPanel({
                   <span className="panel-step-body">
                     <span className="panel-step-title">{s.label}</span>
                     <span className="panel-step-meta">
-                      <AgentAvatar label={i % 2 ? '章节主笔' : 'PI'} size={13} status={false} />
-                      {i % 2 ? '章节主笔' : 'PI'} · {STEP_MS[i] ?? '—'}
+                      <AgentAvatar label={s.agent} size={AVATAR_SIZE.xs} status={false} />
+                      {s.agent}
                     </span>
                   </span>
-                  <span className="panel-step-state">{s.done ? '已完成' : i === doneSteps ? '进行中' : '等待'}</span>
+                  <span className="panel-step-state">
+                    {s.done
+                      ? PANEL_COPY.stepState.done
+                      : i === doneSteps
+                        ? PANEL_COPY.stepState.running
+                        : PANEL_COPY.stepState.wait}
+                  </span>
                 </li>
               ))}
             </ol>
 
             <div className="panel-sec">
               <div className="panel-sec-head">
-                <span>用量</span>
-                <span className="panel-sec-meta">本会话</span>
+                <span>{PANEL_COPY.usageTitle}</span>
+                <span className="panel-sec-meta">{PANEL_COPY.usageMeta}</span>
               </div>
-              <div className="panel-usage-k">上下文 {panel.contextPct}%</div>
+              <div className="panel-usage-k">{PANEL_COPY.contextLabel(panel.contextPct)}</div>
               <div className="panel-usage-v">
                 {(panel.tokensUsed / 1000).toFixed(0)}k
                 <span> / {(panel.tokensCap / 1000).toFixed(0)}k tokens</span>
@@ -171,15 +175,15 @@ export function AgentPanel({
         {tab === 'team' ? (
           <>
             <div className="panel-sec-head">
-              <span>成员 · {ROSTER.length}</span>
-              <span className="panel-sec-meta">群会话派发范围</span>
+              <span>{PANEL_COPY.rosterSection(ROSTER.length)}</span>
+              <span className="panel-sec-meta">{PANEL_COPY.rosterMeta}</span>
             </div>
             <ul className="panel-roster">
               {ROSTER.map((m) => {
-                const busy = m.id === 'cr';
+                const busy = m.state === 'busy';
                 return (
                   <li key={m.id}>
-                    <AgentAvatar label={m.role} size={30} status={false} />
+                    <AgentAvatar label={m.role} size={AVATAR_SIZE.lg} status={false} />
                     <span className="panel-roster-body">
                       <span className="panel-roster-name">
                         {m.name}
@@ -188,7 +192,7 @@ export function AgentPanel({
                       <span className="panel-roster-note">{m.note}</span>
                     </span>
                     <span className="panel-roster-state" data-busy={busy ? 'true' : undefined}>
-                      {busy ? '执行中' : '待命'}
+                      {busy ? PANEL_COPY.busy : PANEL_COPY.standby}
                     </span>
                   </li>
                 );
@@ -200,15 +204,15 @@ export function AgentPanel({
         {tab === 'policy' ? (
           <>
             <div className="panel-sec-head">
-              <span>策略举证</span>
+              <span>{PANEL_COPY.policySection}</span>
               {dirty ? (
                 <button className="panel-sec-btn" onClick={save}>
-                  保存策略
+                  {PANEL_COPY.savePolicy}
                 </button>
               ) : flash ? (
-                <span className="panel-pill-ok">已保存</span>
+                <span className="panel-pill-ok">{PANEL_COPY.policySaved}</span>
               ) : (
-                <span className="panel-sec-meta">行→列</span>
+                <span className="panel-sec-meta">{PANEL_COPY.policyDir}</span>
               )}
             </div>
             <PolicyMatrix roster={ROSTER} value={policy} onChange={setPolicy} />
@@ -218,29 +222,35 @@ export function AgentPanel({
         {tab === 'dag' ? (
           <>
             <div className="panel-sec-head">
-              <span>工作流</span>
-              <span className="panel-sec-meta">
-                {DAG_NODES.length} 节点 · {DAG_EDGES.length} 边
-              </span>
+              <span>{PANEL_COPY.dagSection}</span>
+              <span className="panel-sec-meta">{PANEL_COPY.dagMeta(DAG_NODES.length, DAG_EDGES.length)}</span>
             </div>
-            <DagFlow nodes={DAG_NODES} edges={DAG_EDGES} policy={policy} roster={ROSTER} />
-            <div className="panel-approve">
-              <span className="panel-approve-ico">
-                <IconCheck size={13} />
-              </span>
-              <span className="panel-approve-body">
-                <b>1 道审批门</b>
-                <span>「合并成稿」前需要你确认，其余节点主控自闭环。</span>
-              </span>
-            </div>
+            <DagFlow
+              nodes={DAG_NODES}
+              edges={DAG_EDGES}
+              canvas={DAG_CANVAS}
+              policy={policy}
+              roster={ROSTER}
+            />
+            {panel.approval ? (
+              <div className="panel-approve">
+                <span className="panel-approve-ico">
+                  <IconCheck size={13} />
+                </span>
+                <span className="panel-approve-body">
+                  <b>{panel.approval.gate}</b>
+                  <span>{panel.approval.note}</span>
+                </span>
+              </div>
+            ) : null}
           </>
         ) : null}
 
         {tab === 'artifacts' ? (
           <>
             <div className="panel-sec-head">
-              <span>产物 · {panel.artifacts.length}</span>
-              <span className="panel-sec-meta">本轮</span>
+              <span>{PANEL_COPY.artifactsSection(panel.artifacts.length)}</span>
+              <span className="panel-sec-meta">{PANEL_COPY.artifactsMeta}</span>
             </div>
             <ul className="panel-files panel-files--pad">
               {panel.artifacts.map((a) => (

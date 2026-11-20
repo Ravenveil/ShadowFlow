@@ -215,3 +215,16 @@ a {
   background: var(--bg-hover);
   color: var(--ink);
 }
+
+/* ---------- 语义色调 ----------
+   组件只写 data-tone="teal"，这里把色值映射成 --tone；
+   消费方用 `background: var(--tone)`。新增色调 = tokens.css 加一行 + 这里加一行。 */
+[data-tone='accent'] { --tone: var(--tone-accent); }
+[data-tone='teal'] { --tone: var(--tone-teal); }
+[data-tone='violet'] { --tone: var(--tone-violet); }
+[data-tone='pink'] { --tone: var(--tone-pink); }
+[data-tone='blue'] { --tone: var(--tone-blue); }
+[data-tone='amber'] { --tone: var(--tone-amber); }
+[data-tone='green'] { --tone: var(--tone-green); }
+[data-tone='red'] { --tone: var(--tone-red); }
+[data-tone='slate'] { --tone: var(--tone-slate); }

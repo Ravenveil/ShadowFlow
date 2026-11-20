@@ -58,15 +58,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function useTheme(): ThemeCtx {
   const ctx = useContext(Ctx);
-  if (!ctx) throw new Error('useTheme 必须在 ThemeProvider 内使用');
+  if (!ctx) throw new Error('useTheme must be used inside <ThemeProvider>');
   return ctx;
 }
-
-/** 三套风格的展示信息（供切换器渲染）。 */
-export const THEME_META: Record<ThemeName, { label: string; hint: string; blurb: string }> = {
-  ink: { label: '墨橙', hint: '品牌营销风', blurb: '米白纸感 · 橙色强调 · 硬边卡片' },
-  clean: { label: '净白', hint: '极简工作台', blurb: '纯白留白 · 紫色强调 · 圆角柔和' },
-  night: { label: '夜间', hint: '深色护眼', blurb: '深墨背景 · 橙光点缀 · 长时间写作' },
-};
-
-export const THEME_ORDER: ThemeName[] = ['ink', 'clean', 'night'];

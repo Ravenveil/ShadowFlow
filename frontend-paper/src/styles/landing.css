@@ -527,6 +527,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
+  background: var(--tone, var(--accent));
   color: #fff;
   font-size: 8px;
   font-style: normal;
@@ -926,6 +927,7 @@
 }
 
 .lp-crew-ico {
+  background: var(--tone, var(--accent));
   display: inline-flex;
   align-items: center;
   justify-content: center;

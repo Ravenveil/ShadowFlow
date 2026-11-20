@@ -69,6 +69,18 @@ export interface Session {
 
 /* ── 右栏：策略举证 / DAG 工作流 ───────────────────────────────────── */
 
+/** 团队成员（右栏编队、策略矩阵行列头、DAG 节点归属都读它）。 */
+export interface RosterMember {
+  id: string;
+  name: string;
+  role: string;
+  /** 行头用的短名（角色缩写，2 字最佳）；缺省回落 name。 */
+  short?: string;
+  /** 手上在做什么。 */
+  note?: string;
+  state?: 'busy' | 'idle';
+}
+
 /** 策略举证三态（对齐后端 policy-gate：permit 允许 / warn 需复核 / deny 禁止）。 */
 export type PolicyState = 'permit' | 'warn' | 'deny';
 
@@ -88,6 +100,18 @@ export interface DagNodeDef {
   status: StepStatus;
   /** 交接方式：直接 / 条件 / 审批门。 */
   mode?: 'direct' | 'conditional' | 'approve';
+  /**
+   * 画布坐标（设计像素）。布局是**数据**不是组件常量 ——
+   * 加一个节点只需在数据里给坐标，DagFlow 不认识任何具体节点的 id。
+   * 缺省时由 DagFlow 按顺序自动竖排。
+   */
+  layout?: { x: number; y: number; w: number; h: number };
+}
+
+/** DAG 画布的设计尺寸（坐标系统一按此缩放）。 */
+export interface DagCanvasSize {
+  w: number;
+  h: number;
 }
 
 export interface DagEdgeDef {
@@ -97,11 +121,32 @@ export interface DagEdgeDef {
   label?: string;
 }
 
+export interface PanelStep {
+  label: string;
+  done: boolean;
+  /** 执行该步的角色显示名（头像与文字都走它）。 */
+  agent: string;
+  /** 耗时（毫秒）；未开始就不填。 */
+  ms?: number;
+}
+
+export interface PanelApproval {
+  /** 审批门数量说明，如「1 道审批门」。 */
+  gate: string;
+  /** 门后那一句话。 */
+  note: string;
+}
+
 export interface PanelSummary {
+  /** 本轮执行的标题（右栏「执行中」那张卡）。 */
+  runTitle: string;
+  /** 已耗时文案，如「12m 40s」。 */
+  elapsed: string;
   contextPct: number;
   tokensUsed: number;
   tokensCap: number;
-  steps: { label: string; done: boolean }[];
+  steps: PanelStep[];
   artifacts: ArtifactPayload[];
   subAgents: { name: string; state: 'ready' | 'busy' | 'off' }[];
+  approval?: PanelApproval;
 }

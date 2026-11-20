@@ -1,15 +1,17 @@
+/**
+ * SessionList — 第二栏：会话列表。文案见 `content/app.ts` 的 LIST。
+ */
 import { useState } from 'react';
-import { AvatarStack } from '../avatar';
+import { AvatarStack, AVATAR_SIZE } from '../avatar';
+import { LIST } from '../content/app';
 import type { Session } from '../data/types';
 import { IconPlus, IconSearch } from './icons';
 
-const KIND_LABEL: Record<Session['kind'], string> = {
-  dm: '单聊',
-  group: '群聊',
-  project: '项目',
-};
+/** 「几条成员 / 会话类型」的副标题文案：多人看人数，单人看类型。 */
+function metaOf(s: Session): string {
+  return s.members.length > 1 ? LIST.memberCount(s.members.length) : LIST.kindLabel[s.kind];
+}
 
-/** 第二栏：会话列表（对应设计稿 List）。 */
 export function SessionList({
   sessions,
   activeId,
@@ -32,11 +34,11 @@ export function SessionList({
   return (
     <aside className="slist">
       <div className="slist-head">
-        <button className="slist-back" onClick={onCollapse} title="收起列表">
+        <button className="slist-back" onClick={onCollapse} title={LIST.collapse}>
           ←
         </button>
         <span className="slist-head-title">{currentAgent}</span>
-        <button className="sf-icon-btn" onClick={onCollapse} title="收起">
+        <button className="sf-icon-btn" onClick={onCollapse} title={LIST.close}>
           ✕
         </button>
       </div>
@@ -44,16 +46,12 @@ export function SessionList({
       <div className="slist-tools">
         <button className="slist-new" onClick={onNew}>
           <IconPlus size={14} />
-          新建
+          {LIST.create}
         </button>
         <label className="slist-search">
           <IconSearch size={13} />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索对话、项目或 Agent"
-          />
-          <kbd>⌘K</kbd>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={LIST.searchPlaceholder} />
+          <kbd>{LIST.searchKey}</kbd>
         </label>
       </div>
 
@@ -68,7 +66,7 @@ export function SessionList({
             >
               <span className="slist-card-top">
                 {s.members.length > 1 ? (
-                  <AvatarStack labels={s.members} max={2} size={22} showRest={false} />
+                  <AvatarStack labels={s.members} max={2} size={AVATAR_SIZE.list} showRest={false} />
                 ) : (
                   <span className="slist-card-dot" />
                 )}
@@ -76,20 +74,18 @@ export function SessionList({
                 {s.status === 'active' ? <i className="slist-card-live" /> : null}
               </span>
               <span className="slist-card-meta">
-                <span>
-                  {s.members.length > 1 ? `${s.members.length} 位成员` : KIND_LABEL[s.kind]}
-                </span>
+                <span>{metaOf(s)}</span>
                 <span className="slist-card-time">{s.updatedAt}</span>
                 {s.unread ? <i className="slist-card-unread">{s.unread}</i> : null}
               </span>
             </button>
           ))}
-          {list.length === 0 ? <div className="slist-empty">没有匹配的会话</div> : null}
+          {list.length === 0 ? <div className="slist-empty">{LIST.empty}</div> : null}
         </div>
 
         <div className="slist-group">
-          <div className="slist-group-title">项目与 AGENT</div>
-          {['实验设计与消融', '图表与配图', '投稿材料'].map((p) => (
+          <div className="slist-group-title">{LIST.groupTitle}</div>
+          {LIST.shortcuts.map((p) => (
             <button key={p} className="slist-plain">
               <span className="slist-plain-mark">▸</span>
               {p}

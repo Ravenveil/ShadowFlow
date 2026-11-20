@@ -1,7 +1,12 @@
+/**
+ * Composer — 输入框 + 模型切换。文案与模型清单见 `content/app.ts` 的 COMPOSER。
+ */
 import { useRef, useState } from 'react';
+import { COMPOSER } from '../content/app';
 import { IconArrowUp, IconPaperclip, IconSlash, IconSparkle, IconChevronDown } from '../shell/icons';
 
-const MODELS = ['Claude Sonnet 4.6', 'GPT-5.2', 'Gemini 3 Pro'];
+/** 输入框最大自增高（px）——版式参数，改这里即可。 */
+const MAX_GROW = 160;
 
 export function Composer({
   onSend,
@@ -37,7 +42,7 @@ export function Composer({
     setText(e.target.value);
     const el = e.target;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, MAX_GROW)}px`;
   }
 
   return (
@@ -54,7 +59,7 @@ export function Composer({
         />
         <div className="composer-bar">
           <div className="composer-bar-left">
-            <button className="sf-icon-btn" title="添加附件">
+            <button className="sf-icon-btn" title={COMPOSER.attach}>
               <IconPaperclip size={15} />
             </button>
             <button className="composer-chip" onClick={() => setMenu((v) => !v)}>
@@ -64,7 +69,7 @@ export function Composer({
             </button>
             {menu ? (
               <div className="composer-menu">
-                {MODELS.map((m) => (
+                {COMPOSER.models.map((m) => (
                   <button
                     key={m}
                     data-active={m === model ? 'true' : undefined}
@@ -78,21 +83,21 @@ export function Composer({
                 ))}
               </div>
             ) : null}
-            <button className="sf-icon-btn" title="斜杠命令">
+            <button className="sf-icon-btn" title={COMPOSER.slash}>
               <IconSlash size={15} />
             </button>
-            <button className="composer-at" title="提及角色">
+            <button className="composer-at" title={COMPOSER.mention}>
               @
             </button>
           </div>
-          <button className="composer-send" onClick={submit} disabled={!text.trim()} title="发送">
+          <button className="composer-send" onClick={submit} disabled={!text.trim()} title={COMPOSER.send}>
             <IconArrowUp size={16} />
           </button>
         </div>
       </div>
       <div className="composer-hint">
-        <span>Enter 发送 · Shift + Enter 换行</span>
-        <span>@ 提及角色 · / 调用命令</span>
+        <span>{COMPOSER.hintKeys}</span>
+        <span>{COMPOSER.hintTools}</span>
       </div>
     </div>
   );

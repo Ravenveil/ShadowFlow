@@ -9,26 +9,19 @@
  * 交互沿用旧版：点格子循环 未配置 → permit → warn → deny → 未配置；
  * 行尾 chip 给出该行最严态（deny > warn > permit）的一眼摘要。
  * 未落库前只改本地草稿（父组件持有），有 diff 才出现「保存」。
+ *
+ * 组件只认 roster 与矩阵，不含任何具体人名/角色；文案在 `content/app.ts` 的 POLICY。
  */
-import { AgentAvatar } from '../avatar';
-import type { PolicyMatrix as Matrix, PolicyState } from '../data/types';
+import { AgentAvatar, AVATAR_SIZE } from '../avatar';
+import { POLICY } from '../content/app';
+import type { PolicyMatrix as Matrix, PolicyState, RosterMember } from '../data/types';
 
-export const POLICY_META: Record<PolicyState, { label: string; mark: string }> = {
-  permit: { label: '直通', mark: '●' },
-  warn: { label: '需复核', mark: '▲' },
-  deny: { label: '禁止', mark: '✕' },
-};
-
+/** 三态排序（取最严）与点击循环顺序 —— 业务语义，改这里即可调整交互。 */
 const RANK: Record<PolicyState, number> = { permit: 1, warn: 2, deny: 3 };
 const CYCLE: PolicyState[] = ['permit', 'warn', 'deny'];
 
-export interface RosterItem {
-  id: string;
-  name: string;
-  role: string;
-  /** 行头用的短名（角色缩写，2 字最佳）；缺省回落 name。 */
-  short?: string;
-}
+/** 矩阵只关心这几个字段，收窄参数便于复用。 */
+export type RosterItem = Pick<RosterMember, 'id' | 'name' | 'role' | 'short'>;
 
 export function PolicyMatrix({
   roster,
@@ -82,15 +75,15 @@ export function PolicyMatrix({
       <table className="pm-table">
         <thead>
           <tr>
-            <th className="pm-corner" title="行 = 发起方 · 列 = 接收方">
-              行→列
+            <th className="pm-corner" title={POLICY.cornerTitle}>
+              {POLICY.corner}
             </th>
             {roster.map((a) => (
               <th key={a.id} title={`${a.name} · ${a.role}`}>
-                <AgentAvatar label={a.role} size={20} status={false} />
+                <AgentAvatar label={a.role} size={AVATAR_SIZE.md} status={false} />
               </th>
             ))}
-            <th className="pm-sum-h">最严</th>
+            <th className="pm-sum-h">{POLICY.worst}</th>
           </tr>
         </thead>
         <tbody>
@@ -99,34 +92,29 @@ export function PolicyMatrix({
             return (
               <tr key={from.id}>
                 <th className="pm-rowhead" title={`${from.name} · ${from.role}`}>
-                  <AgentAvatar label={from.role} size={18} status={false} />
+                  <AgentAvatar label={from.role} size={AVATAR_SIZE.row} status={false} />
                   <span className="pm-rowhead-name">{from.short ?? from.name}</span>
                 </th>
                 {roster.map((to) => {
                   if (from.id === to.id) return <td key={to.id} className="pm-self" />;
                   const st = cell(from.id, to.id);
+                  const meta = st ? POLICY.states[st] : null;
                   return (
                     <td key={to.id}>
                       <button
                         type="button"
                         className={`pm-cell${st ? ` is-${st}` : ''}`}
                         onClick={() => cycle(from.id, to.id)}
-                        title={
-                          st
-                            ? `${from.name} → ${to.name}：${POLICY_META[st].label}（点击切换）`
-                            : `${from.name} → ${to.name}：未配置（点击设限）`
-                        }
-                        aria-label={`${from.name} to ${to.name}: ${st ?? 'none'}`}
+                        title={POLICY.cellTitle(from.name, to.name, meta?.label)}
+                        aria-label={POLICY.cellAria(from.name, to.name, st)}
                       >
-                        {st ? POLICY_META[st].mark : '·'}
+                        {meta ? meta.mark : '·'}
                       </button>
                     </td>
                   );
                 })}
                 <td className="pm-sum">
-                  {worst ? (
-                    <span className={`pm-chip is-${worst}`}>{POLICY_META[worst].label}</span>
-                  ) : null}
+                  {worst ? <span className={`pm-chip is-${worst}`}>{POLICY.states[worst].label}</span> : null}
                 </td>
               </tr>
             );
@@ -138,30 +126,25 @@ export function PolicyMatrix({
         {CYCLE.map((s) => (
           <span key={s} className={`pm-stat-item is-${s}`}>
             <b>{counts[s]}</b>
-            {POLICY_META[s].label}
+            {POLICY.states[s].label}
           </span>
         ))}
-        <span className="pm-stat-total">
-          共 {counts.permit + counts.warn + counts.deny} 条已配置
-        </span>
+        <span className="pm-stat-total">{POLICY.total(counts.permit + counts.warn + counts.deny)}</span>
       </div>
 
       <div className="pm-legend">
         {CYCLE.map((s) => (
           <span key={s} className="pm-legend-item">
-            <i className={`pm-legend-dot is-${s}`}>{POLICY_META[s].mark}</i>
-            {POLICY_META[s].label}
+            <i className={`pm-legend-dot is-${s}`}>{POLICY.states[s].mark}</i>
+            {POLICY.states[s].label}
           </span>
         ))}
       </div>
-      <p className="pm-hint">点格子循环：直通 → 需复核 → 禁止 → 清除。限制会同步染到工作流连线。</p>
+      <p className="pm-hint">{POLICY.hint}</p>
 
       <div className="pm-note">
-        <b>这套矩阵在论文里管什么</b>
-        <p>
-          每个格子是「A 的产出，B 能不能直接当真」。设成「禁止」，B 就不能拿 A 的结论当证据，
-          双向都受限；改动会立刻反映到工作流连线的颜色上。
-        </p>
+        <b>{POLICY.noteTitle}</b>
+        <p>{POLICY.noteBody}</p>
       </div>
     </div>
   );

@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ShadowFlow Paper Platform — 论文协作前端（双风格）",
+  "description": "ShadowFlow Paper Platform — 论文协作前端（三套风格）",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:conventions": "node scripts/check-conventions.mjs",
+    "check": "npm run typecheck && npm run check:conventions"
   }
 }
