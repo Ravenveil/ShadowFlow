@@ -14,8 +14,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentAvatar, AVATAR_SIZE } from '../avatar';
 import { PANEL as PANEL_COPY } from '../content/app';
-import type { PanelSummary, PolicyMatrix as Matrix } from '../data/types';
-import { DAG_CANVAS, DAG_EDGES, DAG_NODES, PANEL, POLICY_SEED, ROSTER } from '../data/mock';
+import type {
+  DagDataset,
+  PanelSummary,
+  PolicyMatrix as Matrix,
+  RosterMember,
+} from '../data/types';
 import { PolicyMatrix } from '../panel/PolicyMatrix';
 import { DagFlow } from '../panel/DagFlow';
 import {
@@ -41,15 +45,24 @@ const TAB_ICON: Record<TabId, (p: { size?: number }) => JSX.Element> = {
 };
 
 export function AgentPanel({
-  panel = PANEL,
+  panel,
+  roster,
+  policy: policySeed,
+  dag,
+  onSavePolicy,
   onClose,
 }: {
-  panel?: PanelSummary;
+  panel: PanelSummary;
+  roster: RosterMember[];
+  /** 已落库的策略矩阵；点格子只改本地草稿，保存后才回流到这里。 */
+  policy: Matrix;
+  dag: DagDataset;
+  onSavePolicy?: (next: Matrix) => void;
   onClose?: () => void;
 }) {
   const [tab, setTab] = useState<TabId>('run');
-  const [policy, setPolicy] = useState<Matrix>(() => POLICY_SEED);
-  const [saved, setSaved] = useState<Matrix>(() => POLICY_SEED);
+  const [policy, setPolicy] = useState<Matrix>(policySeed);
+  const [saved, setSaved] = useState<Matrix>(policySeed);
   const [flash, setFlash] = useState(false);
   const flashTimer = useRef<number | null>(null);
 
@@ -62,8 +75,15 @@ export function AgentPanel({
 
   const dirty = useMemo(() => JSON.stringify(policy) !== JSON.stringify(saved), [policy, saved]);
 
+  // 外部换了另一份矩阵（重新加载 / 保存回流）就重置草稿，避免拿着旧数据继续改
+  useEffect(() => {
+    setPolicy(policySeed);
+    setSaved(policySeed);
+  }, [policySeed]);
+
   const save = () => {
     setSaved(policy);
+    void onSavePolicy?.(policy);
     setFlash(true);
     if (flashTimer.current) window.clearTimeout(flashTimer.current);
     flashTimer.current = window.setTimeout(() => setFlash(false), 1800);
@@ -175,11 +195,11 @@ export function AgentPanel({
         {tab === 'team' ? (
           <>
             <div className="panel-sec-head">
-              <span>{PANEL_COPY.rosterSection(ROSTER.length)}</span>
+              <span>{PANEL_COPY.rosterSection(roster.length)}</span>
               <span className="panel-sec-meta">{PANEL_COPY.rosterMeta}</span>
             </div>
             <ul className="panel-roster">
-              {ROSTER.map((m) => {
+              {roster.map((m) => {
                 const busy = m.state === 'busy';
                 return (
                   <li key={m.id}>
@@ -215,7 +235,7 @@ export function AgentPanel({
                 <span className="panel-sec-meta">{PANEL_COPY.policyDir}</span>
               )}
             </div>
-            <PolicyMatrix roster={ROSTER} value={policy} onChange={setPolicy} />
+            <PolicyMatrix roster={roster} value={policy} onChange={setPolicy} />
           </>
         ) : null}
 
@@ -223,14 +243,14 @@ export function AgentPanel({
           <>
             <div className="panel-sec-head">
               <span>{PANEL_COPY.dagSection}</span>
-              <span className="panel-sec-meta">{PANEL_COPY.dagMeta(DAG_NODES.length, DAG_EDGES.length)}</span>
+              <span className="panel-sec-meta">{PANEL_COPY.dagMeta(dag.nodes.length, dag.edges.length)}</span>
             </div>
             <DagFlow
-              nodes={DAG_NODES}
-              edges={DAG_EDGES}
-              canvas={DAG_CANVAS}
+              nodes={dag.nodes}
+              edges={dag.edges}
+              canvas={dag.canvas}
               policy={policy}
-              roster={ROSTER}
+              roster={roster}
             />
             {panel.approval ? (
               <div className="panel-approve">

@@ -1,3 +1,9 @@
+/**
+ * mock.ts — 演示态数据集（**只被 data/source.ts 消费**）。
+ *
+ * 组件不要直接 import 这里：数据一律经 `data/source.ts` 的 WorkspaceSource，
+ * 这样换成真接口时只改 source.ts 一处（`npm run check` 会拦住违规引用）。
+ */
 import type {
   DagEdgeDef,
   DagNodeDef,
@@ -7,7 +13,11 @@ import type {
   Session,
 } from './types';
 
-/** 论文团队角色（与 templates/academic-paper.yaml 对齐）。 */
+/**
+ * 论文团队角色（与 templates/academic-paper.yaml 对齐）。
+ * 暂未接入 UI —— 右栏编队目前读下面手写的 ROSTER；等 yaml 那侧接上后，
+ * roster 由这份表生成，ROSTER 里的 name/note 挪进后端。
+ */
 export const TEAM_ROLES = [
   { id: 'pi', name: 'PI', cn: '课题负责人', soul: '把控研究方向与学术严谨性' },
   { id: 'section-writer', name: 'SectionWriter', cn: '章节主笔', soul: '按 section 拆分写作任务' },

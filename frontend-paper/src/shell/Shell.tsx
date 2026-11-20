@@ -1,8 +1,9 @@
 /**
  * Shell — 四栏工作台外壳：Rail / 会话列表 / 聊天 / 执行详情。
  *
- * 只负责「哪一栏、哪条会话、面板开关」这层状态；数据来自 `data/mock.ts`，
- * 文案在 `content/app.ts`。接真接口时替换数据来源即可，布局不用动。
+ * 只负责**视图状态**（哪条会话、面板开关、设置开关），所有业务数据来自
+ * `data/useWorkspace()`；数据源是 mock 还是 http 由 `data/source.ts` 决定，
+ * 这里不认识任何一个具体数据文件。文案仍在 `content/app.ts`。
  */
 import { useCallback, useMemo, useState } from 'react';
 import { Rail } from './Rail';
@@ -11,63 +12,46 @@ import { ChatArea } from './ChatArea';
 import { AgentPanel } from './AgentPanel';
 import { Settings } from './Settings';
 import { CHAT, DEMO } from '../content/app';
-import { MESSAGES, SESSIONS } from '../data/mock';
-import type { Message } from '../data/types';
-
-/** 默认打开哪条会话（真接口接入后由路由/后端决定）。 */
-const DEFAULT_SESSION = 'grp-paper';
-const DEFAULT_SESSION_DM = 'lead';
-
-function nowTime(): { t: number; label: string } {
-  const t = new Date();
-  const label = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-  return { t: t.getTime(), label };
-}
-
-/** 演示态：主控对着用户消息回一句（接上后端就换成流式响应）。 */
-function leadReply(text: string): Message {
-  const { t, label } = nowTime();
-  return {
-    id: `m-${t}`,
-    role: 'agent',
-    author: DEMO.leadAuthor,
-    time: label,
-    kind: 'text',
-    text: DEMO.leadReply(text),
-  };
-}
+import { DEFAULT_DM_ID, DEFAULT_SESSION_ID } from '../data/source';
+import { useWorkspace } from '../data/useWorkspace';
 
 export function Shell({ onExit }: { onExit: () => void }) {
-  const [activeId, setActiveId] = useState(DEFAULT_SESSION);
+  const { data, status, error, send, savePolicy, reload } = useWorkspace();
+  const [activeId, setActiveId] = useState(DEFAULT_SESSION_ID);
   const [panelOpen, setPanelOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [threads, setThreads] = useState<Record<string, Message[]>>(() => ({
-    [DEFAULT_SESSION]: MESSAGES,
-    [DEFAULT_SESSION_DM]: MESSAGES.slice(0, 2),
-  }));
 
-  const session = useMemo(() => SESSIONS.find((s) => s.id === activeId) ?? SESSIONS[0], [activeId]);
-  const messages = threads[activeId] ?? [];
-
-  const send = useCallback(
-    (text: string) => {
-      const { t, label } = nowTime();
-      const mine: Message = { id: `u-${t}`, role: 'user', time: label, kind: 'text', text };
-      setThreads((prev) => ({
-        ...prev,
-        [activeId]: [...(prev[activeId] ?? []), mine, leadReply(text)],
-      }));
-    },
-    [activeId],
+  const session = useMemo(
+    () => data?.sessions.find((s) => s.id === activeId) ?? data?.sessions[0],
+    [data, activeId],
   );
+  const messages = useMemo(() => data?.threads[activeId] ?? [], [data, activeId]);
 
-  const openDm = useCallback(() => setActiveId(DEFAULT_SESSION_DM), []);
+  const openDm = useCallback(() => setActiveId(DEFAULT_DM_ID), []);
+
+  if (!data || !session) {
+    return (
+      <div className="shell shell--boot" data-panel="closed">
+        <span className="shell-boot">
+          {status === 'error' ? CHAT.loadError(error ?? '') : CHAT.loading}
+        </span>
+        {status === 'error' ? (
+          <button className="shell-boot-retry" onClick={reload}>
+            {CHAT.retry}
+          </button>
+        ) : null}
+        <button className="shell-back" onClick={onExit} title={CHAT.backHome}>
+          {CHAT.home}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="shell" data-panel={panelOpen ? 'open' : 'closed'}>
       <Rail onOpenSettings={() => setSettingsOpen(true)} />
       <SessionList
-        sessions={SESSIONS}
+        sessions={data.sessions}
         activeId={activeId}
         onSelect={setActiveId}
         onNew={openDm}
@@ -77,11 +61,20 @@ export function Shell({ onExit }: { onExit: () => void }) {
       <ChatArea
         session={session}
         messages={messages}
-        onSend={send}
+        onSend={(text) => void send(activeId, text)}
         panelOpen={panelOpen}
         onTogglePanel={() => setPanelOpen((v) => !v)}
       />
-      {panelOpen ? <AgentPanel onClose={() => setPanelOpen(false)} /> : null}
+      {panelOpen ? (
+        <AgentPanel
+          panel={data.panel}
+          roster={data.roster}
+          policy={data.policy}
+          dag={data.dag}
+          onSavePolicy={savePolicy}
+          onClose={() => setPanelOpen(false)}
+        />
+      ) : null}
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <button className="shell-back" onClick={onExit} title={CHAT.backHome}>
         {CHAT.home}

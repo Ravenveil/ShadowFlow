@@ -70,6 +70,9 @@ export const CHAT = {
   },
   backHome: '回到首页',
   home: '首页',
+  loading: '正在加载工作台…',
+  loadError: (reason: string) => `工作台加载失败：${reason}`,
+  retry: '重试',
 };
 
 export const COMPOSER = {

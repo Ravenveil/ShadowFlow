@@ -1,4 +1,9 @@
-/** 论文平台数据模型（前端先行；后续替换为 /api 真实数据）。 */
+/**
+ * 论文平台数据模型。
+ *
+ * 这些只是**形状**，不含任何一份具体数据；数据从哪来由 `data/source.ts`
+ * 的 WorkspaceSource 决定（演示态读 mock，上线走 /api）。
+ */
 
 export type MsgRole = 'user' | 'agent' | 'system';
 
@@ -119,6 +124,13 @@ export interface DagEdgeDef {
   to: string;
   mode: 'direct' | 'conditional' | 'approve';
   label?: string;
+}
+
+/** 一张完整的工作流图（画布尺寸 + 节点 + 连线），右栏一次取全。 */
+export interface DagDataset {
+  canvas: DagCanvasSize;
+  nodes: DagNodeDef[];
+  edges: DagEdgeDef[];
 }
 
 export interface PanelStep {
