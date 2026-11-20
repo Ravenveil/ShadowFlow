@@ -2,7 +2,8 @@
  * collaboration 域 — teams 用例（application 层，纯校验编排部分）
  *
  * D1 workflow DAG 校验：把前端画布「存储形」展平成草案形，委托
- * lib/team-dag-draft.validateDagDraft（纯函数，单一真源）。
+ * 域内 model validateDagDraft（纯函数，单一真源；2026-11-20 从
+ * lib/team-dag-draft 迁入 dag-draft-model，切断对 transport 的传递依赖）。
  * 文件 I/O（一队一 JSON、原子写）在 infra，本模块只编排规则。
  */
 
@@ -11,7 +12,7 @@ import {
   normalizeDraftEdgeMode,
   type DagDraftEdge,
   type DagDraftNode,
-} from '../../../lib/team-dag-draft';
+} from '../dag-draft-model';
 import {
   edgeIdentity,
   nodeIdentity,
