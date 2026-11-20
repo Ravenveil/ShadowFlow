@@ -91,7 +91,9 @@ domains/memory/handoff-model.ts      domains/commerce/merchant-model.ts
 
 1. **规则在哪？** → 能指到 `model.ts` / `use_cases/`，而不是「在 storage 的某个函数里」。
 2. **对外提供哪些用例？** → 数 `use_cases/` 下的文件就能答，不用读路由。
-3. **想换存储改哪里？** → 只看 `infra/`，其余零改动。
+3. **想换存储改哪里？** → 改 `infra/` 一处实现 + 装配根一处 `new`，业务与 HTTP 零改动
+   （当前装配点在 adapters 内，收口到 index.ts 前这是诚实答案；写成"零改动"
+   会让做到 95% 的人以为自己不及格）。
 
 任何一问答不上，说明只是搬了文件。
 
@@ -127,27 +129,58 @@ domains/memory/handoff-model.ts      domains/commerce/merchant-model.ts
 
 - 不新增「幽灵目录」（`utils/`、`helpers/`、`common2/`）。真要放，说明它属于哪个域的 model。
 - 文件超过 ~600 行先想「这里是不是有两个域」，而不是继续加函数。
+  **执行方式是棘轮不是一刀切**：存量超标文件记入 `scripts/arch-line-baseline.json`
+  （只许减不许增），新文件超 600 行直接打回（`arch-check.mjs` 强制）。
+- `lib/` 只放无业务规则的机制（协议、算法、纯投影、基础设施策略如 `cli-policy.ts`）；
+  一旦含业务规则，必须进 `domains/<域>/model`（判据同 §5）。
 - `docs/` 不入库（见 `.gitignore`）。开发文档只放仓库根的 `CONTRIBUTING.md` / `ARCHITECTURE.md` / 各层 `AGENTS.md`。
 
-## 九、现状盘点（2026-11-19）
+## 九、现状盘点（2026-11-20 按代码实测修订）
+
+### 9.1 已迁移域（`backend/node/src/domains/`）
 
 | 域 | 结构 | 说明 |
 |---|---|---|
-| `memory` | 四件套（entries）+ 规则层（lessons/profiles/handoff） | **样板域**，见 `domains/memory/README.md` |
-| `collaboration` | 四件套（hops）+ model/use_cases（teams）+ 规则层（groups / state） | 群与编队语义 |
-| `commerce` | 规则层三件（merchant / social / shipping） | 口径、状态机、收件校验 |
+| `memory` | **完整四件套**（entries / lessons / profiles）+ 规则层（handoff）+ 薄壳（state） | **样板域**，见 `domains/memory/README.md`；lessons/profiles 已有 repository+infra+use_cases+adapters（2026-11-19 第 5/6 批完成） |
+| `collaboration` | 四件套（hops，**adapters 待补**——HTTP 仍在 `routes/groups/groups-chat.ts`）+ 四件套（teams，use_cases 泄漏 import lib/team-dag-draft 待堵）+ 规则层（groups / state / approval-model） | 群与编队语义 |
+| `commerce` | 规则层三件（merchant / social / shipping，各带单测）；**用例与存储仍在 `storage/merchant-board.ts`（1267 行）** | 口径、状态机、收件校验 |
 | `craft` | 规则层（profit / agent） | 代卖盈利口径 |
-| `analytics` | 规则层（usage / evidence） | 成本估算、证据包 |
+| `analytics` | 规则层（usage / evidence）+ **adapters 两个直连 SQL（dashboard / token-usage，红线违规待迁）** | 成本估算、证据包 |
 | `catalog` | 规则层（蓝图脱敏 + 契约校验） | 对线安全 |
-| `voice` | adapters | 待补 |
+| `voice` | adapters 孤岛（无 model/repository） | 待补 |
 
-未列入的模块（`routes/`（未迁移部分）、`transport/`、`workflow/`、`parsers/`、`prompts/`）目前仍是技术分层，属技术基础设施，**不强行业务聚合**。要动它们时按本文的判据先问一句「这里有业务规则吗」。
+### 9.2 未迁移面积（诚实数字：domains 只占后端 ~6%）
+
+`routes/` 21259 行（26%）、`lib/` 19401 行（24%）、`storage/` 9630 行（12%）——
+三者合计 **62% 不在新结构里**。其中 `lib/` 不全是"技术基础设施"：
+`chat-strategy`（寒暄判定）、`plan-gate`（计划门规则）、`permission-policy`
+（权限规则）是**业务规则**，按 §5 应进 `domains/<域>/model`，只是尚未排期。
+`routes/`、`storage/`、`transport/`、`workflow/`、`parsers/`、`prompts/`、
+`assembly/` 等仍按技术分层维护，要动它们时先问「这里有业务规则吗」。
+
+### 9.3 迁移优先队列（触发条件驱动，不是全量重写）
+
+| 目标 | 触发条件 | 做法 |
+|---|---|---|
+| `storage/merchant-board.ts`（1267 行） | 口径/查询规则要改第二次时 | 只提规则层 model，SQL 留 storage |
+| `storage/memory-handoff.ts`（1204 行） | handoff 语义要改第二次时 | 同上（model 已就位，直接迁 SQL 消费方） |
+| `analytics` 两个直连 SQL 的 adapters | 看板查询要改时 | 补 repository 接口 + infra |
+| `lib/chat-strategy` / `plan-gate` / `permission-policy` | 各自规则要改时 | 迁对应域 model，lib 留 re-export |
+| `collaboration/teams` 的 use_cases 泄漏 | 任意时刻（一行改动） | `validateDagDraft` 下沉或抽接口 |
+
+### 9.4 红线的执行（2026-11-20 起自动化）
+
+§8 红线由 `node scripts/arch-check.mjs` 执行（CI lint job 强制）：
+model 纯净 / use_cases 边界 / lib 不反向依赖 routes（白名单仅
+`run-sessions/registry`）/ 600 行棘轮（`scripts/arch-line-baseline.json`
+记 21 个存量超标文件，**只许减不许增**；新文件超 600 行直接打回）。
 
 ## 十、验收（每批改动都要过）
 
 ```bash
 cd backend/node && npx tsc --noEmit && npx vitest run      # 后端：类型 + 全量
 cd frontend   && npx tsc --noEmit && npx vitest run        # 前端：类型 + 全量
+node scripts/arch-check.mjs                                 # 红线门禁（CI 同款）
 ```
 
 - **零回归**是硬门槛：基线数字只许增（新增测试）不许减。
