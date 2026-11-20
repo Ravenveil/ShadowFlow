@@ -1,0 +1,9 @@
+{
+  "name": "ShadowFlow 论文平台 · 代码导出",
+  "id": "shadowflow-code-to-figma",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": { "allowedDomains": ["none"] }
+}
