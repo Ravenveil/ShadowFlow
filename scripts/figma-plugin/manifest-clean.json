@@ -1,0 +1,8 @@
+{
+  "name": "ShadowFlow · 删导航风格切换器",
+  "id": "shadowflow-clean-theme-switch",
+  "api": "1.0.0",
+  "main": "clean-theme-switch.js",
+  "editorType": ["figma"],
+  "documentAccess": "currentpage"
+}
