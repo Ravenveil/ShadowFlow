@@ -215,39 +215,3 @@ a {
   background: var(--bg-hover);
   color: var(--ink);
 }
-
-/* 主题切换器：跨两套皮肤都要好看 */
-.sf-theme-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-sunken);
-  border: 1px solid var(--line);
-}
-
-.sf-theme-switch button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 11px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-3);
-  transition: all 0.16s ease;
-}
-
-.sf-theme-switch button[aria-pressed='true'] {
-  background: var(--bg-elev);
-  color: var(--ink);
-  box-shadow: var(--shadow-card-sm);
-}
-
-[data-theme='ink'] .sf-theme-switch button[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--bg);
-  box-shadow: none;
-}

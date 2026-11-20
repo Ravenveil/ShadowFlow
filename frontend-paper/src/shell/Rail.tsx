@@ -1,4 +1,3 @@
-import { useTheme, THEME_META } from '../theme/ThemeProvider';
 import {
   IconBook,
   IconChat,
@@ -23,8 +22,6 @@ const WORKSPACE = [
 
 /** 第一栏：全局导航（对应设计稿 Rail）。 */
 export function Rail({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { theme, setTheme } = useTheme();
-
   return (
     <aside className="rail">
       <div className="rail-brand">
@@ -61,18 +58,6 @@ export function Rail({ onOpenSettings }: { onOpenSettings: () => void }) {
           <IconSettings size={15} />
           <span>设置</span>
         </button>
-        <div className="sf-theme-switch" role="group" aria-label="切换风格">
-          {(Object.keys(THEME_META) as (keyof typeof THEME_META)[]).map((k) => (
-            <button
-              key={k}
-              aria-pressed={theme === k}
-              onClick={() => setTheme(k)}
-              title={`${THEME_META[k].label} · ${THEME_META[k].hint}`}
-            >
-              {THEME_META[k].label}
-            </button>
-          ))}
-        </div>
       </div>
     </aside>
   );

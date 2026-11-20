@@ -374,15 +374,8 @@
   border-top: 1px solid var(--line);
 }
 
-.rail-foot .sf-theme-switch {
+.rail-foot .rail-settings {
   flex: 1;
-}
-
-.rail-foot .sf-theme-switch button {
-  flex: 1;
-  justify-content: center;
-  padding: 0 6px;
-  font-size: 11px;
 }
 
 /* 回到首页 */
@@ -506,10 +499,6 @@
   gap: 8px;
   padding: 8px;
   border-top: 1px solid var(--line);
-}
-
-.rail-foot .sf-theme-switch {
-  width: 100%;
 }
 
 /* ============ 第二栏：会话列表 ============ */

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { AgentAvatar } from '../avatar';
-import { useTheme, THEME_META } from '../theme/ThemeProvider';
 import {
   IconArrowRight,
   IconCheck,
@@ -191,7 +190,6 @@ function ProductVisual() {
 }
 
 export function Landing({ onEnter }: { onEnter: () => void }) {
-  const { theme, setTheme } = useTheme();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -223,13 +221,6 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
           </nav>
 
           <div className="lp-nav-actions">
-            <div className="sf-theme-switch">
-              {(Object.keys(THEME_META) as (keyof typeof THEME_META)[]).map((k) => (
-                <button key={k} aria-pressed={theme === k} onClick={() => setTheme(k)}>
-                  {THEME_META[k].label}
-                </button>
-              ))}
-            </div>
             <button className="lp-cta-sm" onClick={onEnter}>
               预约演示
               <IconArrowRight size={14} />
