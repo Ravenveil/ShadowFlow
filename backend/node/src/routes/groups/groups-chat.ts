@@ -140,96 +140,21 @@ const activeDagRuns = new Map<string, AbortController>();
 // pendingApprovals: "${groupId}:${nodeId}" → resolve。执行器 deps.approval.request
 // 挂起等 Promise；用户两条路批/拒：
 //   1) 显式 API：POST /api/groups/:id/approvals/:nodeId { decision: 'approve'|'reject' }
-//   2) 会话内自然语言：该群下一条用户消息若以 批准/同意/approve/go/继续 开头 → 批；
-//      以 拒绝/不同意/reject/否/停 开头 → 拒。（群聊主链路不受影响：消息照常
-//      持久化 + fan-out；只在没有 pending 时才完全旁路。）
-//
-// 2026-11-07 BE-06 审批意见（T09 评审缺口收尾）— 决定升级为 ApprovalVerdict：
-// { decision, comment? }。两条决定路径都能附自由文本意见：
-//   1) API：body 增可选 comment（≤500 字）→ action journal 留痕 + 响应带回；
-//   2) 文本：决定词 + 显式分隔符（，,、:：）后半句收作意见（「同意，预算砍半」
-//      → approved + comment「预算砍半」）；无分隔符时必须是纯决定短语（「拒绝的
-//      诱惑」这类决定词开头的整句不吞，见 parseApprovalVerdict）。
-// 执行器侧 approval.request 契约仍是 Promise<'approved'|'rejected'>——闭包映射
-// v.decision 返回，意见经系统留痕消息落地，不破坏 run-team-dag 契约。
-
-/** 审批决定 + 可选自由文本意见（BE-06）。 */
-export interface ApprovalVerdict {
-  decision: 'approved' | 'rejected';
-  /** 审批意见（自由文本，可空）。 */
-  comment?: string;
-}
+//   2) 会话内自然语言（解析规则见 domains/collaboration/approval-model.ts）。
+// 纯规则（ApprovalVerdict / parseApprovalDecision / parseApprovalVerdict）已迁出到
+// 域 model 层；此处保留会话状态（pendingApprovals 注册表）与消费逻辑。
+import {
+  parseApprovalVerdict,
+  type ApprovalVerdict,
+} from '../../domains/collaboration/approval-model';
+export { parseApprovalDecision, parseApprovalVerdict } from '../../domains/collaboration/approval-model';
+export type { ApprovalVerdict } from '../../domains/collaboration/approval-model';
 
 const pendingApprovals = new Map<string, (v: ApprovalVerdict) => void>();
 
 /** 测试可见：清空审批注册表（groups-chat 路由单测隔离用）。 */
 export function clearPendingApprovals(): void {
   pendingApprovals.clear();
-}
-
-/**
- * 纯函数：解析会话短文本里的审批决定（OpenBot 审批纪律决定路径②）。
- * 导出供回归测试直打真实实现——此前测试用同正则副本复测，双实现会漂移。
- */
-export function parseApprovalDecision(text: string): 'approved' | 'rejected' | null {
-  const trimmed = text.trim().toLowerCase();
-  // 决定消息必须短——「批准」「拒绝」是决定，「继续写代码」这种长句是新一轮
-  // 派活，不吞（前缀「继续」会误伤，长度闸门兜住）。中文 ≤6 字；拉丁词按
-  // 字符计 ≤10（"approve"/"rejected" 全词各 7-8 字符）。
-  const latinChars = (trimmed.match(/[a-z]/g) ?? []).length;
-  const lenLimit = latinChars > 0 ? 10 : 6;
-  if (trimmed.length > lenLimit) return null;
-  const isApprove = /^(批准|同意|approve|ok|好|通过|allowed|yes)/.test(trimmed);
-  const isReject = /^(拒绝|不同意|reject|否|不行|停|驳回|no|deny)/.test(trimmed);
-  if (!isApprove && !isReject) return null;
-  return isApprove ? 'approved' : 'rejected';
-}
-
-// ── BE-06 审批意见解析（2026-11-07）────────────────────────────────────────
-// 决定词全集（含常见屈折形）——裸形态必须整串就是「决定词 + 轻声尾缀/标点」，
-// 决定词开头的整句（「拒绝的诱惑」「停止生成」）不算决定，防误吞派活。
-const APPROVE_WORD = '(?:批准|同意|通过|approved|approve|allowed|allow|yes|ok|okay|好)';
-const REJECT_WORD = '(?:拒绝|不同意|驳回|不行|rejected|reject|denied|deny|no|停|否)';
-const DECISION_TAIL = '(?:吧|啊|哦|呢|呀|的)?[。！!？?~～\\s]*';
-const BARE_APPROVE_RE = new RegExp(`^${APPROVE_WORD}${DECISION_TAIL}$`, 'i');
-const BARE_REJECT_RE = new RegExp(`^${REJECT_WORD}${DECISION_TAIL}$`, 'i');
-/** 显式分隔符——只有这些后面的半句才收作审批意见。 */
-const VERDICT_SEPARATORS = /[，,、:：]/;
-/** 文本路径意见长度上限（API 路径见 approvalDecisionHandler，500）。 */
-const MAX_TEXT_COMMENT = 200;
-
-/**
- * 纯函数：解析会话文本里的「审批决定 + 可选意见」（BE-06，决定路径②意见版）。
- * 规则：
- *   - 有显式分隔符（，,、:：）→ 前半句必须是纯决定短语，后半句收作意见
- *     （「同意，预算砍半」→ {approved, comment:'预算砍半'}）；
- *   - 无分隔符 → 整串必须是纯决定短语（≤6 中文/≤10 拉丁闸门保留），无意见；
- *     「拒绝的诱惑」「停止生成」「approve now」这类决定词开头的派活句 → null。
- * parseApprovalDecision（宽松前缀版）保持不动——旧回归直打它；本函数供
- * tryResolveApprovalFromText 用，语义更严（意见需要显式分隔符，防误吞）。
- */
-export function parseApprovalVerdict(text: string): ApprovalVerdict | null {
-  const trimmed = text.trim();
-  const sep = trimmed.search(VERDICT_SEPARATORS);
-  if (sep >= 0) {
-    const head = trimmed.slice(0, sep).trim();
-    const comment = trimmed.slice(sep + 1).trim().slice(0, MAX_TEXT_COMMENT);
-    const decision = bareDecision(head);
-    if (!decision) return null;
-    return comment ? { decision, comment } : { decision };
-  }
-  const decision = bareDecision(trimmed);
-  return decision ? { decision } : null;
-}
-
-/** 裸决定短语判定：整串 = 决定词 + 轻尾缀/标点；带旧长度闸门兜底。 */
-function bareDecision(head: string): 'approved' | 'rejected' | null {
-  const latinChars = (head.match(/[a-z]/gi) ?? []).length;
-  const lenLimit = latinChars > 0 ? 10 : 6;
-  if (head.length > lenLimit) return null;
-  if (BARE_APPROVE_RE.test(head)) return 'approved';
-  if (BARE_REJECT_RE.test(head)) return 'rejected';
-  return null;
 }
 
 /** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
@@ -445,63 +370,20 @@ export function shouldRunTeamDag(group: Pick<GroupRecord, 'team_id'>): boolean {
 }
 
 // ── 管线型 CLI 适配（2026-11-20）─────────────────────────────────────────
-// `cli:autoresearchclaw` 这类 23 阶段研究管线是分钟~小时级任务，与
-// claude/opencode 这类「一问一答秒回」的 CLI 完全不是一个时间尺度。两个纯
-// 判定函数把 cli-registry 的描述符字段翻成群聊调度语义，便于单测锁死。
-
-/**
- * 长任务 CLI 的 DAG 单节点超时（2 小时）。
- * 23 阶段管线含检索、实验、写作、编译，正常跑完就在 1 小时量级。
- */
-export const LONG_RUNNING_NODE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-
-/**
- * executor 是否指向一个 long_running CLI（`cli:<id>` 且 descriptor.long_running）。
- *
- * 只认 `cli:` 前缀：`byok:zhipu` / `anthropic-direct` / `cli:unknown` 一律
- * false（未命中的 id → findCli 返回 undefined）。NeverThrow：任何异常都按
- * false 处理，判定失败只是退回旧默认值（120s 超时），不能把聊天主链路打断。
- */
-export function isLongRunningExecutor(executor: string): boolean {
-  try {
-    if (typeof executor !== 'string' || !executor.startsWith('cli:')) return false;
-    return findCli(executor.slice(4))?.long_running === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * executor 是否指向 no_worktree CLI（`cli:<id>` 且 descriptor.no_worktree）。
- *
- * 同上只认 `cli:` 前缀、NeverThrow。判定为真时群聊跳过 prepareWorktree，
- * 工具沙箱目录直接用群 workspace —— 管线型 CLI 自己管理产物目录层级，
- * 塞进 `.shadowflow/worktrees/<agent>` 后用户在右侧产出面板里找不到东西，
- * 管线内按相对路径写死的配置也会失效。
- */
-export function isNoWorktreeExecutor(executor: string): boolean {
-  try {
-    if (typeof executor !== 'string' || !executor.startsWith('cli:')) return false;
-    return findCli(executor.slice(4))?.no_worktree === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * DAG 调度参数按 executor 收敛：长任务 CLI → 放宽超时 + 关闭自动重试；
- * 其余 → 返回空对象（调用点展开后不传，走 runTeamDagFanout 默认 120s / 1）。
- *
- * 为什么关重试：管线型 CLI 在 120s 处被砍会留下半成品目录，重跑等于从零
- * 再烧一遍额度和 GPU；宁可让它超时后显式失败，也不要静默重跑两遍。
- */
-export function dagTimeoutOptsFor(executor: string): {
-  nodeTimeoutMs?: number;
-  defaultMaxRetries?: number;
-} {
-  if (!isLongRunningExecutor(executor)) return {};
-  return { nodeTimeoutMs: LONG_RUNNING_NODE_TIMEOUT_MS, defaultMaxRetries: 0 };
-}
+// 已迁出：isLongRunningExecutor / isNoWorktreeExecutor / dagTimeoutOptsFor /
+// LONG_RUNNING_NODE_TIMEOUT_MS → transport/cli-policy.ts（基础设施策略，
+// 只读 cli-registry，与 spawner 同源；此处 re-export 保持调用方与测试零改动）。
+import {
+  dagTimeoutOptsFor,
+  isLongRunningExecutor,
+  isNoWorktreeExecutor,
+} from '../../transport/cli-policy';
+export {
+  LONG_RUNNING_NODE_TIMEOUT_MS,
+  dagTimeoutOptsFor,
+  isLongRunningExecutor,
+  isNoWorktreeExecutor,
+} from '../../transport/cli-policy';
 
 /**
  * T05① 计划确认门预检（纯函数，可纯测试；同 shouldRunTeamDag 闸口模式）。
