@@ -1,0 +1,8 @@
+{
+  "name": "ShadowFlow · 生成四栏工作台",
+  "id": "shadowflow-workshop-sync",
+  "api": "1.0.0",
+  "main": "workshop.js",
+  "editorType": ["figma"],
+  "documentAccess": "currentpage"
+}
