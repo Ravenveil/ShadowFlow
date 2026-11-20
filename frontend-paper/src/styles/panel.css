@@ -1340,25 +1340,3 @@
   color: var(--ink);
 }
 
-/* 语义说明卡：矩阵空着也是信息，告诉用户它到底管什么 */
-.pm-note {
-  margin-top: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-left: 2px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elev);
-}
-
-.pm-note b {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 10.5px;
-  color: var(--ink);
-}
-
-.pm-note p {
-  font-size: 9.5px;
-  line-height: 1.65;
-  color: var(--ink-3);
-}

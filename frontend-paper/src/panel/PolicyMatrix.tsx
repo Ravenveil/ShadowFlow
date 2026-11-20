@@ -141,11 +141,6 @@ export function PolicyMatrix({
         ))}
       </div>
       <p className="pm-hint">{POLICY.hint}</p>
-
-      <div className="pm-note">
-        <b>{POLICY.noteTitle}</b>
-        <p>{POLICY.noteBody}</p>
-      </div>
     </div>
   );
 }

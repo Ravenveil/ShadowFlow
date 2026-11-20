@@ -208,9 +208,6 @@ export const POLICY = {
   worst: '最严',
   total: (n: number) => `共 ${n} 条已配置`,
   hint: '点格子循环：直通 → 需复核 → 禁止 → 清除。限制会同步染到工作流连线。',
-  noteTitle: '这套矩阵在论文里管什么',
-  noteBody:
-    '每个格子是「A 的产出，B 能不能直接当真」。设成「禁止」，B 就不能拿 A 的结论当证据，双向都受限；改动会立刻反映到工作流连线的颜色上。',
   cellTitle: (from: string, to: string, label?: string | null) =>
     `${from} → ${to}：${label ? `${label}（点击切换）` : '未配置（点击设限）'}`,
   cellAria: (from: string, to: string, state: string | null) => `${from} to ${to}: ${state ?? 'none'}`,
