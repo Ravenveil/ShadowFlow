@@ -22,7 +22,11 @@
 
 import { createConversation, getConversationByGroup } from '../storage/conversations';
 import { getOrCreateProject } from '../storage/projects';
-import { registerGatewayRun } from '../routes/runs/run-sessions';
+// 2026-11-20 架构评审 R4：lib 禁 import routes（分层倒置）。registerGatewayRun
+// 的真身在 routes/runs/run-sessions/registry.ts，它只依赖 lib/* 与 storage/*，
+// 本身不碰 express router —— 从 registry 直取（index.ts 会拖进整个 express 路由
+// 模块），lib 的分层方向就恢复了：lib ← registry，而不是 lib ← index(routes)。
+import { registerGatewayRun } from '../routes/runs/run-sessions/registry';
 import type { MessagePatch, TimelineMessage } from './contracts';
 
 /** goal 预览长度：'[chat] ' + 首条用户消息前 40 字。 */

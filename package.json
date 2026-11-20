@@ -22,13 +22,14 @@
     "test:coverage": "npm --prefix frontend run test:coverage",
     "test:ui": "npm --prefix frontend run test:ui",
     "test:server": "npm --prefix backend/node run test",
-    "lint": "eslint frontend/src frontend/tests backend/node/src tests --ext ts,tsx --max-warnings 0",
+    "lint": "eslint frontend/src frontend/tests backend/node/src tests --ext ts,tsx --max-warnings 0 && node scripts/arch-check.mjs",
     "format": "npm --prefix frontend run format",
     "i18n:extract": "npm --prefix frontend run i18n:extract",
     "i18n:status": "npm --prefix frontend run i18n:status",
     "i18n:lint": "npm --prefix frontend run i18n:lint",
     "i18n:translate": "node scripts/i18n-translate.mjs",
-    "i18n:translate:dry": "node scripts/i18n-translate.mjs --dry-run"
+    "i18n:translate:dry": "node scripts/i18n-translate.mjs --dry-run",
+    "arch:check": "node scripts/arch-check.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

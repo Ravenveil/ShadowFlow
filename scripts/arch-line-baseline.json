@@ -1,0 +1,23 @@
+{
+  "backend/node/src/assembly/assembler.ts": 1484,
+  "backend/node/src/lib/run-event-bus.ts": 727,
+  "backend/node/src/lib/skill-compiler/index.ts": 662,
+  "backend/node/src/lib/timeline-projector.ts": 1013,
+  "backend/node/src/routes/agents/teams-store.ts": 786,
+  "backend/node/src/routes/groups/groups-chat.ts": 2277,
+  "backend/node/src/routes/opc/opc-company.ts": 773,
+  "backend/node/src/routes/runs/run-sessions/index.ts": 2493,
+  "backend/node/src/routes/system/fs-browse.ts": 817,
+  "backend/node/src/routes/system/settings-ext.ts": 708,
+  "backend/node/src/routes/system/settings.ts": 1251,
+  "backend/node/src/storage/evidence.ts": 836,
+  "backend/node/src/storage/groups-store.ts": 672,
+  "backend/node/src/storage/memory-handoff.ts": 1204,
+  "backend/node/src/storage/merchant-board.ts": 1267,
+  "backend/node/src/transport/api-clients/claude-code-cli-api-client.ts": 1031,
+  "backend/node/src/transport/api-clients/openai-compat-api-client.ts": 638,
+  "frontend/src/api/runs.ts": 637,
+  "frontend/src/api/runSessions.ts": 752,
+  "frontend/src/common/types/memory.ts": 718,
+  "frontend/src/core/hooks/useRunSession.ts": 1168
+}

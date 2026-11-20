@@ -55,6 +55,11 @@ jobs:
       - name: eslint
         run: npm run lint
 
+      # ARCHITECTURE.md 红线门禁（2026-11-20）：model 纯净 / use_cases 边界 /
+      # lib 不反向依赖 routes / 600 行棘轮（scripts/arch-line-baseline.json）。
+      - name: architecture red lines
+        run: node scripts/arch-check.mjs
+
   # ------------------------------------------------------------------
   # Backend typecheck — tsc --noEmit over backend/node/src (no emit, no dist)
   # ------------------------------------------------------------------
