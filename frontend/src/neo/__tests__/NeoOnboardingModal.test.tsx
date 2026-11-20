@@ -67,7 +67,7 @@ describe('NeoOnboardingModal', () => {
     render(<NeoOnboardingModal onFinished={onFinished} onSkipped={vi.fn()} />);
     // 直接跳到最后一问（今天想做的事）
     goLast();
-    expect(screen.getByText('今天就想让总经理先帮你做成的一件事')).toBeInTheDocument();
+    expect(screen.getByText('今天就想让主控先帮你做成的一件事')).toBeInTheDocument();
     fireEvent.change(screen.getByTestId('neo-onb-input-firstTask'), {
       target: { value: '整理行业日报' },
     });

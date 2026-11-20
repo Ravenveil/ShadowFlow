@@ -109,6 +109,7 @@ import {
   seedBuiltinDesignSystems,
 } from './loaders/design-systems';
 import { ensureBuiltinCatalogTemplates } from './lib/catalog-builtin';
+import { ensureLeadAgent } from './storage/lead-agent';
 
 const PORT = Number(process.env.PORT ?? 8002);
 // 公网部署可配多来源（逗号分隔）：FRONTEND_ORIGIN=https://a.example.com,https://b.example.com
@@ -403,6 +404,16 @@ app.use((_req, res) => {
   const seeded = ensureBuiltinCatalogTemplates();
   if (seeded.length > 0) {
     console.log(`[index] catalog: seeded builtin team templates ${seeded.join(', ')}`);
+  }
+}
+
+// ── 内置「主控」agent 种子（2026-11-20）──────────────────────────────────────
+// 主控原本只由 Python secretary_seed.py 播种；单后端不启 Python 时没有主控，
+// 前端首访那场「跟主控对话」就指向空 id。这里在 Node 侧幂等补种一次。
+{
+  const lead = ensureLeadAgent();
+  if (lead.created) {
+    console.log(`[index] lead-agent: seeded builtin 主控 (${lead.agentId})`);
   }
 }
 

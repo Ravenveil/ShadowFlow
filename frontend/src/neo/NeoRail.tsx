@@ -43,7 +43,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
-  BarChart3,
   CalendarClock,
   ChevronDown,
   Folder,
@@ -1584,20 +1583,10 @@ export function NeoRail({
         </button>
         {/* 记忆入口已折叠进设置（2026-11-06 折叠批）：记忆条目 / 画像 / 交接
             统一在「设置 → 记忆」下管理，左栏不再占一级导航行。 */}
-        {/* 产品盈利看板（2026-11-07 由「数据看板」重构）：nav 常驻行。
-            列表区保持当前内容（dashboard 是内容阅读态，不占列表区）。 */}
-        <button
-          type="button"
-          className={`neo-nav-row${nav.view === 'dashboard' ? ' on' : ''}`}
-          onClick={() => onNavigate({ view: 'dashboard' })}
-          aria-pressed={nav.view === 'dashboard'}
-          data-testid="neo-nav-dashboard"
-        >
-          <BarChart3 size={15} strokeWidth={1.75} aria-hidden />
-          <span className="neo-nav-row-name">
-            {t('neo.dashboard', { defaultValue: language === 'zh' ? '产品盈利' : 'Product Profit' })}
-          </span>
-        </button>
+        {/* 产品盈利看板入口已移除（2026-11-20 论文平台改版）：产品是论文，
+            「手工艺品代卖」盈利看板不属于论文主线，nav 行下线。
+            view: 'dashboard' 变体保留在 NeoNav 里（历史深链/测试仍可达），
+            只是不再有一级导航入口——要恢复只需把这段 JSX 加回来。 */}
         {/* 定时任务（2026-11-06，GrokBot 教程「定时任务」章节 + OpenBot /routines
             surface 对齐）：全局计划管理面入口，中栏 SchedulesPage + 左栏
             schedules 列表区。 */}
@@ -1799,7 +1788,7 @@ export function NeoRail({
               <div className="neo-list-note">
                 {t('neo.sessionsEmpty', {
                   defaultValue: language === 'zh'
-                    ? '还没有其他会话，向总经理吩咐第一件事吧'
+                    ? '还没有其他会话，向主控吩咐第一件事吧'
                     : 'No conversations yet — tell the GM your first task',
                 })}
               </div>

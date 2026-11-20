@@ -79,20 +79,20 @@ const QUIZ_FIELDS: QuizField[] = [
   },
   {
     key: 'style',
-    label: '希望总经理怎么跟你说话',
+    label: '希望主控怎么跟你说话',
     placeholder: '例如：简短中文、先给结论',
     options: ['简短中文', '先给结论', '详细解释', '列清单'],
   },
   {
     key: 'redline',
-    label: '有哪些红线（总经理必须遵守）',
+    label: '有哪些红线（主控必须遵守）',
     placeholder: '例如：发消息前先给我看、不碰支付',
     options: ['发消息前先给我看', '不碰支付', '不主动加人', '重要决定先问我'],
     multi: true,
   },
   {
     key: 'firstTask',
-    label: '今天就想让总经理先帮你做成的一件事',
+    label: '今天就想让主控先帮你做成的一件事',
     placeholder: '例如：帮我整理一份行业日报模板',
     options: [],
   },
@@ -206,7 +206,7 @@ export function NeoOnboardingModal({
       if (combined) answerLines.push(`${f.label}：${combined}`);
     }
     return answerLines.length
-      ? `（认识一下）你好，总经理，先自我介绍：\n${answerLines.join('\n')}\n请记住这些，之后按我习惯的方式跟我协作。`
+      ? `（认识一下）你好，主控，先自我介绍：\n${answerLines.join('\n')}\n请记住这些，之后按我习惯的方式跟我协作。`
       : '';
   };
 
@@ -313,11 +313,11 @@ export function NeoOnboardingModal({
           </span>
           <div className="neo-onb-title-wrap">
             <h2 className="neo-onb-title">
-              {t('neo.onboarding.title', { defaultValue: '让总经理更快帮上你' })}
+              {t('neo.onboarding.title', { defaultValue: '让主控更快帮上你' })}
             </h2>
             <p className="neo-onb-sub">
               {t('neo.onboarding.sub', {
-                defaultValue: '几个小问题，选一选或填一填，总经理据此安排怎么协助你。都可以跳过。',
+                defaultValue: '几个小问题，选一选或填一填，主控据此安排怎么协助你。都可以跳过。',
               })}
             </p>
           </div>

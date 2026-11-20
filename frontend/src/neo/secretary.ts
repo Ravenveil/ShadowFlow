@@ -1,15 +1,19 @@
 /**
- * 内置秘书（2026-11-06，GrokBot「主Bot派活」范式）。
- * 显示名定稿「总经理」（当日两次更名：影 → 秘书 → 总经理）。
+ * 内置主控（2026-11-06，GrokBot「主Bot派活」范式）。
+ * 显示名沿革：影 → 秘书 → 总经理（2026-11-06）→ 主控（2026-11-20，论文平台）。
  *
- * 后端 shadowflow/services/secretary_seed.py 启动时幂等播种固定 id 的
- * agent；前端用同一 id 渲染左栏常驻入口 + 首访自动落进与它的会话。
- * 两端字面量需保持一致（无跨端契约文件，改动时同步）。
+ * 播种在两处，都必须保持同一 id：
+ *   - backend/node/src/storage/lead-agent.ts —— 单后端模式（不启 Python）的
+ *     播种真源，soul 面向论文平台（接需求 → 拆活 → @角色派活 → 汇总）；
+ *   - backend/python/shadowflow/services/secretary_seed.py —— 双后端模式仍在
+ *     播种，但 soul 写死「手工艺品代卖」业务，属遗留，后续统一到 Node 那份。
+ * 前端用同一 id 渲染左栏常驻入口 + 首访自动落进与它的会话。
  */
 import type { NeoNav } from './types';
 
 export const SECRETARY_AGENT_ID = 'agent-shadow-secretary';
-export const SECRETARY_NAME = '总经理';
+/** 用户可见名。会话里所有「跟谁说话」的默认指向都是它。 */
+export const SECRETARY_NAME = '主控';
 /** 首访自动进入秘书的会话（localStorage 一次性标记）。 */
 export const SECRETARY_ENTERED_KEY = 'sf.secretary.entered';
 

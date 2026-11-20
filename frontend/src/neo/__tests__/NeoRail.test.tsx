@@ -156,37 +156,12 @@ describe('NeoRail — 导航行 onNavigate 上报（跳转收敛契约）', () =
     expect(screen.queryByTestId('neo-nav-memory')).not.toBeInTheDocument();
   });
 
-  it('数据看板导航行（2026-11-05 整合批）：点击上报 dashboard nav，行高亮，左栏列表区保持', () => {
-    const onNavigate = vi.fn();
-    const v1 = render(
-      <MemoryRouter>
-        <NeoRail
-          nav={{ view: 'home' }}
-          section="home"
-          onNavigate={onNavigate}
-          onNewTask={() => {}}
-          collapsed={false}
-          onToggleCollapsed={() => {}}
-        />
-      </MemoryRouter>,
-    );
-    fireEvent.click(screen.getByTestId('neo-nav-dashboard'));
-    expect(onNavigate).toHaveBeenCalledWith({ view: 'dashboard' });
-    v1.unmount();
-    // dashboard 视图：导航行点亮（aria-pressed），列表区仍归 section 管
-    render(
-      <MemoryRouter>
-        <NeoRail
-          nav={{ view: 'dashboard' }}
-          section="home"
-          onNavigate={onNavigate}
-          onNewTask={() => {}}
-          collapsed={false}
-          onToggleCollapsed={() => {}}
-        />
-      </MemoryRouter>,
-    );
-    expect(screen.getByTestId('neo-nav-dashboard')).toHaveAttribute('aria-pressed', 'true');
+  // 2026-11-20 论文平台改版：产品盈利（dashboard）一级导航行下线。
+  // view: 'dashboard' 变体仍保留在 NeoNav（历史深链/其它入口可达），只是左栏
+  // 不再渲染这一行——这里锁住「入口消失」这个事实，防回归时又冒出来。
+  it('产品盈利导航行已下线（2026-11-20 论文平台改版）', () => {
+    renderRail();
+    expect(screen.queryByTestId('neo-nav-dashboard')).not.toBeInTheDocument();
   });
 });
 

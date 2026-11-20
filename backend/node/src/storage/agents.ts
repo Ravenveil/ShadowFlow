@@ -117,13 +117,26 @@ export function listAllAgents(workspaceId?: string): AgentRecord[] {
   return [...sqliteRows, ...yamlAsRecords];
 }
 
+/**
+ * 创建 agent 的可选参数。
+ *
+ * `agentId` 存在的理由（2026-11-20）：内置「主控」必须用固定 id
+ * （agent-shadow-secretary，前端 lib/secretary.ts 同值），而 randomUUID 生成的 id
+ * 无法跨重启/跨端对齐。仅内部播种使用，HTTP 路由不传。
+ */
+export interface CreateAgentOptions {
+  agentId?: string;
+  source?: AgentRecord['source'];
+}
+
 export function createAgent(
   name: string,
   soul: string,
   workspace_id: string = 'default',
+  opts: CreateAgentOptions = {},
 ): AgentRecord {
   const agent: AgentRecord = {
-    agent_id: randomUUID(),
+    agent_id: opts.agentId ?? randomUUID(),
     name,
     soul,
     workspace_id,
@@ -133,7 +146,7 @@ export function createAgent(
       model: 'claude-sonnet-4-6',
     },
     status: 'idle',
-    source: 'quick_hire',
+    source: opts.source ?? 'quick_hire',
     created_at: new Date().toISOString(),
   };
 
