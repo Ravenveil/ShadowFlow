@@ -454,7 +454,7 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     // ── ClawHub（2026-06）— AutoResearchClaw 注册项（FR-07）────────────────
     // 2026-10-30 已校准：AutoResearchClaw 是 GitHub 项目（非 PyPI 包），
     // 安装 = git clone + venv 内 pip install -e .；CLI 入口 researchclaw。
-    // 本机已装：C:/Users/jy/AutoResearchClaw（venv Python 3.14），
+    // 本机安装在 ~/AutoResearchClaw（venv Python 3.14），
     // 全局 wrapper：~/.local/bin/researchclaw（路由到 venv python -m）。
     // 单次执行 = `researchclaw run --topic "<prompt>" --auto-approve`。
     id: 'autoresearchclaw',
@@ -466,12 +466,13 @@ export const KNOWN_CLIS: CliDescriptor[] = [
     // venv 内安装，卸载 = 删除克隆目录 + PATH 里的 wrapper。目录内有用户的
     // 研究产物（artifacts/），平台不自动删 → copy-only 引导。
     uninstall_cmd:
-      '删除 C:/Users/jy/AutoResearchClaw 目录（内含研究产物 artifacts/，请先备份）+ ~/.local/bin/researchclaw.exe',
+      '删除 ~/AutoResearchClaw 目录（内含研究产物 artifacts/，请先备份）+ ~/.local/bin/researchclaw(.exe)',
     // 复用现有 plain-line 解析管道（决策 #4：不单独配置流式开关）。
     stream_format: 'plain-line',
-    // 单次研究管线：prompt 作为 --topic 传入，--auto-approve 跳过人工门；
-    // --config 指向本机绝对路径（ARC 按 cwd 自动探测在 run-session 目录下
-    // 找不到配置，必须显式指定）。
+    // 单次研究管线：prompt 作为 --topic 传入，--auto-approve 跳过人工门。
+    // --config 运行时解析（2026-11-20 架构评审 R5：本机绝对路径不得进源码）——
+    // 见文件底部 resolveArcConfigArg()。ARC 按 cwd 自动探测在 run-session 目录
+    // 下找不到配置，必须显式指定；extra_args 里的占位符在 spawn 前被替换。
     extra_args: [
       'run',
       '--auto-approve',
@@ -482,7 +483,7 @@ export const KNOWN_CLIS: CliDescriptor[] = [
       // 整条管线在真正开始前就退出。跳过这个抖动探针，真实阶段失败时会有
       // 明确的 stage 级报错，信息量更大。
       '--skip-preflight',
-      '--config', 'C:/Users/jy/AutoResearchClaw/config.arc.yaml',
+      '--config', resolveArcConfigPath(),
     ],
     fallback_bins: [],
     capability_flags: {},
@@ -509,4 +510,24 @@ export const KNOWN_CLIS: CliDescriptor[] = [
 /** Lookup helper — `undefined` for unknown ids. */
 export function findCli(id: string): CliDescriptor | undefined {
   return KNOWN_CLIS.find((c) => c.id === id);
+}
+
+/**
+ * ARC 配置路径解析（2026-11-20 架构评审 R5：机器绑定路径不得写进源码）。
+ *
+ * 优先级：`ARC_CONFIG` 环境变量 → `~/AutoResearchClaw/config.arc.yaml`。
+ * 返回**归一化的正斜杠路径**（ARC/Python 在 Windows 上两种都收，正斜杠
+ * 避免 argv 里的反斜杠转义歧义）。找不到时仍返回默认猜测——让 spawn 继续，
+ * 由 ARC 自己报 "config not found"（比在这里吞掉错误更能定位问题）。
+ */
+function resolveArcConfigPath(): string {
+  const fromEnv = process.env.ARC_CONFIG?.trim();
+  if (fromEnv) return fromEnv.replace(/\\/g, '/');
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE || '';
+    if (home) return `${home.replace(/\\/g, '/')}/AutoResearchClaw/config.arc.yaml`;
+  } catch {
+    /* fall through */
+  }
+  return '~/AutoResearchClaw/config.arc.yaml';
 }
