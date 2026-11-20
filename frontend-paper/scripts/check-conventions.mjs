@@ -30,6 +30,8 @@ const MOCK_CONSUMERS = new Set(['data/source.ts']);
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/;
 const CJK_RE = /[\u4e00-\u9fa5]/;
 const MOCK_IMPORT_RE = /from\s+['"][^'"]*\/mock['"]/;
+/** 后端路径与 fetch 只许出现在 data/http/（映射层是唯一懂后端的地方）。 */
+const API_CALL_RE = /\bfetch\s*\(|['"`]\/api\//;
 
 /** 去掉 // 与 /* *\/ 注释，避免注释里的色值/中文触发规则。 */
 function stripComments(code) {
@@ -58,6 +60,13 @@ for (const file of walk(SRC)) {
   if (!MOCK_CONSUMERS.has(rel) && MOCK_IMPORT_RE.test(code)) {
     problems.push(
       `${rel}  直接 import 了 data/mock → 改走 data/source.ts 的 WorkspaceSource（否则换后端要改多处）`,
+    );
+  }
+
+  // 规则 4：只有 data/http/ 认识后端；组件和别的数据文件不许自己 fetch
+  if (!rel.startsWith('data/http/') && API_CALL_RE.test(code)) {
+    problems.push(
+      `${rel}  直接写了后端地址或 fetch → 收进 data/http/（组件只认 WorkspaceSource）`,
     );
   }
 

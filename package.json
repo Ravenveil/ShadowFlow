@@ -29,7 +29,11 @@
     "i18n:lint": "npm --prefix frontend run i18n:lint",
     "i18n:translate": "node scripts/i18n-translate.mjs",
     "i18n:translate:dry": "node scripts/i18n-translate.mjs --dry-run",
-    "arch:check": "node scripts/arch-check.mjs"
+    "arch:check": "node scripts/arch-check.mjs",
+    "dev:paper": "node scripts/dev.mjs --paper",
+    "dev:paper:mock": "node scripts/dev.mjs --paper --mock",
+    "test:paper": "npm --prefix frontend-paper run check",
+    "dev:legacy": "node scripts/dev.mjs --legacy"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

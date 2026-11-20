@@ -1,13 +1,18 @@
 /**
  * source.ts — 工作台**唯一的数据出入口**。
  *
- * 组件只认这里的 `WorkspaceData` / `WorkspaceSource` 契约，
- * 不直接 import 任何具体数据文件；换真后端时，改本文件底部的 `source`
- * 一行即可，Shell / ChatArea / AgentPanel / PolicyMatrix / DagFlow 全都不用动。
+ * 组件只认这里的 `WorkspaceData` / `WorkspaceSource` 契约，不直接 import
+ * 任何具体数据文件，也不出现后端路径；换后端只改这里的 `source` 一行，
+ * Shell / ChatArea / AgentPanel / PolicyMatrix / DagFlow 全都不用动。
  *
  * 两个实现：
- *   mockSource —— 演示态，读 ./mock.ts，发消息时用 content/app.ts 的 DEMO 应答模板
- *   httpSource —— 真接口，走 fetch，路由集中在 ROUTES 里
+ *   mockSource —— 演示态，读 ./mock.ts（设计评审、离线截图用）
+ *   httpSource —— 真后端，见 ./http/（组装既有 /api 端点，不含一条新后端路由）
+ *
+ * 选择顺序：
+ *   1. URL 带 `?mock=1`（或 `#mock`）→ mock
+ *   2. `VITE_WS_SOURCE=mock`       → mock
+ *   3. 其余                        → http
  *
  * mock 也返回 Promise，是为了让组件的 loading / 竞态处理现在就写好，
  * 接后端时不用回头补一遍。
@@ -25,6 +30,7 @@ import {
   SESSIONS,
   SETTINGS_SEED,
 } from './mock';
+import { httpSource } from './http';
 import type {
   AppSettings,
   CliProbe,
@@ -39,9 +45,8 @@ import type {
   SshHost,
 } from './types';
 
-/** 默认打开哪条会话（真接口接入后由路由或后端决定）。 */
+/** 演示态默认打开哪条会话；真接口由后端第一条会话决定。 */
 export const DEFAULT_SESSION_ID = 'grp-paper';
-export const DEFAULT_DM_ID = 'lead';
 
 /** 一次加载所需的全部数据：左两栏 + 聊天 + 右栏，避免各组件各自取数的时序差。 */
 export interface WorkspaceData {
@@ -56,27 +61,51 @@ export interface WorkspaceData {
   composer: ComposerData;
   /** 设置页的全部配置。 */
   settings: AppSettings;
+  /**
+   * panel / roster / policy / dag 这四块描述的是**哪条会话**。
+   * 切会话后界面拿它跟自己选中的 id 比，不一致才去 `loadPanel` 重取 ——
+   * 避免首屏刚 load 完又重复拉一遍。
+   */
+  focused: string;
 }
+
+/** 切会话时要换新的那一块（右栏 + 编队 + 策略 + 工作流）。 */
+export type PanelSlice = Pick<WorkspaceData, 'panel' | 'roster' | 'policy' | 'dag'>;
+
+/** 测 SSH 连通性只回这三个字段；主机名 / 端口等是界面已有的，不该被覆写。 */
+export type SshProbe = Pick<SshHost, 'state' | 'latencyMs' | 'gpu'>;
 
 /** 数据源契约。所有方法异步，失败用 reject 表达，由 useWorkspace 统一兜。 */
 export interface WorkspaceSource {
   readonly id: 'mock' | 'http';
-  load(): Promise<WorkspaceData>;
   /**
-   * 发一条消息，resolve 出**要追加到会话尾部**的消息（自己的那条 + 对方应答）。
+   * 一次取回全部数据。`sessionId` 指定「右栏看哪条会话」，缺省用第一条。
+   * 切会话后用 `loadPanel` 只换右栏，不必整页重取。
+   */
+  load(sessionId?: string): Promise<WorkspaceData>;
+  /** 只拉某条会话的右栏切片；没实现（演示态）时界面保持原样。 */
+  loadPanel?(sessionId: string): Promise<PanelSlice>;
+  /**
+   * 发一条消息，resolve 出**要追加到会话尾部**的消息（自己那条，可能还有应答）。
    * `signal` 用于「停止生成」：中止后不再追加任何消息。
    */
   send(sessionId: string, out: Outbound, opts?: { signal?: AbortSignal }): Promise<Message[]>;
+  /** 应答是否经推送（SSE）异步到达；为真时「发送中」要等推送帧收尾。 */
+  readonly streamsReplies?: boolean;
+  /** 订阅某条会话的后续消息（真后端走 SSE）；返回退订函数。 */
+  subscribe?(sessionId: string, onMessages: (messages: Message[]) => void): () => void;
+  /** 停掉正在跑的这一轮（真后端要通知服务端，光 abort 请求停不住 agent）。 */
+  stop?(sessionId: string): void | Promise<void>;
   /** 落库策略矩阵；演示态不下发，只保留签名。 */
   savePolicy(policy: PolicyMatrix): Promise<void>;
-  /** 语音转写：录音 blob → 文本。演示态返回一段示例话术。 */
+  /** 语音转写：录音 blob → 文本。 */
   transcribe(audio: Blob): Promise<string>;
   /** 落库整份设置（分区分块改完再下发，避免每次点开关都打一次接口）。 */
   saveSettings(next: AppSettings): Promise<void>;
   /** 重新扫描本机 PATH 上的 Agent CLI，返回最新探测结果。 */
   rescanCli(): Promise<CliProbe[]>;
-  /** 测一次 SSH 连通性（握手 + 查目录），返回更新后的主机条目。 */
-  testSsh(id: string): Promise<SshHost>;
+  /** 测一次 SSH 连通性（握手 + 查目录），只回状态字段，由调用方合并。 */
+  testSsh(id: string): Promise<SshProbe>;
   /** 把工作区与设置恢复成初始状态，返回重置后的完整数据。 */
   reset(): Promise<WorkspaceData>;
 }
@@ -124,7 +153,7 @@ export const mockSource: WorkspaceSource = {
       sessions: clone(SESSIONS),
       threads: {
         [DEFAULT_SESSION_ID]: messages,
-        [DEFAULT_DM_ID]: messages.slice(0, 2),
+        lead: messages.slice(0, 2),
       },
       panel: clone(PANEL),
       roster: ROSTER.map((m) => ({ ...m })),
@@ -138,6 +167,7 @@ export const mockSource: WorkspaceSource = {
       },
       composer: clone(COMPOSER_DATA),
       settings: clone(settingsState),
+      focused: DEFAULT_SESSION_ID,
     };
   },
 
@@ -167,7 +197,7 @@ export const mockSource: WorkspaceSource = {
   },
 
   async savePolicy() {
-    /* 演示态不落库。接后端后这段逻辑搬进 httpSource.savePolicy。 */
+    /* 演示态不落库。真接口见 httpSource.savePolicy。 */
   },
 
   async transcribe() {
@@ -189,7 +219,7 @@ export const mockSource: WorkspaceSource = {
     await sleep(900);
     const host = settingsState.ssh.find((h) => h.id === id);
     if (!host) throw new Error(`unknown ssh host: ${id}`);
-    // 演示态：第一次点一律成功，给个像样的握手耗时
+    // 演示态：一律成功，给个像样的握手耗时
     const next: SshHost = {
       ...host,
       state: 'ok',
@@ -199,7 +229,7 @@ export const mockSource: WorkspaceSource = {
       ...settingsState,
       ssh: settingsState.ssh.map((h) => (h.id === id ? next : h)),
     };
-    return clone(next);
+    return { state: next.state, latencyMs: next.latencyMs };
   },
 
   async reset() {
@@ -208,66 +238,15 @@ export const mockSource: WorkspaceSource = {
   },
 };
 
-/* ── http 实现 ─────────────────────────────────────────────────────── */
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? '';
-
-/** 后端路由集中在这里，换路径只改这张表。 */
-const ROUTES = {
-  workspace: '/api/workspace',
-  messages: (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
-  policy: '/api/policy',
-  asr: '/api/asr/transcribe',
-  settings: '/api/settings',
-  cliRescan: '/api/settings/cli/rescan',
-  sshTest: (id: string) => `/api/settings/ssh/${encodeURIComponent(id)}/test`,
-  reset: '/api/workspace/reset',
-};
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      accept: 'application/json',
-      ...(init?.body ? { 'content-type': 'application/json' } : {}),
-      ...init?.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} → ${res.status}`);
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
-
-export const httpSource: WorkspaceSource = {
-  id: 'http',
-  load: () => request<WorkspaceData>(ROUTES.workspace),
-  send: (sessionId, out, opts) =>
-    request<Message[]>(ROUTES.messages(sessionId), {
-      method: 'POST',
-      body: JSON.stringify(out),
-      signal: opts?.signal,
-    }),
-  savePolicy: async (policy) => {
-    await request<void>(ROUTES.policy, { method: 'PUT', body: JSON.stringify(policy) });
-  },
-  saveSettings: async (next) => {
-    await request<void>(ROUTES.settings, { method: 'PUT', body: JSON.stringify(next) });
-  },
-  rescanCli: () => request<CliProbe[]>(ROUTES.cliRescan, { method: 'POST' }),
-  testSsh: (id) => request<SshHost>(ROUTES.sshTest(id), { method: 'POST' }),
-  reset: () => request<WorkspaceData>(ROUTES.reset, { method: 'POST' }),
-  transcribe: async (audio) => {
-    const body = new FormData();
-    body.append('audio', audio, 'voice.webm');
-    const res = await fetch(`${API_BASE}${ROUTES.asr}`, { method: 'POST', body });
-    if (!res.ok) throw new Error(`POST ${ROUTES.asr} → ${res.status}`);
-    const json = (await res.json()) as { text?: string };
-    return json.text ?? '';
-  },
-};
-
 /* ── 唯一开关 ─────────────────────────────────────────────────────── */
 
-/** 换后端：把这里改成 httpSource，或启动时设 VITE_WS_SOURCE=http。 */
-export const source: WorkspaceSource =
-  import.meta.env.VITE_WS_SOURCE === 'http' ? httpSource : mockSource;
+/** URL 上带 `?mock=1` 或 `#mock` 就切演示数据（设计评审 / 离线截图用）。 */
+function wantsMock(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (import.meta.env.VITE_WS_SOURCE === 'mock') return true;
+  const search = window.location.search;
+  return /[?&]mock=1\b/.test(search) || window.location.hash.includes('mock');
+}
+
+/** 换后端：改这里一行；演示态用 `?mock=1` 临时切，不必改代码。 */
+export const source: WorkspaceSource = wantsMock() ? mockSource : httpSource;

@@ -32,13 +32,20 @@ ShadowFlow 是一个 **contract-first（契约优先）的多智能体工作流�
 
 ```
 ShadowFlow/
-├── frontend/                     # 前端（React 18 + Vite，端口 3007）
+├── frontend/                     # 旧前端（React 18 + Vite，端口 3007）
 │   └── src/
 │       ├── neo/                  #   Neo 界面体系（NeoApp/NeoRail/NeoHost/NeoChat/Timeline + projections/）
 │       ├── core/  pages/         #   核心组件与设置 / 路由级页面（Dashboard/Knowledge/Memory/Schedules/Settings…）
 │       ├── components/           #   通用组件（composer/、knowledge/、run-session/…）
 │       ├── api/  store/  lib/    #   fetch 客户端 / Zustand store / 工具库
 │       └── AppRoutes.tsx         #   路由表
+├── frontend-paper/               # 新前端：论文四栏工作台（端口 3008，已接真后端）
+│   └── src/
+│       ├── data/                 #   ★ 唯一数据出入口：source.ts 契约 + http/（路由/映射/SSE）+ mock.ts
+│       ├── content/              #   全部中文文案（组件里不许写中文）
+│       ├── theme/                #   tokens.css（--tone-*）+ 三套风格
+│       ├── shell/  chat/  panel/  settings/  landing/
+│       └── styles/               #   base / shell / chat / panel / composer / settings / landing
 ├── backend/
 │   ├── node/                     # Node 网关（Express + better-sqlite3，端口 8002）
 │   │   ├── src/routes/           #   REST 路由，每文件一个 prefix（清单见 src/routes/AGENTS.md）
@@ -84,7 +91,7 @@ docker compose -f docker/docker-compose.yml up -d   # web :3000 / node :8002 / a
 ```bash
 # 1. JS 依赖（根 + server 两处）
 npm install
-cd server && npm install && cd ..
+cd backend/node && npm install && cd ..
 
 # 2. Python 后端（要完整功能才需要；Python >= 3.10）
 python -m venv .venv
@@ -94,14 +101,40 @@ python -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 # 可选依赖组：.[server] .[memory] .[mcp] .[lightrag] .[all]
 
-# 3. 一键启动全部三个服务
-npm run dev                   # 自动就绪探测 + 打开 http://localhost:3007
-npm run dev -- --no-python    # 只起网关 + 前端
+# 3. 一键启动（默认拉新前端 frontend-paper :3008 + Node :8002）
+npm run dev                   # http://localhost:3008
+npm run dev -- --legacy       # 回旧前端 http://localhost:3007
+npm run dev -- --mock         # 新前端 + 演示数据（不连后端，评审/截图用）
+npm run dev -- --no-python    # 不起 Python（单后端模式下本来也不起）
 ```
 
-启动器（`scripts/dev.mjs`）负责：拉起 Python(:8000) + Node(:8002) + Vite(:3007)，三个全部 HTTP 可达才开浏览器；Ctrl+C 或任一进程退出会停掉整棵进程树；端口被占用时启动前直接报错。Python 解释器探测顺序：`SF_PYTHON` 环境变量 > 根目录 `.venv` > 系统 `python`。
+启动器（`scripts/dev.mjs`）负责：拉起 Python(:8000) + Node(:8002) + Vite(:3007 或 3008)，三个全部 HTTP 可达才开浏览器；Ctrl+C 或任一进程退出会停掉整棵进程树；端口被占用时启动前直接报错。Python 解释器探测顺序：`SF_PYTHON` 环境变量 > 根目录 `.venv` > 系统 `python`。
 
 也可单独启动：`npm run dev:python` / `dev:server` / `dev:web`。
+
+### 两个前端
+
+| 目录 | 端口 | 说明 |
+|---|---|---|
+| `frontend/` | 3007 | 旧前端（Neo 工作台 + 宣传页），功能最全，暂保留为回退 |
+| `frontend-paper/` | 3008 | 新前端（论文四栏工作台），已接真后端，**后续主推** |
+
+新前端只有**一个数据出入口**：`frontend-paper/src/data/source.ts`。
+
+- `httpSource`（`src/data/http/`）负责拼装既有 `/api` 端点 → `WorkspaceData`；
+  后端路由表在 `client.ts` 的 `ROUTES`，字段映射在 `mappers.ts`。
+  **接新后端只改这两个文件，组件不动。**
+- `mockSource` 读 `data/mock.ts`，用 `?mock=1` 或 `VITE_WS_SOURCE=mock` 切。
+- 三条守卫由 `npm run check --prefix frontend-paper` 把关：组件不许写色值、
+  不许写中文文案、不许自己 `fetch` 后端（只有 `data/http/` 认识 `/api`）。
+
+发消息是「两段式」：`POST /api/groups/:id/messages` 只回存好的那条，
+agent 回复从 `GET /api/groups/:id/events`（SSE）推过来 —— 所以「发送中」
+在有推送的源上要等第一帧才收尾，`npm run check` 不覆盖这条，改动时手动验一遍。
+
+生产镜像：`docker/Dockerfile.paper`（把 compose 里 `shadowflow-web` 的
+dockerfile 从 `Dockerfile.web` 换掉即可，端口与其他配置不动）。
+
 
 **API Key 约定（BYOK）**：key 粘贴在网页界面里，存浏览器 localStorage；`.env` 只作服务端兜底。**永远不要提交真实 key**（历史上泄露过一次，key 已作废，勿重蹈覆辙）。
 

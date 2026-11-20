@@ -29,11 +29,18 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const IS_WIN = process.platform === 'win32';
 
-const WEB_PORT = 3007;
 const GW_PORT = 8002;
 const PY_PORT = 8000;
 
 const args = new Set(process.argv.slice(2));
+
+// --paper：跑新版论文前端（frontend-paper，端口 3008，直接连 8002；
+// 旧前端 3007 保持可用，随时可回退）。--mock 让它用演示数据（不连后端）。
+// 新前端已是默认（--legacy 回旧前端，--mock 用演示数据）
+const PAPER = !args.has('--legacy');
+const PAPER_MOCK = PAPER && args.has('--mock');
+const WEB_PORT = PAPER ? 3008 : 3007;
+
 const OPEN_BROWSER = !args.has('--no-open');
 const SINGLE_BACKEND = (process.env.SF_BACKEND_MODE ?? '').trim().toLowerCase() === 'single';
 // single 模式不启 Python；--no-python 仍可单独用于 legacy 调试。
@@ -279,7 +286,7 @@ async function main() {
   console.log(`
 ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.reset}
   ────────────────────────────────────────────
-  ${C.cyan}UI${C.reset}      ${uiUrl}
+  ${C.cyan}UI${C.reset}      ${uiUrl}${C.dim}  ${PAPER ? (PAPER_MOCK ? 'frontend-paper · 演示数据' : 'frontend-paper · 接后端') : 'frontend'}${C.reset}
   ${C.cyan}网关${C.reset}    http://localhost:${GW_PORT}/health
   ${C.cyan}模式${C.reset}    ${SINGLE_BACKEND ? `${C.green}单后端 (SF_BACKEND_MODE=single)${C.reset}` : `${C.dim}双后端 legacy${C.reset}`}${SINGLE_BACKEND ? `\n  ${C.dim}剩余缺口: http://localhost:${GW_PORT}/health/backend-gaps${C.reset}` : ''}
   ${withPython ? `${C.cyan}Python${C.reset}  http://localhost:${PY_PORT}/docs` : `${C.dim}Python  已跳过${C.reset}`}
@@ -317,10 +324,17 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
     'watch', 'src/index.ts',
   ], { cwd: path.join(ROOT, 'backend', 'node') });
   console.log(`${C.dim}  [gw] tsx watch backend/node/src/index.ts${C.reset}`);
+  const webDir = path.join(ROOT, PAPER ? 'frontend-paper' : 'frontend');
   launch('web', C.web, process.execPath, [
-    path.join('node_modules', 'vite', 'bin', 'vite.js'),
-  ], { cwd: path.join(ROOT, 'frontend'), env: { SF_DEV_OPEN: '0' } }); // vite 不自己开浏览器,由本启动器统一在就绪后开
-  console.log(`${C.dim}  [web] vite${C.reset}\n`);
+    path.join(webDir, 'node_modules', 'vite', 'bin', 'vite.js'),
+  ], {
+    cwd: webDir,
+    env: {
+      SF_DEV_OPEN: '0', // vite 不自己开浏览器,由本启动器统一在就绪后开
+      ...(PAPER ? { VITE_WS_SOURCE: PAPER_MOCK ? 'mock' : 'http' } : {}),
+    },
+  });
+  console.log(`${C.dim}  [web] vite (${PAPER ? 'frontend-paper' : 'frontend'})${C.reset}\n`);
 
   // 3) 就绪探测(任一进程死掉会走 exit handler 直接收摊,这里只会等超时)
   const waiting = [

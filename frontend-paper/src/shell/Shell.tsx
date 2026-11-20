@@ -5,7 +5,7 @@
  * `data/useWorkspace()`；数据源是 mock 还是 http 由 `data/source.ts` 决定，
  * 这里不认识任何一个具体数据文件。文案仍在 `content/app.ts`。
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Rail } from './Rail';
 import { SessionList } from './SessionList';
 import { ChatArea } from './ChatArea';
@@ -13,7 +13,7 @@ import { AgentPanel } from './AgentPanel';
 import { SettingsSheet, type SettingsSection } from '../settings/SettingsSheet';
 import { CHAT, DEMO } from '../content/app';
 import type { Outbound } from '../data/types';
-import { DEFAULT_DM_ID, DEFAULT_SESSION_ID } from '../data/source';
+import { DEFAULT_SESSION_ID } from '../data/source';
 import { useWorkspace } from '../data/useWorkspace';
 import { downloadJson } from '../ui/download';
 
@@ -25,6 +25,8 @@ export function Shell({ onExit }: { onExit: () => void }) {
     send,
     sending,
     stop,
+    watch,
+    focus,
     transcribe,
     savePolicy,
     patchSettings,
@@ -34,6 +36,10 @@ export function Shell({ onExit }: { onExit: () => void }) {
     reset,
     reload,
   } = useWorkspace();
+  /**
+   * 演示态的默认会话；接真后端时这个 id 不存在，会自动回落到列表第一条
+   * （消息按**解析出来的** session.id 取，所以回落也不会串号）。
+   */
   const [activeId, setActiveId] = useState(DEFAULT_SESSION_ID);
   const [panelOpen, setPanelOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -45,13 +51,34 @@ export function Shell({ onExit }: { onExit: () => void }) {
     () => data?.sessions.find((s) => s.id === activeId) ?? data?.sessions[0],
     [data, activeId],
   );
-  const messages = useMemo(() => data?.threads[activeId] ?? [], [data, activeId]);
+  /** 消息永远跟着**解析出来的**会话走（activeId 可能是空或已失效的旧 id）。 */
+  const messages = useMemo(
+    () => (session ? (data?.threads[session.id] ?? []) : []),
+    [data, session],
+  );
 
-  const openDm = useCallback(() => setActiveId(DEFAULT_DM_ID), []);
+  const openDm = useCallback(() => {
+    const dm = data?.sessions.find((s) => s.kind === 'dm');
+    if (dm) setActiveId(dm.id);
+  }, [data]);
+
+  const select = useCallback((id: string) => setActiveId(id), []);
+
+  // 切会话：右栏那块（编队 / 策略 / 工作流 / 执行）跟着换。
+  // 数据里记着这四块属于哪条会话（`focused`），不一致才重取，首屏不重复拉。
+  useEffect(() => {
+    if (session && data && data.focused !== session.id) focus(session.id);
+  }, [session?.id, data?.focused, focus]);
+
+  // 订阅当前会话的后续消息（真后端走 SSE；演示态没有订阅，等于空操作）
+  useEffect(() => {
+    if (!session) return;
+    return watch(session.id);
+  }, [session?.id, watch]);
 
   const sendOut = useCallback(
-    (out: Outbound) => send(activeId, out),
-    [activeId, send],
+    (out: Outbound) => (session ? send(session.id, out) : Promise.resolve()),
+    [session, send],
   );
 
   /** 导出：把当前工作区（会话 / 策略 / 设置）落成一个 JSON 文件。 */
@@ -75,9 +102,12 @@ export function Shell({ onExit }: { onExit: () => void }) {
           {status === 'error' ? CHAT.loadError(error ?? '') : CHAT.loading}
         </span>
         {status === 'error' ? (
-          <button className="shell-boot-retry" onClick={reload}>
-            {CHAT.retry}
-          </button>
+          <>
+            <span className="shell-boot-hint">{CHAT.loadErrorHint}</span>
+            <button className="shell-boot-retry" onClick={reload}>
+              {CHAT.retry}
+            </button>
+          </>
         ) : null}
         <button className="shell-back" onClick={onExit} title={CHAT.backHome}>
           {CHAT.home}
@@ -91,8 +121,8 @@ export function Shell({ onExit }: { onExit: () => void }) {
       <Rail onOpenSettings={() => setSettingsOpen(true)} />
       <SessionList
         sessions={data.sessions}
-        activeId={activeId}
-        onSelect={setActiveId}
+        activeId={session.id}
+        onSelect={select}
         onNew={openDm}
         onCollapse={openDm}
         currentAgent={DEMO.leadAuthor}
@@ -106,7 +136,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
         onModelChange={setModelId}
         sending={sending}
         onSend={sendOut}
-        onStop={stop}
+        onStop={() => stop(session.id)}
         transcribe={transcribe}
         onInspect={() => setPanelOpen(true)}
         panelOpen={panelOpen}

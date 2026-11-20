@@ -67,6 +67,8 @@ services:
   shadowflow-web:
     build:
       context: ..
+      # 换新前端（论文四栏工作台）：把下一行改成 docker/Dockerfile.paper，
+      # 端口 / 反代 / 依赖关系全都不用动。
       dockerfile: docker/Dockerfile.web
     image: shadowflow/web:dev
     container_name: shadowflow-web

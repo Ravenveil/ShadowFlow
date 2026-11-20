@@ -89,7 +89,8 @@ export function AgentPanel({
   };
 
   const doneSteps = panel.steps.filter((s) => s.done).length;
-  const pct = Math.round((doneSteps / panel.steps.length) * 100);
+  // 0 步时别算出 NaN%（真后端新会话就是这种情况）
+  const pct = panel.steps.length ? Math.round((doneSteps / panel.steps.length) * 100) : 0;
   const running = panel.steps.some((s) => !s.done);
 
   return (
@@ -98,7 +99,7 @@ export function AgentPanel({
         <span className="panel-head-title">{PANEL_COPY.title}</span>
         <span className="panel-head-live">
           <i aria-hidden />
-          {running ? PANEL_COPY.liveRunning : PANEL_COPY.liveDone}
+          {!panel.steps.length ? PANEL_COPY.liveIdle : running ? PANEL_COPY.liveRunning : PANEL_COPY.liveDone}
         </span>
         {onClose ? (
           <button className="sf-icon-btn" onClick={onClose} title={PANEL_COPY.close} aria-label={PANEL_COPY.close}>
@@ -152,6 +153,7 @@ export function AgentPanel({
                 {PANEL_COPY.viewDag}
               </button>
             </div>
+            {panel.steps.length ? (
             <ol className="panel-steps">
               {panel.steps.map((s, i) => (
                 <li key={s.label} data-done={s.done ? 'true' : undefined}>
@@ -173,6 +175,11 @@ export function AgentPanel({
                 </li>
               ))}
             </ol>
+            ) : (
+              <div className="panel-empty">
+                <p>{PANEL_COPY.emptyRun}</p>
+              </div>
+            )}
 
             <div className="panel-sec">
               <div className="panel-sec-head">

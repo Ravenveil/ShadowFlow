@@ -72,6 +72,7 @@ export const CHAT = {
   home: '首页',
   loading: '正在加载工作台…',
   loadError: (reason: string) => `工作台加载失败：${reason}`,
+  loadErrorHint: '后端没起或端口不对？检查 :8002 是否在跑；只想看界面可用 ?mock=1 切演示数据。',
   retry: '重试',
 };
 
@@ -155,10 +156,17 @@ export const RUN = {
   allDone: '全部完成',
 };
 
+/** 群成员在 Agent 名册里已经找不到时的占位（历史群常见：成员被删但 group 还引用着）。 */
+export const ROSTER_MISSING = {
+  name: (tail: string) => `成员 ${tail}`,
+  role: '已不在名册',
+};
+
 export const PANEL = {
   title: '执行详情',
   liveRunning: '运行中',
   liveDone: '已完成',
+  liveIdle: '待命',
   close: '收起面板',
   tabsLabel: '面板分区',
   /**
@@ -177,6 +185,8 @@ export const PANEL = {
   elapsed: (v: string) => `耗时 ${v}`,
   stepsDone: (done: number, total: number) => `${done} / ${total} 步已交`,
   stepsSection: (n: number) => `步骤 · ${n}`,
+  /** 这条会话还没有任何交付时，步骤区给一句话，而不是空白。 */
+  emptyRun: '这条会话还没有执行记录。发一条指令，主控拆完步骤就会出现在这里。',
   viewDag: '查看编队',
   usageTitle: '用量',
   usageMeta: '本会话',

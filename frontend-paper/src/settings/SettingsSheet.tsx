@@ -23,7 +23,8 @@ import {
   IconTerminal,
   IconUser,
 } from '../shell/icons';
-import type { AppSettings, CliProbe, SshHost } from '../data/types';
+import type { AppSettings, CliProbe } from '../data/types';
+import type { SshProbe } from '../data/source';
 import { AppearanceSection } from './sections/AppearanceSection';
 import { CliSection } from './sections/CliSection';
 import { CollabSection } from './sections/CollabSection';
@@ -78,7 +79,7 @@ export interface SettingsSheetProps {
   saving: boolean;
   onPatch: (patch: Partial<AppSettings>) => void;
   onRescanCli: () => Promise<CliProbe[]>;
-  onTestSsh: (id: string) => Promise<SshHost>;
+  onTestSsh: (id: string) => Promise<SshProbe>;
   onExport: () => void;
   onReset: () => Promise<void>;
 }
@@ -200,7 +201,7 @@ function renderSection(
     settings: AppSettings;
     onPatch: (patch: Partial<AppSettings>) => void;
     onRescanCli: () => Promise<CliProbe[]>;
-    onTestSsh: (id: string) => Promise<SshHost>;
+    onTestSsh: (id: string) => Promise<SshProbe>;
     onExport: () => void;
     onReset: () => Promise<void>;
   },

@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1
+# ShadowFlow Paper Web —— 新版论文工作台（frontend-paper）→ nginx
+#
+# 与 Dockerfile.web 的差别只有「构建哪个目录」：
+#   Dockerfile.web    frontend/        （旧前端，Neo 工作台）
+#   Dockerfile.paper  frontend-paper/  （新前端，四栏论文工作台）
+# 运行期完全一样：静态站点 + /api 反代 shadowflow-node:8002（SSE 不缓冲）。
+#
+# 切生产：把 docker-compose.yml 里 shadowflow-web 的 dockerfile 从
+#   docker/Dockerfile.web  改成  docker/Dockerfile.paper
+# 其余不动（端口 3000、健康检查、网络都在 compose 里）。
+
+FROM node:20.14.0-alpine AS builder
+
+WORKDIR /app
+
+# frontend-paper 不维护 package-lock（node_modules 在仓库里是指向 frontend 的
+# junction，不能进镜像），所以用 npm install 而非 npm ci。
+COPY frontend-paper/package.json ./frontend-paper/
+RUN cd frontend-paper && npm install --no-audit --no-fund
+
+COPY frontend-paper/tsconfig.json frontend-paper/vite.config.ts frontend-paper/index.html ./frontend-paper/
+COPY frontend-paper/src ./frontend-paper/src
+
+# 直接调 vite：容器里不必跑 tsc（类型与约定由 `npm run check` 在 CI 把关）。
+RUN cd frontend-paper && npx vite build
+
+
+FROM nginx:1.27.4-alpine AS runtime
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# 注意 location /api/ 里的 proxy_buffering off —— 群聊回复走 SSE，
+# 缓冲会让「消息一条条冒出来」变成「最后一次性出现」。
+# 这里显式写死 Connection "" 以支持 HTTP/1.1 长连接。
+RUN cat > /etc/nginx/conf.d/default.conf <<'NGINXCONF'
+server {
+  listen 3000;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  client_max_body_size 100m;
+
+  location /api/ {
+    proxy_pass http://shadowflow-node:8002;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+NGINXCONF
+
+COPY --from=builder /app/frontend-paper/dist /usr/share/nginx/html
+RUN chown -R appuser:appgroup /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
+    && (chown appuser:appgroup /var/run 2>/dev/null || true)
+
+USER appuser
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

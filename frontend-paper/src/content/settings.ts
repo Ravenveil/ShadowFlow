@@ -5,8 +5,7 @@
  * 分区顺序、分组归属、选项文案都在这里改；值在 `data/mock.ts`。
  */
 
-/** 导航分组。id 决定渲染哪个分区组件（见 settings/SettingsSheet.tsx 的 REGISTRY）。 */
-export const SETTINGS_NAV = {
+/** 导航分组。id 决定渲染哪个分区组件（见 settings/SettingsSheet.tsx 的 REGISTRY）。 */export const SETTINGS_NAV = {
   title: '设置',
   sub: '偏好保存在本机，换设备不会同步',
   close: '关闭',
@@ -227,14 +226,39 @@ export const SETTINGS_COPY = {
     exportBtn: '导出',
     exporting: '打包中…',
     exported: '已开始下载',
-    resetTitle: '重置演示数据',
-    resetNote: '把会话、策略与设置恢复成初始状态，不可撤销。',
-    resetBtn: '重置',
-    resetConfirm: '再点一次确认重置',
-    resetDone: '已重置为初始数据',
+    resetTitle: '重新载入工作区',
+    resetNote: '从后端重新拉一遍会话、策略与设置；不动任何服务端数据。',
+    resetBtn: '重新载入',
+    resetConfirm: '再点一次确认重载',
+    resetDone: '已重新载入',
     aboutTitle: '关于',
     version: '版本 0.4.2',
-    build: '构建 2026-11-20 · 本地演示数据',
+    build: '构建 2026-11-20',
     docs: '使用文档',
   },
 } as const;
+
+/**
+ * 后端 provider id → 展示名。后端只存 id（`zhipu` / `mimo` …），
+ * 中文名与色调属于文案，放在这里；映射层查不到就回落成 id 本身。
+ */
+export const PROVIDER_LABEL: Record<string, { name: string; vendor: string; tone: string }> = {
+  zhipu: { name: '智谱 GLM', vendor: '智谱 AI', tone: 'blue' },
+  anthropic: { name: 'Claude', vendor: 'Anthropic', tone: 'amber' },
+  openai: { name: 'OpenAI', vendor: 'OpenAI', tone: 'green' },
+  deepseek: { name: 'DeepSeek', vendor: '深度求索', tone: 'violet' },
+  mimo: { name: 'MiMo', vendor: '小米', tone: 'teal' },
+  moonshot: { name: 'Kimi', vendor: '月之暗面', tone: 'pink' },
+  qwen: { name: '通义千问', vendor: '阿里云', tone: 'slate' },
+};
+
+/** 本地 CLI id → 展示名（后端探测只回 id 与版本，名字是文案）。 */
+export const CLI_LABEL: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex CLI',
+  gemini: 'Gemini CLI',
+  opencode: 'OpenCode',
+  cursor: 'Cursor CLI',
+  aider: 'Aider',
+  autoresearchclaw: 'Auto Research',
+};

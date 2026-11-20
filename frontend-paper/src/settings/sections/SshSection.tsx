@@ -16,6 +16,7 @@ import {
 } from '../../shell/icons';
 import { SETTINGS_COPY } from '../../content/settings';
 import type { SshHost } from '../../data/types';
+import type { SshProbe } from '../../data/source';
 import { useFlash } from '../primitives';
 import type { SectionProps } from '../types';
 
@@ -42,7 +43,7 @@ export function SshSection({
   settings,
   onPatch,
   onTest,
-}: SectionProps & { onTest: (id: string) => Promise<SshHost> }) {
+}: SectionProps & { onTest: (id: string) => Promise<SshProbe> }) {
   const { ssh } = settings;
   const [flash, setFlash] = useFlash(2600);
   const [busy, setBusy] = useState<string | null>(null);

@@ -27,7 +27,9 @@ export default defineConfig({
     // without a JS crash. Pulling up the legacy FastAPI side would require a
     // full pip install on the runner, and its absence is already allowlisted
     // by the spec (ERR_CONNECTION_REFUSED / net::ERR).
-    command: 'npm --prefix .. run dev -- --no-python --no-open',
+    // --legacy：统一启动器默认已切到新前端（frontend-paper :3008），
+    // 这套 smoke 断言的是旧前端的路由，显式要旧的。
+    command: 'npm --prefix .. run dev -- --legacy --no-python --no-open',
     url: DEV_URL,
     reuseExistingServer: !process.env.CI,
     // vite cold start + tsx compiling the gateway; 30s was too tight on a

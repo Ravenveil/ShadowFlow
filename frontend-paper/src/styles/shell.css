@@ -98,6 +98,15 @@
   color: var(--ink-3);
 }
 
+/* 加载失败时的一句排查提示（后端没起 / 端口不对 / 想切演示数据） */
+.shell-boot-hint {
+  max-width: 380px;
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
 .shell-boot-retry {
   height: 30px;
   padding: 0 15px;
