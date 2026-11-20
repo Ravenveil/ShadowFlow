@@ -203,15 +203,71 @@ export function toPolicy(matrix?: Record<string, Record<string, string>> | null)
   return out;
 }
 
-const NODE_W = 140;
-const NODE_H = 44;
+/*
+ * 存图坐标是「画布自由布局」（ReactFlow 里能拖到 1600 宽），右栏只有 300 出头。
+ * 原样塞进去会被 viewBox 整体缩小 —— 节点变成小色块、字糊成两三个像素。
+ * 所以这里做一次**列压缩**：把 x 相近的节点归成一列，列内按 y 排序等距排，
+ * 列宽按画布平均分；拓扑（谁接谁、并行分支）完全不变，只是把间距收紧。
+ */
+const DESIGN_W = 308;
+const PAD = 12;
+const GAP_X = 10;
+const NODE_H = 40;
+const GAP_Y = 18;
+/** 两个 x 差多少以内算同一列。 */
+const COL_TOLERANCE = 48;
+
+interface Parsed {
+  node: DagNodeDef;
+  x?: number;
+  y?: number;
+}
+
+/** 列压缩：返回每个节点在设计坐标里的位置 + 画布高度。 */
+function compactLayout(parsed: Parsed[]): { boxes: Map<string, { x: number; y: number; w: number; h: number }>; h: number } {
+  const boxes = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const positioned = parsed.filter((p) => p.x !== undefined && p.y !== undefined);
+  if (!positioned.length) return { boxes, h: 348 };
+
+  const xs = [...new Set(positioned.map((p) => p.x as number))].sort((a, b) => a - b);
+  const colStarts: number[] = [];
+  for (const x of xs) {
+    const last = colStarts[colStarts.length - 1];
+    if (last === undefined || x - last > COL_TOLERANCE) colStarts.push(x);
+  }
+  const colOf = (x: number): number => {
+    let idx = 0;
+    colStarts.forEach((start, i) => {
+      if (x >= start) idx = i;
+    });
+    return idx;
+  };
+
+  const cols = Math.min(colStarts.length, 3);
+  const colW = Math.floor((DESIGN_W - PAD * 2 - GAP_X * (cols - 1)) / cols);
+  const rowsInCol: number[] = new Array(cols).fill(0);
+  let maxRows = 0;
+
+  // 按原 y 排序，保证同列内上下关系不变
+  for (const p of [...positioned].sort((a, b) => (a.y as number) - (b.y as number))) {
+    const col = Math.min(colOf(p.x as number), cols - 1);
+    const row = rowsInCol[col]++;
+    maxRows = Math.max(maxRows, rowsInCol[col]);
+    boxes.set(p.node.id, {
+      x: PAD + col * (colW + GAP_X),
+      y: PAD + row * (NODE_H + GAP_Y),
+      w: colW,
+      h: NODE_H,
+    });
+  }
+
+  return { boxes, h: PAD * 2 + maxRows * (NODE_H + GAP_Y) - GAP_Y };
+}
 
 /** 画布节点是存储形（ReactFlow 风格），这里只取画得出来的部分。 */
 export function toDag(workflow: WorkflowDto | null | undefined, roster: RosterMember[]): DagDataset {
   const roleOf = new Map(roster.map((m) => [m.id, m]));
-  const nodes: DagNodeDef[] = [];
-  let maxX = 0;
-  let maxY = 0;
+  const parsed: Parsed[] = [];
 
   for (const raw of workflow?.nodes ?? []) {
     if (!raw || typeof raw !== 'object') continue;
@@ -220,28 +276,33 @@ export function toDag(workflow: WorkflowDto | null | undefined, roster: RosterMe
     if (!id) continue;
     const data = (n.data && typeof n.data === 'object' ? n.data : {}) as Record<string, unknown>;
     const owner = str(pick(data.agentId, n.agentId, data.agent_id, n.agent_id));
-    const label = str(pick(data.label, n.label, data.name, n.name)) || roleOf.get(owner)?.role || id;
+    const rawLabel = str(pick(data.label, n.label, data.name, n.name));
+    // 「Researcher · 文献侦察」在窄节点里只剩「R · …」；有中文角色名就只用角色名
+    const tail = rawLabel.includes('·') ? rawLabel.split('·').pop()?.trim() : '';
+    const label = tail || rawLabel || roleOf.get(owner)?.role || id;
     const pos = (n.position && typeof n.position === 'object' ? n.position : null) as
       | Record<string, unknown>
       | null;
-    const x = typeof pos?.x === 'number' ? pos.x : undefined;
-    const y = typeof pos?.y === 'number' ? pos.y : undefined;
-    const w = typeof n.width === 'number' ? n.width : NODE_W;
-    const h = typeof n.height === 'number' ? n.height : NODE_H;
-    if (x !== undefined && y !== undefined) {
-      maxX = Math.max(maxX, x + w);
-      maxY = Math.max(maxY, y + h);
-    }
-    nodes.push({
-      id,
-      label,
-      owner: owner || 'lead',
-      role: roleOf.get(owner)?.role ?? '',
-      // 静态存图没有运行态；真正在跑的状态由 SSE 帧更新（后续接）。
-      status: 'wait',
-      layout: x !== undefined && y !== undefined ? { x, y, w, h } : undefined,
+
+    parsed.push({
+      node: {
+        id,
+        label,
+        owner: owner || 'lead',
+        role: roleOf.get(owner)?.role ?? '',
+        // 静态存图没有运行态；真正在跑的状态由 SSE 帧更新（后续接）。
+        status: 'wait',
+      },
+      x: typeof pos?.x === 'number' ? pos.x : undefined,
+      y: typeof pos?.y === 'number' ? pos.y : undefined,
     });
   }
+
+  const { boxes, h } = compactLayout(parsed);
+  const nodes = parsed.map((p) => ({
+    ...p.node,
+    layout: boxes.get(p.node.id),
+  }));
 
   const edges: DagEdgeDef[] = [];
   for (const raw of workflow?.edges ?? []) {
@@ -259,7 +320,7 @@ export function toDag(workflow: WorkflowDto | null | undefined, roster: RosterMe
   }
 
   return {
-    canvas: { w: Math.max(308, Math.ceil(maxX + 16)), h: Math.max(348, Math.ceil(maxY + 16)) },
+    canvas: { w: DESIGN_W, h: Math.max(348, Math.ceil(h)) },
     nodes,
     edges,
   };

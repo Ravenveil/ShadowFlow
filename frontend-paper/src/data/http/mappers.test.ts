@@ -156,29 +156,43 @@ describe('编队 / 策略 / 工作流', () => {
     expect(toPolicy(undefined)).toEqual({});
   });
 
-  it('DAG 兼容包装形与裸形节点，缺失坐标就不给 layout', () => {
+  it('DAG 兼容包装形与裸形节点，并把存图坐标压进 308 宽的右栏', () => {
     const dag = toDag(
       {
         nodes: [
-          { id: 'n1', data: { agentId: 'a1', label: '解析' }, position: { x: 10, y: 20 } },
-          { id: 'n2', agentId: 'a2', label: '写作' },
+          { id: 'n1', data: { agentId: 'a1', label: 'Researcher · 文献侦察' }, position: { x: 40, y: 30 } },
+          { id: 'n2', agentId: 'a2', label: '写作', position: { x: 820, y: 30 } },
+          { id: 'n3', position: { x: 40, y: 260 } },
           { id: 'bad' },
         ],
         edges: [
           { source: 'n1', target: 'n2', data: { mode: 'approve', label: '待批' } },
-          { from: 'n2', to: 'n1' },
+          { from: 'n2', to: 'n3' },
           { source: 'x' },
         ],
       },
       toRoster(agents, group),
     );
-    expect(dag.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'bad']);
-    expect(dag.nodes[0].layout).toEqual({ x: 10, y: 20, w: 140, h: 44 });
-    expect(dag.nodes[1].layout).toBeUndefined();
+
+    expect(dag.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3', 'bad']);
+    // 有「·」的标题只留角色名：窄节点里才读得出来
+    expect(dag.nodes[0].label).toBe('文献侦察');
+    expect(dag.nodes[0].owner).toBe('a1');
+    // 无坐标的节点不编坐标，交给组件竖排
+    expect(dag.nodes[3].layout).toBeUndefined();
+
+    // 两列压进 308：都在画布内，且右侧那列确实在右边
+    const [b1, b2, b3] = dag.nodes.map((n) => n.layout!);
+    expect(b1.x).toBeLessThan(b2.x);
+    for (const b of [b1, b2, b3]) {
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.w).toBeLessThanOrEqual(308);
+    }
     expect(dag.edges).toHaveLength(2);
     expect(dag.edges[0]).toMatchObject({ from: 'n1', to: 'n2', mode: 'approve', label: '待批' });
     expect(dag.edges[1].mode).toBe('direct');
-    expect(dag.canvas.w).toBeGreaterThanOrEqual(308);
+    expect(dag.canvas.w).toBe(308);
+    expect(dag.canvas.h).toBeGreaterThanOrEqual(348);
   });
 
   it('空工作流给空画布，不崩', () => {
