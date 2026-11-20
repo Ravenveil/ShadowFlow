@@ -12,14 +12,18 @@ import { ChatArea } from './ChatArea';
 import { AgentPanel } from './AgentPanel';
 import { Settings } from './Settings';
 import { CHAT, DEMO } from '../content/app';
+import type { Outbound } from '../data/types';
 import { DEFAULT_DM_ID, DEFAULT_SESSION_ID } from '../data/source';
 import { useWorkspace } from '../data/useWorkspace';
 
 export function Shell({ onExit }: { onExit: () => void }) {
-  const { data, status, error, send, savePolicy, reload } = useWorkspace();
+  const { data, status, error, send, sending, stop, transcribe, savePolicy, reload } =
+    useWorkspace();
   const [activeId, setActiveId] = useState(DEFAULT_SESSION_ID);
   const [panelOpen, setPanelOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** 选中的模型 id；空表示还没选过，用数据里的第一个。 */
+  const [modelId, setModelId] = useState<string | null>(null);
 
   const session = useMemo(
     () => data?.sessions.find((s) => s.id === activeId) ?? data?.sessions[0],
@@ -28,6 +32,11 @@ export function Shell({ onExit }: { onExit: () => void }) {
   const messages = useMemo(() => data?.threads[activeId] ?? [], [data, activeId]);
 
   const openDm = useCallback(() => setActiveId(DEFAULT_DM_ID), []);
+
+  const sendOut = useCallback(
+    (out: Outbound) => send(activeId, out),
+    [activeId, send],
+  );
 
   if (!data || !session) {
     return (
@@ -61,7 +70,15 @@ export function Shell({ onExit }: { onExit: () => void }) {
       <ChatArea
         session={session}
         messages={messages}
-        onSend={(text) => void send(activeId, text)}
+        roster={data.roster}
+        composer={data.composer}
+        model={modelId ?? data.composer.models[0]?.id ?? ''}
+        onModelChange={setModelId}
+        sending={sending}
+        onSend={sendOut}
+        onStop={stop}
+        transcribe={transcribe}
+        onInspect={() => setPanelOpen(true)}
         panelOpen={panelOpen}
         onTogglePanel={() => setPanelOpen((v) => !v)}
       />

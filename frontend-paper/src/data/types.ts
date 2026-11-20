@@ -60,6 +60,10 @@ export interface Message {
   run?: RunPayload;
   team?: TeamPayload;
   artifacts?: ArtifactPayload[];
+  /** 这条消息带上的附件（用户气泡里显示成小 chip）。 */
+  attachments?: AttachmentRef[];
+  /** 这条消息引用的知识包 id（显示成小 chip）。 */
+  knowledge?: string[];
 }
 
 export interface Session {
@@ -161,4 +165,64 @@ export interface PanelSummary {
   artifacts: ArtifactPayload[];
   subAgents: { name: string; state: 'ready' | 'busy' | 'off' }[];
   approval?: PanelApproval;
+}
+
+/* ── 输入框（composer）：模型 / 命令 / 知识包 / 附件 ───────────────── */
+
+/** 一个可选模型。分组名相同者排在一起（CLI 与 API 两大类）。 */
+export interface ModelRef {
+  id: string;
+  label: string;
+  group: string;
+  /** 副标题：版本、厂商、备注。 */
+  note?: string;
+}
+
+/**
+ * 斜杠命令。两种行为二选一：
+ *   insert —— 把模板文字插进输入框（用户再补细节）
+ *   action —— 直接做一件事（清空 / 打开帮助 / 跳到执行面板）
+ */
+export interface ComposerCommand {
+  id: string;
+  /** 含斜杠的命令名，如 `/clear`。 */
+  name: string;
+  desc: string;
+  insert?: string;
+  action?: 'clear' | 'help' | 'inspect';
+}
+
+/** 知识包（多模态记忆库里的一包文档），勾选后随消息检索注入。 */
+export interface KnowledgePack {
+  id: string;
+  name: string;
+  desc?: string;
+  /** 包内文档数。 */
+  docs: number;
+}
+
+/** 输入框所需的全部可选资源，随工作台一次取回。 */
+export interface ComposerData {
+  models: ModelRef[];
+  commands: ComposerCommand[];
+  knowledge: KnowledgePack[];
+}
+
+/** 已选附件。演示态只带名字与本地预览；接后端时换成上传后的 id。 */
+export interface AttachmentRef {
+  id: string;
+  name: string;
+  kind: 'image' | 'file';
+  /** 图片的本地预览地址（object URL），非图片没有。 */
+  preview?: string;
+  size: string;
+}
+
+/** 一次发送携带的内容。 */
+export interface Outbound {
+  text: string;
+  attachments?: AttachmentRef[];
+  /** 本轮勾选的知识包 id。 */
+  knowledge?: string[];
+  model?: string;
 }

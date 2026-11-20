@@ -14,6 +14,7 @@
  */
 import { DEMO } from '../content/app';
 import {
+  COMPOSER_DATA,
   DAG_CANVAS,
   DAG_EDGES,
   DAG_NODES,
@@ -24,8 +25,10 @@ import {
   SESSIONS,
 } from './mock';
 import type {
+  ComposerData,
   DagDataset,
   Message,
+  Outbound,
   PanelSummary,
   PolicyMatrix,
   RosterMember,
@@ -45,22 +48,48 @@ export interface WorkspaceData {
   roster: RosterMember[];
   policy: PolicyMatrix;
   dag: DagDataset;
+  /** 输入框的可选资源：模型 / 命令 / 知识包。 */
+  composer: ComposerData;
 }
 
 /** 数据源契约。所有方法异步，失败用 reject 表达，由 useWorkspace 统一兜。 */
 export interface WorkspaceSource {
   readonly id: 'mock' | 'http';
   load(): Promise<WorkspaceData>;
-  /** 发一条消息，resolve 出**要追加到会话尾部**的消息（自己的那条 + 对方应答）。 */
-  send(sessionId: string, text: string): Promise<Message[]>;
+  /**
+   * 发一条消息，resolve 出**要追加到会话尾部**的消息（自己的那条 + 对方应答）。
+   * `signal` 用于「停止生成」：中止后不再追加任何消息。
+   */
+  send(sessionId: string, out: Outbound, opts?: { signal?: AbortSignal }): Promise<Message[]>;
   /** 落库策略矩阵；演示态不下发，只保留签名。 */
   savePolicy(policy: PolicyMatrix): Promise<void>;
+  /** 语音转写：录音 blob → 文本。演示态返回一段示例话术。 */
+  transcribe(audio: Blob): Promise<string>;
 }
 
 /* ── mock 实现 ─────────────────────────────────────────────────────── */
 
 /** 深拷贝，避免组件改到模块级常量（策略矩阵是会被点的）。 */
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/** 可被 AbortSignal 打断的等待（模拟后端思考耗时，「停止生成」靠它生效）。 */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('aborted', 'AbortError'));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException('aborted', 'AbortError'));
+      },
+      { once: true },
+    );
+  });
+}
 
 function stamp(): { id: string; time: string } {
   const d = new Date();
@@ -90,26 +119,42 @@ export const mockSource: WorkspaceSource = {
         nodes: DAG_NODES.map((n) => ({ ...n, layout: n.layout ? { ...n.layout } : undefined })),
         edges: DAG_EDGES.map((e) => ({ ...e })),
       },
+      composer: clone(COMPOSER_DATA),
     };
   },
 
-  async send(_sessionId, text) {
+  async send(_sessionId, out, opts) {
+    // 故意留一段「思考时间」，让发送钮的停止态和竞态现在就是真的
+    await sleep(900, opts?.signal);
     const { id, time } = stamp();
     return [
-      { id: `u-${id}`, role: 'user', time, kind: 'text', text },
+      {
+        id: `u-${id}`,
+        role: 'user',
+        time,
+        kind: 'text',
+        text: out.text,
+        attachments: out.attachments,
+        knowledge: out.knowledge,
+      },
       {
         id: `m-${id}`,
         role: 'agent',
         author: DEMO.leadAuthor,
         time,
         kind: 'text',
-        text: DEMO.leadReply(text),
+        text: DEMO.leadReply(out.text),
       },
     ];
   },
 
   async savePolicy() {
     /* 演示态不落库。接后端后这段逻辑搬进 httpSource.savePolicy。 */
+  },
+
+  async transcribe() {
+    await sleep(800);
+    return DEMO.transcript;
   },
 };
 
@@ -122,6 +167,7 @@ const ROUTES = {
   workspace: '/api/workspace',
   messages: (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
   policy: '/api/policy',
+  asr: '/api/asr/transcribe',
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -141,13 +187,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const httpSource: WorkspaceSource = {
   id: 'http',
   load: () => request<WorkspaceData>(ROUTES.workspace),
-  send: (sessionId, text) =>
+  send: (sessionId, out, opts) =>
     request<Message[]>(ROUTES.messages(sessionId), {
       method: 'POST',
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(out),
+      signal: opts?.signal,
     }),
   savePolicy: async (policy) => {
     await request<void>(ROUTES.policy, { method: 'PUT', body: JSON.stringify(policy) });
+  },
+  transcribe: async (audio) => {
+    const body = new FormData();
+    body.append('audio', audio, 'voice.webm');
+    const res = await fetch(`${API_BASE}${ROUTES.asr}`, { method: 'POST', body });
+    if (!res.ok) throw new Error(`POST ${ROUTES.asr} → ${res.status}`);
+    const json = (await res.json()) as { text?: string };
+    return json.text ?? '';
   },
 };
 

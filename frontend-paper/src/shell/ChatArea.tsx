@@ -1,28 +1,43 @@
 /**
  * ChatArea — 第三栏：会话头部 + 消息流 + 输入区。文案见 `content/app.ts` 的 CHAT。
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { AvatarStack, AVATAR_SIZE } from '../avatar';
 import { MessageList } from '../chat/MessageList';
-import { Composer } from '../chat/Composer';
-import { CHAT, COMPOSER } from '../content/app';
-import type { Message, Session } from '../data/types';
+import { Composer } from '../chat/composer/Composer';
+import { CHAT } from '../content/app';
+import type { ComposerData, Message, Outbound, RosterMember, Session } from '../data/types';
 import { IconMore, IconPanel, IconSparkle, IconUsers } from './icons';
 
 export function ChatArea({
   session,
   messages,
+  roster,
+  composer,
+  model,
+  onModelChange,
+  sending,
   onSend,
+  onStop,
+  transcribe,
+  onInspect,
   panelOpen,
   onTogglePanel,
 }: {
   session: Session;
   messages: Message[];
-  onSend: (text: string) => void;
+  roster: RosterMember[];
+  composer: ComposerData;
+  model: string;
+  onModelChange: (id: string) => void;
+  sending: boolean;
+  onSend: (out: Outbound) => Promise<void>;
+  onStop: () => void;
+  transcribe: (audio: Blob) => Promise<string>;
+  onInspect: () => void;
   panelOpen: boolean;
   onTogglePanel: () => void;
 }) {
-  const [model, setModel] = useState(COMPOSER.models[0]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isGroup = session.kind === 'group';
 
@@ -63,7 +78,7 @@ export function ChatArea({
       <div className="chat-scroll" ref={scrollRef}>
         <div className="chat-inner">
           {messages.length ? (
-            <MessageList messages={messages} />
+            <MessageList messages={messages} packs={composer.knowledge} />
           ) : (
             <div className="chat-empty">
               <span className="chat-empty-ico">
@@ -73,7 +88,7 @@ export function ChatArea({
               <p>{isGroup ? CHAT.emptyBody.group : CHAT.emptyBody.dm}</p>
               <div className="chat-empty-chips">
                 {(isGroup ? CHAT.emptyChips.group : CHAT.emptyChips.other).map((s) => (
-                  <button key={s} onClick={() => onSend(s)}>
+                  <button key={s} onClick={() => void onSend({ text: s })}>
                     {s}
                   </button>
                 ))}
@@ -85,9 +100,15 @@ export function ChatArea({
 
       <div className="chat-foot">
         <Composer
-          onSend={onSend}
+          roster={roster}
+          composer={composer}
           model={model}
-          onModelChange={setModel}
+          onModelChange={onModelChange}
+          sending={sending}
+          onSend={onSend}
+          onStop={onStop}
+          transcribe={transcribe}
+          onInspect={onInspect}
           placeholder={isGroup ? CHAT.placeholder.group : CHAT.placeholder.dm}
         />
       </div>

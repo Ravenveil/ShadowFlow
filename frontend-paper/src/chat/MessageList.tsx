@@ -1,6 +1,6 @@
 import { AgentAvatar, AVATAR_SIZE } from '../avatar';
 import { DEMO } from '../content/app';
-import type { ArtifactPayload, Message } from '../data/types';
+import type { ArtifactPayload, KnowledgePack, Message } from '../data/types';
 import { IconFile, IconImage, IconCode, IconBook, IconGrid } from '../shell/icons';
 import { RunBlock } from './RunBlock';
 import { TeamBlock } from './TeamBlock';
@@ -32,11 +32,36 @@ function ArtifactCard({ a }: { a: ArtifactPayload }) {
   );
 }
 
-function Bubble({ m }: { m: Message }) {
+/** 用户消息带上的附件 / 知识包，显示成气泡下面的小 chip。 */
+function Refs({ m, packs }: { m: Message; packs: KnowledgePack[] }) {
+  const kps = (m.knowledge ?? [])
+    .map((id) => packs.find((p) => p.id === id)?.name ?? id)
+    .filter(Boolean);
+  if (!m.attachments?.length && !kps.length) return null;
+  return (
+    <div className="sf-msg-refs">
+      {(m.attachments ?? []).map((a) => (
+        <span className="sf-msg-ref" key={a.id}>
+          {a.kind === 'image' ? <IconImage size={11} /> : <IconFile size={11} />}
+          {a.name}
+        </span>
+      ))}
+      {kps.map((name) => (
+        <span className="sf-msg-ref sf-msg-ref--kp" key={name}>
+          <IconBook size={11} />
+          {name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Bubble({ m, packs }: { m: Message; packs: KnowledgePack[] }) {
   if (m.role === 'user') {
     return (
       <div className="sf-msg sf-msg--user">
-        <div className="sf-msg-userbubble">{m.text}</div>
+        {m.text ? <div className="sf-msg-userbubble">{m.text}</div> : null}
+        <Refs m={m} packs={packs} />
         <span className="sf-msg-time">{m.time}</span>
       </div>
     );
@@ -71,11 +96,17 @@ function Bubble({ m }: { m: Message }) {
   );
 }
 
-export function MessageList({ messages }: { messages: Message[] }) {
+export function MessageList({
+  messages,
+  packs = [],
+}: {
+  messages: Message[];
+  packs?: KnowledgePack[];
+}) {
   return (
     <div className="sf-thread">
       {messages.map((m) => (
-        <Bubble key={m.id} m={m} />
+        <Bubble key={m.id} m={m} packs={packs} />
       ))}
     </div>
   );

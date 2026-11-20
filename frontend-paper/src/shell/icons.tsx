@@ -196,3 +196,36 @@ export const IconBranch = ({ size }: P) => (
     <path d="M17.5 11.2c0 3-2.4 4.2-4.6 4.6-2.1.4-3.4 1-3.4 2.7" />
   </svg>
 );
+
+export const IconMic = ({ size }: P) => (
+  <svg {...base(size)}>
+    <rect x="9" y="3" width="6" height="10.5" rx="3" />
+    <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" />
+  </svg>
+);
+
+export const IconStop = ({ size }: P) => (
+  <svg {...base(size)}>
+    <rect x="7.5" y="7.5" width="9" height="9" rx="2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const IconClose = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
+
+export const IconLink = ({ size }: P) => (
+  <svg {...base(size)}>
+    <path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.6-2.6a4 4 0 1 0-5.7-5.7L11.7 6.6" />
+    <path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.6 2.6a4 4 0 1 0 5.7 5.7l1.4-1.4" />
+  </svg>
+);
+
+export const IconKeyboard = ({ size }: P) => (
+  <svg {...base(size)}>
+    <rect x="2.8" y="6" width="18.4" height="12" rx="2.6" />
+    <path d="M6.6 10h.01M9.8 10h.01M13 10h.01M16.2 10h.01M6.6 13.4h.01M9.8 13.4h.01M13 13.4h.01M16.2 13.4h.01M8.8 16.4h6.4" />
+  </svg>
+);

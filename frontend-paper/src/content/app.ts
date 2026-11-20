@@ -75,14 +75,70 @@ export const CHAT = {
   retry: '重试',
 };
 
+/**
+ * 输入框的全部措辞。功能对照旧前端 NeoComposer：
+ * 多行输入 / ⌘⏎ / @ 提及 / 斜杠命令 / 模型 / 知识包 / 附件 / 拖拽 / 语音 / 停止。
+ */
 export const COMPOSER = {
-  models: ['Claude Sonnet 4.6', 'GPT-5.2', 'Gemini 3 Pro'],
-  attach: '添加附件',
+  placeholderHint: '@ 提及角色 · / 调命令',
+  /* 工具条 */
+  attach: '添加图片 / 文件（也可直接拖入）',
   slash: '斜杠命令',
-  mention: '提及角色',
+  mention: '提及角色或知识包',
   send: '发送',
+  stop: '停止生成',
+  knowledge: '引用知识包',
+  voice: '语音输入',
+  /* 键盘提示 */
   hintKeys: 'Enter 发送 · Shift + Enter 换行',
-  hintTools: '@ 提及角色 · / 调用命令',
+  hintTools: '@ 提及 · / 命令',
+  /* 触发菜单 */
+  menuMentionTitle: '提及',
+  menuCommandTitle: '命令',
+  menuGroupMember: '成员',
+  menuGroupKnowledge: '知识包',
+  menuGroupCommand: '内置命令',
+  menuGroupTemplate: '指令模板',
+  menuEmpty: (q: string) => `没有匹配「${q}」的项`,
+  /* 模型面板 */
+  modelTitle: '选择模型',
+  modelManage: '管理模型',
+  /* 知识包面板 */
+  knowledgeTitle: '本轮引用的知识包',
+  knowledgeDocs: (n: number) => `${n} 篇`,
+  knowledgeSelected: (n: number) => `已选 ${n} 个知识包`,
+  /* 语音 */
+  voiceStarting: '正在请求麦克风…',
+  voiceRecording: '录音中',
+  voiceStop: '完成录音',
+  voiceCancel: '取消录音',
+  voiceTranscribing: '正在转写…',
+  voiceUnsupported: '当前环境不支持录音',
+  voiceEmpty: '没听到内容，再说一次',
+  voiceAppended: '语音已转写',
+  /* 拖拽 */
+  dropHint: '松开以添加图片 / 文件',
+  /* 附件 chip */
+  attachRemove: '移除附件',
+  /* 帮助面板 */
+  helpTitle: '快捷键与命令',
+  helpKeys: [
+    ['Enter', '发送消息'],
+    ['Shift + Enter', '换行'],
+    ['⌘ / Ctrl + Enter', '发送消息（备用）'],
+    ['@', '提及成员或知识包'],
+    ['/', '调起命令'],
+    ['↑ ↓', '在菜单里移动'],
+    ['Enter / Tab', '选中菜单项'],
+    ['Esc', '关闭菜单'],
+  ],
+  helpCommands: '在输入框敲 / 即可看到全部命令',
+  /* 通用 */
+  close: '关闭',
+  cleared: '已清空输入内容',
+  submitFailed: (reason: string) => `发送失败：${reason}`,
+  sizeKB: (kb: number) => `${kb} KB`,
+  sizeMB: (mb: string) => `${mb} MB`,
 };
 
 /** 步骤状态的中文说法（RunBlock / TeamBlock / DAG 共用）。 */
@@ -208,6 +264,8 @@ export const DEMO = {
   /** 用户消息超过这么长就在应答里截断。 */
   quoteLimit: 40,
   leadAuthor: '主控',
+  /** 演示态语音转写结果（真接口接上后由后端 ASR 返回）。 */
+  transcript: '帮我把第三章的实验对比再核一遍，重点看 7B 与 13B 的口径是否一致。',
   leadReply: (text: string) => {
     const quote = text.slice(0, DEMO.quoteLimit) + (text.length > DEMO.quoteLimit ? '…' : '');
     return `收到，我按这条推进：${quote}\n\n先拆成可执行的步骤，再分给对应的角色。中途要你拍板的地方，我会单独挂出来，不打断你别的活。`;

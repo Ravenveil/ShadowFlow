@@ -10,6 +10,7 @@ import type {
   Message,
   PanelSummary,
   PolicyMatrix,
+  ComposerData,
   Session,
 } from './types';
 
@@ -234,4 +235,32 @@ export const PANEL: PanelSummary = {
     gate: '1 道审批门',
     note: '「合并成稿」前需要你确认，其余节点主控自闭环。',
   },
+};
+
+/** 输入框的可选资源：模型（CLI / API 两组）、斜杠命令、知识包。 */
+export const COMPOSER_DATA: ComposerData = {
+  models: [
+    { id: 'cli:claude', label: 'Claude Code', group: 'CLI', note: 'Opus 4.6 · 已装' },
+    { id: 'cli:codex', label: 'Codex CLI', group: 'CLI', note: 'GPT-5.2 · 已装' },
+    { id: 'cli:gemini', label: 'Gemini CLI', group: 'CLI', note: '3 Pro · 已装' },
+    { id: 'api:deepseek', label: 'DeepSeek', group: 'API', note: 'V4.1 · 自有 Key' },
+    { id: 'api:kimi', label: 'Kimi', group: 'API', note: 'K2 · 自有 Key' },
+    { id: 'api:qwen', label: 'Qwen', group: 'API', note: '3 Max · 自有 Key' },
+  ],
+  commands: [
+    { id: 'clear', name: '/clear', desc: '清空输入框、附件与已选知识包', action: 'clear' },
+    { id: 'help', name: '/help', desc: '查看快捷键与命令说明', action: 'help' },
+    { id: 'inspect', name: '/inspect', desc: '跳到右栏看本轮执行记录', action: 'inspect' },
+    { id: 'outline', name: '/outline', desc: '插入章节骨架指令', insert: '按以下结构生成章节骨架，并标出每节字数配比：' },
+    { id: 'cite', name: '/cite', desc: '插入引用补齐指令', insert: '为下面这段补 3 条可核查引用（作者 · 年份 · 出处）：' },
+    { id: 'review', name: '/review', desc: '插入交叉复核指令', insert: '交叉复核这版结论，逐条指出证据不足与口径风险：' },
+    { id: 'figure', name: '/figure', desc: '插入配图说明指令', insert: '把这段改写成配图说明，注明数据来源与坐标含义：' },
+    { id: 'polish', name: '/polish', desc: '插入文风统一指令', insert: '在不改变结论的前提下统一文风，删掉口语化表达：' },
+  ],
+  knowledge: [
+    { id: 'kp-lit', name: '文献综述库', desc: '近五年同主题论文与预印本', docs: 128 },
+    { id: 'kp-exp', name: '实验记录', desc: '消融、参数扫描与日志', docs: 34 },
+    { id: 'kp-fig', name: '图表素材', desc: '可复用配图与原始数据', docs: 61 },
+    { id: 'kp-style', name: '期刊格式规范', desc: '目标会议的模板与引用样式', docs: 6 },
+  ],
 };

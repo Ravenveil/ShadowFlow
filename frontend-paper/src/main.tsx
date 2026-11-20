@@ -7,6 +7,7 @@ import './styles/shell.css';
 import './styles/chat.css';
 import './styles/panel.css';
 import './styles/settings.css';
+import './styles/composer.css';
 import './styles/landing.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
