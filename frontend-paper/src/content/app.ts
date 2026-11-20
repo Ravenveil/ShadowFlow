@@ -107,20 +107,21 @@ export const PANEL = {
   tabsLabel: '面板分区',
   /**
    * 右栏 tab 的唯一真源：id 决定组件里的图标与状态，label 只是显示文案。
-   * 加一个 tab = 这里加一项 + AgentPanel 的 TAB_ICON 加一行图标。
+   *
+   * 形态对齐旧前端（neo 的「编队」pane）：**编队与工作流不是两页** ——
+   * 成员、工作流、策略举证是同一个编队面板里纵向排布的三节；
+   * 所以这里只有三个 tab，加 tab = 这里加一项 + AgentPanel 的 TAB_ICON 加一行。
    */
   tabs: [
     { id: 'run', label: '执行' },
     { id: 'team', label: '编队' },
-    { id: 'policy', label: '策略举证' },
-    { id: 'dag', label: '工作流' },
     { id: 'artifacts', label: '产物' },
   ] as const,
   runKicker: 'ACTIVE RUN',
   elapsed: (v: string) => `耗时 ${v}`,
   stepsDone: (done: number, total: number) => `${done} / ${total} 步已交`,
   stepsSection: (n: number) => `步骤 · ${n}`,
-  viewDag: '查看 DAG',
+  viewDag: '查看编队',
   usageTitle: '用量',
   usageMeta: '本会话',
   contextLabel: (pct: number) => `上下文 ${pct}%`,

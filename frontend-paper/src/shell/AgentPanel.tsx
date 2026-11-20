@@ -22,6 +22,7 @@ import type {
 } from '../data/types';
 import { PolicyMatrix } from '../panel/PolicyMatrix';
 import { DagFlow } from '../panel/DagFlow';
+import { RosterGrid } from '../panel/RosterGrid';
 import {
   IconBranch,
   IconCheck,
@@ -39,8 +40,6 @@ type TabId = (typeof PANEL_COPY.tabs)[number]['id'];
 const TAB_ICON: Record<TabId, (p: { size?: number }) => JSX.Element> = {
   run: IconSparkle,
   team: IconUsers,
-  policy: IconShield,
-  dag: IconBranch,
   artifacts: IconFile,
 };
 
@@ -149,7 +148,7 @@ export function AgentPanel({
 
             <div className="panel-sec-head">
               <span>{PANEL_COPY.stepsSection(panel.steps.length)}</span>
-              <button className="panel-sec-link" onClick={() => setTab('dag')}>
+              <button className="panel-sec-link" onClick={() => setTab('team')}>
                 {PANEL_COPY.viewDag}
               </button>
             </div>
@@ -192,77 +191,69 @@ export function AgentPanel({
           </>
         ) : null}
 
+        {/* 编队：成员 / 工作流 / 策略举证，三节竖排同一个滚动面板 ——
+            对齐旧前端 TeamPanel 的形态：工作流不是独立一页，它就是编队的一部分。 */}
         {tab === 'team' ? (
           <>
-            <div className="panel-sec-head">
-              <span>{PANEL_COPY.rosterSection(roster.length)}</span>
-              <span className="panel-sec-meta">{PANEL_COPY.rosterMeta}</span>
-            </div>
-            <ul className="panel-roster">
-              {roster.map((m) => {
-                const busy = m.state === 'busy';
-                return (
-                  <li key={m.id}>
-                    <AgentAvatar label={m.role} size={AVATAR_SIZE.lg} status={false} />
-                    <span className="panel-roster-body">
-                      <span className="panel-roster-name">
-                        {m.name}
-                        {m.name !== m.role ? <i className="panel-roster-role">{m.role}</i> : null}
-                      </span>
-                      <span className="panel-roster-note">{m.note}</span>
-                    </span>
-                    <span className="panel-roster-state" data-busy={busy ? 'true' : undefined}>
-                      {busy ? PANEL_COPY.busy : PANEL_COPY.standby}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        ) : null}
-
-        {tab === 'policy' ? (
-          <>
-            <div className="panel-sec-head">
-              <span>{PANEL_COPY.policySection}</span>
-              {dirty ? (
-                <button className="panel-sec-btn" onClick={save}>
-                  {PANEL_COPY.savePolicy}
-                </button>
-              ) : flash ? (
-                <span className="panel-pill-ok">{PANEL_COPY.policySaved}</span>
-              ) : (
-                <span className="panel-sec-meta">{PANEL_COPY.policyDir}</span>
-              )}
-            </div>
-            <PolicyMatrix roster={roster} value={policy} onChange={setPolicy} />
-          </>
-        ) : null}
-
-        {tab === 'dag' ? (
-          <>
-            <div className="panel-sec-head">
-              <span>{PANEL_COPY.dagSection}</span>
-              <span className="panel-sec-meta">{PANEL_COPY.dagMeta(dag.nodes.length, dag.edges.length)}</span>
-            </div>
-            <DagFlow
-              nodes={dag.nodes}
-              edges={dag.edges}
-              canvas={dag.canvas}
-              policy={policy}
-              roster={roster}
-            />
-            {panel.approval ? (
-              <div className="panel-approve">
-                <span className="panel-approve-ico">
-                  <IconCheck size={13} />
+            <div className="panel-sec panel-sec--flush">
+              <div className="panel-sec-head">
+                <span className="panel-sec-title">
+                  <IconUsers size={12} />
+                  {PANEL_COPY.rosterSection(roster.length)}
                 </span>
-                <span className="panel-approve-body">
-                  <b>{panel.approval.gate}</b>
-                  <span>{panel.approval.note}</span>
+                <span className="panel-sec-meta">{PANEL_COPY.rosterMeta}</span>
+              </div>
+              <RosterGrid members={roster} />
+            </div>
+
+            <div className="panel-sec panel-sec--flush">
+              <div className="panel-sec-head">
+                <span className="panel-sec-title">
+                  <IconBranch size={12} />
+                  {PANEL_COPY.dagSection}
+                </span>
+                <span className="panel-sec-meta">
+                  {PANEL_COPY.dagMeta(dag.nodes.length, dag.edges.length)}
                 </span>
               </div>
-            ) : null}
+              <DagFlow
+                nodes={dag.nodes}
+                edges={dag.edges}
+                canvas={dag.canvas}
+                policy={policy}
+                roster={roster}
+              />
+              {panel.approval ? (
+                <div className="panel-approve">
+                  <span className="panel-approve-ico">
+                    <IconCheck size={13} />
+                  </span>
+                  <span className="panel-approve-body">
+                    <b>{panel.approval.gate}</b>
+                    <span>{panel.approval.note}</span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="panel-sec panel-sec--flush">
+              <div className="panel-sec-head">
+                <span className="panel-sec-title">
+                  <IconShield size={12} />
+                  {PANEL_COPY.policySection}
+                </span>
+                {dirty ? (
+                  <button className="panel-sec-btn" onClick={save}>
+                    {PANEL_COPY.savePolicy}
+                  </button>
+                ) : flash ? (
+                  <span className="panel-pill-ok">{PANEL_COPY.policySaved}</span>
+                ) : (
+                  <span className="panel-sec-meta">{PANEL_COPY.policyDir}</span>
+                )}
+              </div>
+              <PolicyMatrix roster={roster} value={policy} onChange={setPolicy} />
+            </div>
           </>
         ) : null}
 
