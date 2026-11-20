@@ -1,0 +1,4 @@
+node_modules
+.vite-cache
+dist
+*.log

@@ -1,0 +1,191 @@
+/* ============================================================
+   ShadowFlow Paper · 双风格设计令牌
+   ------------------------------------------------------------
+   一套类名，两套皮。切换方式：<html data-theme="ink|clean">。
+   规则：组件只允许吃变量，禁止写死颜色/圆角/阴影。
+   ============================================================ */
+
+/* ---------- 风格 A：墨橙（品牌营销风，来自落地页设计稿） ---------- */
+:root,
+[data-theme='ink'] {
+  color-scheme: light;
+
+  --bg: #f6f3ec;
+  --bg-elev: #ffffff;
+  --bg-sunken: #ede9df;
+  --bg-hover: #e9e4d7;
+  --bg-deep: #17162d;
+
+  --ink: #14131a;
+  --ink-2: #3d3b45;
+  --ink-3: #7a7683;
+  --ink-4: #a8a3b0;
+  --ink-on-deep: #f3f0e9;
+  --ink-on-deep-2: #a09ab8;
+
+  --line: #ddd8cb;
+  --line-strong: #c4bda9;
+
+  --accent: #ff5e3a;
+  --accent-ink: #ffffff;
+  --accent-soft: #ffebe4;
+  --accent-line: #ffc3b3;
+
+  --ok: #2f8f5b;
+  --ok-soft: #e6f4ec;
+  --warn: #d98324;
+  --warn-soft: #fdf1e0;
+  --danger: #d6455e;
+  --danger-soft: #fbe8ec;
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-pill: 999px;
+
+  --shadow-card: 4px 4px 0 var(--ink);
+  --shadow-card-sm: 2px 2px 0 var(--ink);
+  --shadow-pop: 8px 8px 0 var(--ink);
+  --shadow-float: 0 12px 32px rgba(20, 19, 26, 0.14);
+
+  --font-display: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-body: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  --tracking-label: 0.16em;
+  --weight-display: 900;
+  --weight-title: 800;
+
+  --grid-line: rgba(20, 19, 26, 0.05);
+  --grid-size: 32px;
+
+  /* 「硬边」色：硬阴影 / 描边的底色。夜间要换成纯黑，不能跟着 --ink 变白。 */
+  --edge: #14131a;
+
+  --rail-w: 208px;
+  --list-w: 272px;
+  --panel-w: 340px;
+}
+
+/* ---------- 风格 B：净白（WorkBuddy / ClawsGO 形态） ---------- */
+[data-theme='clean'] {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --bg-elev: #ffffff;
+  --bg-sunken: #f7f7f8;
+  --bg-hover: #f2f2f4;
+  --bg-deep: #16161a;
+
+  --ink: #1f2023;
+  --ink-2: #5a5d63;
+  --ink-3: #9a9da3;
+  --ink-4: #c2c4c9;
+  --ink-on-deep: #f5f5f7;
+  --ink-on-deep-2: #9d9da6;
+
+  --line: #ecedef;
+  --line-strong: #dedfe3;
+
+  --accent: #6c5ce7;
+  --accent-ink: #ffffff;
+  --accent-soft: #f1eefe;
+  --accent-line: #ddd6fb;
+
+  --ok: #16a06a;
+  --ok-soft: #e8f7f0;
+  --warn: #d98324;
+  --warn-soft: #fdf3e6;
+  --danger: #e05252;
+  --danger-soft: #fcecec;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-card: none;
+  --shadow-card-sm: 0 1px 2px rgba(16, 17, 20, 0.04);
+  --shadow-pop: 0 8px 28px rgba(16, 17, 20, 0.08);
+  --shadow-float: 0 12px 40px rgba(16, 17, 20, 0.1);
+
+  --font-display: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-body: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  --tracking-label: 0.02em;
+  --weight-display: 600;
+  --weight-title: 600;
+
+  --grid-line: transparent;
+  --grid-size: 32px;
+
+  --edge: #1f2023;
+
+  --rail-w: 208px;
+  --list-w: 272px;
+  --panel-w: 340px;
+}
+
+/* ---------- 风格 C：夜间（深色，品牌橙提亮） ---------- */
+[data-theme='night'] {
+  color-scheme: dark;
+
+  --bg: #0f0f14;
+  --bg-elev: #17171e;
+  --bg-sunken: #1b1b23;
+  --bg-hover: #22222b;
+  --bg-deep: #08080c;
+
+  --ink: #ececf1;
+  --ink-2: #b5b6c1;
+  --ink-3: #7e7f8c;
+  --ink-4: #565761;
+  --ink-on-deep: #f2f2f7;
+  --ink-on-deep-2: #8b8c98;
+
+  --line: #25252e;
+  --line-strong: #34343f;
+
+  --accent: #ff6b4a;
+  --accent-ink: #17130f;
+  --accent-soft: rgba(255, 107, 74, 0.14);
+  --accent-line: rgba(255, 107, 74, 0.4);
+
+  --ok: #40c68c;
+  --ok-soft: rgba(64, 198, 140, 0.14);
+  --warn: #e6a04a;
+  --warn-soft: rgba(230, 160, 74, 0.14);
+  --danger: #f0727f;
+  --danger-soft: rgba(240, 114, 127, 0.14);
+
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --shadow-card: 3px 3px 0 #000;
+  --shadow-card-sm: 2px 2px 0 #000;
+  --shadow-pop: 8px 8px 0 #000;
+  --shadow-float: 0 18px 46px rgba(0, 0, 0, 0.62);
+
+  --font-display: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-body: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+  --tracking-label: 0.16em;
+  --weight-display: 800;
+  --weight-title: 700;
+
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --grid-size: 32px;
+
+  --edge: #000000;
+
+  --rail-w: 208px;
+  --list-w: 272px;
+  --panel-w: 340px;
+}
