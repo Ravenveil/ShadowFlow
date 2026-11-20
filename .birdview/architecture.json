@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "mapId": "shadowflow-main",
+  "revision": 1,
+  "project": {
+    "id": "shadowflow",
+    "name": "ShadowFlow — 多智能体协作与论文自动化平台"
+  },
+  "modules": [
+    {
+      "id": "frontend",
+      "role": "frontend",
+      "name": "Web 前端 (React)",
+      "kind": "local",
+      "responsibility": "用户交互主界面：群聊/单聊会话、团队拓扑画布、右侧面板（工作空间文件树 + 产出预览 + 编队过程视图）、BYOK 设置。",
+      "ownership": [
+        { "kind": "directory", "path": "frontend/src" }
+      ],
+      "evidence": [
+        { "path": "frontend/src/neo/NeoHost.tsx", "symbol": "NeoHost", "note": "右侧面板宿主：文件树、预览分流 kindOf（markdown/image/pdf/html/sheet/code）、编队 tab。" },
+        { "path": "frontend/src/neo/XlsxPreview.tsx", "symbol": "XlsxPreview", "note": "2026-11-20 新增：SheetJS 解析 xlsx/csv 产出文件并渲染只读表格。" },
+        { "path": "frontend/src/api/fsFiles.ts", "symbol": "rawUrl", "note": "产出文件二进制直链（/api/fs/raw），预览与下载共用。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "layout": { "row": 0, "column": 0 }
+    },
+    {
+      "id": "routes",
+      "role": "backend",
+      "name": "HTTP 路由层 (Node/Express)",
+      "kind": "local",
+      "responsibility": "REST + SSE 入口：会话消息（pyPost 桥接 Python）、团队 YAML 管理、run 体系、审批门（approve）、语音转写、文件系统读写。",
+      "ownership": [
+        { "kind": "directory", "path": "backend/node/src/routes" }
+      ],
+      "evidence": [
+        { "path": "backend/node/src/routes/groups/groups-chat.ts", "symbol": "pyPostMessage", "note": "群聊消息主入口，2276 行（2026-11-20 拆分后），编排 lib 调用与 Python 桥接。" },
+        { "path": "backend/node/src/routes/agents/teams.ts", "symbol": "generateDagDraft", "note": "团队 CRUD + 自然语言→DAG 草稿端点。" }
+      ],
+      "status": "supported",
+      "openQuestions": [
+        "routes 与 lib 合计约占后端 50%（评审 Q2 诚实数字），是后续域迁移的主队列。"
+      ],
+      "layout": { "row": 1, "column": 0 }
+    },
+    {
+      "id": "domains",
+      "role": "backend",
+      "name": "领域层 (DDD 四件套)",
+      "kind": "local",
+      "responsibility": "业务规则真源：memory（lessons/profiles）、collaboration（hops/teams/approval）、analytics（token usage）、voice。model 纯规则、use_cases 编排、adapters/infra 落库。",
+      "ownership": [
+        { "kind": "directory", "path": "backend/node/src/domains" }
+      ],
+      "evidence": [
+        { "path": "backend/node/src/domains/collaboration/dag-draft-model.ts", "symbol": "validateDagDraft", "note": "2026-11-20 拆分：DAG 草稿纯规则从 lib 迁入域 model，切断对 transport 的传递依赖。" },
+        { "path": "backend/node/src/domains/collaboration/approval-model.ts", "symbol": "parseApprovalVerdict", "note": "2026-11-20 拆分：审批文本解析规则（决定词正则/长度闸门）。" },
+        { "path": "scripts/arch-check.mjs", "symbol": "usecase-boundary", "note": "CI 门禁断言 use_cases 禁 import storage/transport/routes。" }
+      ],
+      "status": "supported",
+      "openQuestions": [
+        "域层目前只占后端约 6%（评审 Q2）：lib 内 chat-strategy/plan-gate/permission-policy 仍是业务规则，属迁移队列。"
+      ],
+      "layout": { "row": 1, "column": 1 }
+    },
+    {
+      "id": "lib",
+      "role": "backend",
+      "name": "机制库 (lib)",
+      "kind": "local",
+      "responsibility": "被 routes 消费的底层机制：CLI 注册与调度策略、LLM 编排（chat-strategy/plan-gate/team-dag-draft IO）、gateway-run 过程事件、YAML 加载。",
+      "ownership": [
+        { "kind": "directory", "path": "backend/node/src/lib" }
+      ],
+      "evidence": [
+        { "path": "backend/node/src/lib/team-dag-draft.ts", "symbol": "generateDagDraft", "note": "2026-11-20 拆分后只留 IO（BYOK provider 调用），纯函数已迁域 model 并 re-export 兼容。" },
+        { "path": "backend/node/src/transport/cli-policy.ts", "symbol": "dagTimeoutOptsFor", "note": "CLI 调度策略（长任务超时/免 worktree 标签）从 groups-chat 迁出。" }
+      ],
+      "status": "supported",
+      "openQuestions": [
+        "lib 内 chat-strategy/plan-gate/permission-policy 含业务规则，ARCHITECTURE.md §9.3 列为待迁移项。"
+      ],
+      "layout": { "row": 1, "column": 2 }
+    },
+    {
+      "id": "python",
+      "role": "backend",
+      "name": "Python 服务 (shadowflow.server)",
+      "kind": "local",
+      "responsibility": "记忆库（向量查询/embedding）、run 执行器（ARC 论文管道 23 阶段）、语音 ASR、团队校验（team_validation）。与 Node 通过 HTTP 桥接。",
+      "ownership": [
+        { "kind": "directory", "path": "backend/python/shadowflow" }
+      ],
+      "evidence": [
+        { "path": "backend/python/shadowflow/server", "symbol": "assembly", "note": "FastAPI 装配根；memory/quality/parsers/detectors/prompts/loaders/storage 模块化（2026-11 拆分）。" },
+        { "path": "backend/node/src/lib/team-dag-draft.ts", "note": "文件头注释：validateDagDraft 镜像 Python team_validation.validate_workflow —— 双端同构规则。" }
+      ],
+      "status": "supported",
+      "openQuestions": [
+        "评审 R1：Node/Python 双后端分布式单体——同一业务规则两处实现（DAG 校验、记忆三区），漂移风险需靠镜像测试约束。"
+      ],
+      "layout": { "row": 2, "column": 1 }
+    },
+    {
+      "id": "storage",
+      "role": "database",
+      "name": "SQLite 存储",
+      "kind": "local",
+      "responsibility": "本地持久化：会话/消息、run 记录、token usage、团队 YAML 工作区（.shadowflow/teams）、记忆库落盘。",
+      "ownership": [
+        { "kind": "directory", "path": "backend/node/src/storage" }
+      ],
+      "evidence": [
+        { "path": "backend/node/src/storage/teams-store.ts", "symbol": "validateWorkflowStoredShape", "note": "团队存储经域用例校验后落库（2026-11-20 起调用域内 model）。" },
+        { "path": "scripts/arch-check.mjs", "symbol": "model-pure", "note": "CI 断言域 model 禁 import sqlite/fs。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "layout": { "row": 2, "column": 0 }
+    },
+    {
+      "id": "llm-providers",
+      "role": "generic",
+      "name": "BYOK LLM 提供方（外部服务）",
+      "kind": "external",
+      "responsibility": "用户自带 Key 的外部大模型 API（多 provider），供聊天、DAG 草稿、论文管道各阶段调用。",
+      "ownership": [],
+      "evidence": [
+        { "path": "backend/node/src/transport/api-clients.ts", "symbol": "callProvider", "note": "统一 provider 调用出口；lib/team-dag-draft 与 /api/llm/messages 同源。" },
+        { "path": "backend/node/src/transport/byokKey.ts", "symbol": "resolveProviderKey", "note": "BYOK key 解析。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "roleAssessment": {
+        "basis": "out-of-taxonomy",
+        "note": "外部 LLM API 集成（多 provider 网关），非本仓库代码；schema v0.5.0 角色枚举无外部服务分类，frontend/backend/cache/database/queue/security 均不适用，故 generic 并在名称标注外部服务属性。"
+      },
+      "layout": { "row": 1, "column": 3 }
+    }
+  ],
+  "relationships": [
+    {
+      "id": "fe-routes",
+      "from": "frontend",
+      "to": "routes",
+      "label": "REST/SSE 调用",
+      "evidence": [
+        { "path": "frontend/src/api/fsFiles.ts", "note": "fetch /api/fs/* 与 /api/projects/*。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "request",
+      "visibility": "overview"
+    },
+    {
+      "id": "routes-domains",
+      "from": "routes",
+      "to": "domains",
+      "label": "调域用例（校验/审批规则）",
+      "evidence": [
+        { "path": "backend/node/src/storage/teams-store.ts", "note": "storage 经 use_cases/teams.validateWorkflowStoredShape 校验。" },
+        { "path": "backend/node/src/routes/groups/groups-chat.ts", "note": "import parseApprovalVerdict（域 model）。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "request",
+      "visibility": "overview"
+    },
+    {
+      "id": "routes-lib",
+      "from": "routes",
+      "to": "lib",
+      "label": "调机制库（CLI/编排/网关）",
+      "evidence": [
+        { "path": "backend/node/src/routes/agents/teams.ts", "note": "import generateDagDraft（lib IO）。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "dependency",
+      "visibility": "overview"
+    },
+    {
+      "id": "domains-storage",
+      "from": "domains",
+      "to": "storage",
+      "label": "adapters/infra 落库",
+      "evidence": [
+        { "path": "backend/node/src/domains/memory/infra/sqlite-lesson.repository.ts", "note": "域 infra 持 getDb 写 SQLite。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "dependency",
+      "visibility": "overview"
+    },
+    {
+      "id": "lib-python",
+      "from": "lib",
+      "to": "python",
+      "label": "桥接 Python 服务（run/memory）",
+      "evidence": [
+        { "path": "backend/node/src/lib/gateway-run.ts", "note": "run 体系经 registerGatewayRun（routes/runs/run-sessions/registry 真源）桥接 Python 执行。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "request",
+      "visibility": "overview"
+    },
+    {
+      "id": "lib-llm",
+      "from": "lib",
+      "to": "llm-providers",
+      "label": "BYOK provider 调用",
+      "evidence": [
+        { "path": "backend/node/src/lib/team-dag-draft.ts", "note": "callDraftLlm 走 callProvider。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "request",
+      "visibility": "overview"
+    },
+    {
+      "id": "python-llm",
+      "from": "python",
+      "to": "llm-providers",
+      "label": "论文管道各阶段 LLM 调用",
+      "evidence": [
+        { "path": "backend/python/shadowflow/server", "note": "ARC 管道 23 阶段经服务端调 LLM（assembly 配置）。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "request",
+      "visibility": "overview"
+    },
+    {
+      "id": "lib-domains",
+      "from": "lib",
+      "to": "domains",
+      "label": "复用域纯规则",
+      "evidence": [
+        { "path": "backend/node/src/lib/team-dag-draft.ts", "note": "2026-11-20 拆分：IO 层 import 域 model（compose/parse/validate）。" }
+      ],
+      "status": "supported",
+      "openQuestions": [],
+      "kind": "dependency",
+      "visibility": "detail"
+    }
+  ]
+}
