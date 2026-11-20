@@ -23,8 +23,11 @@ import {
   POLICY_SEED,
   ROSTER,
   SESSIONS,
+  SETTINGS_SEED,
 } from './mock';
 import type {
+  AppSettings,
+  CliProbe,
   ComposerData,
   DagDataset,
   Message,
@@ -33,6 +36,7 @@ import type {
   PolicyMatrix,
   RosterMember,
   Session,
+  SshHost,
 } from './types';
 
 /** 默认打开哪条会话（真接口接入后由路由或后端决定）。 */
@@ -50,6 +54,8 @@ export interface WorkspaceData {
   dag: DagDataset;
   /** 输入框的可选资源：模型 / 命令 / 知识包。 */
   composer: ComposerData;
+  /** 设置页的全部配置。 */
+  settings: AppSettings;
 }
 
 /** 数据源契约。所有方法异步，失败用 reject 表达，由 useWorkspace 统一兜。 */
@@ -65,6 +71,14 @@ export interface WorkspaceSource {
   savePolicy(policy: PolicyMatrix): Promise<void>;
   /** 语音转写：录音 blob → 文本。演示态返回一段示例话术。 */
   transcribe(audio: Blob): Promise<string>;
+  /** 落库整份设置（分区分块改完再下发，避免每次点开关都打一次接口）。 */
+  saveSettings(next: AppSettings): Promise<void>;
+  /** 重新扫描本机 PATH 上的 Agent CLI，返回最新探测结果。 */
+  rescanCli(): Promise<CliProbe[]>;
+  /** 测一次 SSH 连通性（握手 + 查目录），返回更新后的主机条目。 */
+  testSsh(id: string): Promise<SshHost>;
+  /** 把工作区与设置恢复成初始状态，返回重置后的完整数据。 */
+  reset(): Promise<WorkspaceData>;
 }
 
 /* ── mock 实现 ─────────────────────────────────────────────────────── */
@@ -98,6 +112,9 @@ function stamp(): { id: string; time: string } {
   return { id: String(d.getTime()), time: `${hh}:${mm}` };
 }
 
+/** 演示态的「服务端」：设置改动落在这里，重新 load 也能读回。 */
+let settingsState: AppSettings = clone(SETTINGS_SEED);
+
 export const mockSource: WorkspaceSource = {
   id: 'mock',
 
@@ -120,6 +137,7 @@ export const mockSource: WorkspaceSource = {
         edges: DAG_EDGES.map((e) => ({ ...e })),
       },
       composer: clone(COMPOSER_DATA),
+      settings: clone(settingsState),
     };
   },
 
@@ -156,6 +174,38 @@ export const mockSource: WorkspaceSource = {
     await sleep(800);
     return DEMO.transcript;
   },
+
+  async saveSettings(next) {
+    settingsState = clone(next);
+  },
+
+  async rescanCli() {
+    // 真接口这边是后端扫 PATH；演示态只是把已知清单重新吐一遍
+    await sleep(700);
+    return clone(settingsState.clis);
+  },
+
+  async testSsh(id) {
+    await sleep(900);
+    const host = settingsState.ssh.find((h) => h.id === id);
+    if (!host) throw new Error(`unknown ssh host: ${id}`);
+    // 演示态：第一次点一律成功，给个像样的握手耗时
+    const next: SshHost = {
+      ...host,
+      state: 'ok',
+      latencyMs: 28 + Math.round(Math.random() * 90),
+    };
+    settingsState = {
+      ...settingsState,
+      ssh: settingsState.ssh.map((h) => (h.id === id ? next : h)),
+    };
+    return clone(next);
+  },
+
+  async reset() {
+    settingsState = clone(SETTINGS_SEED);
+    return mockSource.load();
+  },
 };
 
 /* ── http 实现 ─────────────────────────────────────────────────────── */
@@ -168,6 +218,10 @@ const ROUTES = {
   messages: (sessionId: string) => `/api/sessions/${encodeURIComponent(sessionId)}/messages`,
   policy: '/api/policy',
   asr: '/api/asr/transcribe',
+  settings: '/api/settings',
+  cliRescan: '/api/settings/cli/rescan',
+  sshTest: (id: string) => `/api/settings/ssh/${encodeURIComponent(id)}/test`,
+  reset: '/api/workspace/reset',
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -196,6 +250,12 @@ export const httpSource: WorkspaceSource = {
   savePolicy: async (policy) => {
     await request<void>(ROUTES.policy, { method: 'PUT', body: JSON.stringify(policy) });
   },
+  saveSettings: async (next) => {
+    await request<void>(ROUTES.settings, { method: 'PUT', body: JSON.stringify(next) });
+  },
+  rescanCli: () => request<CliProbe[]>(ROUTES.cliRescan, { method: 'POST' }),
+  testSsh: (id) => request<SshHost>(ROUTES.sshTest(id), { method: 'POST' }),
+  reset: () => request<WorkspaceData>(ROUTES.reset, { method: 'POST' }),
   transcribe: async (audio) => {
     const body = new FormData();
     body.append('audio', audio, 'voice.webm');

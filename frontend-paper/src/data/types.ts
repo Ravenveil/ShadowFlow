@@ -1,3 +1,5 @@
+import type { ToneName } from '../theme/tones';
+
 /**
  * 论文平台数据模型。
  *
@@ -225,4 +227,124 @@ export interface Outbound {
   /** 本轮勾选的知识包 id。 */
   knowledge?: string[];
   model?: string;
+}
+
+/* ── 设置（settings sheet） ─────────────────────────────────────────
+   形状对齐旧前端 SettingsPage 的有用分支：个人资料 / 外观 / 写作规范 /
+   模型与密钥（BYOK）/ 本地 CLI / 连接器 / 知识与记忆 / 协作 / 通知 / 数据。
+   外观里的风格与动效属于纯客户端偏好，放在 theme / ui 的 context 里，不在此。
+   ------------------------------------------------------------------ */
+
+/** 个人资料：谁在用这套工作台。 */
+export interface UserProfile {
+  name: string;
+  email: string;
+  /** 单位 / 课题组。 */
+  org: string;
+  timezone: string;
+}
+
+/** 写作规范：影响主控下发给各角色的系统提示，不只是界面。 */
+export interface WritingRules {
+  /** 引用样式 id，见 SETTINGS_COPY.writing.citation.options。 */
+  citation: string;
+  dateFormat: string;
+  /** 参考文献语言：中英混排 / 仅英文 / 仅中文。 */
+  refLang: string;
+  /** 图表、章节自动编号。 */
+  autoNumber: boolean;
+}
+
+/** 一个模型供应商（BYOK：自带 Key）。 */
+export interface ProviderSetting {
+  id: string;
+  name: string;
+  vendor: string;
+  tone: ToneName;
+  /** 打码后的 Key；未配置为空串。 */
+  key: string;
+  models: string[];
+  defaultModel: string;
+  /** 是否参与路由。 */
+  on: boolean;
+  state: 'ok' | 'idle' | 'error';
+}
+
+/** 本机 CLI 探测结果（本地跑 agent 的那几个）。 */
+export interface CliProbe {
+  id: string;
+  name: string;
+  bin: string;
+  version: string;
+  path: string;
+  installed: boolean;
+}
+
+/** 连接器 / MCP：外部数据源。 */
+export interface ConnectorSetting {
+  id: string;
+  name: string;
+  desc: string;
+  tone: ToneName;
+  on: boolean;
+  state: 'ok' | 'expired' | 'off';
+}
+
+/** 记忆三区（对齐后端 lessons / 画像 / River 手动）。 */
+export interface MemoryZone {
+  id: string;
+  label: string;
+  note: string;
+  on: boolean;
+  /** 已用条数。 */
+  used: number;
+  /** 容量条数。 */
+  cap: number;
+}
+
+/**
+ * 通用偏好项：开关（`on`）或单选（`value`）。
+ * 选项的**文案**在 `content/settings.ts`：数据只存 id 与当前值，不存中文。
+ */
+export interface PrefItem {
+  id: string;
+  label: string;
+  note?: string;
+  on?: boolean;
+  /** 单选项的当前值。 */
+  value?: string;
+}
+
+/**
+ * SSH 远程执行目标：论文团的实验真正跑在远端 GPU 机器上，
+ * 主控把「跑实验 / 拉日志 / 取图」这类活派过去。
+ */
+export interface SshHost {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  port: number;
+  /** 私钥路径（本机绝对路径）。 */
+  keyPath: string;
+  /** 远端工作目录，产物默认落这里。 */
+  remoteDir: string;
+  state: 'ok' | 'untested' | 'error';
+  /** 最近一次连通耗时（毫秒）。 */
+  latencyMs?: number;
+  /** 远端显卡摘要。 */
+  gpu?: string;
+}
+
+export interface AppSettings {
+  profile: UserProfile;
+  writing: WritingRules;
+  providers: ProviderSetting[];
+  clis: CliProbe[];
+  ssh: SshHost[];
+  connectors: ConnectorSetting[];
+  memory: MemoryZone[];
+  collab: PrefItem[];
+  notify: PrefItem[];
+  privacy: PrefItem[];
 }

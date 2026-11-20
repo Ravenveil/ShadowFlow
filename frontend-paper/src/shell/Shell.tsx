@@ -10,18 +10,34 @@ import { Rail } from './Rail';
 import { SessionList } from './SessionList';
 import { ChatArea } from './ChatArea';
 import { AgentPanel } from './AgentPanel';
-import { Settings } from './Settings';
+import { SettingsSheet, type SettingsSection } from '../settings/SettingsSheet';
 import { CHAT, DEMO } from '../content/app';
 import type { Outbound } from '../data/types';
 import { DEFAULT_DM_ID, DEFAULT_SESSION_ID } from '../data/source';
 import { useWorkspace } from '../data/useWorkspace';
+import { downloadJson } from '../ui/download';
 
 export function Shell({ onExit }: { onExit: () => void }) {
-  const { data, status, error, send, sending, stop, transcribe, savePolicy, reload } =
-    useWorkspace();
+  const {
+    data,
+    status,
+    error,
+    send,
+    sending,
+    stop,
+    transcribe,
+    savePolicy,
+    patchSettings,
+    savingSettings,
+    rescanCli,
+    testSsh,
+    reset,
+    reload,
+  } = useWorkspace();
   const [activeId, setActiveId] = useState(DEFAULT_SESSION_ID);
   const [panelOpen, setPanelOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance');
   /** 选中的模型 id；空表示还没选过，用数据里的第一个。 */
   const [modelId, setModelId] = useState<string | null>(null);
 
@@ -37,6 +53,20 @@ export function Shell({ onExit }: { onExit: () => void }) {
     (out: Outbound) => send(activeId, out),
     [activeId, send],
   );
+
+  /** 导出：把当前工作区（会话 / 策略 / 设置）落成一个 JSON 文件。 */
+  const exportWorkspace = useCallback(() => {
+    if (!data) return;
+    downloadJson('shadowflow-workspace.json', {
+      exportedAt: new Date().toISOString(),
+      sessions: data.sessions,
+      threads: data.threads,
+      panel: data.panel,
+      policy: data.policy,
+      dag: data.dag,
+      settings: data.settings,
+    });
+  }, [data]);
 
   if (!data || !session) {
     return (
@@ -92,7 +122,19 @@ export function Shell({ onExit }: { onExit: () => void }) {
           onClose={() => setPanelOpen(false)}
         />
       ) : null}
-      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        section={settingsSection}
+        onSection={setSettingsSection}
+        settings={data.settings}
+        saving={savingSettings}
+        onPatch={(patch) => void patchSettings(patch)}
+        onRescanCli={rescanCli}
+        onTestSsh={testSsh}
+        onExport={exportWorkspace}
+        onReset={reset}
+      />
       <button className="shell-back" onClick={onExit} title={CHAT.backHome}>
         {CHAT.home}
       </button>

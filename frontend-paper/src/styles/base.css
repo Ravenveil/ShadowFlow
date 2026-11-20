@@ -228,3 +228,38 @@ a {
 [data-tone='green'] { --tone: var(--tone-green); }
 [data-tone='red'] { --tone: var(--tone-red); }
 [data-tone='slate'] { --tone: var(--tone-slate); }
+
+/* ---------- 界面密度 / 动效 ----------
+   结果由 `ui/prefs.tsx` 写到 <html data-density|data-motion>，这里只声明表现。
+   密度只动行距与卡片内边距，不动字号 —— 字号变了排版会崩。 */
+html[data-density='compact'] .slist-card {
+  padding: 6px 10px;
+}
+
+html[data-density='compact'] .sf-thread {
+  gap: 13px;
+}
+
+html[data-density='compact'] .panel-sec {
+  padding: 9px 6px;
+}
+
+html[data-density='wide'] .slist-card {
+  padding: 12px 10px;
+}
+
+html[data-density='wide'] .sf-thread {
+  gap: 26px;
+}
+
+html[data-density='wide'] .panel-sec {
+  padding: 16px 6px;
+}
+
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}

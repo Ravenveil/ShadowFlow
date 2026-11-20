@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { source, type WorkspaceData, type WorkspaceSource } from './source';
-import type { Outbound, PolicyMatrix } from './types';
+import type { AppSettings, CliProbe, Outbound, PolicyMatrix, SshHost } from './types';
 
 export type WorkspaceStatus = 'loading' | 'ready' | 'error';
 
@@ -28,6 +28,19 @@ export interface WorkspaceApi {
   transcribe: (audio: Blob) => Promise<string>;
   /** 存策略：本地立即生效，再交给数据源落库。 */
   savePolicy: (policy: PolicyMatrix) => Promise<void>;
+  /**
+   * 改设置：`patch` 是**顶层分区的浅合并**（比如 `{ profile: {...} }`）。
+   * 同样先本地生效再下发，改坏了不会让界面回跳。
+   */
+  patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  /** 设置正在下发（页脚据此显示保存态）。 */
+  savingSettings: boolean;
+  /** 重扫本机 CLI，结果写回 settings.clis（返回最新一份给调用方提示用）。 */
+  rescanCli: () => Promise<CliProbe[]>;
+  /** 测 SSH 连通性，结果写回 settings.ssh。 */
+  testSsh: (id: string) => Promise<SshHost>;
+  /** 重置工作区（会话 / 策略 / 设置全部回到初始）。 */
+  reset: () => Promise<void>;
   /** 重新拉一次（错误重试 / 手动刷新）。 */
   reload: () => void;
 }
@@ -38,7 +51,11 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [sending, setSending] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  /** 最新数据的镜像：patchSettings 要在 updater 之外算出合并结果再下发。 */
+  const dataRef = useRef<WorkspaceData | null>(null);
+  dataRef.current = data;
 
   useEffect(() => {
     let alive = true;
@@ -115,7 +132,73 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
     [src],
   );
 
+  const patchSettings = useCallback(
+    async (patch: Partial<AppSettings>) => {
+      const current = dataRef.current;
+      if (!current) return;
+      const next: AppSettings = { ...current.settings, ...patch };
+      setData({ ...current, settings: next });
+      setSavingSettings(true);
+      try {
+        await src.saveSettings(next);
+      } catch (err) {
+        console.error('[workspace] saveSettings failed', err);
+        throw err;
+      } finally {
+        setSavingSettings(false);
+      }
+    },
+    [src],
+  );
+
+  const rescanCli = useCallback(async () => {
+    const clis = await src.rescanCli();
+    const current = dataRef.current;
+    if (current) {
+      setData({ ...current, settings: { ...current.settings, clis } });
+    }
+    return clis;
+  }, [src]);
+
+  const testSsh = useCallback(
+    async (id: string) => {
+      const host = await src.testSsh(id);
+      const current = dataRef.current;
+      if (current) {
+        setData({
+          ...current,
+          settings: {
+            ...current.settings,
+            ssh: current.settings.ssh.map((h) => (h.id === id ? host : h)),
+          },
+        });
+      }
+      return host;
+    },
+    [src],
+  );
+
+  const reset = useCallback(async () => {
+    const fresh = await src.reset();
+    setData(fresh);
+  }, [src]);
+
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
-  return { data, status, error, send, sending, stop, transcribe, savePolicy, reload };
+  return {
+    data,
+    status,
+    error,
+    send,
+    sending,
+    stop,
+    transcribe,
+    savePolicy,
+    patchSettings,
+    savingSettings,
+    rescanCli,
+    testSsh,
+    reset,
+    reload,
+  };
 }
