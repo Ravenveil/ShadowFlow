@@ -113,9 +113,17 @@ async function run() {
   const roots = page.children.filter((n) => n.type === 'FRAME');
   const shots = roots.filter((n) => n.name.includes('四栏工作台'));
   const closeup = roots.filter((n) => n.name.includes('编队面板特写'));
+  const settings = roots.filter((n) => n.name.includes('设置 / '));
 
   ok('生成三套工作台', shots.length === 3, `实际 ${shots.length}`);
   ok('生成一张编队特写', closeup.length === 1, `实际 ${closeup.length}`);
+  ok('生成一张设置面板', settings.length === 1, `实际 ${settings.length}`);
+  if (settings.length) {
+    const st = settings[0];
+    ok('设置 940×672', st.width === 940 && st.height === 672, `${st.width}×${st.height}`);
+    const names = st.children.map((c) => c.name);
+    ok('设置左导航 + 右内容', names.includes('Settings · Nav') && names.includes('Settings · Main'), names.join(' | '));
+  }
 
   for (const s of shots) {
     ok(`${s.name} 尺寸 1440×900`, s.width === 1440 && s.height === 900, `${s.width}×${s.height}`);
@@ -139,7 +147,7 @@ async function run() {
 
   const texts = all.filter((n) => n.type === 'TEXT').map((n) => n.characters);
   const joined = texts.join('\n');
-  ['DeepSeek', '查看编队', '策略举证', '1 道审批门', 'Enter 发送'].forEach((needle) =>
+  ['DeepSeek', '查看编队', '策略举证', '1 道审批门', 'Enter 发送', '界面密度', '数据与隐私'].forEach((needle) =>
     ok(`文案含「${needle}」`, joined.includes(needle)),
   );
 

@@ -709,6 +709,187 @@ function buildTeamPanel(C, root, x, y) {
   return panel;
 }
 
+
+// ============ 设置面板（两栏） ============
+
+const SET_NAV = [
+  ['账户', ['个人资料', '外观']],
+  ['写作', ['写作规范', '模型与密钥', '本地 CLI']],
+  ['集成', ['连接器', '远程执行', '知识与记忆']],
+  ['偏好', ['协作', '通知', '数据与隐私']],
+];
+
+/** 三套风格缩略图的配色（与 settings.css 的 .tp-* 同源）。 */
+const TP = {
+  墨橙: { bg: '#F6F3EC', rail: '#EDE9DF', bar: '#14131A', bubble: '#FF5E3A' },
+  净白: { bg: '#FFFFFF', rail: '#F7F7F8', bar: '#1F2023', bubble: '#DDD6FB' },
+  夜间: { bg: '#0F0F14', rail: '#1B1B23', bar: '#ECECF1', bubble: '#FF6B4A' },
+};
+
+function themePreview(name) {
+  const c = TP[name];
+  const p = row('预览 · ' + name, 208, 54, c.bg, 0, [0, 0, 0, 0], { radius: 4, stroke: '#00000014' });
+  const rail = col('p-rail', 46, 54, c.rail, 4, [8, 6, 8, 6]);
+  [1, 0.55, 0.55].forEach(function (o) {
+    const b = box('b', 34, 3, c.bar, { radius: 1 });
+    b.fills = solid(c.bar, o);
+    rail.appendChild(b);
+  });
+  const main = col('p-main', 108, 54, null, 4, [8, 7, 8, 7]);
+  main.appendChild(box('l', 92, 3, c.bar, { radius: 1 }));
+  main.appendChild(box('l', 58, 3, c.bar, { radius: 1 }));
+  main.appendChild(spacer());
+  main.appendChild(box('bubble', 92, 9, c.bubble, { radius: 2 }));
+  main.appendChild(box('bubble', 50, 9, c.bubble, { radius: 2 }));
+  const panel = col('p-panel', 54, 54, c.bg, 4, [9, 6, 9, 6], { stroke: '#00000010' });
+  panel.appendChild(box('l', 40, 3, c.bar, { radius: 1 }));
+  panel.appendChild(box('l', 40, 3, c.bar, { radius: 1 }));
+  p.appendChild(rail);
+  p.appendChild(main);
+  p.appendChild(panel);
+  return p;
+}
+
+function buildSettings(C, root) {
+  // 左导航
+  const nav = col('Settings · Nav', 204, 672, C.sunken, 0, [0, 0, 0, 0]);
+  nav.strokes = solid(C.line);
+  nav.strokeWeight = 1;
+  nav.x = 0;
+  nav.y = 0;
+  root.appendChild(nav);
+
+  const nh = col('nav-head', 204, 74, null, 3, [20, 18, 12, 18]);
+  nh.appendChild(txt('设置', 15.5, C.ink, F.semi));
+  nh.appendChild(txt('偏好保存在本机，换设备不会同步', 10, C.ink3, F.reg, { width: 166 }));
+  nav.appendChild(nh);
+
+  const list = col('nav-list', 204, 0, null, 3, [0, 8, 12, 8]);
+  autoH(list);
+  SET_NAV.forEach(function (g) {
+    const gl = row('grp · ' + g[0], 188, 22, null, 0, [8, 10, 0, 10]);
+    gl.appendChild(txt(g[0], 9.5, C.ink3, F.reg));
+    list.appendChild(gl);
+    g[1].forEach(function (label) {
+      const active = label === '外观';
+      const it = row(
+        'nav · ' + label,
+        188,
+        32,
+        active ? C.elev : null,
+        9,
+        [0, 10, 0, 10],
+        active ? { radius: 7, stroke: C.line2 } : undefined,
+      );
+      it.appendChild(iconBox(13, active ? C.accent : C.ink3, 2));
+      it.appendChild(txt(label, 12.5, active ? C.ink : C.ink2, active ? F.semi : F.reg));
+      list.appendChild(it);
+    });
+  });
+  nav.appendChild(list);
+
+  // 右内容
+  const main = col('Settings · Main', 736, 672, C.elev, 0, [0, 0, 0, 0]);
+  main.x = 204;
+  main.y = 0;
+  root.appendChild(main);
+
+  const head = row('st-head', 736, 62, null, 11, [16, 22, 14, 22]);
+  const ico = row('head-ico', 30, 30, C.accentSoft, 0, [0, 0, 0, 0], { radius: 8 });
+  ico.primaryAxisAlignItems = 'CENTER';
+  ico.appendChild(iconBox(14, C.accent, 2));
+  head.appendChild(ico);
+  const htxt = col('head-text', 0, 0, null, 2, [0, 0, 0, 0]);
+  htxt.layoutSizingHorizontal = 'HUG';
+  htxt.appendChild(txt('外观', 15, C.ink, F.semi));
+  htxt.appendChild(txt('切换立即生效，并记住在这台设备上。', 11, C.ink3, F.reg));
+  head.appendChild(htxt);
+  head.appendChild(spacer());
+  head.appendChild(iconBox(15, C.ink3, 3));
+  main.appendChild(head);
+  main.appendChild(box('hr', 736, 1, C.line));
+
+  const body = col('st-body', 736, 0, null, 0, [18, 22, 0, 22]);
+  autoH(body);
+  main.appendChild(body);
+
+  body.appendChild(txt('界面风格', 10, C.ink3, F.reg));
+
+  const cards = row('theme-cards', 692, 0, null, 10, [8, 0, 2, 0]);
+  autoH(cards);
+  ['墨橙', '净白', '夜间'].forEach(function (name) {
+    const on = name === '墨橙';
+    const card = col('style-card · ' + name, 224, 0, C.bg, 7, [8, 8, 8, 8], {
+      radius: 8,
+      stroke: on ? C.accent : C.line,
+    });
+    autoH(card);
+    card.appendChild(themePreview(name));
+    const line = row('name', 208, 16, null, 5, [0, 2, 0, 2]);
+    line.appendChild(txt(name, 12, C.ink, F.semi));
+    if (on) line.appendChild(box('dot', 13, 13, C.accent, { radius: 7 }));
+    card.appendChild(line);
+    card.appendChild(
+      txt(
+        name === '墨橙' ? '米白纸感 · 橙色强调 · 硬边卡片' : name === '净白' ? '纯白留白 · 紫色强调 · 圆角柔和' : '深墨背景 · 橙光点缀 · 长时间写作',
+        10,
+        C.ink3,
+        F.reg,
+        { width: 208 },
+      ),
+    );
+    cards.appendChild(card);
+  });
+  body.appendChild(cards);
+
+  // 界面密度
+  const dens = row('row · 界面密度', 692, 46, null, 0, [12, 0, 12, 0]);
+  const dt = col('d-t', 0, 0, null, 2, [0, 0, 0, 0]);
+  dt.layoutSizingHorizontal = 'HUG';
+  dt.appendChild(txt('界面密度', 13, C.ink, F.reg));
+  dt.appendChild(txt('只影响行距与卡片内边距，不动字号。', 11, C.ink3, F.reg));
+  dens.appendChild(dt);
+  dens.appendChild(spacer());
+  const seg = row('seg', 150, 27, C.sunken, 2, [2, 2, 2, 2], { radius: 14, stroke: C.line });
+  ['紧凑', '标准', '宽松'].forEach(function (l) {
+    const on = l === '标准';
+    const it = row('seg · ' + l, 47, 23, on ? C.ink : null, 0, [0, 0, 0, 0], { radius: 12 });
+    it.primaryAxisAlignItems = 'CENTER';
+    it.appendChild(txt(l, 11.5, on ? C.bg : C.ink2, F.reg));
+    seg.appendChild(it);
+  });
+  dens.appendChild(seg);
+  body.appendChild(dens);
+  body.appendChild(box('hr', 692, 1, C.line));
+
+  // 界面动画
+  const mot = row('row · 界面动画', 692, 46, null, 0, [12, 0, 12, 0]);
+  const mt = col('m-t', 0, 0, null, 2, [0, 0, 0, 0]);
+  mt.layoutSizingHorizontal = 'HUG';
+  mt.appendChild(txt('界面动画', 13, C.ink, F.reg));
+  mt.appendChild(txt('关掉后弹出、滚动、状态切换都直接到位。', 11, C.ink3, F.reg));
+  mot.appendChild(mt);
+  mot.appendChild(spacer());
+  const sw = row('switch', 34, 19, C.accent, 0, [0, 0, 0, 0], { radius: 10 });
+  sw.primaryAxisAlignItems = 'MAX';
+  sw.appendChild(box('knob', 13, 13, C.bg, { radius: 7 }));
+  mot.appendChild(sw);
+  body.appendChild(mot);
+
+  main.appendChild(spacer());
+  main.appendChild(box('hr', 736, 1, C.line));
+  const foot = row('st-foot', 736, 52, C.sunken, 12, [11, 22, 11, 22]);
+  foot.appendChild(txt('已保存', 10.5, C.ink3, F.reg));
+  foot.appendChild(spacer());
+  const done = row('done', 74, 30, C.ink, 0, [0, 0, 0, 0], { radius: 7 });
+  done.primaryAxisAlignItems = 'CENTER';
+  done.appendChild(txt('完成', 11.5, C.bg, F.semi));
+  foot.appendChild(done);
+  main.appendChild(foot);
+
+  return root;
+}
+
 // ============ 运行 ============
 
 (async function main() {
@@ -750,9 +931,21 @@ function buildTeamPanel(C, root, x, y) {
     holder.y = 1400;
     buildTeamPanel(C0, holder, 0, 0);
 
+    // 设置面板（墨橙，外观分区）
+    const setName = '论文平台 · 设置 / 墨橙';
+    const oldS = figma.currentPage.children.find(function (n) {
+      return n.name === setName;
+    });
+    if (oldS) oldS.remove();
+    const settingsHolder = box(setName, 940, 672, C0.bg);
+    figma.currentPage.appendChild(settingsHolder);
+    settingsHolder.x = THEMES.length * 1520;
+    settingsHolder.y = 2400;
+    buildSettings(C0, settingsHolder);
+
     figma.currentPage.selection = made;
     figma.viewport.scrollAndZoomIntoView(made);
-    figma.notify('已生成 3 套工作台 + 1 张编队特写', { timeout: 6000 });
+    figma.notify('已生成 3 套工作台 + 编队特写 + 设置面板', { timeout: 6000 });
     figma.closePlugin();
   } catch (err) {
     figma.notify('生成失败：' + (err && err.message ? err.message : String(err)), {
