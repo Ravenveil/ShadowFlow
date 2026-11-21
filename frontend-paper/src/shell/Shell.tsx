@@ -1,7 +1,7 @@
 /**
- * Shell — 三栏工作台外壳：Rail / 会话列表 / 聊天。
+ * Shell — 四栏工作台外壳：Rail / 会话列表 / 聊天 / 执行详情。
  *
- * 只负责**视图状态**（哪条会话、设置开关），所有业务数据来自
+ * 只负责**视图状态**（哪条会话、面板开关、设置开关），所有业务数据来自
  * `data/useWorkspace()`；数据源是 mock 还是 http 由 `data/source.ts` 决定，
  * 这里不认识任何一个具体数据文件。文案仍在 `content/app.ts`。
  */
@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Rail } from './Rail';
 import { SessionList } from './SessionList';
 import { ChatArea } from './ChatArea';
+import { AgentPanel } from './AgentPanel';
 import { SettingsSheet, type SettingsSection } from '../settings/SettingsSheet';
 import { CHAT, DEMO } from '../content/app';
 import type { Outbound } from '../data/types';
@@ -27,6 +28,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
     watch,
     focus,
     transcribe,
+    savePolicy,
     patchSettings,
     savingSettings,
     rescanCli,
@@ -39,6 +41,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
    * （消息按**解析出来的** session.id 取，所以回落也不会串号）。
    */
   const [activeId, setActiveId] = useState(DEFAULT_SESSION_ID);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance');
   /** 选中的模型 id；空表示还没选过，用数据里的第一个。 */
@@ -61,8 +64,8 @@ export function Shell({ onExit }: { onExit: () => void }) {
 
   const select = useCallback((id: string) => setActiveId(id), []);
 
-  // 切会话：让数据源把会话相关的数据（消息 / 编队 / 策略 / DAG）focus 到当前会话。
-  // 数据里记着这些数据属于哪条会话（`focused`），不一致才重取，首屏不重复拉。
+  // 切会话：右栏那块（编队 / 策略 / 工作流 / 执行）跟着换。
+  // 数据里记着这四块属于哪条会话（`focused`），不一致才重取，首屏不重复拉。
   useEffect(() => {
     if (session && data && data.focused !== session.id) focus(session.id);
   }, [session?.id, data?.focused, focus]);
@@ -85,6 +88,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
       exportedAt: new Date().toISOString(),
       sessions: data.sessions,
       threads: data.threads,
+      panel: data.panel,
       policy: data.policy,
       dag: data.dag,
       settings: data.settings,
@@ -93,7 +97,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
 
   if (!data || !session) {
     return (
-      <div className="shell shell--boot">
+      <div className="shell shell--boot" data-panel="closed">
         <span className="shell-boot">
           {status === 'error' ? CHAT.loadError(error ?? '') : CHAT.loading}
         </span>
@@ -113,7 +117,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
   }
 
   return (
-    <div className="shell">
+    <div className="shell" data-panel={panelOpen ? 'open' : 'closed'}>
       <Rail onOpenSettings={() => setSettingsOpen(true)} />
       <SessionList
         sessions={data.sessions}
@@ -134,7 +138,20 @@ export function Shell({ onExit }: { onExit: () => void }) {
         onSend={sendOut}
         onStop={() => stop(session.id)}
         transcribe={transcribe}
+        onInspect={() => setPanelOpen(true)}
+        panelOpen={panelOpen}
+        onTogglePanel={() => setPanelOpen((v) => !v)}
       />
+      {panelOpen ? (
+        <AgentPanel
+          panel={data.panel}
+          roster={data.roster}
+          policy={data.policy}
+          dag={data.dag}
+          onSavePolicy={savePolicy}
+          onClose={() => setPanelOpen(false)}
+        />
+      ) : null}
       <SettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

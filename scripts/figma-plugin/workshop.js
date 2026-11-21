@@ -1,15 +1,15 @@
 // ============================================================
-// ShadowFlow 论文平台 · 三栏工作台 + 编队面板特写
+// ShadowFlow 论文平台 · 四栏工作台 + 编队面板特写
 // 离线 Figma 插件：不消耗 MCP 配额，按前端源码生成原生 auto-layout 图层
 //
 // 用法：
 //   1. Figma 桌面版 → Plugins → Development → Import plugin from manifest…
 //      选 scripts/figma-plugin/manifest-workshop.json
 //   2. 打开「wjy7770302's team library」(U1cazeAqzrmMolbYqm6Ar9)
-//   3. Plugins → Development → 运行 ShadowFlow · 生成三栏工作台
+//   3. Plugins → Development → 运行 ShadowFlow · 生成四栏工作台
 //
 // 生成内容（同名旧 frame 会先删掉，避免重复堆叠）：
-//   论文平台 · 三栏工作台 / 墨橙 / 净白 / 夜间   —— 1440×900
+//   论文平台 · 四栏工作台 / 墨橙 / 净白 / 夜间   —— 1440×900
 //   论文平台 · 编队面板特写                      —— 340×900
 // ============================================================
 
@@ -18,7 +18,7 @@ const F = { reg: 'Regular', med: 'Medium', semi: 'Semi Bold', bold: 'Bold' };
 const THEMES = [
   {
     key: 'ink',
-    name: '论文平台 · 三栏工作台 / 墨橙',
+    name: '论文平台 · 四栏工作台 / 墨橙',
     c: {
       bg: '#F6F3EC', elev: '#FFFFFF', sunken: '#EDE9DF', ink: '#14131A',
       ink2: '#3D3B45', ink3: '#7A7683', line: '#DDD8CB', line2: '#C9C2B1',
@@ -28,7 +28,7 @@ const THEMES = [
   },
   {
     key: 'clean',
-    name: '论文平台 · 三栏工作台 / 净白',
+    name: '论文平台 · 四栏工作台 / 净白',
     c: {
       bg: '#FFFFFF', elev: '#FFFFFF', sunken: '#F7F7F8', ink: '#1F2023',
       ink2: '#5A5D63', ink3: '#9A9DA3', line: '#ECEDEF', line2: '#DCDDE1',
@@ -38,7 +38,7 @@ const THEMES = [
   },
   {
     key: 'night',
-    name: '论文平台 · 三栏工作台 / 夜间',
+    name: '论文平台 · 四栏工作台 / 夜间',
     c: {
       bg: '#0F0F14', elev: '#17171E', sunken: '#1B1B23', ink: '#ECECF1',
       ink2: '#B5B6C1', ink3: '#7E7F8C', line: '#25252E', line2: '#32323C',
@@ -51,8 +51,7 @@ const THEMES = [
 const RAIL = 208;
 const LIST = 272;
 const PANEL = 340;
-/** 三栏工作台：聊天区占满 Rail + List 之外的全部宽度。 */
-const CHAT = 1440 - RAIL - LIST;
+const CHAT = 1440 - RAIL - LIST - PANEL;
 
 function rgb(h) {
   const s = h.replace('#', '');
@@ -1453,6 +1452,7 @@ function buildDag(C) {
       buildRail(C, root);
       buildList(C, root);
       buildChat(C, root);
+      buildPanel(C, root);
       made.push(root);
     }
 

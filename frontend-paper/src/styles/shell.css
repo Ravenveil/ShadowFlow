@@ -71,13 +71,17 @@
   box-shadow: 0 0 0 1.5px var(--bg-elev);
 }
 
-/* ============ 三栏骨架 ============ */
+/* ============ 四栏骨架 ============ */
 .shell {
   display: grid;
-  grid-template-columns: var(--rail-w) var(--list-w) minmax(0, 1fr);
+  grid-template-columns: var(--rail-w) var(--list-w) minmax(0, 1fr) var(--panel-w);
   height: 100vh;
   overflow: hidden;
   background: var(--bg);
+}
+
+.shell[data-panel='closed'] {
+  grid-template-columns: var(--rail-w) var(--list-w) minmax(0, 1fr);
 }
 
 /* 数据未就绪（加载中 / 拉取失败）时的占位：不画四栏骨架，避免闪一下再重排。 */

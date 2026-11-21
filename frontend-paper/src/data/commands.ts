@@ -10,6 +10,7 @@ import type { ComposerCommand } from './types';
 export const COMMANDS: ComposerCommand[] = [
   { id: 'clear', name: '/clear', desc: '清空输入框、附件与已选知识包', action: 'clear' },
   { id: 'help', name: '/help', desc: '查看快捷键与命令说明', action: 'help' },
+  { id: 'inspect', name: '/inspect', desc: '跳到右栏看本轮执行记录', action: 'inspect' },
   {
     id: 'outline',
     name: '/outline',

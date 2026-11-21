@@ -113,7 +113,7 @@ async function run() {
   if (figma._notify?.opts?.error) throw new Error(`插件内部报错：${figma._notify.msg}`);
 
   const roots = page.children.filter((n) => n.type === 'FRAME');
-  const shots = roots.filter((n) => n.name.includes('三栏工作台'));
+  const shots = roots.filter((n) => n.name.includes('四栏工作台'));
   const closeup = roots.filter((n) => n.name.includes('编队面板特写'));
   const settings = roots.filter((n) => n.name.includes('设置 / '));
   const landing = roots.filter((n) => n.name.includes('落地页'));
@@ -156,11 +156,12 @@ async function run() {
   for (const s of shots) {
     ok(`${s.name} 尺寸 1440×900`, s.width === 1440 && s.height === 900, `${s.width}×${s.height}`);
     const names = s.children.map((c) => c.name);
-    ok(`${s.name} 三栏就位`, names.length === 3, names.join(' | '));
+    ok(`${s.name} 四栏就位`, names.length >= 4, names.join(' | '));
     ok(
-      `${s.name} 含 Rail/List/Chat 且无 Panel`,
-      ['Rail · 全局导航', 'List · 会话列表', 'Chat · 对话区'].every((k) => names.includes(k)) &&
-        !names.includes('Panel · 执行详情'),
+      `${s.name} 含 Rail/List/Chat/Panel`,
+      ['Rail · 全局导航', 'List · 会话列表', 'Chat · 对话区', 'Panel · 执行详情'].every((k) =>
+        names.includes(k),
+      ),
       names.join(' | '),
     );
   }
@@ -174,10 +175,9 @@ async function run() {
 
   const texts = all.filter((n) => n.type === 'TEXT').map((n) => n.characters);
   const joined = texts.join('\n');
-  ['DeepSeek', '策略举证', '1 道审批门', 'Enter 发送', '界面密度', '数据与隐私'].forEach((needle) =>
+  ['DeepSeek', '查看编队', '策略举证', '1 道审批门', 'Enter 发送', '界面密度', '数据与隐私'].forEach((needle) =>
     ok(`文案含「${needle}」`, joined.includes(needle)),
   );
-  ok('工作台无执行详情栏文案「查看编队」', !joined.includes('查看编队'));
   ['论文团队。', '为一人工信 / 科研团队打造', 'RESEARCH SCENARIOS', 'CLOSED-LOOP WORKFLOW', 'AGENT CLUSTER', 'HUMAN IN THE LOOP', 'YOUR LAB. YOUR METHOD. YOUR AI TEAM.', '工作室版', '常见问题'].forEach((needle) =>
     ok(`落地页文案含「${needle}」`, joined.includes(needle)),
   );
@@ -196,7 +196,7 @@ async function run() {
   ok('DAG 六节点', dagNodes.length === 6, String(dagNodes.length));
 
   const tabs = all.filter((n) => n.name.startsWith('tab · '));
-  ok('tab 仅编队特写保留（工作台已删执行详情栏）', tabs.length === 3, String(tabs.length));
+  ok('tab 三枚 ×（3 套 + 特写）', tabs.length === 12, String(tabs.length));
 
   ok('插件正常收尾', figma._closed === true);
 
