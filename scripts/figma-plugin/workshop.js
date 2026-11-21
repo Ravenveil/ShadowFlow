@@ -1220,6 +1220,209 @@ function buildLanding(C) {
   return root;
 }
 
+// ============ DAG 结合版（shadow 主仓分层画布 + shadow-merge 过程时间线）============
+//
+// 融合三方长处：
+//   - shadow 主仓 ProcessDagCanvas/TeamDagCanvas：最长路径分层的横向 DAG、审批门虚线、
+//     策略染色（绿/琥珀/红）、迭代环标记
+//   - shadow-merge TimelineView：带步骤编号 + 状态的执行时间线
+//   - frontend-paper DagFlow：节点头像 + owner + 线型语义（直接/条件/审批）
+// 一张画板并排展示「分层 DAG 主视图」+「策略矩阵」+「执行时间线」，作为搬前端前的设计稿。
+
+function dagNode(C, label, role, status, policy) {
+  // status: done | running | wait | failed ; policy: permit | warn | deny | null
+  const n = col('DAG节点 / ' + label, 156, 66, C.elev, 4, [10, 10, 9, 10], {
+    radius: 5,
+    stroke: policy === 'deny' ? C.danger : policy === 'warn' ? C.warn : policy === 'permit' ? C.ok : C.line2,
+    strokeWeight: policy ? 2 : 1,
+  });
+  const head = row('head', 0, 20, null, 7, [0, 0, 0, 0]);
+  head.appendChild(avatar(16, status === 'done' ? C.ok : status === 'running' ? C.accent : C.ink3));
+  head.appendChild(txt(role, 9, C.ink3, F.med));
+  head.appendChild(spacer());
+  const stColor = status === 'done' ? C.ok : status === 'running' ? C.accent : status === 'failed' ? C.danger : C.ink3;
+  head.appendChild(dotBar(6, 6, stColor, 3));
+  n.appendChild(head);
+  n.appendChild(txt(label, 11, C.ink, F.semi));
+  n.appendChild(txt(
+    (status === 'done' ? '已完成' : status === 'running' ? '执行中' : status === 'failed' ? '失败' : '等待中') +
+      (policy ? ' · ' + (policy === 'deny' ? '拒绝' : policy === 'warn' ? '警告' : '允许') : ''),
+    8,
+    stColor,
+    F.reg,
+  ));
+  return n;
+}
+
+function buildDag(C) {
+  const root = col('论文平台 · DAG 结合版 / 墨橙', 1440, 1080, C.bg, 0, [0, 0, 0, 0], { clip: true });
+
+  // ---- 标题区 ----
+  const head = col('header', 1440, 96, C.elev, 6, [24, 28, 18, 28]);
+  head.appendChild(txt('DAG · 协作编排与执行追踪', 22, C.ink, F.bold));
+  head.appendChild(txt('横向分层看编排 · 策略矩阵看约束 · 时间线看执行 —— 三视图同源', 11, C.ink3, F.reg));
+  root.appendChild(head);
+
+  const body = row('body', 1440, 984, C.bg, 18, [20, 24, 24, 24]);
+
+  // ================= 左：分层 DAG 主视图 =================
+  const main = col('DAG主视图', 880, 944, C.elev, 12, [18, 18, 18, 18], { radius: 6, stroke: C.line });
+  const mt = row('title', 0, 24, null, 8, [0, 0, 0, 0]);
+  mt.appendChild(txt('01 / 编排 DAG', 12, C.ink, F.bold));
+  mt.appendChild(txt('最长路径分层 · 线型=交接方式 · 颜色=策略', 9, C.ink3, F.reg));
+  main.appendChild(mt);
+
+  // 五列节点定义（col, row）：输入 → 解析 → 并行复核 → 审批门 → 产出
+  const nodes = [
+    { label: '素材入库', role: '资料员', status: 'done', policy: null, x: 20, y: 40 },
+    { label: '文献综述', role: '研究员', status: 'done', policy: 'permit', x: 20, y: 150 },
+    { label: '数据核验', role: '分析员', status: 'running', policy: 'warn', x: 220, y: 40 },
+    { label: '方法比对', role: '分析员', status: 'running', policy: null, x: 220, y: 150 },
+    { label: '初稿写作', role: '写手', status: 'wait', policy: null, x: 420, y: 40 },
+    { label: '同行复核', role: '审稿人', status: 'wait', policy: 'deny', x: 420, y: 150 },
+    { label: '人工审批门', role: '你', status: 'wait', policy: null, x: 620, y: 95 },
+    { label: '投稿产出', role: '主编', status: 'wait', policy: null, x: 780, y: 95 },
+  ];
+
+  // 画布：绝对定位放节点 + 正交连线（矩形）
+  const canvas = box('canvas', 850, 560, C.sunken, { radius: 4, clip: true });
+  // 列标题
+  ['输入', '解析', '并行复核', '审批', '产出'].forEach(function (t, i) {
+    const c = txt(t, 9, C.ink3, F.semi);
+    c.x = 20 + i * 200;
+    c.y = 12;
+    canvas.appendChild(c);
+  });
+  // 连线（正交：水平矩形 + 竖直矩形；审批入边用虚线）
+  function hline(x, y, w, color, dashed) {
+    const l = box('edge-h', w, dashed ? 1.5 : 2, color, { radius: 1 });
+    l.x = x; l.y = y;
+    if (dashed) l.dashPattern = [5, 4];
+    canvas.appendChild(l);
+  }
+  function vline(x, y, h, color, dashed) {
+    const l = box('edge-v', 2, h, color, { radius: 1 });
+    l.x = x; l.y = y;
+    if (dashed) l.dashPattern = [5, 4];
+    canvas.appendChild(l);
+  }
+  // 简化的分层连线：输入两节点 → 分析两节点 → 复核两节点 → 审批 → 产出
+  const E = C.line2;
+  hline(180, 58, 40, E); hline(180, 168, 40, E);
+  vline(218, 58, 110, E); // 汇聚到解析列
+  hline(180, 73, 40, E, false); // 交叉一条
+  hline(380, 58, 40, C.warn, true); // 警告策略边（琥珀虚线）
+  hline(380, 168, 40, E);
+  hline(580, 58, 40, E); hline(580, 168, 40, E);
+  vline(618, 58, 95, E); vline(618, 168, -0, E); // 汇入审批
+  hline(618, 128, 40, C.accent, true); // 审批门入边（橙虚线）
+  hline(778, 128, 20, E);
+  // 节点
+  nodes.forEach(function (d) {
+    const node = dagNode(C, d.label, d.role, d.status, d.policy);
+    node.x = d.x; node.y = d.y + 32;
+    canvas.appendChild(node);
+  });
+  main.appendChild(canvas);
+
+  // 图例
+  const legend = row('legend', 0, 28, null, 16, [2, 0, 0, 0]);
+  const mk = function (color, label, dashed) {
+    const g = row('lg', 0, 16, null, 5, [0, 0, 0, 0]);
+    const line = box('l', 18, dashed ? 1.5 : 2, color);
+    if (dashed) line.dashPattern = [5, 4];
+    g.appendChild(line);
+    g.appendChild(txt(label, 9, C.ink3, F.reg));
+    return g;
+  };
+  legend.appendChild(mk(E, '直接交接', false));
+  legend.appendChild(mk(C.accent, '审批门', true));
+  legend.appendChild(mk(C.ok, '允许', false));
+  legend.appendChild(mk(C.warn, '警告', true));
+  legend.appendChild(mk(C.danger, '拒绝', false));
+  main.appendChild(legend);
+
+  // 迭代环徽标说明
+  const loopNote = row('loopNote', 0, 26, C.accentSoft, 8, [6, 10, 6, 10], { radius: 4 });
+  loopNote.appendChild(txt('⟳ 迭代环', 9, C.accent, F.semi));
+  loopNote.appendChild(txt('复核↔写作 可回炉 3 轮，收敛后进入审批门', 9, C.ink2, F.reg));
+  main.appendChild(loopNote);
+  body.appendChild(main);
+
+  // ================= 右：策略矩阵 + 执行时间线 =================
+  const side = col('侧栏', 0, 944, null, 14, [0, 0, 0, 0]);
+
+  // 策略矩阵
+  const matrix = col('策略矩阵', 416, 330, C.elev, 10, [16, 18, 16, 18], { radius: 6, stroke: C.line });
+  matrix.appendChild(txt('02 / 协作策略矩阵', 12, C.ink, F.bold));
+  matrix.appendChild(txt('成员对双向取更严 · 改一格即反映到 DAG 边色', 9, C.ink3, F.reg));
+  const headerRow = row('mh', 0, 20, null, 6, [0, 0, 0, 34]);
+  ['资料', '分析', '审稿', '主编'].forEach(function (t) {
+    headerRow.appendChild(txt(t, 8, C.ink3, F.med));
+  });
+  matrix.appendChild(headerRow);
+  const gridColors = [
+    ['#', C.ok, C.warn, C.ok],
+    [C.ok, '#', C.danger, C.ok],
+    [C.warn, C.danger, '#', C.warn],
+    [C.ok, C.ok, C.warn, '#'],
+  ];
+  gridColors.forEach(function (r, ri) {
+    const gr = row('mrow' + ri, 0, 30, null, 6, [0, 0, 0, 34]);
+    gr.appendChild(txt(['资料', '分析', '审稿', '主编'][ri], 8, C.ink3, F.med));
+    r.forEach(function (cell) {
+      const cc = cell === '#' ? C.sunken : typeof cell === 'string' && cell.indexOf('#') === 0 ? cell : C.ok;
+      const swatch = box('cell', 52, 26, cc, { radius: 3, stroke: C.line });
+      gr.appendChild(swatch);
+    });
+    matrix.appendChild(gr);
+  });
+  const mlegend = row('mlg', 0, 20, null, 12, [4, 0, 0, 34]);
+  [ [C.ok, '允许'], [C.warn, '警告'], [C.danger, '拒绝'] ].forEach(function (p) {
+    const g = row('p', 0, 14, null, 4, [0, 0, 0, 0]);
+    g.appendChild(box('s', 10, 10, p[0], { radius: 2 }));
+    g.appendChild(txt(p[1], 8, C.ink3, F.reg));
+    mlegend.appendChild(g);
+  });
+  matrix.appendChild(mlegend);
+  side.appendChild(matrix);
+
+  // 执行时间线
+  const timeline = col('执行时间线', 416, 600, C.elev, 8, [16, 18, 16, 18], { radius: 6, stroke: C.line });
+  timeline.appendChild(txt('03 / 执行时间线', 12, C.ink, F.bold));
+  timeline.appendChild(txt('步骤编号 + 状态，来自 shadow-merge TimelineView', 9, C.ink3, F.reg));
+  const steps = [
+    ['01', '素材入库 · 3 份资料解析', 'done', '09:41'],
+    ['02', '文献综述 · 提炼 12 条要点', 'done', '09:43'],
+    ['03', '数据核验 · 7B/13B 口径比对', 'running', '09:46'],
+    ['04', '方法比对 · 等待并行复核', 'wait', '—'],
+    ['05', '初稿写作 · 队列', 'wait', '—'],
+    ['06', '人工审批门 · 待你确认', 'wait', '—'],
+    ['07', '投稿产出 · 队列', 'wait', '—'],
+  ];
+  steps.forEach(function (s) {
+    const sc = s[2] === 'done' ? C.ok : s[2] === 'running' ? C.accent : C.ink3;
+    const item = row('step' + s[0], 0, 44, s[2] === 'running' ? C.accentSoft : C.elev, 10, [8, 10, 8, 10], {
+      radius: 4,
+      stroke: s[2] === 'running' ? C.accent : C.line,
+    });
+    item.appendChild(box('num', 24, 24, sc, { radius: 12 }));
+    item.appendChild(txt(s[0], 10, sc, F.bold));
+    const mid = col('mid', 0, 0, null, 2, [0, 0, 0, 0]);
+    mid.appendChild(txt(s[1], 10, C.ink, F.med));
+    mid.appendChild(txt('状态 ' + (s[2] === 'done' ? '已完成' : s[2] === 'running' ? '执行中' : '等待中'), 8, sc, F.reg));
+    item.appendChild(mid);
+    item.appendChild(spacer());
+    item.appendChild(txt(s[3], 9, C.ink3, F.reg));
+    timeline.appendChild(item);
+  });
+  side.appendChild(timeline);
+  body.appendChild(side);
+
+  root.appendChild(body);
+  return root;
+}
+
 // ============ 运行 ============
 
 (async function main() {
@@ -1285,9 +1488,21 @@ function buildLanding(C) {
     landing.y = 1400;
     made.push(landing);
 
+    // DAG 结合版（shadow 主仓分层画布 + shadow-merge 过程时间线）
+    const dagName = '论文平台 · DAG 结合版 / 墨橙';
+    const oldDag = figma.currentPage.children.find(function (n) {
+      return n.name === dagName;
+    });
+    if (oldDag) oldDag.remove();
+    const dag = buildDag(C0);
+    figma.currentPage.appendChild(dag);
+    dag.x = -3040;
+    dag.y = 1400;
+    made.push(dag);
+
     figma.currentPage.selection = made;
     figma.viewport.scrollAndZoomIntoView(made);
-    figma.notify('已生成落地页 + 3 套工作台 + 编队特写 + 设置面板', { timeout: 6000 });
+    figma.notify('已生成落地页 + DAG结合版 + 3 套工作台 + 编队特写 + 设置面板', { timeout: 6000 });
     figma.closePlugin();
   } catch (err) {
     figma.notify('生成失败：' + (err && err.message ? err.message : String(err)), {

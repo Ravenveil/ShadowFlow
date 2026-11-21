@@ -115,11 +115,20 @@ async function run() {
   const closeup = roots.filter((n) => n.name.includes('编队面板特写'));
   const settings = roots.filter((n) => n.name.includes('设置 / '));
   const landing = roots.filter((n) => n.name.includes('落地页'));
+  const dagBoard = roots.filter((n) => n.name.includes('DAG 结合版'));
 
   ok('生成三套工作台', shots.length === 3, `实际 ${shots.length}`);
   ok('生成一张编队特写', closeup.length === 1, `实际 ${closeup.length}`);
   ok('生成一张设置面板', settings.length === 1, `实际 ${settings.length}`);
   ok('生成一张落地页', landing.length === 1, `实际 ${landing.length}`);
+  ok('生成一张 DAG 结合版画板', dagBoard.length === 1, `实际 ${dagBoard.length}`);
+  if (dagBoard.length) {
+    const db = dagBoard[0];
+    ok('DAG 画板 1440×1080', db.width === 1440 && db.height === 1080, `${db.width}×${db.height}`);
+    const body = db.children.find((c) => c.name === 'body');
+    const viewNames = body ? body.children.map((c) => c.name) : [];
+    ok('DAG 三视图同源（主视图+侧栏）', viewNames.includes('DAG主视图') && viewNames.includes('侧栏'), viewNames.join(' | '));
+  }
   if (landing.length) {
     const lp = landing[0];
     ok('落地页 1440 宽', lp.width === 1440, `${lp.width}`);
@@ -163,6 +172,16 @@ async function run() {
   ['论文团队。', '为一人工信 / 科研团队打造', 'RESEARCH SCENARIOS', 'CLOSED-LOOP WORKFLOW', 'AGENT CLUSTER', 'HUMAN IN THE LOOP', 'YOUR LAB. YOUR METHOD. YOUR AI TEAM.', '工作室版', '常见问题'].forEach((needle) =>
     ok(`落地页文案含「${needle}」`, joined.includes(needle)),
   );
+  ['DAG · 协作编排与执行追踪', '编排 DAG', '最长路径分层', '协作策略矩阵', '执行时间线', '人工审批门', '迭代环', '直接交接', '审批门'].forEach((needle) =>
+    ok(`DAG 文案含「${needle}」`, joined.includes(needle)),
+  );
+  const dagLayerNodes = all.filter((n) => n.name.startsWith('DAG节点 / '));
+  ok('DAG 画板 8 个编排节点', dagLayerNodes.length === 8, String(dagLayerNodes.length));
+  const edgeHs = all.filter((n) => n.name === 'edge-h');
+  const edgeVs = all.filter((n) => n.name === 'edge-v');
+  ok('DAG 正交连线（水平+竖直）', edgeHs.length >= 5 && edgeVs.length >= 2, `h=${edgeHs.length} v=${edgeVs.length}`);
+  const dashes = all.filter((n) => Array.isArray(n.dashPattern) && n.dashPattern.length > 0);
+  ok('DAG 审批/策略虚线', dashes.length >= 2, String(dashes.length));
 
   const dagNodes = all.filter((n) => n.name.startsWith('node · '));
   ok('DAG 六节点', dagNodes.length === 6, String(dagNodes.length));
