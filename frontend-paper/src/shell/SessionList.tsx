@@ -2,7 +2,7 @@
  * SessionList — 第二栏：会话列表。文案见 `content/app.ts` 的 LIST。
  */
 import { useState } from 'react';
-import { AvatarStack, AVATAR_SIZE } from '../avatar';
+import { AgentAvatar, AvatarStack, AVATAR_SIZE } from '../avatar';
 import { LIST } from '../content/app';
 import type { Session } from '../data/types';
 import { IconPlus, IconSearch } from './icons';
@@ -37,6 +37,7 @@ export function SessionList({
         <button className="slist-back" onClick={onCollapse} title={LIST.collapse}>
           ←
         </button>
+        <AgentAvatar label={currentAgent} size={AVATAR_SIZE.base} status={false} />
         <span className="slist-head-title">{currentAgent}</span>
         <button className="sf-icon-btn" onClick={onCollapse} title={LIST.close}>
           ✕
