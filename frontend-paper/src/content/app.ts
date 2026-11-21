@@ -52,8 +52,6 @@ export const CHAT = {
   } satisfies Record<Session['kind'], string>,
   members: (n: number) => `${n} 位`,
   more: '更多',
-  panelHide: '收起面板',
-  panelShow: '展开面板',
   emptyTitle: (title: string) => `与 ${title} 开始对话`,
   emptyBody: {
     group: '在群里发消息，主控会接住需求并拆给对应角色；也可以 @ 某位角色直接提问。',

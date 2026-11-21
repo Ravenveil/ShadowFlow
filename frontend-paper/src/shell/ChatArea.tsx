@@ -7,7 +7,7 @@ import { MessageList } from '../chat/MessageList';
 import { Composer } from '../chat/composer/Composer';
 import { CHAT } from '../content/app';
 import type { ComposerData, Message, Outbound, RosterMember, Session } from '../data/types';
-import { IconMore, IconPanel, IconSparkle, IconUsers } from './icons';
+import { IconMore, IconSparkle, IconUsers } from './icons';
 
 export function ChatArea({
   session,
@@ -20,9 +20,6 @@ export function ChatArea({
   onSend,
   onStop,
   transcribe,
-  onInspect,
-  panelOpen,
-  onTogglePanel,
 }: {
   session: Session;
   messages: Message[];
@@ -34,9 +31,6 @@ export function ChatArea({
   onSend: (out: Outbound) => Promise<void>;
   onStop: () => void;
   transcribe: (audio: Blob) => Promise<string>;
-  onInspect: () => void;
-  panelOpen: boolean;
-  onTogglePanel: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isGroup = session.kind === 'group';
@@ -63,14 +57,6 @@ export function ChatArea({
           ) : null}
           <button className="sf-icon-btn" title={CHAT.more}>
             <IconMore size={16} />
-          </button>
-          <button
-            className="sf-icon-btn"
-            title={panelOpen ? CHAT.panelHide : CHAT.panelShow}
-            data-active={panelOpen ? 'true' : undefined}
-            onClick={onTogglePanel}
-          >
-            <IconPanel size={16} />
           </button>
         </div>
       </header>
@@ -108,7 +94,6 @@ export function ChatArea({
           onSend={onSend}
           onStop={onStop}
           transcribe={transcribe}
-          onInspect={onInspect}
           placeholder={isGroup ? CHAT.placeholder.group : CHAT.placeholder.dm}
         />
       </div>

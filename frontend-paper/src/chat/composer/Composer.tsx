@@ -50,7 +50,6 @@ export function Composer({
   onSend,
   onStop,
   transcribe,
-  onInspect,
 }: {
   placeholder: string;
   roster: RosterMember[];
@@ -61,7 +60,6 @@ export function Composer({
   onSend: (out: Outbound) => Promise<void>;
   onStop: () => void;
   transcribe: (audio: Blob) => Promise<string>;
-  onInspect: () => void;
 }) {
   const [text, setText] = useState('');
   const [trigger, setTrigger] = useState<DetectedTrigger | null>(null);
@@ -142,11 +140,9 @@ export function Composer({
         setToast(COMPOSER.cleared);
       } else if (action === 'help') {
         setHelpOpen(true);
-      } else {
-        onInspect();
       }
     },
-    [attachments, onInspect],
+    [attachments],
   );
 
   const menuItems: MenuItem[] = useMemo(() => {

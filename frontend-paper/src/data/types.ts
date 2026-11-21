@@ -191,7 +191,7 @@ export interface ComposerCommand {
   name: string;
   desc: string;
   insert?: string;
-  action?: 'clear' | 'help' | 'inspect';
+  action?: 'clear' | 'help';
 }
 
 /** 知识包（多模态记忆库里的一包文档），勾选后随消息检索注入。 */
