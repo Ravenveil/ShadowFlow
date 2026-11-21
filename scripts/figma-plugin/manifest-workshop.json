@@ -1,8 +1,7 @@
 {
-  "name": "ShadowFlow · 生成四栏工作台",
-  "id": "shadowflow-workshop-sync",
-  "api": "1.0.0",
+  "name": "ShadowFlow · 生成设计稿",
   "main": "workshop.js",
+  "api": "1.0.0",
   "editorType": ["figma"],
-  "documentAccess": "currentpage"
+  "networkAccess": { "allowedDomains": ["none"] }
 }
