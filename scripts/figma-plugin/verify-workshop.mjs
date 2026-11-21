@@ -93,6 +93,7 @@ const figma = {
 };
 
 const code = fs.readFileSync(path.join(here, 'workshop.js'), 'utf8');
+const plugin1Code = fs.readFileSync(path.join(here, '1', 'code.js'), 'utf8');
 const ctx = vm.createContext({ figma, console, setTimeout, clearTimeout });
 
 const fail = [];
@@ -105,6 +106,7 @@ const ok = (label, cond, detail) => {
 };
 
 async function run() {
+  ok('plugin1/code.js 与 workshop.js 同步', plugin1Code === code, '请重新执行 cp ../workshop.js code.js');
   await vm.runInContext(code, ctx);
   await new Promise((r) => setTimeout(r, 60));
 
