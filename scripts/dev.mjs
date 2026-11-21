@@ -5,18 +5,19 @@
  *   npm run dev
  *
  * 做四件事:
- *   1. 拉起 Python FastAPI(:8000)+ Node 网关(:8002)+ Vite 前端(:3007)
- *   2. 就绪探测:三个服务全部 HTTP 可达后才开浏览器(避免落地白屏/报错)
- *   3. 自动打开浏览器 http://localhost:3007
+ *   1. 拉起 Node 网关(:8002) + Vite 前端(:3008)；legacy 模式额外拉 Python(:8000)
+ *   2. 就绪探测:所需服务全部 HTTP 可达后才开浏览器(避免落地白屏/报错)
+ *   3. 自动打开浏览器 http://localhost:3008
  *   4. Ctrl+C 或任一进程退出 → 整棵进程树一起停,不留孤儿
  *
  * 端口被占用时启动前直接报错退出;Python 解释器自动探测
  * (SF_PYTHON 环境变量 > 根目录 .venv > 系统 python)。
  *
- * 可选参数:--no-open 不开浏览器;--no-python 只起网关+前端。
+ * 可选参数:--no-open 不开浏览器;--no-python 强制不启 Python;--legacy 用旧前端。
  *
- * 单后端（2026-11-18）：设 SF_BACKEND_MODE=single 时不拉起 Python，网关只跑
- * Node（groups 自动走 Node SQLite）。未迁移端点返回结构化 BACKEND_GAP 404,
+ * 单后端为默认（2026-11-21 起）：所有后端端点已迁到 Node，默认只起网关+前端，
+ * 不再拉 Python。仅显式 SF_BACKEND_MODE=legacy 才回退双后端（逃生舱）。
+ * 未迁移端点返回结构化 BACKEND_GAP 404,
  * 访问 http://localhost:8002/health/backend-gaps 看剩余清单。
  */
 import { spawn, execFile, execFileSync } from 'node:child_process';
@@ -42,8 +43,10 @@ const PAPER_MOCK = PAPER && args.has('--mock');
 const WEB_PORT = PAPER ? 3008 : 3007;
 
 const OPEN_BROWSER = !args.has('--no-open');
-const SINGLE_BACKEND = (process.env.SF_BACKEND_MODE ?? '').trim().toLowerCase() === 'single';
-// single 模式不启 Python；--no-python 仍可单独用于 legacy 调试。
+// 与 backend/node/src/config/backend-mode.ts 的 getBackendMode() 对齐：
+// 默认 single（不启 Python），仅显式 SF_BACKEND_MODE=legacy 才回退双后端。
+const SINGLE_BACKEND = (process.env.SF_BACKEND_MODE ?? '').trim().toLowerCase() !== 'legacy';
+// --no-python 可在 legacy 模式下强制关掉 Python。
 const WITH_PYTHON = !args.has('--no-python') && !SINGLE_BACKEND;
 
 const C = {
@@ -288,7 +291,7 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
   ────────────────────────────────────────────
   ${C.cyan}UI${C.reset}      ${uiUrl}${C.dim}  ${PAPER ? (PAPER_MOCK ? 'frontend-paper · 演示数据' : 'frontend-paper · 接后端') : 'frontend'}${C.reset}
   ${C.cyan}网关${C.reset}    http://localhost:${GW_PORT}/health
-  ${C.cyan}模式${C.reset}    ${SINGLE_BACKEND ? `${C.green}单后端 (SF_BACKEND_MODE=single)${C.reset}` : `${C.dim}双后端 legacy${C.reset}`}${SINGLE_BACKEND ? `\n  ${C.dim}剩余缺口: http://localhost:${GW_PORT}/health/backend-gaps${C.reset}` : ''}
+  ${C.cyan}模式${C.reset}    ${SINGLE_BACKEND ? `${C.green}单后端（默认，仅 Node）${C.reset}` : `${C.yellow}双后端 legacy（显式回退）${C.reset}`}${SINGLE_BACKEND ? `\n  ${C.dim}剩余缺口: http://localhost:${GW_PORT}/health/backend-gaps${C.reset}` : ''}
   ${withPython ? `${C.cyan}Python${C.reset}  http://localhost:${PY_PORT}/docs` : `${C.dim}Python  已跳过${C.reset}`}
   ${C.dim}Ctrl+C 停止全部服务${C.reset}
 `);
