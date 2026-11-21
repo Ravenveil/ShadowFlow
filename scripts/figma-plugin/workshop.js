@@ -206,6 +206,10 @@ function buildList(C, root) {
 
   const head = row('List · Head', LIST, 56, null, 8, [0, 14, 0, 14]);
   head.appendChild(txt('←', 14, C.ink3, F.med));
+  // 主控头像：与 shadow-merge 总经理共用同一张 CEO 脸（seed=CEO / #ff5e3a）。
+  const ceoAvatar = avatar(24, '#ff5e3a');
+  ceoAvatar.name = '主控头像 · CEO';
+  head.appendChild(ceoAvatar);
   head.appendChild(txt('主控', 14, C.ink, F.bold));
   head.appendChild(spacer());
   head.appendChild(iconBox(14, C.ink3, 7));

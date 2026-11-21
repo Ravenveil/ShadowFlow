@@ -144,6 +144,13 @@ async function run() {
     ok('设置左导航 + 右内容', names.includes('Settings · Nav') && names.includes('Settings · Main'), names.join(' | '));
   }
 
+  const ceoAvatars = all.filter((n) => n.name === '主控头像 · CEO');
+  ok(
+    '三套工作台会话顶栏均有主控头像（CEO 脸）',
+    ceoAvatars.length === 3,
+    `实际 ${ceoAvatars.length}`,
+  );
+
   for (const s of shots) {
     ok(`${s.name} 尺寸 1440×900`, s.width === 1440 && s.height === 900, `${s.width}×${s.height}`);
     const names = s.children.map((c) => c.name);
