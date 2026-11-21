@@ -114,10 +114,20 @@ async function run() {
   const shots = roots.filter((n) => n.name.includes('四栏工作台'));
   const closeup = roots.filter((n) => n.name.includes('编队面板特写'));
   const settings = roots.filter((n) => n.name.includes('设置 / '));
+  const landing = roots.filter((n) => n.name.includes('落地页'));
 
   ok('生成三套工作台', shots.length === 3, `实际 ${shots.length}`);
   ok('生成一张编队特写', closeup.length === 1, `实际 ${closeup.length}`);
   ok('生成一张设置面板', settings.length === 1, `实际 ${settings.length}`);
+  ok('生成一张落地页', landing.length === 1, `实际 ${landing.length}`);
+  if (landing.length) {
+    const lp = landing[0];
+    ok('落地页 1440 宽', lp.width === 1440, `${lp.width}`);
+    const lpNames = lp.children.map((c) => c.name);
+    ['lp-nav', 'lp-hero', 'lp-pain', 'lp-workflow', 'lp-agents', 'lp-know', 'lp-slogan', 'lp-cases', 'lp-faq', 'lp-pricing', 'lp-footer'].forEach((k) =>
+      ok(`落地页含 ${k}`, lpNames.includes(k), lpNames.join(' | ')),
+    );
+  }
   if (settings.length) {
     const st = settings[0];
     ok('设置 940×672', st.width === 940 && st.height === 672, `${st.width}×${st.height}`);
@@ -149,6 +159,9 @@ async function run() {
   const joined = texts.join('\n');
   ['DeepSeek', '查看编队', '策略举证', '1 道审批门', 'Enter 发送', '界面密度', '数据与隐私'].forEach((needle) =>
     ok(`文案含「${needle}」`, joined.includes(needle)),
+  );
+  ['论文团队。', '为一人工信 / 科研团队打造', 'RESEARCH SCENARIOS', 'CLOSED-LOOP WORKFLOW', 'AGENT CLUSTER', 'HUMAN IN THE LOOP', 'YOUR LAB. YOUR METHOD. YOUR AI TEAM.', '工作室版', '常见问题'].forEach((needle) =>
+    ok(`落地页文案含「${needle}」`, joined.includes(needle)),
   );
 
   const dagNodes = all.filter((n) => n.name.startsWith('node · '));

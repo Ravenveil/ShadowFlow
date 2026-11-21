@@ -890,6 +890,336 @@ function buildSettings(C, root) {
   return root;
 }
 
+// ============ 落地页设计稿（结构对齐 shadow-merge，文案=论文平台） ============
+// 全部节点用 lp- 前缀，避免和工作台/tab/DAG 的断言计数互相干扰。
+
+function lpBtn(label, kind, C) {
+  const solidBtn = kind === 'solid';
+  const b = row('lp-btn · ' + label, 138, 42, solidBtn ? C.accent : null, 0, [0, 0, 0, 0], {
+    radius: 8,
+    stroke: solidBtn ? null : C.line2,
+    strokeWeight: 1,
+  });
+  b.primaryAxisAlignItems = 'CENTER';
+  b.appendChild(txt(label, 13, solidBtn ? C.bg : C.ink, F.semi));
+  return b;
+}
+
+function lpSectionHead(C, kicker, titleLines, side) {
+  const head = col('lp-head', 1200, 150, null, 12, [0, 0, 0, 0]);
+  head.appendChild(txt(kicker, 12, C.accent, F.bold));
+  titleLines.forEach((line) => head.appendChild(txt(line, 34, C.ink, F.bold)));
+  if (side) {
+    const s = txt(side, 14, C.ink2, F.reg, { width: 720 });
+    s.opacity = 0.9;
+    head.appendChild(s);
+  }
+  return head;
+}
+
+function buildLanding(C) {
+  const LIGHT = '#F6F3EC';
+  const root = col('论文平台 · 落地页 / 墨橙', 1440, 5400, C.bg, 0, [0, 0, 0, 0], { clip: true });
+
+  // ── 顶部导航 ──
+  const nav = row('lp-nav', 1440, 76, C.elev, 0, [0, 120, 0, 120]);
+  nav.strokes = solid(C.line);
+  nav.strokeWeight = 1;
+  nav.appendChild(box('lp-logo', 26, 26, C.accent, { radius: 7 }));
+  nav.appendChild(txt('ShadowFlow', 17, C.ink, F.bold));
+  nav.appendChild(spacer());
+  ['研究场景', '闭环链路', 'Agent 团队', '知识沉淀', '案例演示', '常见问题'].forEach((l) =>
+    nav.appendChild(txt(l, 12.5, C.ink2, F.med)),
+  );
+  nav.appendChild(spacer());
+  nav.appendChild(lpBtn('联系我们', 'outline', C));
+  nav.appendChild(lpBtn('进入工作台', 'solid', C));
+  root.appendChild(nav);
+
+  // ── Hero ──
+  const hero = row('lp-hero', 1440, 600, C.bg, 40, [70, 120, 60, 120]);
+  const heroCopy = col('lp-hero-copy', 560, 460, null, 16, [0, 0, 0, 0]);
+  const pill = row('lp-pill', 210, 30, C.accentSoft, 0, [0, 14, 0, 14], { radius: 15 });
+  pill.appendChild(txt('为一人工信 / 科研团队打造', 11, C.accent, F.semi));
+  heroCopy.appendChild(pill);
+  heroCopy.appendChild(txt('一个人，', 50, C.ink, F.bold, { lineHeight: 60 }));
+  heroCopy.appendChild(txt('也能带出一支', 50, C.ink, F.bold, { lineHeight: 60 }));
+  heroCopy.appendChild(txt('论文团队。', 50, C.accent, F.bold, { lineHeight: 60 }));
+  heroCopy.appendChild(txt('从选题到投稿，让 AI 角色按你的方法协同推进。你负责判断与把关，ShadowFlow 负责把每一环都闭合。', 15, C.ink2, F.reg, { width: 520 }));
+  const heroBtns = row('lp-hero-btns', 440, 44, null, 12, [0, 0, 0, 0]);
+  heroBtns.appendChild(lpBtn('进入工作台', 'solid', C));
+  heroBtns.appendChild(lpBtn('联系我们', 'outline', C));
+  heroBtns.appendChild(txt('看看如何工作 →', 13, C.ink2, F.med));
+  heroCopy.appendChild(heroBtns);
+  const ticks = row('lp-ticks', 460, 24, null, 18, [0, 0, 0, 0]);
+  ['无需信用卡', '15 分钟完成配置', '关键节点人工可控'].forEach((t) => ticks.appendChild(txt('✓ ' + t, 11.5, C.ink3, F.reg)));
+  heroCopy.appendChild(ticks);
+  hero.appendChild(heroCopy);
+
+  const win = col('lp-product-window', 560, 470, C.elev, 14, [18, 18, 18, 18], { radius: 14, stroke: C.line, strokeWeight: 1 });
+  const winTop = row('lp-win-top', 524, 34, null, 10, [0, 0, 0, 0]);
+  [C.danger, C.warn, C.ok].forEach((c) => winTop.appendChild(avatar(9, c)));
+  winTop.appendChild(txt('shadowflow.ai / 项目执行中心', 12, C.ink3, F.med));
+  win.appendChild(winTop);
+  win.appendChild(txt('LLM Agent 角色分工综述', 22, C.ink, F.bold));
+  const statRow = row('lp-stats', 524, 66, C.sunken, 0, [10, 18, 10, 18], { radius: 10 });
+  [['12', '任务总数'], ['08', '已完成'], ['03', '执行中']].forEach(([k, v]) => {
+    const cell = col('lp-stat', 150, 46, null, 4, [0, 0, 0, 0]);
+    cell.appendChild(txt(k, 24, C.accent, F.bold));
+    cell.appendChild(txt(v, 11, C.ink3, F.reg));
+    statRow.appendChild(cell);
+  });
+  win.appendChild(statRow);
+  const flow = col('lp-flow', 524, 190, null, 10, [12, 14, 12, 14], { radius: 10, stroke: C.line, strokeWeight: 1 });
+  flow.appendChild(row('lp-flow-head', 496, 22, null, 8, [0, 0, 0, 0], {}));
+  flow.children[0].appendChild(txt('工作流', 13, C.ink, F.semi));
+  flow.children[0].appendChild(spacer());
+  flow.children[0].appendChild(txt('实时更新 ●', 11, C.ok, F.med));
+  [['01', '文献调研', '已完成', C.ok], ['02', '方法设计', '进行中', C.accent], ['03', '章节撰写', '执行中', '#8e6cff']].forEach(([n, t, s, col]) => {
+    const r = row('lp-flow-row', 496, 34, C.sunken, 12, [0, 12, 0, 12], { radius: 8 });
+    r.appendChild(avatar(20, col));
+    r.appendChild(txt(n, 11, C.ink3, F.med));
+    r.appendChild(txt(t, 13, C.ink, F.semi));
+    r.appendChild(spacer());
+    r.appendChild(txt(s, 11, col, F.med));
+    flow.appendChild(r);
+  });
+  win.appendChild(flow);
+  const floatCard = row('lp-float', 300, 40, C.elev, 10, [0, 12, 0, 12], { radius: 8, stroke: C.accent, strokeWeight: 1 });
+  floatCard.appendChild(iconBox(18, C.accent));
+  floatCard.appendChild(txt('章节主笔 · 已完成 4 个 section', 11.5, C.ink, F.med));
+  win.appendChild(floatCard);
+  hero.appendChild(win);
+  root.appendChild(hero);
+
+  // ── 痛点 ──
+  const pain = col('lp-pain', 1440, 520, C.sunken, 30, [56, 120, 40, 120]);
+  pain.appendChild(lpSectionHead(C, 'RESEARCH SCENARIOS', ['论文协作场景，', '是否遇到以下问题？'], '当你同时是调研、方法、写作和投稿负责人，真正消耗精力的不是某一项工作，而是不断切换角色与拼接上下文。'));
+  const painGrid = row('lp-pain-grid', 1200, 240, null, 20, [0, 0, 0, 0]);
+  [
+    ['01', '工具很多，链路依然断裂', '文献库、AI 对话、LaTeX 工程和组会纪要散落各处，每次续写都要重建上下文。'],
+    ['02', '一个人承担多个岗位', '文献调研、方法设计、写作、投稿，全压在同一个研究者身上。切换成本比工作量本身更贵。'],
+    ['03', 'AI 输出难以稳定交付', '缺少负责人、验收标准、审核节点与修改记录，结果不可控、不可回溯。'],
+    ['04', '项目经验无法变成资产', '审稿意见、有效论证和写作偏好散落历史文件，下一篇又要从零开始。'],
+  ].forEach(([n, title, body]) => {
+    const card = col('lp-pain-card', 285, 240, C.elev, 12, [20, 18, 18, 18], { radius: 12, stroke: C.line, strokeWeight: 1 });
+    const top = row('lp-pain-top', 249, 30, null, 8, [0, 0, 0, 0]);
+    top.appendChild(txt(n, 13, C.accent, F.bold));
+    top.appendChild(spacer());
+    top.appendChild(iconBox(22, C.accent));
+    card.appendChild(top);
+    card.appendChild(txt(title, 15, C.ink, F.semi, { width: 249 }));
+    card.appendChild(txt(body, 12, C.ink2, F.reg, { width: 249 }));
+    painGrid.appendChild(card);
+  });
+  pain.appendChild(painGrid);
+  root.appendChild(pain);
+
+  // ── 闭环链路（深色） ──
+  const flowSec = row('lp-workflow', 1440, 560, C.deep, 40, [56, 120, 40, 120]);
+  const flowLeft = col('lp-workflow-left', 520, 440, null, 16, [0, 0, 0, 0]);
+  flowLeft.appendChild(txt('CLOSED-LOOP WORKFLOW', 12, '#FF8A6B', F.bold));
+  flowLeft.appendChild(txt('闭环的链路，', 34, LIGHT, F.bold));
+  flowLeft.appendChild(txt('帮您解决上述问题。', 34, LIGHT, F.bold));
+  flowLeft.appendChild(txt('ShadowFlow 不是让几个聊天机器人各说各话，而是让每个角色基于同一份课题知识，接力完成同一个研究目标。', 14, '#B8B4C6', F.reg, { width: 500 }));
+  [['01', 'BRIEF', '录入课题需求'], ['02', 'PLAN', '主控拆解'], ['03', 'CREATE', '角色协同执行'], ['04', 'DELIVER', '审核并投稿交付']].forEach(([n, lb, t], i) => {
+    const st = row('lp-step', 500, 52, i === 1 ? C.accent : '#22213A', 14, [0, 16, 0, 16], { radius: 8 });
+    st.appendChild(txt(n, 13, i === 1 ? LIGHT : '#8E8AA6', F.bold));
+    const tx = col('lp-step-tx', 400, 44, null, 2, [0, 0, 0, 0]);
+    tx.appendChild(txt(lb, 10, i === 1 ? LIGHT : '#8E8AA6', F.med));
+    tx.appendChild(txt(t, 14, LIGHT, F.semi));
+    st.appendChild(tx);
+    flowLeft.appendChild(st);
+  });
+  flowSec.appendChild(flowLeft);
+  const detail = col('lp-step-detail', 560, 440, '#1B1A2E', 16, [28, 28, 28, 28], { radius: 14, stroke: '#34324C', strokeWeight: 1 });
+  detail.appendChild(row('lp-detail-top', 504, 22, null, 8, [0, 0, 0, 0], {}));
+  detail.children[0].appendChild(txt('WORKFLOW / 02', 11, '#8E8AA6', F.med));
+  detail.children[0].appendChild(spacer());
+  detail.children[0].appendChild(txt('LIVE', 11, C.ok, F.bold));
+  detail.appendChild(iconBox(52, '#FF8A6B'));
+  detail.appendChild(txt('主控拆解', 26, LIGHT, F.bold));
+  detail.appendChild(txt('识别课题范围，生成章节计划、任务清单和质量标准，并自动分配给合适的 AI 角色。', 14, '#B8B4C6', F.reg, { width: 504 }));
+  const out = row('lp-out', 504, 60, '#232238', 12, [0, 16, 0, 16], { radius: 10 });
+  out.appendChild(iconBox(22, C.ok));
+  const outTx = col('lp-out-tx', 440, 48, null, 3, [0, 0, 0, 0]);
+  outTx.appendChild(txt('本阶段产出', 10, '#8E8AA6', F.med));
+  outTx.appendChild(txt('章节计划与任务 DAG', 14, LIGHT, F.semi));
+  out.appendChild(outTx);
+  detail.appendChild(out);
+  const dots = row('lp-dots', 504, 12, null, 8, [0, 0, 0, 0]);
+  [C.ok, C.ok, '#4A4866', '#4A4866'].forEach((cc) => dots.appendChild(box('dot', 100, 4, cc, { radius: 2 })));
+  detail.appendChild(dots);
+  flowSec.appendChild(detail);
+  root.appendChild(flowSec);
+
+  // ── Agent 集群 ──
+  const agentsSec = col('lp-agents', 1440, 660, C.bg, 26, [56, 120, 40, 120]);
+  agentsSec.appendChild(lpSectionHead(C, 'AGENT CLUSTER', ['Agent 员工集群，', '打造论文交付链路。'], '每位角色都有明确的职责、输入、工具和交付标准。主控负责规划和调度，你始终保留最终决策权。'));
+  const agentGrid = row('lp-agent-grid', 1200, 260, null, 18, [0, 0, 0, 0]);
+  [
+    ['A1', 'CHIEF OF STAFF', '主控', '接需求 · 拆任务 · 调度团队', C.accent],
+    ['A2', 'RESEARCHER', '文献研究员', '文献扫描 · 基线对比 · 洞察提炼', '#2777e8'],
+    ['A3', 'STRATEGIST', '方法设计', '实验设计 · 消融规划 · 统计口径', '#8e6cff'],
+    ['A4', 'CREATIVE', '章节主笔', '章节撰写 · 图表脚本 · 投稿材料', '#e05aa0'],
+    ['A5', 'CITATION OFFICER', '引用核查', '引用核对 · 口径复核 · 依据溯源', '#2ec4a6'],
+    ['A6', 'SUBMISSION MGR', '投稿管理', '格式对齐 · 材料打包 · 投稿跟进', '#12b76a'],
+  ].forEach(([code, en, cn, task, color]) => {
+    const card = col('lp-agent-card', 188, 260, C.elev, 10, [16, 14, 16, 14], { radius: 12, stroke: C.line, strokeWeight: 1 });
+    const top = row('lp-agent-top', 160, 24, null, 6, [0, 0, 0, 0]);
+    top.appendChild(txt(code, 11, C.ink3, F.bold));
+    top.appendChild(spacer());
+    top.appendChild(txt('●', 10, color, F.med));
+    card.appendChild(top);
+    card.appendChild(avatar(46, color));
+    card.appendChild(txt(en, 9.5, color, F.med));
+    card.appendChild(txt(cn, 15, C.ink, F.bold));
+    card.appendChild(txt(task, 11, C.ink2, F.reg, { width: 160 }));
+    card.appendChild(spacer());
+    card.appendChild(txt('READY TO WORK', 9.5, C.ok, F.med));
+    agentGrid.appendChild(card);
+  });
+  agentsSec.appendChild(agentGrid);
+  const human = row('lp-human', 1200, 92, C.accentSoft, 18, [0, 24, 0, 24], { radius: 12 });
+  human.appendChild(box('lp-human-badge', 46, 46, C.accent, { radius: 12 }));
+  human.appendChild(col('lp-human-tx', 1080, 70, null, 4, [0, 0, 0, 0]));
+  human.children[1].appendChild(txt('HUMAN IN THE LOOP', 10, C.accent, F.bold));
+  human.children[1].appendChild(txt('AI 负责执行，你负责判断——关键策略、结论取舍与最终投稿都由你审核确认。', 14, C.ink, F.semi, { width: 1060 }));
+  agentsSec.appendChild(human);
+  root.appendChild(agentsSec);
+
+  // ── 知识沉淀 ──
+  const know = row('lp-know', 1440, 520, C.sunken, 40, [56, 120, 40, 120]);
+  const knowCopy = col('lp-know-copy', 520, 400, null, 16, [0, 0, 0, 0]);
+  knowCopy.appendChild(txt('EVERY PROJECT MAKES YOU STRONGER', 12, C.accent, F.bold));
+  knowCopy.appendChild(txt('论文闭环链路长期沉淀，', 32, C.ink, F.bold));
+  knowCopy.appendChild(txt('越来越聪明。', 32, C.ink, F.bold));
+  knowCopy.appendChild(txt('每次项目的审稿意见、有效论证、写作偏好和交付标准都会回到课题组的记忆系统。下一次，不再从零开始。', 14, C.ink2, F.reg, { width: 500 }));
+  const knowMetrics = row('lp-know-metrics', 480, 80, null, 30, [0, 0, 0, 0]);
+  [['1', '个统一课题上下文'], ['∞', '次复用方法与经验']].forEach(([k, v]) => {
+    const m = col('lp-know-metric', 200, 80, null, 4, [0, 0, 0, 0]);
+    m.appendChild(txt(k, 40, C.accent, F.bold));
+    m.appendChild(txt(v, 12, C.ink2, F.reg));
+    knowMetrics.appendChild(m);
+  });
+  knowCopy.appendChild(knowMetrics);
+  know.appendChild(knowCopy);
+  const kg = box('lp-knowledge-graph', 560, 400, C.elev, { radius: 14, stroke: C.line, strokeWeight: 1 });
+  const core = col('lp-kg-core', 180, 96, C.deep, 6, [0, 0, 0, 0], { radius: 12 });
+  core.primaryAxisAlignItems = 'CENTER';
+  core.counterAxisAlignItems = 'CENTER';
+  core.appendChild(txt('课题组知识库', 15, LIGHT, F.bold));
+  core.appendChild(txt('持续学习中', 10, '#B8B4C6', F.med));
+  core.x = 190;
+  core.y = 152;
+  kg.appendChild(core);
+  [['审稿意见', 40, 40], ['项目成果', 400, 40], ['SOP 模板', 40, 320], ['写作偏好', 400, 320]].forEach(([n, x, y]) => {
+    const node = row('lp-kg-node', 120, 44, C.bg, 6, [0, 10, 0, 10], { radius: 10, stroke: C.line2, strokeWeight: 1 });
+    node.appendChild(iconBox(16, C.accent));
+    node.appendChild(txt(n, 11.5, C.ink, F.med));
+    node.x = x;
+    node.y = y;
+    kg.appendChild(node);
+  });
+  know.appendChild(kg);
+  root.appendChild(know);
+
+  // ── 口号带（深色） ──
+  const slogan = col('lp-slogan', 1440, 240, C.deep, 12, [0, 120, 0, 120]);
+  slogan.primaryAxisAlignItems = 'CENTER';
+  slogan.appendChild(txt('YOUR LAB. YOUR METHOD. YOUR AI TEAM.', 13, '#FF8A6B', F.bold));
+  slogan.appendChild(txt('让一个人，也能带出一支专业的论文团队。', 32, LIGHT, F.bold));
+  root.appendChild(slogan);
+
+  // ── 案例 + Demo ──
+  const cases = col('lp-cases', 1440, 620, C.bg, 24, [56, 120, 40, 120]);
+  cases.appendChild(lpSectionHead(C, 'CASE STUDY', ['客户案例：从组会稿', '到投稿材料全流程。'], '真实场景演示：上传组会记录与实验数据，主控拆解后分给各角色，最终产出投稿级稿件。'));
+  const figs = row('lp-figs', 1200, 180, null, 18, [0, 0, 0, 0]);
+  [['组会记录 · 结构化入库', C.ok], ['实验数据 · 核对归档', '#2777e8']].forEach(([cap, color]) => {
+    const fig = col('lp-fig', 591, 180, C.sunken, 8, [0, 0, 0, 0], { radius: 12, stroke: C.line, strokeWeight: 1 });
+    fig.appendChild(box('lp-fig-img', 591, 132, color, { radius: 12 }));
+    fig.appendChild(txt(cap, 12, C.ink2, F.med));
+    figs.appendChild(fig);
+  });
+  cases.appendChild(figs);
+  const demo = row('lp-demo', 1200, 200, C.elev, 0, [0, 0, 0, 0], { radius: 12, stroke: C.line, strokeWeight: 1 });
+  const demoChat = col('lp-demo-chat', 700, 200, C.bg, 10, [16, 16, 16, 16]);
+  demoChat.appendChild(txt('课题组 · 组会稿转投稿稿', 14, C.ink, F.bold));
+  demoChat.appendChild(row('lp-msg', 520, 38, C.elev, 6, [0, 12, 0, 12], { radius: 8 }));
+  demoChat.children[1].appendChild(txt('主控：想把组会稿整理成投稿稿？', 11.5, C.ink2, F.med));
+  demoChat.appendChild(row('lp-msg', 520, 38, C.accentSoft, 6, [0, 12, 0, 12], { radius: 8 }));
+  demoChat.children[2].appendChild(txt('用户：组会稿_v3.md · 实验对比表.xlsx', 11.5, C.ink, F.med));
+  demo.appendChild(demoChat);
+  const demoBoard = col('lp-demo-board', 500, 200, C.sunken, 8, [16, 16, 16, 16]);
+  demoBoard.appendChild(txt('平台实时同步', 13, C.ink, F.semi));
+  [['知识库资料', '3 份'], ['Agent 团队', '6 人'], ['引用核查', '52 条']].forEach(([k, v]) => {
+    const r = row('lp-metric', 468, 32, C.elev, 8, [0, 10, 0, 10], { radius: 6 });
+    r.appendChild(txt(k, 11.5, C.ink2, F.reg));
+    r.appendChild(spacer());
+    r.appendChild(txt(v, 12, C.accent, F.bold));
+    demoBoard.appendChild(r);
+  });
+  demo.appendChild(demoBoard);
+  cases.appendChild(demo);
+  root.appendChild(cases);
+
+  // ── FAQ ──
+  const faq = row('lp-faq', 1440, 460, C.elev, 60, [56, 120, 40, 120]);
+  const faqL = col('lp-faq-l', 300, 300, null, 14, [0, 0, 0, 0]);
+  faqL.appendChild(txt('常见问题', 34, C.ink, F.bold));
+  faqL.appendChild(lpBtn('联系我们', 'outline', C));
+  faq.appendChild(faqL);
+  const faqR = col('lp-faq-r', 840, 360, null, 10, [0, 0, 0, 0]);
+  [
+    'ShadowFlow 和通用大模型有什么不同？',
+    '我已经在用很多 AI 工具，还需要 ShadowFlow 吗？',
+    'AI 会直接把未经审核的内容发出去吗？',
+    '能否沉淀我自己的研究方法论？',
+  ].forEach((q, i) => {
+    const item = col('lp-faq-item', 840, i === 0 ? 96 : 66, i === 0 ? C.accentSoft : C.bg, 0, [14, 18, 14, 18], { radius: 8, stroke: C.line, strokeWeight: 1 });
+    const qrow = row('lp-faq-q', 804, 30, null, 10, [0, 0, 0, 0]);
+    qrow.appendChild(txt('0' + (i + 1), 12, C.accent, F.bold));
+    qrow.appendChild(txt(q, 14, C.ink, F.semi));
+    qrow.appendChild(spacer());
+    qrow.appendChild(txt('⌄', 14, C.ink3, F.med));
+    item.appendChild(qrow);
+    if (i === 0) item.appendChild(txt('通用大模型擅长单次对话与生成；ShadowFlow 把模型能力组织成有岗位、有上下游、有质量标准的业务流程，并将执行过程与课题、成本和交付成果关联起来。', 11.5, C.ink2, F.reg, { width: 804 }));
+    faqR.appendChild(item);
+  });
+  faq.appendChild(faqR);
+  root.appendChild(faq);
+
+  // ── 价格 ──
+  const pricing = col('lp-pricing', 1440, 520, C.sunken, 26, [56, 120, 40, 120]);
+  pricing.appendChild(lpSectionHead(C, 'PRICING', ['选择适合你的方案，', '从一个人到一支团队。'], null));
+  const plans = row('lp-plans', 1200, 250, null, 20, [0, 0, 0, 0]);
+  [
+    ['体验版', '免费', ['3 位预设 AI 员工', '500 基础积分'], false],
+    ['工作室版', '¥66 / 月', ['1000+2000 赠送积分', '多课题项目管理', '课题组知识库'], true],
+    ['专业定制版', '定制', ['专属 Skill 与员工', '知识库迁移', '定制工作流与部署'], false],
+  ].forEach(([name, price, feats, featured]) => {
+    const card = col('lp-plan', 386, 250, C.elev, 12, [24, 22, 22, 22], { radius: 12, stroke: featured ? C.accent : C.line, strokeWeight: featured ? 2 : 1 });
+    card.appendChild(txt(name, 16, C.ink, F.bold));
+    card.appendChild(txt(price, 30, featured ? C.accent : C.ink, F.bold));
+    feats.forEach((f) => card.appendChild(txt('✓ ' + f, 12, C.ink2, F.reg)));
+    card.appendChild(spacer());
+    card.appendChild(lpBtn(featured ? '立即开始' : '了解更多', featured ? 'solid' : 'outline', C));
+    plans.appendChild(card);
+  });
+  pricing.appendChild(plans);
+  root.appendChild(pricing);
+
+  // ── 页脚 ──
+  const footer = col('lp-footer', 1440, 180, C.deep, 16, [44, 120, 30, 120]);
+  footer.appendChild(row('lp-footer-brand', 300, 30, null, 8, [0, 0, 0, 0], {}));
+  footer.children[0].appendChild(box('lp-footer-logo', 22, 22, C.accent, { radius: 6 }));
+  footer.children[0].appendChild(txt('ShadowFlow', 16, LIGHT, F.bold));
+  footer.appendChild(txt('© 2026 ShadowFlow · 论文协作平台', 11, '#8E8AA6', F.reg));
+  root.appendChild(footer);
+
+  return root;
+}
+
 // ============ 运行 ============
 
 (async function main() {
@@ -943,9 +1273,21 @@ function buildSettings(C, root) {
     settingsHolder.y = 2400;
     buildSettings(C0, settingsHolder);
 
+    // 落地页设计稿（结构对齐 shadow-merge，文案=论文平台）
+    const lpName = '论文平台 · 落地页 / 墨橙';
+    const oldLp = figma.currentPage.children.find(function (n) {
+      return n.name === lpName;
+    });
+    if (oldLp) oldLp.remove();
+    const landing = buildLanding(C0);
+    figma.currentPage.appendChild(landing);
+    landing.x = -1520;
+    landing.y = 1400;
+    made.push(landing);
+
     figma.currentPage.selection = made;
     figma.viewport.scrollAndZoomIntoView(made);
-    figma.notify('已生成 3 套工作台 + 编队特写 + 设置面板', { timeout: 6000 });
+    figma.notify('已生成落地页 + 3 套工作台 + 编队特写 + 设置面板', { timeout: 6000 });
     figma.closePlugin();
   } catch (err) {
     figma.notify('生成失败：' + (err && err.message ? err.message : String(err)), {
