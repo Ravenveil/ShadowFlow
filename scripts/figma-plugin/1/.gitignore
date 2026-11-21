@@ -5,4 +5,5 @@ node_modules
 
 out/
 dist/
-code.js
+
+# 本插件直接维护 code.js（设计稿生成器入口），必须入库，不能被模板忽略
