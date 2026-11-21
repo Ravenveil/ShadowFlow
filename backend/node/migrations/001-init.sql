@@ -116,8 +116,55 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   token_hash  TEXT NOT NULL UNIQUE,   -- sha256(raw_token) hex
   address     TEXT NOT NULL,
-  auth_type   TEXT NOT NULL DEFAULT 'wallet',  -- 'wallet' | 'guest'
+  auth_type   TEXT NOT NULL DEFAULT 'wallet',  -- 'wallet' | 'guest' | 'email'
   expires_at  TEXT NOT NULL,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash);
+
+-- ── Email accounts + landing-page leads（merged 登录体系迁入） ────────────────
+-- password_hash format: scrypt$<salt_hex>$<hash_hex>（见 routes/system/auth.ts）。
+-- 邮箱账号的会话 auth_type='email'，auth_sessions.address 存小写邮箱。
+
+CREATE TABLE IF NOT EXISTS auth_email_users (
+  email         TEXT PRIMARY KEY,           -- lowercased
+  password_hash TEXT NOT NULL,
+  display_name  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS auth_leads (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  email      TEXT NOT NULL,
+  name       TEXT,
+  source     TEXT,                          -- 'newsletter' | 'demo' | 'plan' | ...
+  note       TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_auth_leads_email ON auth_leads(email);
+
+-- ── 用户与资源归属（登录信息隔离） ────────────────────────────────────────────
+-- users 是「谁在用」的唯一真源；注册 / 登录 / 游客签发时同步 upsert。
+-- 首个邮箱用户或 SF_ADMIN_EMAIL 指定者引导为 admin（见 storage/users.ts）。
+
+CREATE TABLE IF NOT EXISTS users (
+  user_id TEXT PRIMARY KEY,
+  email TEXT,
+  display_name TEXT,
+  auth_type TEXT NOT NULL DEFAULT 'email',
+  role TEXT NOT NULL DEFAULT 'user',
+  disabled INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+CREATE TABLE IF NOT EXISTS resource_owners (
+  resource_type TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  owner_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(resource_type, resource_id)
+);
+CREATE INDEX IF NOT EXISTS idx_resource_owners_owner ON resource_owners(owner_user_id);

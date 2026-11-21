@@ -9,9 +9,11 @@ import {
   AlertCircle,
   ArrowRight,
   ArrowUp,
+  BarChart3,
   Bell,
   BookOpen,
   Brain,
+  BrainCircuit,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -19,8 +21,10 @@ import {
   CircleDashed,
   Clock,
   Code2,
+  Database,
   Download,
   Eye,
+  FileCheck2,
   FileText,
   Folder,
   GitBranch,
@@ -31,9 +35,13 @@ import {
   LayoutGrid,
   Link as LinkIcon,
   Loader2,
+  Menu,
   MessageSquare,
+  MessageSquareText,
   Mic,
   MoreHorizontal,
+  MousePointer2,
+  Network,
   Palette,
   PanelRight,
   Paperclip,
@@ -50,11 +58,14 @@ import {
   SlidersHorizontal,
   Sparkles,
   Square,
+  Target,
   Terminal,
   Trash2,
   User,
   Users,
+  UsersRound,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -125,3 +136,16 @@ export const IconKeyboard = mk(Keyboard);
 export const IconDownload = mk(Download);
 export const IconEye = mk(Eye);
 export const IconTrash = mk(Trash2);
+
+/* 落地页专用 */
+export const IconBarChart = mk(BarChart3);
+export const IconBrainCircuit = mk(BrainCircuit);
+export const IconNetwork = mk(Network);
+export const IconDatabase = mk(Database);
+export const IconFileCheck = mk(FileCheck2);
+export const IconTarget = mk(Target);
+export const IconUsersRound = mk(UsersRound);
+export const IconZap = mk(Zap);
+export const IconPointer = mk(MousePointer2);
+export const IconMenu = mk(Menu);
+export const IconMessage = mk(MessageSquareText);
