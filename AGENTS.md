@@ -2,7 +2,7 @@
 
 ## 架构与目录（2026-11-19 起是硬约束）
 
-**改任何代码前先读 [ARCHITECTURE.md](ARCHITECTURE.md)。** 要点：
+**改任何代码前先读 [documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md)。** 要点：
 
 - 业务规则进 `backend/node/src/domains/<域>/model`；多步编排进 `use_cases`；HTTP 形状进 `routes`/`adapters`；SQL/IO 进 `infra`。
 - `model` 禁止 import express / sqlite / fs / crypto —— 纯领域。

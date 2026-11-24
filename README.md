@@ -172,7 +172,7 @@ python scripts/check_contracts.py             # type drift
 
 ### Contributing
 
-PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code style, and PR guidelines.
+PRs welcome! See [CONTRIBUTING.md](documentation/CONTRIBUTING.md) for setup, code style, and PR guidelines.
 
 ## License
 
@@ -183,7 +183,6 @@ PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code style, and P
 ## Phase 2–3 Roadmap
 
 ### Phase 2 — Deep Integration
-- **Tauri Sidecar**: desktop app (macOS / Windows), offline-capable
 - **River Memory System**: main-stream / tributary / water-gate memory protocol, cross-run semantic persistence
 
 ### Phase 3 — Value Network

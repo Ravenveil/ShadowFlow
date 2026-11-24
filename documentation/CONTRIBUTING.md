@@ -1,0 +1,249 @@
+# ShadowFlow 开发文档（CONTRIBUTING）
+
+欢迎参与 ShadowFlow 开发！本文档面向协作者，是上手与日常开发的唯一入口：架构、目录结构、环境搭建、常见任务配方、测试、CI 与 PR 流程。
+
+> 用户视角的介绍（功能演示、Docker 快速上手）见 [README.md](../README.md) / [README.zh.md](README.zh.md)。
+> **架构与目录的硬约束见 [ARCHITECTURE.md](ARCHITECTURE.md)**——新增代码放哪、领域包长什么样、哪些是红线，以那份为准；本文只讲怎么跑起来、怎么改。
+> 各层目录还有 `AGENTS.md`（给编码代理的局部约定，如 `backend/node/src/routes/AGENTS.md`）——改哪层代码，先读哪层的 AGENTS.md。
+
+## 项目概览
+
+ShadowFlow 是一个 **contract-first（契约优先）的多智能体工作流平台**：AI agent 团队在人类可审阅的策略规则下协作，支持拒绝回路（rejection loops）、检查点回滚，以及对接任意 agent 运行时（Claude Code / Codex / MCP / ACP）的插件化契约。
+
+## 架构总览
+
+三个服务协同工作（2026-11-07 仓库按语言拆分后：前端独立目录、两个后端各归其位）：
+
+| 服务 | 位置 | 技术栈 | 端口 | 职责 |
+|---|---|---|---|---|
+| Web UI | `frontend/` | React 18 + Vite + Zustand + ReactFlow | 3007 | 工作流编辑器、Neo 界面体系 |
+| Node 网关 | `backend/node/` | Node + tsx + Express + better-sqlite3 | 8002 | RunSession API、技能编译、群聊 DAG、反向代理 |
+| ~~Python API~~ | ~~`backend/python/`~~ | FastAPI | 8000 | **已退役（ADR-0001，2026-11-24）**：目录已删，全部职责由 Node 网关承担 |
+
+请求链路：**Vite → 代理 `/api/*` 到 Node（8002）→ 未匹配路由返回 BACKEND_GAP 结构化 404**（无 Python 兜底，ADR-0001）。
+
+配套组件：
+
+- `examples/backend-poc/` — OPC OS 原型后端（早期独立验证项目，原 `backend/python` OPC 服务的移植来源，该目录已删（ADR-0001），与主链路无关，保留作参照）
+- `examples/ui-kits/` — 设计稿 HTML
+
+## 目录结构
+
+```
+ShadowFlow/
+├── frontend/                     # 旧前端（React 18 + Vite，端口 3007）
+│   └── src/
+│       ├── neo/                  #   Neo 界面体系（NeoApp/NeoRail/NeoHost/NeoChat/Timeline + projections/）
+│       ├── core/  pages/         #   核心组件与设置 / 路由级页面（Dashboard/Knowledge/Memory/Schedules/Settings…）
+│       ├── components/           #   通用组件（composer/、knowledge/、run-session/…）
+│       ├── api/  store/  lib/    #   fetch 客户端 / Zustand store / 工具库
+│       └── AppRoutes.tsx         #   路由表
+├── frontend-paper/               # 新前端：论文四栏工作台（端口 3008，已接真后端）
+│   └── src/
+│       ├── data/                 #   ★ 唯一数据出入口：source.ts 契约 + http/（路由/映射/SSE）+ mock.ts
+│       ├── content/              #   全部中文文案（组件里不许写中文）
+│       ├── theme/                #   tokens.css（--tone-*）+ 三套风格
+│       ├── shell/  chat/  panel/  settings/  landing/
+│       └── styles/               #   base / shell / chat / panel / composer / settings / landing
+├── backend/
+│   ├── node/                     # Node 网关（Express + better-sqlite3，端口 8002）
+│   │   ├── src/routes/           #   REST 路由，每文件一个 prefix（清单见 src/routes/AGENTS.md）
+│   │   ├── src/domains/          #   ★ 业务域（model/repository/infra/use_cases/adapters）——规范见 ARCHITECTURE.md
+│   │   ├── src/lib/              #   业务内核（chat-dag、skill-compiler、tool-runner、team-yaml…）
+│   │   ├── src/storage/          #   SQLite 落库 + 已迁移模块的兼容层
+│   │   ├── src/transport/  src/workflow/  src/assembly/  src/parsers/  src/prompts/  src/detectors/ …
+│   │   └── src/index.ts          #   入口：路由挂载 + /api 兜底反代 Python
+│   └── python/                   # Python 包（FastAPI，端口 8000）
+│       ├── shadowflow/api/       #   REST API（按域拆模块：agents/teams/groups/chat/memory/runs/schedules…）
+│       ├── shadowflow/core/      #   工作流图抽象（graph/node/topology）
+│       ├── shadowflow/assembly/  #   编译激活（compile/activation/learner）
+│       ├── shadowflow/memory/    #   记忆体系（memory_bank、global_memory、session/user、layers）
+│       └── shadowflow/contracts/ runtime/ protocol/ llm/ services/  #  契约 / 运行时 / 协议 / 模型 / 领域服务
+├── docker/                       # Dockerfile.web / docker-compose.yml（compose 与 CI 共用；Dockerfile.api 已随 Python 退役删除）
+├── templates/                    # 工作流模板（*.yaml）+ agent-packs（yaml manifest）
+├── config/                       # 示例/默认配置（app.json、network.json、catalog-templates/…）
+├── examples/                     # 运行时契约示例（yaml/ts）+ backend-poc/（OPC OS 原型）+ ui-kits/（设计稿 HTML）
+├── tests/                        # 跨栈/端到端测试（Python 单测已随 backend/python 删除）
+├── scripts/                      # dev.mjs 统一启动器、i18n、demo/、data/training（训练脚本与数据）
+├── .github/workflows/            # CI（ci.yml）
+├── documentation/                # ★ 入库开发文档（ARCHITECTURE.md 为架构约束，改代码前必读）
+└── pyproject.toml                # Python 包定义（可选依赖组见下）
+```
+
+**有意不入库的目录**（克隆后没有是正常的，别重建）：`docs/`（内部设计文档）、`design-refs/`（界面参考截图）、`server/skills/BMAD-METHOD/`（第三方方法论，按需由 skill ingest 拉取）、`_local/`（本地收纳 hub——研究资料、PM 产物、设计证据、临时杂物统一放这里，`.gitignore` 已声明）、`demo-runtime/`、`_data/` 等本地运行目录。完整清单见 `.gitignore`。
+
+## 快速开始
+
+### 方式一：Docker（无需装环境）
+
+```bash
+git clone https://github.com/Ravenveil/ShadowFlow.git && cd ShadowFlow
+cp .env.example .env          # 可选：填 API key；留空则用界面内 BYOK 输入
+docker compose -f docker/docker-compose.yml up -d   # web :3000 / node :8002 / api :8000
+```
+
+镜像构建文件在 `docker/Dockerfile.web`（网关用自己的 `backend/node/Dockerfile`）。**移动这些文件时必须同步修改 `docker/docker-compose.yml` 和 `.github/workflows/ci.yml`**，CI 会实际构建验证。
+
+### 方式二：本地开发（改代码用这个）
+
+```bash
+# 1. JS 依赖（根 + server 两处）
+npm install
+cd backend/node && npm install && cd ..
+
+# 2. Python 后端（要完整功能才需要；Python >= 3.10）
+python -m venv .venv
+# Windows:
+.venv\Scripts\pip install -e ".[dev]"
+# macOS/Linux:
+.venv/bin/pip install -e ".[dev]"
+# 可选依赖组：.[server] .[memory] .[mcp] .[lightrag] .[all]
+
+# 3. 一键启动（默认拉新前端 frontend-paper :3008 + Node :8002）
+npm run dev                   # http://localhost:3008
+npm run dev -- --legacy       # 回旧前端 http://localhost:3007
+npm run dev -- --mock         # 新前端 + 演示数据（不连后端，评审/截图用）
+npm run dev -- --no-python    # 不起 Python（单后端模式下本来也不起）
+```
+
+启动器（`scripts/dev.mjs`）负责：拉起 Python(:8000) + Node(:8002) + Vite(:3007 或 3008)，三个全部 HTTP 可达才开浏览器；Ctrl+C 或任一进程退出会停掉整棵进程树；端口被占用时启动前直接报错。Python 解释器探测顺序：`SF_PYTHON` 环境变量 > 根目录 `.venv` > 系统 `python`。
+
+也可单独启动：`npm run dev:python` / `dev:server` / `dev:web`。
+
+### 两个前端
+
+| 目录 | 端口 | 说明 |
+|---|---|---|
+| `frontend/` | 3007 | 旧前端（Neo 工作台 + 宣传页），功能最全，暂保留为回退 |
+| `frontend-paper/` | 3008 | 新前端（论文四栏工作台），已接真后端，**后续主推** |
+
+新前端只有**一个数据出入口**：`frontend-paper/src/data/source.ts`。
+
+- `httpSource`（`src/data/http/`）负责拼装既有 `/api` 端点 → `WorkspaceData`；
+  后端路由表在 `client.ts` 的 `ROUTES`，字段映射在 `mappers.ts`。
+  **接新后端只改这两个文件，组件不动。**
+- `mockSource` 读 `data/mock.ts`，用 `?mock=1` 或 `VITE_WS_SOURCE=mock` 切。
+- 三条守卫由 `npm run check --prefix frontend-paper` 把关：组件不许写色值、
+  不许写中文文案、不许自己 `fetch` 后端（只有 `data/http/` 认识 `/api`）。
+
+发消息是「两段式」：`POST /api/groups/:id/messages` 只回存好的那条，
+agent 回复从 `GET /api/groups/:id/events`（SSE）推过来 —— 所以「发送中」
+在有推送的源上要等第一帧才收尾，`npm run check` 不覆盖这条，改动时手动验一遍。
+
+生产镜像：`docker/Dockerfile.paper`（把 compose 里 `shadowflow-web` 的
+dockerfile 从 `Dockerfile.web` 换掉即可，端口与其他配置不动）。
+
+
+**API Key 约定（BYOK）**：key 粘贴在网页界面里，存浏览器 localStorage；`.env` 只作服务端兜底。**永远不要提交真实 key**（历史上泄露过一次，key 已作废，勿重蹈覆辙）。
+
+## 三栈模块地图
+
+改代码前先定位到正确的层，不要跨界搬运逻辑。
+
+**前端 `frontend/src/`**：`neo/` 是主界面体系（`NeoApp` 总编排、`NeoRail` 左栏、`NeoHost` 宿主面板、`NeoChat`/`NeoGroupChat` 会话、`NeoTimeline` 过程流，`projections/` 把后端事件投影成展示模型，`secretary.ts` 内置秘书人格）；`pages/` 是路由级页面；`components/` 按域分子目录（composer/、knowledge/、run-session/…）；`api/` 是 fetch 客户端，`store/` 是 Zustand。
+
+**Node 网关 `backend/node/src/`**：`domains/` 是业务域（分层规范见 [ARCHITECTURE.md](ARCHITECTURE.md)）；`routes/` 只做 HTTP shape 转换；`lib/` 是业务内核——`chat-dag/`（群聊 DAG 与 @ 提及路由）、`skill-compiler/`（技能编译）、`tool-runner.ts`（工具执行）、`run-event-bus/store`（运行事件）、`team-yaml.ts`/`team-source.ts`（编队来源）、`worktree-manager.ts` 等；`storage/` 落 SQLite（已迁移模块在此只剩兼容层）；`index.ts` 的 gap handler 对未迁移端点返回 BACKEND_GAP 结构化 404（无 Python 兜底，ADR-0001）。
+
+**Python 包**：已退役并删除（ADR-0001，2026-11-24）；历史职责（记忆体系、契约校验、opc/scheduler 领域服务）由 Node 域包承担，迁移缺口清单见 `/health/backend-gaps`。
+
+## 常见任务配方
+
+### 新增一个 REST 路由（Node 网关）
+
+1. 在 `backend/node/src/routes/<域>/<name>.ts` 写一个 Router，`export default router`
+2. `backend/node/src/index.ts` 加 `import` + `app.use('/api/<name>', xRouter)`，**挂载顺序无关（无 fallback）**
+3. 路由文件只做 HTTP shape 转换（req.body → 用例入参 → res.json）；**业务规则进 `domains/<域>/model`，编排进 `use_cases`**（见 [ARCHITECTURE.md](ARCHITECTURE.md)）；不要在 routes 里直接读 yaml / 调 LLM SDK
+4. SSE 流用 `res.write('data: ...\n\n')` 模式（参考 `routes/runs/run-sessions/`）
+
+详见 `backend/node/src/routes/AGENTS.md`。
+
+### 新增一个 Neo 导航页（前端）
+
+四步接线，不引新依赖（图表用 SVG 自绘）：
+
+1. `frontend/src/neo/types.ts`：`NeoNav` union 加变体
+2. `frontend/src/neo/NeoRail.tsx`：加导航行
+3. `frontend/src/neo/NeoApp.tsx`：`SECTION_BY_NAV` / `pageView` / 中栏渲染三处接线
+4. `frontend/src/AppRoutes.tsx`：加 Route
+
+### 新增 UI 文案
+
+文案走 `react-i18next`（en + zh 双语）：`npm run i18n:extract` 抽取、`npm run i18n:status` 查缺。改 UI 必须同步改对应 vitest 用例。
+
+### 新增跨栈功能（记忆 / 看板类）
+
+参考「经验记忆」既有链路：落库（SQLite 表）→ Node 路由暴露 `/api/...` → 前端 `frontend/src/api/` 加客户端 → Neo/页面加入口。行为开关放 `settings` 表（如 `memory.autoLearn`），成本类数据另附单价配置（如 `llm.priceTable`）。
+
+## 测试
+
+```bash
+# 前端（在 frontend/ 下）
+cd frontend && npx tsc --noEmit && npx vitest run
+
+# Node 网关（在 backend/node/ 下）
+cd backend/node && npx tsc --noEmit && npx vitest run
+
+# Python 门禁已随 backend/python 删除（ADR-0001，2026-11-24）
+```
+
+已知注意事项：
+
+- `src/pages/KnowledgePage.test.tsx` 的「图谱切换」用例是**存量 flaky**：全量跑偶尔超时挂掉，隔离跑稳定通过。CI 上遇到它挂了，先隔离复跑再排查。
+- server 存量失败（干净树可复现，勿误归因到自己的改动）：`prompt-assembly.test.ts` 等少量用例。
+- 测试里 `vi.mock` 拦不到模块内部的动态 `import()`——把 IO 逻辑拆成纯函数直测 + 薄壳不测。
+
+## CI 说明
+
+`.github/workflows/ci.yml` 在每次 push / PR 上跑 7 个 job：
+
+| Job | 内容 |
+|---|---|
+| lint (eslint) | 前端 ESLint，零警告策略 |
+| typecheck (server) | server 的 tsc --noEmit |
+| test (backend) | vitest (backend/node src/__tests__) |
+| test (frontend) | vitest web project |
+| e2e (frontend smoke) | Playwright 冒烟 |
+| build-docker | 构建验证 docker/ 下两个镜像（不推送） |
+| secret-scan | 密钥扫描 |
+
+## 分支与 PR 流程
+
+**main 分支有保护规则：必须走 PR，且需要 1 个 approving review + code owner（@Ravenveil）批准**（`.github/CODEOWNERS` 全量声明）。协作者之间互批不算数，直推 main 会被拒——这是刻意设计，请走 PR。
+
+1. 从 `main` 拉分支，命名：`feat/...`、`fix/...`、`perf/...`
+2. 提交信息用 [Conventional Commits](https://www.conventionalcommits.org/)：
+   ```
+   feat(gateway): add run-session streaming endpoint
+   fix(ui): prevent canvas double-zoom on trackpad
+   ```
+3. CI 全绿 + owner approve 后合入（squash 为主）
+4. 行为变更时同步更新 README / CHANGELOG
+
+本地已合入的分支请及时删（远端同样）；判断一个 squash 合入的分支是否可删：`git cherry origin/main origin/<branch>` 无 `+` 行即等价。
+
+## 代码风格
+
+- TypeScript strict 模式；`npm run format`（prettier）；UI 文案走 `react-i18next`（en + zh 双语）
+- Python：ruff 格式化，鼓励类型标注
+- **改代码前先想「这段逻辑属于哪一层」**：业务规则 → `domains/<域>/model`；多步编排 → `use_cases`；HTTP 形状 → `routes`/`adapters`；SQL/IO → `infra`。判定方法与红线见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+- `scripts/*.mjs` 锁了 `eol=lf`（.gitattributes）：Windows 上 CRLF checkout 会让 vite 动态 import 含中文模板串的 .mjs 报 `Invalid or unexpected token`——遇到先查行尾
+
+## 领域速查（改前先看）
+
+- **架构与目录落位**：见 [ARCHITECTURE.md](ARCHITECTURE.md)——三条判据、域包四件套、三问自检、放置决策树、红线。样板域读 `backend/node/src/domains/memory/README.md`。
+- **Neo 前端接线**：见上文「新增一个 Neo 导航页」四步。
+- **群聊 DAG**：`backend/node/src/lib/chat-dag/mentions.ts`（@ 提及 = 定向派活，跳过 LLM 意图拆解；中文标点算 token 终结符）。
+- **hop 交接卡片**：`hopStore` 包装 SQLite 真源，播报 best-effort，绝不阻塞落库主链路。
+- **审批边**：EdgeKind `'approve'` 是执行语义，别在读路径把它折叠成 sequential。
+- **记忆三区并存**：memory_lessons（自动沉淀）+ memory_handoffs（交接写回）+ River Memory（手动）；设置页四分区入口。
+- **协议标签正则**：匹配 `sf:` 协议时一律用 `<sf[:-]name>` 双分隔符——模型冒号常写成连字符。
+- **无 Python 兜底（ADR-0001）**：`/api/*` 未被 Node 路由匹配会返回 BACKEND_GAP 结构化 404（gap 计数见 `/health/backend-gaps`）；新增端点直接在 Node 域包里实现，迁移清单见 ADR-0001。
+
+## 安全
+
+- 不提交 API key、token、`.env`；`.env.example` 只放占位符
+- 漏洞请走 [GitHub Security Advisories](https://github.com/Ravenveil/ShadowFlow/security/advisories) 私密报告，勿开公开 issue
+
+## License
+
+贡献即同意以 [MIT License](LICENSE) 授权。

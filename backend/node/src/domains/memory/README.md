@@ -2,7 +2,7 @@
 
 > 目录重构 + 代码重构拆分。本域是「真 DDD 分层」的样板域：
 > **entries / lessons / profiles 三个子域已按四件套重建**（model / repository / infra / use_cases / adapters）。
-> 按 [ARCHITECTURE.md](../../../../ARCHITECTURE.md) §5「渐进式边界」：
+> 按 [ARCHITECTURE.md](../../../../documentation/ARCHITECTURE.md) §5「渐进式边界」：
 > **handoff 只提纯规则层**（`handoff-model.ts`，1222 行的 SQL 装配仍留 storage），
 > **state 只有 adapter 薄壳**（无业务规则，不配四件套）。
 
