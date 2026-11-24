@@ -1,0 +1,332 @@
+/**
+ * app.ts — 工作台（四栏）的**全部可见文案**。
+ *
+ * 约定：`src/shell/**`、`src/chat/**`、`src/panel/**` 里不出现中文内容，
+ * 只负责把这里的字符串摆到位置上。产品改口播、改 tab 名、改提示语 —— 改这一个文件。
+ *
+ * 分节与视图一一对应：rail / list / chat / composer / panel / policy / dag / settings。
+ */
+import type { PolicyState, Session } from '../data/types';
+
+export interface RailItem {
+  id: string;
+  label: string;
+  badge?: string;
+}
+
+export const RAIL = {
+  brand: 'ShadowFlow',
+  nav: [
+    { id: 'chat', label: '对话' },
+    { id: 'team', label: 'Agent 团队', badge: '4' },
+    { id: 'kb', label: '知识库' },
+    { id: 'dash', label: '数据看板' },
+  ] satisfies RailItem[],
+  workspaceTitle: '工作空间',
+  workspace: [
+    { id: 'project', label: '项目' },
+    { id: 'cron', label: '定时任务' },
+  ] satisfies RailItem[],
+  settings: '设置',
+};
+
+export const LIST = {
+  collapse: '收起列表',
+  close: '收起',
+  create: '新建',
+  searchPlaceholder: '搜索对话、项目或 Agent',
+  searchKey: '⌘K',
+  empty: '没有匹配的会话',
+  groupTitle: '项目与 AGENT',
+  /** 会话列表底部常驻的快捷入口（真接口接入前是静态项）。 */
+  shortcuts: ['实验设计与消融', '图表与配图', '投稿材料'],
+  memberCount: (n: number) => `${n} 位成员`,
+  kindLabel: { dm: '单聊', group: '群聊', project: '项目' } satisfies Record<Session['kind'], string>,
+  /** 抽屉头 */
+  drawerTitle: '对话',
+  drawerSubtitle: '搜索、新建或继续任何会话',
+  /** 新建菜单 */
+  newConversation: '新建对话',
+  newProject: '新建项目',
+  newProjectName: '输入项目名称',
+  newProjectConfirm: '创建',
+  creating: '创建中…',
+  /** 主控（董事长）置顶卡 */
+  ceoTitle: '董事长',
+  ceoSubtitle: '全局调度 · 任务拆解与决策',
+  ceoAvatarLabel: '董事长',
+  openAgentDmTitle: '点击打开单聊',
+  /** 相对时间（会话卡右上角） */
+  yesterday: '昨天',
+  weekdays: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+  /** 分组标题 */
+  recentTitle: '最近对话',
+  projectsTitle: '项目与 Agent',
+  noConversations: '还没有会话 —— 点「新建」开始。',
+  noMatches: '没有匹配的会话',
+  noProjects: '暂无项目与 Agent（尚未创建）',
+  loading: '正在加载会话…',
+  retry: '重试',
+  unnamed: '未命名会话',
+};
+
+export const CHAT = {
+  subtitle: {
+    dm: '接需求、拆任务、派活、汇总产出',
+    group: '群聊 · 主控调度，角色可各自发言',
+    project: '项目会话 · 主控牵头推进',
+  } satisfies Record<Session['kind'], string>,
+  members: (n: number) => `${n} 位`,
+  more: '更多',
+  panelHide: '收起面板',
+  panelShow: '展开面板',
+  emptyTitle: (title: string) => `与 ${title} 开始对话`,
+  emptyBody: {
+    group: '在群里发消息，主控会接住需求并拆给对应角色；也可以 @ 某位角色直接提问。',
+    dm: '发消息，TA 就开始干活。试试 @ 提及角色，或用 / 调起命令。',
+  },
+  /** 空会话的引导句（按会话类型）。 */
+  emptyChips: {
+    group: ['把组会稿整理成投稿稿', '核对第 3 节引用', '生成章节骨架'],
+    other: ['列个提纲', '看看当前进度', '复盘上周产出'],
+  },
+  placeholder: {
+    group: '在群里发消息，主控会接住并派给角色 · @ 可直接点某位角色',
+    dm: '发消息，TA 就开始干活 · 试试 @ 提及角色 或 / 命令',
+  },
+  backHome: '回到首页',
+  home: '首页',
+  loading: '正在加载工作台…',
+  loadError: (reason: string) => `工作台加载失败：${reason}`,
+  loadErrorHint: '后端没起或端口不对？检查 :8002 是否在跑；只想看界面可用 ?mock=1 切演示数据。',
+  retry: '重试',
+};
+
+/**
+ * 输入框的全部措辞。功能对照旧前端 NeoComposer：
+ * 多行输入 / ⌘⏎ / @ 提及 / 斜杠命令 / 模型 / 知识包 / 附件 / 拖拽 / 语音 / 停止。
+ */
+export const COMPOSER = {
+  placeholderHint: '@ 提及角色 · / 调命令',
+  /* 工具条 */
+  attach: '添加图片 / 文件（也可直接拖入）',
+  slash: '斜杠命令',
+  mention: '提及角色或知识包',
+  send: '发送',
+  stop: '停止生成',
+  knowledge: '引用知识包',
+  voice: '语音输入',
+  /* 键盘提示 */
+  hintKeys: 'Enter 发送 · Shift + Enter 换行',
+  hintTools: '@ 提及 · / 命令',
+  /* 触发菜单 */
+  menuMentionTitle: '提及',
+  menuCommandTitle: '命令',
+  menuGroupMember: '成员',
+  menuGroupKnowledge: '知识包',
+  menuGroupCommand: '内置命令',
+  menuGroupTemplate: '指令模板',
+  menuEmpty: (q: string) => `没有匹配「${q}」的项`,
+  /* 模型面板 */
+  modelTitle: '选择模型',
+  modelManage: '管理模型',
+  /* 知识包面板 */
+  knowledgeTitle: '本轮引用的知识包',
+  knowledgeDocs: (n: number) => `${n} 篇`,
+  knowledgeSelected: (n: number) => `已选 ${n} 个知识包`,
+  /* 语音 */
+  voiceStarting: '正在请求麦克风…',
+  voiceRecording: '录音中',
+  voiceStop: '完成录音',
+  voiceCancel: '取消录音',
+  voiceTranscribing: '正在转写…',
+  voiceUnsupported: '当前环境不支持录音',
+  voiceEmpty: '没听到内容，再说一次',
+  voiceAppended: '语音已转写',
+  /* 拖拽 */
+  dropHint: '松开以添加图片 / 文件',
+  /* 附件 chip */
+  attachRemove: '移除附件',
+  /* 帮助面板 */
+  helpTitle: '快捷键与命令',
+  helpKeys: [
+    ['Enter', '发送消息'],
+    ['Shift + Enter', '换行'],
+    ['⌘ / Ctrl + Enter', '发送消息（备用）'],
+    ['@', '提及成员或知识包'],
+    ['/', '调起命令'],
+    ['↑ ↓', '在菜单里移动'],
+    ['Enter / Tab', '选中菜单项'],
+    ['Esc', '关闭菜单'],
+  ],
+  helpCommands: '在输入框敲 / 即可看到全部命令',
+  /* 通用 */
+  close: '关闭',
+  cleared: '已清空输入内容',
+  submitFailed: (reason: string) => `发送失败：${reason}`,
+  sizeKB: (kb: number) => `${kb} KB`,
+  sizeMB: (mb: string) => `${mb} MB`,
+};
+
+/** 步骤状态的中文说法（RunBlock / TeamBlock / DAG 共用）。 */
+export const STEP_STATUS_TEXT = {
+  done: '已完成',
+  running: '进行中',
+  wait: '等待中',
+  failed: '失败',
+} as const;
+
+export const RUN = {
+  running: '运行',
+  steps: (n: number) => `${n} 个步骤`,
+  allDone: '全部完成',
+};
+
+/** 群成员在 Agent 名册里已经找不到时的占位（历史群常见：成员被删但 group 还引用着）。 */
+export const ROSTER_MISSING = {
+  name: (tail: string) => `成员 ${tail}`,
+  role: '已不在名册',
+};
+
+export const PANEL = {
+  title: '执行详情',
+  liveRunning: '运行中',
+  liveDone: '已完成',
+  liveIdle: '待命',
+  close: '收起面板',
+  tabsLabel: '面板分区',
+  /**
+   * 右栏 tab 的唯一真源：id 决定组件里的图标与状态，label 只是显示文案。
+   *
+   * 形态对齐旧前端（neo 的「编队」pane）：**编队与工作流不是两页** ——
+   * 成员、工作流、策略举证是同一个编队面板里纵向排布的三节；
+   * 所以这里只有三个 tab，加 tab = 这里加一项 + AgentPanel 的 TAB_ICON 加一行。
+   */
+  tabs: [
+    { id: 'run', label: '执行' },
+    { id: 'team', label: '编队' },
+    { id: 'artifacts', label: '产物' },
+  ] as const,
+  runKicker: 'ACTIVE RUN',
+  elapsed: (v: string) => `耗时 ${v}`,
+  stepsDone: (done: number, total: number) => `${done} / ${total} 步已交`,
+  stepsSection: (n: number) => `步骤 · ${n}`,
+  /** 这条会话还没有任何交付时，步骤区给一句话，而不是空白。 */
+  emptyRun: '这条会话还没有执行记录。发一条指令，主控拆完步骤就会出现在这里。',
+  viewDag: '查看编队',
+  usageTitle: '用量',
+  usageMeta: '本会话',
+  contextLabel: (pct: number) => `上下文 ${pct}%`,
+  rosterSection: (n: number) => `成员 · ${n}`,
+  rosterMeta: '群会话派发范围',
+  busy: '执行中',
+  standby: '待命',
+  policySection: '策略举证',
+  savePolicy: '保存策略',
+  policySaved: '已保存',
+  policyDir: '行→列',
+  dagSection: '工作流',
+  dagMeta: (nodes: number, edges: number) => `${nodes} 节点 · ${edges} 边`,
+  artifactsSection: (n: number) => `产物 · ${n}`,
+  approve: '批准',
+  reject: '拒绝',
+  deciding: '处理中…',
+  deliverableLabel: {
+    final: '终稿',
+    verify: '核验',
+    paper: '论文',
+    bib: '文献',
+    charts: '图表',
+  } as const,
+  /** 副标题：产物就是会话工作目录里的文件，说清出处，别让人以为是「本轮」清单。 */
+  artifactsMeta: '工作目录',
+  artifactsRoot: '工作目录',
+  artifactsLoading: '读取目录…',
+  artifactsEmpty: '这个目录还是空的',
+  artifactsEmptyHint: 'agent 写的稿子、图、参考文献都会落在这里；跑完一轮再回来看。',
+  artifactsNoDir: '这条会话没有工作目录',
+  artifactsNoDirHint: '群记录里没带 workspace_dir，多半是历史会话：给它发一条指令就会建出来。',
+  artifactsFolder: '目录',
+  artifactsUp: '上一级',
+  artifactsBack: '返回列表',
+  artifactsTruncated: '文件较大，只显示了前 1 MB',
+  artifactsReadFail: (reason: string) => `打不开：${reason}`,
+  artifactsImageFail: '这张图读不出来（后端没给直链），先显示源码。',
+  artifactsZoom: '点开看大图',
+  stepState: { done: '已完成', running: '进行中', wait: '等待' } as const,
+};
+
+export const POLICY = {
+  /** 三态的中文说法与标记（矩阵、图例、行尾 chip 共用）。 */
+  states: {
+    permit: { label: '直通', mark: '●' },
+    warn: { label: '需复核', mark: '▲' },
+    deny: { label: '禁止', mark: '✕' },
+  } satisfies Record<PolicyState, { label: string; mark: string }>,
+  corner: '行→列',
+  cornerTitle: '行 = 发起方 · 列 = 接收方',
+  worst: '最严',
+  total: (n: number) => `共 ${n} 条已配置`,
+  hint: '点格子循环：直通 → 需复核 → 禁止 → 清除。限制会同步染到工作流连线。',
+  cellTitle: (from: string, to: string, label?: string | null) =>
+    `${from} → ${to}：${label ? `${label}（点击切换）` : '未配置（点击设限）'}`,
+  cellAria: (from: string, to: string, state: string | null) => `${from} to ${to}: ${state ?? 'none'}`,
+};
+
+export const DAG = {
+  footHint: (nodes: number, edges: number) =>
+    `${nodes} 节点 · ${edges} 边 · 线型看交接方式，颜色看策略举证`,
+  selSeparator: ' · ',
+  legendTitle: '线型 = 交接方式',
+  legendMode: {
+    direct: '直接交接',
+    conditional: '条件',
+    approve: '审批门',
+  } as const,
+  status: { done: '已完成', running: '执行中', wait: '等待中', failed: '失败' } as const,
+  gateNode: '审批门',
+  lastDelivery: '最近交付',
+  empty: '暂无节点',
+};
+
+export const SETTINGS = {
+  title: '设置',
+  close: '关闭',
+  appearanceTitle: '外观风格',
+  appearanceNote: '切换后立即生效，并记住你的选择。',
+  modelsTitle: '模型',
+  modelsNote: '默认模型（每个会话可单独覆盖）。',
+  models: [
+    { label: '默认对话模型', value: 'Claude Sonnet 4.6' },
+    { label: '写作/润色模型', value: 'Claude Sonnet 4.6' },
+  ],
+  collabTitle: '协作偏好',
+  collabNote: '决定主控怎么派活。',
+  collab: [
+    { label: '群里默认只跟主控对话', state: '已开启' },
+    { label: '关键节点需人工确认', state: '已开启' },
+  ],
+  footHint: '风格偏好保存在本地浏览器',
+  done: '完成',
+};
+
+/** 首页按钮与空态里的通用措辞（跨视图复用）。 */
+export const COMMON = {
+  approveGate: '审批门',
+};
+
+/**
+ * 真接口接入前的演示态文案（主控的自动应答）。
+ * 接上 /api 后整块可以删掉，组件不需要动。
+ */
+export const DEMO = {
+  /** 用户消息超过这么长就在应答里截断。 */
+  quoteLimit: 40,
+  leadAuthor: '主控',
+  /** 演示态语音转写结果（真接口接上后由后端 ASR 返回）。 */
+  transcript: '帮我把第三章的实验对比再核一遍，重点看 7B 与 13B 的口径是否一致。',
+  leadReply: (text: string) => {
+    const quote = text.slice(0, DEMO.quoteLimit) + (text.length > DEMO.quoteLimit ? '…' : '');
+    return `收到，我按这条推进：${quote}\n\n先拆成可执行的步骤，再分给对应的角色。中途要你拍板的地方，我会单独挂出来，不打断你别的活。`;
+  },
+};

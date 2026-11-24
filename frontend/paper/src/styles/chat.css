@@ -1,0 +1,873 @@
+/* ============ 聊天区 ============ */
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  position: relative;
+}
+
+[data-theme='ink'] .chat {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+}
+
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  flex: none;
+  padding: 0 18px 0 20px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+.chat-head-main {
+  min-width: 0;
+}
+
+.chat-head-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: var(--weight-title);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+[data-theme='ink'] .chat-head-title {
+  font-weight: 800;
+}
+
+.chat-head-sub {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.chat-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.chat-head-members {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-2);
+  transition: border-color 0.14s ease;
+}
+
+.chat-head-members:hover {
+  border-color: var(--line-strong);
+}
+
+.chat-head-members svg {
+  color: var(--ink-4);
+}
+
+.chat-head-actions .sf-icon-btn[data-active='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* 消息滚动区 */
+.chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.chat-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 26px 22px 12px;
+}
+
+.sf-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---- 用户消息 ---- */
+.sf-msg--user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding-left: 44px;
+}
+
+.sf-msg-userbubble {
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-elev);
+  color: var(--ink);
+}
+
+[data-theme='ink'] .sf-msg-userbubble {
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  box-shadow: var(--shadow-card-sm);
+  border-radius: var(--radius-sm);
+}
+
+[data-theme='clean'] .sf-msg-userbubble {
+  background: var(--accent-soft);
+  color: var(--ink);
+  border-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-xs);
+}
+
+.sf-msg--user .sf-msg-time {
+  font-size: 10px;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+}
+
+/* ---- Agent 消息 ---- */
+.sf-msg--agent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.sf-msg-gutter {
+  padding-top: 1px;
+  flex: none;
+}
+
+.sf-msg-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.sf-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sf-msg-author {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+
+.sf-msg-head .sf-msg-time {
+  font-size: 10px;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+}
+
+.sf-msg-text {
+  font-size: 13.5px;
+  line-height: 1.72;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+[data-theme='ink'] .sf-msg-text {
+  color: var(--ink-2);
+}
+
+.sf-msg-system {
+  align-self: center;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--bg-sunken);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+
+/* ---- 管道执行块 ---- */
+.sf-run {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  overflow: hidden;
+  transition: border-color 0.16s ease;
+}
+
+[data-theme='ink'] .sf-run {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card-sm);
+  border-radius: var(--radius-sm);
+}
+
+.sf-run[data-open='true'] {
+  border-color: var(--line-strong);
+}
+
+.sf-run-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 11px;
+  text-align: left;
+  transition: background 0.14s ease;
+}
+
+.sf-run-head:hover {
+  background: var(--bg-sunken);
+}
+
+.sf-run-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sf-run-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.sf-run-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+.sf-run-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: sf-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes sf-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+
+.sf-run-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  color: var(--ink-4);
+  transition: transform 0.18s ease;
+}
+
+.sf-run-chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+
+/* 收起时的一排角色 chip */
+.sf-run-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 0 11px 10px;
+}
+
+.sf-run-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 21px;
+  padding: 0 8px 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+
+.sf-run-chip[data-status='running'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sf-run-chip.is-more {
+  color: var(--ink-3);
+  padding: 0 8px;
+}
+
+/* 展开的步骤列表 */
+.sf-run-steps {
+  border-top: 1px solid var(--line);
+  padding: 8px 11px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sf-run-step {
+  display: grid;
+  grid-template-columns: 22px 16px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+}
+
+.sf-run-step:hover {
+  background: var(--bg-sunken);
+}
+
+.sf-run-step-n {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-4);
+}
+
+.sf-run-step-title {
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-run-step[data-status='running'] .sf-run-step-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sf-run-step[data-status='wait'] .sf-run-step-title {
+  color: var(--ink-4);
+}
+
+.sf-run-step-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.sf-run-step-tail {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-4);
+  min-width: 34px;
+  text-align: right;
+}
+
+.sf-run-step[data-status='running'] .sf-run-step-tail {
+  color: var(--accent);
+}
+
+/* 步骤状态点 */
+.sf-step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  font-size: 0;
+}
+
+.sf-step-mark.is-done {
+  background: var(--ok);
+  color: #fff;
+}
+
+.sf-step-mark.is-running {
+  border: 1.6px solid var(--accent);
+  border-top-color: transparent;
+  animation: sf-spin 0.9s linear infinite;
+}
+
+.sf-step-mark.is-wait {
+  border: 1.4px solid var(--line-strong);
+}
+
+.sf-step-mark.is-failed {
+  background: var(--danger);
+}
+
+@keyframes sf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- 团队面板 ---- */
+.sf-team {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+[data-theme='ink'] .sf-team {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card-sm);
+  border-radius: var(--radius-sm);
+}
+
+.sf-team-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 11px;
+  text-align: left;
+}
+
+.sf-team-head:hover {
+  background: var(--bg-sunken);
+}
+
+.sf-team-faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sf-team-faces .sf-avatar + .sf-avatar {
+  margin-left: -6px;
+}
+
+.sf-team-faces .sf-avatar {
+  box-shadow: 0 0 0 1.5px var(--bg-elev);
+}
+
+.sf-team-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.sf-team-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+}
+
+.sf-team-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  color: var(--ink-4);
+}
+
+.sf-team-list {
+  border-top: 1px solid var(--line);
+  padding: 4px 6px 7px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sf-team-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  transition: background 0.13s ease;
+  cursor: pointer;
+}
+
+.sf-team-row:hover {
+  background: var(--bg-sunken);
+}
+
+.sf-team-role {
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.sf-team-name {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  flex: none;
+}
+
+.sf-team-note {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 2px;
+}
+
+.sf-team-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.sf-team-row[data-status='done'] .sf-team-status {
+  color: var(--ink-3);
+}
+
+.sf-team-row[data-status='running'] .sf-team-status {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sf-team-go {
+  display: inline-flex;
+  color: var(--ink-4);
+}
+
+/* ---- 产物卡片 ---- */
+.sf-artifacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.sf-artifact {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  text-align: left;
+  transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  max-width: 260px;
+}
+
+[data-theme='ink'] .sf-artifact {
+  box-shadow: var(--shadow-card-sm);
+}
+
+.sf-artifact:hover {
+  border-color: var(--accent-line);
+  transform: translateY(-1px);
+}
+
+[data-theme='ink'] .sf-artifact:hover {
+  box-shadow: 3px 3px 0 var(--edge);
+}
+
+.sf-artifact-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-xs);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sf-artifact-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sf-artifact-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-artifact-meta {
+  font-size: 10px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+/* ============ 输入区 ============ */
+.chat-foot {
+  flex: none;
+  padding: 0 22px 14px;
+  background: linear-gradient(to top, var(--bg) 62%, transparent);
+}
+
+.composer {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.composer-box {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elev);
+  padding: 10px 10px 8px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+[data-theme='ink'] .composer-box {
+  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-sm);
+}
+
+.composer-box:focus-within {
+  border-color: var(--accent);
+}
+
+[data-theme='ink'] .composer-box:focus-within {
+  box-shadow: 4px 4px 0 var(--accent);
+}
+
+[data-theme='clean'] .composer-box:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.composer-input {
+  display: block;
+  width: 100%;
+  min-height: 22px;
+  max-height: 160px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  padding: 2px 4px 4px;
+}
+
+.composer-input::placeholder {
+  color: var(--ink-4);
+}
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.composer-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  min-width: 0;
+}
+
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--ink-2);
+  transition: background 0.13s ease;
+}
+
+.composer-chip:hover {
+  background: var(--bg-hover);
+}
+
+.composer-chip svg {
+  color: var(--ink-3);
+}
+
+.composer-at {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition: background 0.13s ease, color 0.13s ease;
+}
+
+.composer-at:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.composer-menu {
+  position: absolute;
+  bottom: 32px;
+  left: 34px;
+  z-index: 30;
+  min-width: 180px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+}
+
+.composer-menu button {
+  padding: 7px 10px;
+  border-radius: var(--radius-xs);
+  text-align: left;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.composer-menu button:hover {
+  background: var(--bg-sunken);
+  color: var(--ink);
+}
+
+.composer-menu button[data-active='true'] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.composer-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+
+.composer-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.composer-send:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.composer-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 4px 0;
+  font-size: 10px;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+}
+
+/* ---- 空会话 ---- */
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 72px 24px 0;
+  gap: 10px;
+}
+
+.chat-empty-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
+[data-theme='ink'] .chat-empty-ico {
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-card-sm);
+}
+
+.chat-empty h3 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--weight-title);
+  color: var(--ink);
+}
+
+.chat-empty p {
+  max-width: 400px;
+  font-size: 12.5px;
+  line-height: 1.72;
+  color: var(--ink-3);
+}
+
+.chat-empty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.chat-empty-chips button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  font-size: 12px;
+  color: var(--ink-2);
+  transition: border-color 0.14s ease, color 0.14s ease, transform 0.1s ease;
+}
+
+.chat-empty-chips button:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  transform: translateY(-1px);
+}

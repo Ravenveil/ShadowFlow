@@ -1,0 +1,12 @@
+{
+  "title": "ShadowFlow — 一个人，也能经营一家 AI 营销公司",
+  "description": "ShadowFlow 是 AI 营销公司工作台：CEO 主控对话调度多 Agent 团队，覆盖内容、投放、品牌与数据全流程。",
+  "language": "zh-CN",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

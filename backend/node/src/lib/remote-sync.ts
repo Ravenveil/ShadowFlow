@@ -3,7 +3,7 @@
  *
  * 用途：ARC 论文团的实验在远端 GPU 机器上跑，产出（training log / 图表 / tex）
  * 必须回到本机，右栏产出面板才看得见 —— 面板是**本机文件树**
- * （`frontend/src/neo/NeoHost.tsx` 以 `conversation.workspaceDir` 为 root，走
+ * （`frontend/legacy/src/neo/NeoHost.tsx` 以 `conversation.workspaceDir` 为 root，走
  * `GET /api/fs/list`），远端文件不落盘就永远不可见。
  *
  * 为什么是「ssh | 本地 tar 流」而不是「sshExec 收字符串再解」：

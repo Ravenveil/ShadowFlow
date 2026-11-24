@@ -7,7 +7,7 @@
  *   - MemoryBankHit  ← retrieve hits (:2165-2188)
  *   - QueryResponse  ← query (:2191-2206)
  *   - FolderIngestResult ← ingest_folder (:1725-1731)
- * 前端契约镜像：frontend/src/api/memoryBank.ts（字段只增不减）。
+ * 前端契约镜像：frontend/legacy/src/api/memoryBank.ts（字段只增不减）。
  */
 
 export interface RetrievalProfile {

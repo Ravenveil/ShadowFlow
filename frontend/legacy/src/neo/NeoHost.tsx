@@ -1,0 +1,1579 @@
+/**
+ * NeoHost — Neo 右栏「Agent 的主机」（对标 clawsgo c1_05/c1_07/c2_02/c2_03）。
+ *
+ * 顶部 tab（2026-11-06 用户反馈调整）：条件 tab 打头 —— agent 上下文
+ * 「灵魂 / 定时任务」排最前（默认激活灵魂），团队/群聊上下文「编队」排最前
+ * （默认激活编队）；其后是固定 tab 工作空间 / 产物；
+ * 动态产物 tab（2026-08-23，对标 clawsgo c1_05/c1_07/c2_02/c2_03）：点「产物」
+ * 行 / 「历史」行进入的 run 产物、或产物出现时自动开——在 tab 条追加一个以
+ * 产物文件名命名的临时 tab（图标盒右上角 × 关闭，关闭激活 tab 回落「产物」）；
+ * 同一产物重复点击聚焦已有 tab 不重复开；tab 条溢出横滚（safe center）。
+ *
+ * - 工作空间：左文件树（listDirs 懒加载展开、类型图标、选中高亮）+ 右预览
+ *   （markdown → NeoMarkdown；代码 → 等宽+行号；图片 → rawUrl <img>；
+ *   工具条：预览/代码切换、下载、关闭）。
+ * - 产物：runId 非空时经 listRuns() 取该 run 的 RunRecord（artifact_url /
+ *   artifact_type / artifact_filename 为后端真实落库字段），点击开产物 tab，
+ *   预览走 Neo 自有 projections/NeoArtifactPreview（阶段 2.5：done.html
+ *   filecard + 大纲 + markdown 双栏视觉；下载/导出端点不变）。
+ * - Loop：SSE `loop` 帧（useRunSession）优先 → loops/stream SSE → 一次性
+ *   getRunLoops 回落（src/api/runs.ts，返回 RunLoopsResponse，LoopStep[]
+ *   按 loop_id 去重）→ PDCA 迭代卡（kind/setpoint/状态 pill +
+ *   迭代列表：轮次 · verifier_score · metrics 迷你条形 · sensor.classification +
+ *   每环 verifier 面板 LoopVerdicts：每轮 rationale + claims），分形深度用缩进。
+ * - 过程（阶段 2.3）：src/neo/projections/ProcessView — getRunGraph +
+ *   getTaskTree，节点轨 + 边 chips + 缩进任务树；SSE 流式期间 5s 轮询。
+ *   run 开始执行时自动露出一次（同一 run 不重复抢 tab）。下方并挂迭代环区
+ *   （PDCA 卡 + 每环 LoopVerdicts 验证意见）与证据投影区（B40：
+ *   src/neo/projections/EvidencePanel — memory-graph / training-dataset）。
+ * - 产物（阶段 2.3 升级）：src/neo/projections/ArtifactsView —
+ *   artifact-lineage + checkpoint-lineage 产物/检查点列表；无 lineage 数据时
+ *   回落到 RunRecord.artifact_* 单条旧行为；点击开 NeoArtifactPreview tab。
+ * - 编队（阶段 2.4 切面，团队 target / 团队群会话时出现）：
+ *   src/neo/projections/TeamPanel — 成员 roster + 工作流 DAG 编辑 + 协作策略
+ *   矩阵（2026-11-04 用户反馈批：尾部重复的 GroupMembersPanel 与一级
+ *   「封驳矩阵」section 移除；TeamPanel 内「分节点输出」同步移除）。
+ * - 灵魂（2026-08-22，soulAgent 非空时出现：agent-target 或 agent 的 DM 会话）：
+ *   内嵌 NeoAgentSoul — persona/系统提示词编辑（GET + PATCH /api/agents）。
+ *
+ * 不 mock、不加 placeholder；runId 为空 = 整体空态；数据缺失 = 干净空态。
+ * 颜色一律 var(--t-*) / color-mix，day/night 双主题安全；样式全在 neo-host.css。
+ */
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
+import {
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  Code,
+  Database,
+  Download,
+  Eye,
+  FileCode,
+  FileImage,
+  FilePlus2,
+  FileSpreadsheet,
+  FileText,
+  Folder,
+  FolderOpen,
+  GitBranch,
+  Package,
+  Plus,
+  RefreshCw,
+  Repeat,
+  Search,
+  Sparkles,
+  Upload,
+  Waypoints,
+  X,
+} from 'lucide-react';
+import { useI18n } from '../common/i18n';
+import {
+  listDirs,
+  pickNativeFolder,
+  rawUrl,
+  readFile,
+  uploadFile,
+  writeFile,
+  type FsDirEntry,
+} from '../api/fsFiles';
+import {
+  getRunLoops,
+  listRuns,
+  streamRunLoops,
+  type ArtifactType,
+  type LoopRecord,
+  type LoopStatus,
+  type RunRecord,
+} from '../api/runs';
+import { useRunSession } from '../core/hooks/useRunSession';
+import { NeoMarkdown } from './projections/NeoMarkdown';
+import { NeoArtifactPreview } from './projections/NeoArtifactPreview';
+import { ProcessView } from './projections/ProcessView';
+import { ArtifactsView, type LineageArtifact } from './projections/ArtifactsView';
+import { LoopVerdicts } from './projections/LoopVerdicts';
+import { EvidencePanel } from './projections/EvidencePanel';
+import XlsxPreview from './XlsxPreview';
+import { TeamPanel } from './projections/TeamPanel';
+import { NeoAgentSoul } from './NeoAgentSoul';
+import { friendlyErrorText } from './friendlyError';
+import { NeoAgentInspector } from './NeoAgentInspector';
+import { AgentSchedulesPanel } from './AgentSchedulesPanel';
+import type { NeoHostProps } from './types';
+// ClawHub（2026-06，T08）：soulAgent 头像（AgentRecord → DiceBear）
+import { AgentAvatar } from '../components/agent/AgentAvatar';
+import { getAgent, type AgentRecord } from '../api/agents';
+import '../pages/clawhub/clawhub.css';
+import './neo-host.css';
+
+// ---------------------------------------------------------------------------
+// 常量 / 小工具
+// ---------------------------------------------------------------------------
+
+/** 与 chat-home WorkspaceFilesView 共用同一 localStorage key（用户选过的项目目录两处通用）。 */
+const LS_PROJECT_FOLDER = 'sf.project-folder';
+
+const MD_EXTS = new Set(['md', 'markdown']);
+const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico']);
+/** 2026-11-19 预览分流：pdf/html 走 rawUrl + iframe（readFile 按 utf8 读二进制会乱码）。 */
+const HTML_EXTS = new Set(['html', 'htm']);
+/** 2026-11-20 表格预览：SheetJS 解析（Univer xlsx 导入是 Pro 组件，开源组合=SheetJS）。 */
+const SHEET_EXTS = new Set(['xlsx', 'xls', 'csv', 'tsv']);
+
+type FileKind = 'markdown' | 'image' | 'pdf' | 'html' | 'sheet' | 'code';
+
+function extOf(name: string): string {
+  const i = name.lastIndexOf('.');
+  return i < 0 ? '' : name.slice(i + 1).toLowerCase();
+}
+
+function kindOf(name: string): FileKind {
+  const ext = extOf(name);
+  if (MD_EXTS.has(ext)) return 'markdown';
+  if (IMG_EXTS.has(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  if (HTML_EXTS.has(ext)) return 'html';
+  if (SHEET_EXTS.has(ext)) return 'sheet';
+  return 'code';
+}
+
+function FileTypeIcon({ name }: { name: string }) {
+  const kind = kindOf(name);
+  if (kind === 'image') return <FileImage size={13} strokeWidth={1.8} />;
+  if (kind === 'pdf' || kind === 'html') return <FileText size={13} strokeWidth={1.8} />;
+  if (kind === 'sheet') return <FileSpreadsheet size={13} strokeWidth={1.8} />;
+  if (kind === 'code') return <FileCode size={13} strokeWidth={1.8} />;
+  return <FileText size={13} strokeWidth={1.8} />;
+}
+
+/**
+ * 产出类扩展名：论文/图表/数据/文档。这些排在同级普通文件之前，
+ * 让「刚跑完的产出」在文件多的任务目录里也能第一眼看到（2026-11-19）。
+ */
+const OUTPUT_EXTS = new Set([
+  'md', 'markdown', 'tex', 'bib', 'pdf', 'ipynb',
+  'csv', 'xlsx', 'docx', 'pptx',
+  'png', 'jpg', 'jpeg', 'svg',
+]);
+
+function sortEntries(entries: FsDirEntry[]): FsDirEntry[] {
+  return [...entries].sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    if (!a.isDir) {
+      const ao = OUTPUT_EXTS.has(extOf(a.name)) ? 0 : 1;
+      const bo = OUTPUT_EXTS.has(extOf(b.name)) ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function artifactFilename(rec: RunRecord): string {
+  if (rec.artifact_filename) return rec.artifact_filename;
+  const url = rec.artifact_url ?? '';
+  const base = url.split('/').pop() ?? '';
+  return base || rec.goal;
+}
+
+// ---------------------------------------------------------------------------
+// Loop tab — 状态 pill / 文案映射
+// ---------------------------------------------------------------------------
+
+const LOOP_STATUS_CLASS: Record<LoopStatus, string> = {
+  converged: 'neo-host-pill--converged',
+  running: 'neo-host-pill--running',
+  oscillating: 'neo-host-pill--oscillating',
+  diverged: 'neo-host-pill--diverged',
+  halted: 'neo-host-pill--halted',
+};
+
+/** 每个 loop 内各 metric 的绝对值最大值（迷你条形归一化用）。 */
+function metricMaxes(loop: LoopRecord): Record<string, number> {
+  const max: Record<string, number> = {};
+  for (const it of loop.iterations) {
+    for (const [k, v] of Object.entries(it.metrics ?? {})) {
+      const a = Math.abs(v);
+      if (!(max[k] >= a)) max[k] = a > 0 ? a : 1;
+    }
+  }
+  return max;
+}
+
+// ---------------------------------------------------------------------------
+// 主组件
+// ---------------------------------------------------------------------------
+
+type FixedTab = 'workspace' | 'artifacts' | 'team';
+
+interface ArtifactTab {
+  /** tab 唯一 id：RunRecord 单产物 = runId；lineage 产物 = artifact_id。 */
+  id: string;
+  url: string;
+  /** 预览渲染分支类型（html / yaml / markdown）。 */
+  type: ArtifactType;
+  filename: string;
+  sessionId?: string;
+  isComplete: boolean;
+}
+
+/** lineage 产物文件名 → 预览类型（按扩展名真实推导，不捏造）。 */
+function previewTypeOf(filename: string): ArtifactType {
+  const ext = extOf(filename);
+  if (ext === 'html' || ext === 'htm') return 'html';
+  if (ext === 'yaml' || ext === 'yml') return 'yaml';
+  return 'markdown';
+}
+
+/**
+ * NeoHost 专有增量 prop（不进 types.ts 的公共 NeoHostProps：并行重构期只动
+ * neo 面板三件套自身，避免公共类型面漂移）。
+ * refreshKey：群聊一轮 settle 后 NeoApp 递增 → 重载工作空间根目录（首次挂载不触发）。
+ */
+interface NeoHostExtraProps {
+  refreshKey?: number;
+}
+
+export function NeoHost({
+  target,
+  runId,
+  soulAgent,
+  conversation,
+  inspectAgent,
+  onCloseInspectAgent,
+  onNavigate,
+  refreshKey,
+}: NeoHostProps & NeoHostExtraProps) {
+  const { t } = useI18n();
+
+  // ── ClawHub（2026-06，T08）：soulAgent 的完整记录（DiceBear 头像字段）────
+  // agent-target / DM 会话上下文时拉取；失败 → null（标题不渲染头像，零回归）。
+  const [soulAgentRecord, setSoulAgentRecord] = useState<AgentRecord | null>(null);
+  useEffect(() => {
+    if (!soulAgent) {
+      setSoulAgentRecord(null);
+      return;
+    }
+    let alive = true;
+    getAgent(soulAgent.id)
+      .then((a) => {
+        if (alive) setSoulAgentRecord(a);
+      })
+      .catch(() => {
+        if (alive) setSoulAgentRecord(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [soulAgent?.id]);
+
+  // W2 钉钉式融合（2026-08-22）：中栏开着非 DM 会话（团队群）→ 本面板标题
+  // 跟随群聊名称（缺失回落「团队的主机」）并露出「编队」tab。
+  const isTeamConv = conversation != null && conversation.kind !== 'dm';
+
+  // 编队 tab 群会话入口（2026-11-01）：无 target 且会话带 teamId → 可在群聊右栏
+  // 直接挂 TeamPanel（DAG 编辑 + 运行查看）。teamName 回落会话名。
+  const convTeamEntry =
+    !target && conversation?.teamId
+      ? { id: conversation.teamId, name: conversation.teamName ?? conversation.groupId }
+      : null;
+
+  // ── tab 状态 ──────────────────────────────────────────────────────────────
+  // 2026-11-06 用户反馈：默认激活 tab 跟随上下文——agent 上下文首屏「灵魂」、
+  // 团队/群聊上下文首屏「编队」，其余（无上下文）保持「工作空间」。
+  const hasTeamContext = target?.kind === 'team' || convTeamEntry != null || isTeamConv;
+  const [activeTab, setActiveTab] = useState<string>(
+    hasTeamContext ? 'team' : soulAgent ? 'soul' : 'workspace',
+  );
+  const [artifactTabs, setArtifactTabs] = useState<ArtifactTab[]>([]);
+
+  /** 已自动开过产物 tab 的 runId（同一 run 不重复自动激活）。 */
+  const autoOpenedRef = useRef<Set<string>>(new Set());
+  /** 已自动露出「过程」tab 的 runId（run 开始执行时抢一次 tab，之后不打扰）。 */
+  const autoProcessRef = useRef<Set<string>>(new Set());
+
+  // SSE 只读视图：per-node 输出归属（TeamPanel）+ isStreaming（投影轮询开关 +
+  // 过程 tab 自动露出）。server runBus 支持同一 session 多 sink attach + replay，
+  // 与 NeoChat 的订阅互不干扰。
+  const session = useRunSession(runId ?? '');
+
+  // ── 工作空间：文件树 ──────────────────────────────────────────────────────
+  const [rootPath, setRootPath] = useState<string | null>(null);
+  /** 当前文件树是否跟随会话任务目录（跟随态下用户手动换目录会解除）。 */
+  const [followsTask, setFollowsTask] = useState(false);
+  const [children, setChildren] = useState<Record<string, FsDirEntry[]>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [loadingDirs, setLoadingDirs] = useState<Record<string, boolean>>({});
+
+  // ── 工作空间：文件预览 ────────────────────────────────────────────────────
+  const [selected, setSelected] = useState<FsDirEntry | null>(null);
+  const [fileState, setFileState] = useState<{ text: string; truncated: boolean } | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+  const [fileError, setFileError] = useState(false);
+  const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
+  const fileReqRef = useRef(0);
+  /** Coze「搜索文件」对标 — 在已加载的树缓存里按名称过滤（客户端真实过滤，不 mock）。 */
+  const [treeQuery, setTreeQuery] = useState('');
+
+  // ── 产物 ──────────────────────────────────────────────────────────────────
+  const [runRecord, setRunRecord] = useState<RunRecord | null>(null);
+  /** W1-B：产物文本按 tab id 缓存 —— tab 保活后切走再切回不丢内容、不串内容。 */
+  const [artifactContents, setArtifactContents] = useState<Record<string, string>>({});
+  const [artifactLoading, setArtifactLoading] = useState(false);
+  /** 产物预览「刷新」按钮：清掉当前 tab 缓存并重新拉取。 */
+  const [artifactTick, setArtifactTick] = useState(0);
+
+  // ── Loop ──────────────────────────────────────────────────────────────────
+  const [loops, setLoops] = useState<LoopRecord[] | null>(null);
+  const [loopsError, setLoopsError] = useState<string | null>(null);
+
+  const activeArtifactTab =
+    artifactTabs.find((tab) => `artifact:${tab.id}` === activeTab) ?? null;
+
+  // ── tab 下划线测量 ────────────────────────────────────────────────────────
+  const tabbarRef = useRef<HTMLDivElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number; visible: boolean }>({
+    left: 0,
+    width: 0,
+    visible: false,
+  });
+  useLayoutEffect(() => {
+    const el = tabbarRef.current?.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`);
+    if (el) setBar({ left: el.offsetLeft, width: el.offsetWidth, visible: true });
+    else setBar((b) => ({ ...b, visible: false }));
+  }, [activeTab, artifactTabs.length, runId]);
+  useEffect(() => {
+    const onResize = () => {
+      const el = tabbarRef.current?.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`);
+      if (el) setBar({ left: el.offsetLeft, width: el.offsetWidth, visible: true });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [activeTab]);
+
+  // ── 工作空间 root 解析（当前任务目录 → 用户选过的目录 → 后端 home）────────
+  // 2026-11-19 产出可见性修复：agent/CLI/DAG 把产出写在会话的 workspace_dir，
+  // 面板却固定看 localStorage/home → 用户翻不到论文与图表。改成任务目录优先。
+  const taskDir = conversation?.workspaceDir?.trim() || null;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (taskDir) {
+        if (!cancelled) {
+          setRootPath(taskDir);
+          setFollowsTask(true);
+          setChildren({});
+          setExpanded({});
+        }
+        return;
+      }
+      setFollowsTask(false);
+      let saved: string | null = null;
+      try { saved = localStorage.getItem(LS_PROJECT_FOLDER); } catch { /* ssr */ }
+      if (saved) {
+        if (!cancelled) setRootPath(saved);
+        return;
+      }
+      const r = await listDirs();
+      if (!cancelled && r && r.path !== 'ROOT') setRootPath(r.path);
+    })();
+    return () => { cancelled = true; };
+  }, [taskDir]);
+
+  const loadChildren = useCallback(async (dir: string) => {
+    setLoadingDirs((m) => ({ ...m, [dir]: true }));
+    const r = await listDirs(dir);
+    setLoadingDirs((m) => ({ ...m, [dir]: false }));
+    if (r) setChildren((m) => ({ ...m, [dir]: r.entries }));
+  }, []);
+
+  useEffect(() => {
+    if (rootPath) loadChildren(rootPath);
+  }, [rootPath, loadChildren]);
+
+  const toggleDir = (entry: FsDirEntry) => {
+    const next = !expanded[entry.path];
+    setExpanded((m) => ({ ...m, [entry.path]: next }));
+    if (next && !children[entry.path]) loadChildren(entry.path);
+  };
+
+  const refreshTree = useCallback(() => {
+    if (!rootPath) return;
+    setChildren({});
+    setExpanded({});
+    loadChildren(rootPath);
+  }, [rootPath, loadChildren]);
+
+  // 2026-11-19 回合结束自动刷新：NeoApp 在群聊一轮 settle 后递增 refreshKey，
+  // 这里重载根目录（收拾掉全部已有的子树缓存，等价于点工具条「刷新」）。
+  // 首次挂载不重复触发 —— useRef 记住上次值。
+  const lastRefreshKeyRef = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey === undefined) return;
+    if (lastRefreshKeyRef.current === refreshKey) return;
+    lastRefreshKeyRef.current = refreshKey;
+    refreshTree();
+  }, [refreshKey, refreshTree]);
+
+  const pickFolder = async () => {
+    const p = await pickNativeFolder();
+    if (!p) return; // 取消 / 503 → 保持现状（与 WorkspaceFilesView 同语义）
+    try { localStorage.setItem(LS_PROJECT_FOLDER, p); } catch { /* ignore */ }
+    setSelected(null);
+    setChildren({});
+    setExpanded({});
+    setFollowsTask(false); // 用户主动换目录 → 解除跟随任务目录
+    setRootPath(p);
+  };
+
+  // ── 工作空间：新建 / 上传文件（2026-08-22，T04 企业资料喂入）───────────────
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  // 新建文件弹窗 + 错误条（2026-11-04 用户反馈批）：window.prompt/window.alert
+  // 原生框替换为应用内 neo-modal 弹窗与行内红条（不再弹「localhost:3007 显示」）。
+  const [newFileOpen, setNewFileOpen] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [newFileBusy, setNewFileBusy] = useState(false);
+  const [newFileError, setNewFileError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const openNewFileModal = () => {
+    setNewFileName('');
+    setNewFileError(null);
+    setNewFileOpen(true);
+  };
+
+  // 新建：相对文件名交给后端相对 root 解析（前端不拼路径分隔符）；成功后刷新树。
+  const createFile = async () => {
+    if (!rootPath) return;
+    const name = newFileName.trim();
+    if (!name) return;
+    setNewFileBusy(true);
+    setNewFileError(null);
+    try {
+      await writeFile(name, '', rootPath);
+      setNewFileOpen(false);
+      refreshTree();
+    } catch (e) {
+      setNewFileError(friendlyErrorText(e));
+    } finally {
+      setNewFileBusy(false);
+    }
+  };
+
+  const onUploadPicked = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // 允许连续选同一文件
+    if (!file || !rootPath) return;
+    setUploadError(null);
+    try {
+      await uploadFile(rootPath, rootPath, file);
+      refreshTree();
+    } catch (err) {
+      setUploadError(friendlyErrorText(err));
+    }
+  };
+
+  // ── 文件选中 → 预览（race-safe）──────────────────────────────────────────
+  const openFile = (entry: FsDirEntry) => {
+    setSelected(entry);
+    setViewMode(kindOf(entry.name) === 'markdown' ? 'preview' : 'code');
+  };
+
+  useEffect(() => {
+    if (!selected || !rootPath) {
+      setFileState(null);
+      setFileError(false);
+      return;
+    }
+    const kind = kindOf(selected.name);
+    // image / pdf / html / sheet 走 rawUrl 直链渲染，不拉 utf8 文本
+    // （pdf/xlsx 是二进制容器，utf8 解码即损坏）。
+    if (kind === 'image' || kind === 'pdf' || kind === 'html' || kind === 'sheet') {
+      setFileState(null);
+      setFileError(false);
+      setFileLoading(false);
+      return;
+    }
+    const reqId = ++fileReqRef.current;
+    setFileLoading(true);
+    setFileError(false);
+    readFile(selected.path, rootPath)
+      .then((r) => {
+        if (fileReqRef.current === reqId) setFileState({ text: r.content, truncated: r.truncated });
+      })
+      .catch(() => {
+        if (fileReqRef.current === reqId) setFileError(true);
+      })
+      .finally(() => {
+        if (fileReqRef.current === reqId) setFileLoading(false);
+      });
+  }, [selected, rootPath]);
+
+  // ── 产物：runId → RunRecord（真实 REST；artifact_* 为后端落库字段）────────
+  useEffect(() => {
+    if (!runId) {
+      setRunRecord(null);
+      return;
+    }
+    let cancelled = false;
+    listRuns()
+      .then((runs) => {
+        if (!cancelled) setRunRecord(runs.find((r) => r.run_id === runId) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setRunRecord(null);
+      });
+    return () => { cancelled = true; };
+  }, [runId]);
+
+  // 产物出现 → 自动开产物 tab 并激活（clawsgo「产出即开 tab」；同一 run 只自动一次）。
+  useEffect(() => {
+    if (!runId || !runRecord?.artifact_url) return;
+    if (autoOpenedRef.current.has(runId)) return;
+    autoOpenedRef.current.add(runId);
+    openRecordArtifactTab(runRecord);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, runRecord]);
+
+  // run 开始执行 → 自动露出「编队」tab 一次（执行中面板；同一 run 只抢一次）。
+  // os-unified 三合一后过程视图在编队 pane 顶部。
+  useEffect(() => {
+    if (!runId || !session.isStreaming) return;
+    if (autoProcessRef.current.has(runId)) return;
+    autoProcessRef.current.add(runId);
+    setActiveTab('team');
+  }, [runId, session.isStreaming]);
+
+  // 会话切走/切到 DM → 编队 pane 消失（团队上下文没了），回落到新上下文的
+  // 打头 tab（agent → 灵魂，否则工作空间）。
+  useEffect(() => {
+    if (activeTab === 'team' && !hasTeamContext)
+      setActiveTab(soulAgent ? 'soul' : 'workspace');
+  }, [activeTab, hasTeamContext, soulAgent]);
+
+  // agent 上下文消失（切到群聊/团队/首页）→ 「灵魂」tab 消失，回落：
+  // 还有团队上下文 → 编队，否则工作空间（2026-11-06 tab 调整同批）。
+  useEffect(() => {
+    if ((activeTab === 'soul' || activeTab === 'schedules') && !soulAgent)
+      setActiveTab(hasTeamContext ? 'team' : 'workspace');
+  }, [activeTab, soulAgent, hasTeamContext]);
+
+  // 上下文切换 → 默认 tab 跟随打头位（2026-11-06 用户反馈）：进入新的
+  // 团队/群聊上下文 → 编队；进入新的 agent 上下文（target 或 DM）→ 灵魂；
+  // 无上下文 → 工作空间。NeoHost 跨会话保持挂载，useState 初值只在首次
+  // 挂载生效，这里按上下文 key 变化重置（手动点过其它 tab 不受影响，
+  // 除非上下文真的换了）。放在两个回落 effect 之后：同一次 commit 里
+  // 后定义的 effect 后跑，setValue 以这里为准。
+  const contextKey = `${target?.kind ?? ''}:${target?.id ?? ''}:${conversation?.groupId ?? ''}:${soulAgent?.id ?? ''}`;
+  const lastContextKeyRef = useRef(contextKey);
+  useEffect(() => {
+    if (lastContextKeyRef.current === contextKey) return;
+    lastContextKeyRef.current = contextKey;
+    setActiveTab(hasTeamContext ? 'team' : soulAgent ? 'soul' : 'workspace');
+  }, [contextKey, hasTeamContext, soulAgent]);
+
+  const openRecordArtifactTab = (rec: RunRecord) => {
+    const url = rec.artifact_url;
+    if (!url) return;
+    const tab: ArtifactTab = {
+      id: rec.run_id,
+      url,
+      type: rec.artifact_type ?? 'markdown',
+      filename: artifactFilename(rec),
+      sessionId: rec.session_id,
+      isComplete: rec.status === 'completed',
+    };
+    setArtifactTabs((tabs) =>
+      tabs.some((tb) => tb.id === tab.id) ? tabs : [...tabs, tab],
+    );
+    setActiveTab(`artifact:${tab.id}`);
+  };
+
+  // lineage 产物点击 → 开产物 tab（走 NeoArtifactPreview；url 已由 ArtifactsView 解析）。
+  const openLineageArtifactTab = (item: LineageArtifact) => {
+    if (!item.url) return;
+    const tab: ArtifactTab = {
+      id: item.id,
+      url: item.url,
+      type: previewTypeOf(item.name),
+      filename: item.name,
+      sessionId: runRecord?.session_id,
+      isComplete: runRecord?.status === 'completed',
+    };
+    setArtifactTabs((tabs) =>
+      tabs.some((tb) => tb.id === tab.id) ? tabs : [...tabs, tab],
+    );
+    setActiveTab(`artifact:${tab.id}`);
+  };
+
+  const closeArtifactTab = (id: string) => {
+    setArtifactTabs((tabs) => tabs.filter((tab) => tab.id !== id));
+    if (activeTab === `artifact:${id}`) setActiveTab('artifacts');
+  };
+
+  // 产物 tab 内容（yaml/markdown 渲染 + html 源码 tab 需要文本；按 tab id 缓存，
+  // 已缓存的 tab 不重复拉取；artifactTick = 手动刷新，先清缓存再拉）。
+  useEffect(() => {
+    const tab = activeArtifactTab;
+    if (!tab) {
+      setArtifactLoading(false);
+      return;
+    }
+    if (artifactContents[tab.id] !== undefined) {
+      setArtifactLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setArtifactLoading(true);
+    fetch(tab.url)
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((txt) => {
+        if (!cancelled) {
+          setArtifactContents((m) => ({ ...m, [tab.id]: txt }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setArtifactContents((m) => ({ ...m, [tab.id]: '' }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setArtifactLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeArtifactTab?.id, activeArtifactTab?.url, artifactTick]);
+
+  // ── Loop：优先 SSE `loop` 帧（网关 loop-watcher 推流，全量快照直接替换）；
+  // 无帧时挂 loops/stream 专属 SSE（流式期间），最后回落一次性 getRunLoops
+  // 拉取（历史 run / watcher 静默场景）──
+  // 三条通路都按 loop_id 去重（响应按 step 分组，loop 对象会重复）──
+  useEffect(() => {
+    if (!runId) {
+      setLoops(null);
+      setLoopsError(null);
+      return;
+    }
+    if (session.loops && session.loops.length > 0) {
+      const byId = new Map<string, LoopRecord>();
+      for (const raw of session.loops) {
+        const loop = raw as unknown as LoopRecord;
+        if (loop?.loop_id) byId.set(loop.loop_id, loop);
+      }
+      setLoops(
+        [...byId.values()].sort(
+          (a, b) => a.depth - b.depth || a.loop_id.localeCompare(b.loop_id),
+        ),
+      );
+      setLoopsError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoops(null);
+    setLoopsError(null);
+    const applySteps = (steps: { loop: LoopRecord }[]) => {
+      const byId = new Map<string, LoopRecord>();
+      for (const step of steps) byId.set(step.loop.loop_id, step.loop);
+      setLoops(
+        [...byId.values()].sort(
+          (a, b) => a.depth - b.depth || a.loop_id.localeCompare(b.loop_id),
+        ),
+      );
+    };
+    getRunLoops(runId)
+      .then((r) => {
+        if (cancelled) return;
+        applySteps(r.loops);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoopsError(friendlyErrorText(e));
+      });
+    // loops 专属 SSE（流式期间实时刷新；端点不可用时上面的一次性拉取即回落，
+    // 不另加轮询——过程 tab 的 ProcessView 已有自己的 5s 轮询节奏）。
+    const stream = session.isStreaming
+      ? streamRunLoops(
+          runId,
+          (steps) => {
+            if (cancelled) return;
+            applySteps(steps);
+            setLoopsError(null);
+          },
+          () => {
+            /* 端点未就绪 → 保持一次性 REST 结果，不升级为轮询 */
+          },
+        )
+      : null;
+    return () => {
+      cancelled = true;
+      stream?.close();
+    };
+  }, [runId, session.loops, session.isStreaming]);
+
+  // =========================================================================
+  // 渲染
+  // =========================================================================
+
+  const fixedTabs: Array<{ id: FixedTab; label: string; icon: ReactNode }> = [
+    { id: 'workspace', label: t('neo.host.workspace', { defaultValue: '工作空间' }), icon: <FolderOpen size={20} strokeWidth={1.75} /> },
+    { id: 'artifacts', label: t('neo.host.artifacts', { defaultValue: '产物' }), icon: <Package size={20} strokeWidth={1.75} /> },
+    // os-unified（2026-11-04 用户反馈三合一）：过程/编队/成员合并为「编队」，
+    // 图标换 Waypoints。编队是条件 tab 且排在 tab 条最前（2026-11-06 用户
+    // 反馈：群聊上下文首屏直接是编队），在下方 tab 条条件渲染。
+  ];
+
+  // ── 文件树（递归，懒加载）──
+  const renderTreeEntries = (entries: FsDirEntry[], depth: number): ReactNode =>
+    sortEntries(entries).map((entry) => {
+      const pad = 8 + depth * 14;
+      if (entry.isDir) {
+        const isOpen = Boolean(expanded[entry.path]);
+        const kids = children[entry.path];
+        return (
+          <div key={entry.path}>
+            <button
+              type="button"
+              className="neo-host-tree-row"
+              style={{ paddingLeft: pad }}
+              onClick={() => toggleDir(entry)}
+            >
+              {isOpen ? (
+                <ChevronDown size={12} strokeWidth={1.8} className="neo-host-tree-caret" />
+              ) : (
+                <ChevronRight size={12} strokeWidth={1.8} className="neo-host-tree-caret" />
+              )}
+              <Folder size={13} strokeWidth={1.8} className="neo-host-tree-dir-icon" />
+              <span className="neo-host-tree-name">{entry.name}</span>
+            </button>
+            {isOpen && (
+              loadingDirs[entry.path] && !kids ? (
+                <div className="neo-host-tree-note" style={{ paddingLeft: pad + 26 }}>
+                  {t('neo.host.loading', { defaultValue: '读取中…' })}
+                </div>
+              ) : kids && kids.length > 0 ? (
+                renderTreeEntries(kids, depth + 1)
+              ) : kids ? (
+                <div className="neo-host-tree-note" style={{ paddingLeft: pad + 26 }}>
+                  {t('neo.host.emptyDir', { defaultValue: '（空目录）' })}
+                </div>
+              ) : null
+            )}
+          </div>
+        );
+      }
+      const isSel = selected?.path === entry.path;
+      return (
+        <button
+          key={entry.path}
+          type="button"
+          className={`neo-host-tree-row${isSel ? ' neo-host-tree-row--sel' : ''}`}
+          style={{ paddingLeft: pad + 14 }}
+          onClick={() => openFile(entry)}
+        >
+          <FileTypeIcon name={entry.name} />
+          <span className="neo-host-tree-name">{entry.name}</span>
+        </button>
+      );
+    });
+
+  // ── 工作空间 tab 内容 ──
+  const workspaceContent = (
+    <div className="neo-host-ws">
+      {/* 工具条：路径 + 刷新 + 换目录 */}
+      <div className="neo-host-ws-toolbar">
+        <span className="neo-host-ws-path" title={rootPath ?? ''}>
+          {rootPath ?? t('neo.host.locating', { defaultValue: '定位目录…' })}
+        </span>
+        {followsTask && (
+          <span
+            data-testid="neo-host-task-dir-badge"
+            title={t('neo.host.taskDirHint', {
+              defaultValue: '当前显示本会话的工作目录 —— 智能体产出的文件都在这里',
+            })}
+            style={{
+              flexShrink: 0,
+              padding: '1px 6px',
+              borderRadius: 6,
+              fontSize: 10,
+              lineHeight: '16px',
+              color: 'var(--t-accent, #4c8dff)',
+              background: 'color-mix(in srgb, var(--t-accent, #4c8dff) 14%, transparent)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('neo.host.taskDir', { defaultValue: '任务产出' })}
+          </span>
+        )}
+        <button
+          type="button"
+          className="neo-host-icon-btn"
+          title={t('neo.host.refresh', { defaultValue: '刷新' })}
+          onClick={refreshTree}
+        >
+          <RefreshCw size={12} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="neo-host-icon-btn"
+          title={t('neo.host.newFile', { defaultValue: '新建文件' })}
+          onClick={openNewFileModal}
+          data-testid="neo-host-new-file"
+        >
+          <FilePlus2 size={12} strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
+          className="neo-host-icon-btn"
+          title={t('neo.host.uploadFile', { defaultValue: '上传文件' })}
+          onClick={() => uploadInputRef.current?.click()}
+        >
+          <Upload size={12} strokeWidth={1.8} />
+        </button>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          hidden
+          data-testid="neo-host-upload-input"
+          onChange={onUploadPicked}
+        />
+        {uploadError && (
+          <div
+            role="alert"
+            data-testid="neo-host-upload-error"
+            style={{
+              flexBasis: '100%',
+              marginTop: 6,
+              padding: '6px 10px',
+              borderRadius: 8,
+              fontSize: 12,
+              background: 'color-mix(in srgb, var(--t-err) 8%, transparent)',
+              color: 'var(--t-err)',
+              wordBreak: 'break-all',
+            }}
+          >
+            {uploadError}
+          </div>
+        )}
+        <button
+          type="button"
+          className="neo-host-icon-btn"
+          title={t('neo.host.pickFolder', { defaultValue: '打开项目文件夹' })}
+          onClick={pickFolder}
+        >
+          <FolderOpen size={12} strokeWidth={1.8} />
+        </button>
+      </div>
+      {/* 搜索（Coze「搜索文件」对标；过滤已加载的树缓存） */}
+      <div className="neo-host-ws-search">
+        <Search size={12} strokeWidth={1.8} className="neo-host-ws-search-icon" />
+        <input
+          className="neo-host-ws-search-input"
+          value={treeQuery}
+          onChange={(e) => setTreeQuery(e.target.value)}
+          placeholder={t('neo.host.searchFiles', { defaultValue: '搜索文件' })}
+        />
+        {treeQuery && (
+          <button
+            type="button"
+            className="neo-host-icon-btn"
+            title={t('neo.host.clear', { defaultValue: '清除' })}
+            onClick={() => setTreeQuery('')}
+          >
+            <X size={11} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+      <div className="neo-host-ws-body">
+        {/* 左：文件树（搜索时 = 已加载缓存的扁平匹配列表） */}
+        <div className="neo-host-tree">
+          {treeQuery.trim() ? (
+            (() => {
+              const q = treeQuery.trim().toLowerCase();
+              const matches: FsDirEntry[] = [];
+              for (const list of Object.values(children)) {
+                for (const e of list) {
+                  if (e.name.toLowerCase().includes(q)) matches.push(e);
+                }
+              }
+              if (matches.length === 0) {
+                return (
+                  <div className="neo-host-tree-note neo-host-tree-note--pad">
+                    {t('neo.host.noMatch', { defaultValue: '（无匹配文件）' })}
+                  </div>
+                );
+              }
+              return sortEntries(matches).map((entry) => {
+                const isSel = selected?.path === entry.path;
+                return (
+                  <button
+                    key={entry.path}
+                    type="button"
+                    className={`neo-host-tree-row${isSel ? ' neo-host-tree-row--sel' : ''}`}
+                    onClick={() => (entry.isDir ? toggleDir(entry) : openFile(entry))}
+                  >
+                    {entry.isDir ? (
+                      <Folder size={13} strokeWidth={1.8} className="neo-host-tree-dir-icon" />
+                    ) : (
+                      <FileTypeIcon name={entry.name} />
+                    )}
+                    <span className="neo-host-tree-name">{entry.name}</span>
+                    <span className="neo-host-tree-sub" title={entry.path}>
+                      {entry.path}
+                    </span>
+                  </button>
+                );
+              });
+            })()
+          ) : rootPath && children[rootPath] ? (
+            children[rootPath].length > 0 ? (
+              renderTreeEntries(children[rootPath], 0)
+            ) : (
+              <div className="neo-host-tree-note neo-host-tree-note--pad">
+                {t('neo.host.emptyDir', { defaultValue: '（空目录）' })}
+              </div>
+            )
+          ) : (
+            <div className="neo-host-tree-note neo-host-tree-note--pad">
+              {t('neo.host.loading', { defaultValue: '读取中…' })}
+            </div>
+          )}
+        </div>
+        {/* 右：预览 */}
+        <div className="neo-host-preview">
+          {selected ? (
+            <>
+              <div className="neo-host-preview-toolbar">
+                <span className="neo-host-preview-name" title={selected.path}>
+                  {selected.name}
+                </span>
+                {kindOf(selected.name) === 'markdown' && (
+                  <div className="neo-host-seg">
+                    <button
+                      type="button"
+                      className={`neo-host-seg-btn neo-tt${viewMode === 'preview' ? ' neo-host-seg-btn--on' : ''}`}
+                      data-tip={t('neo.host.preview', { defaultValue: '预览' })}
+                      onClick={() => setViewMode('preview')}
+                    >
+                      <Eye size={11} strokeWidth={2} />
+                      {t('neo.host.preview', { defaultValue: '预览' })}
+                    </button>
+                    <button
+                      type="button"
+                      className={`neo-host-seg-btn neo-tt${viewMode === 'code' ? ' neo-host-seg-btn--on' : ''}`}
+                      data-tip={t('neo.host.code', { defaultValue: '代码' })}
+                      onClick={() => setViewMode('code')}
+                    >
+                      <Code size={11} strokeWidth={2} />
+                      {t('neo.host.code', { defaultValue: '代码' })}
+                    </button>
+                  </div>
+                )}
+                {rootPath && (
+                  <a
+                    className="neo-host-icon-btn"
+                    title={t('neo.host.download', { defaultValue: '下载' })}
+                    href={rawUrl(selected.path, rootPath)}
+                    download={selected.name}
+                  >
+                    <Download size={12} strokeWidth={1.8} />
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="neo-host-icon-btn"
+                  title={t('neo.host.close', { defaultValue: '关闭' })}
+                  onClick={() => setSelected(null)}
+                >
+                  <X size={12} strokeWidth={1.8} />
+                </button>
+              </div>
+              <div className="neo-host-preview-body">
+                {kindOf(selected.name) === 'image' && rootPath ? (
+                  <div className="neo-host-preview-img-wrap">
+                    <img
+                      className="neo-host-preview-img"
+                      src={rawUrl(selected.path, rootPath)}
+                      alt={selected.name}
+                    />
+                  </div>
+                ) : (kindOf(selected.name) === 'pdf' || kindOf(selected.name) === 'html') &&
+                  rootPath ? (
+                  // pdf / html 走 rawUrl 直链（后端 /api/fs/raw 的 MIME 表本就支持），
+                  // <iframe> 交给浏览器原生渲染；sandbox 不给 allow-scripts ——
+                  // html 静态内容可显示，脚本一律不执行（workspace 里的产物不可信）。
+                  <iframe
+                    className="neo-host-preview-frame"
+                    src={rawUrl(selected.path, rootPath)}
+                    title={selected.name}
+                    sandbox="allow-same-origin"
+                  />
+                ) : kindOf(selected.name) === 'sheet' && rootPath ? (
+                  // xlsx/xls/csv/tsv：SheetJS 解析 + HTML 表格（2026-11-20，
+                  // Univer xlsx 导入是 Pro 组件；开源组合零后端）。数据源
+                  // rawUrl 直链，组件内部 fetch arrayBuffer。
+                  <XlsxPreview
+                    src={rawUrl(selected.path, rootPath)}
+                    name={selected.name}
+                  />
+                ) : fileLoading ? (
+                  // b_007：header 先渲染，内容区居中细圆环 spinner
+                  <div className="neo-host-preview-loading">
+                    <span className="neo-spin" />
+                  </div>
+                ) : fileError ? (
+                  <div className="neo-host-tree-note neo-host-tree-note--pad">
+                    {t('neo.host.readFailed', { defaultValue: '（无法预览此文件）' })}
+                  </div>
+                ) : fileState ? (
+                  viewMode === 'preview' && kindOf(selected.name) === 'markdown' ? (
+                    <div className="neo-host-preview-md">
+                      <NeoMarkdown source={fileState.text} />
+                      {fileState.truncated && (
+                        <div className="neo-host-truncated">
+                          {t('neo.host.truncated', { defaultValue: '（内容过长，已截断）' })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="neo-host-code">
+                      {fileState.text.split('\n').map((line, i) => (
+                        <div className="neo-host-code-line" key={i}>
+                          <span className="neo-host-code-ln">{i + 1}</span>
+                          <span className="neo-host-code-text">{line || ' '}</span>
+                        </div>
+                      ))}
+                      {fileState.truncated && (
+                        <div className="neo-host-truncated">
+                          {t('neo.host.truncated', { defaultValue: '（内容过长，已截断）' })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className="neo-host-empty neo-host-empty--fill">
+              {t('neo.host.pickFile', { defaultValue: '在左侧选择文件以查看内容' })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── runId 为空时的 run 依赖 tab 空态（2026-08-19：会话/目标态右栏也常驻，
+  //    工作空间 tab 不依赖 run 照常可用；产物/过程/Loop 给干净空态）──
+  const runlessNote = (
+    <div className="neo-host-empty neo-host-empty--fill">
+      <Package size={20} strokeWidth={1.5} className="neo-host-empty-icon" />
+      <span>{t('neo.host.noRun', { defaultValue: '暂无运行中的任务' })}</span>
+      <span className="neo-host-empty-sub">
+        {t('neo.host.noRunHint', { defaultValue: '发起任务后，这里展示 Agent 的工作空间、产物、过程投影与 Loop 迭代' })}
+      </span>
+    </div>
+  );
+
+  // ── 产物 tab 内容（lineage 驱动，无数据时回落单 artifact 旧行为）──
+  // W1-B 保活：hidden 期间暂停轮询（active 叠加 tab 可见性），切回时 effect 重跑拉新数据。
+  // 2026-11-19 群聊去串台：群/团队会话里 runId 常常是别的 NeoChat run 残留
+  // （群聊 fan-out 根本不产 run 级 artifact —— routes/groups/* 无 artifact 概念），
+  // 直接展示 ArtifactsView 会让用户看到别人的产物。保守做法：isTeamConv 且
+  // runId 存在 → 空态 + 切到「工作空间」的按钮。
+  const artifactsContent =
+    isTeamConv && runId ? (
+      <div
+        className="neo-host-empty neo-host-empty--fill"
+        data-testid="neo-host-team-artifacts-note"
+      >
+        <Package size={20} strokeWidth={1.5} className="neo-host-empty-icon" />
+        <span>{t('neo.host.teamArtifacts', { defaultValue: '群聊的产出在「工作空间」里' })}</span>
+        <span className="neo-host-empty-sub">
+          {t('neo.host.teamArtifactsHint', {
+            defaultValue: '每个 Agent 写的文件都落在本会话的工作目录，去工作空间查看',
+          })}
+        </span>
+        <button
+          type="button"
+          className="neo-btn-primary"
+          data-testid="neo-host-go-workspace"
+          onClick={() => setActiveTab('workspace')}
+        >
+          {t('neo.host.openWorkspace', { defaultValue: '打开工作空间' })}
+        </button>
+      </div>
+    ) : runId ? (
+      <ArtifactsView
+        runId={runId}
+        active={session.isStreaming && activeTab === 'artifacts'}
+        runRecord={runRecord}
+        onOpen={openLineageArtifactTab}
+        onOpenRecord={openRecordArtifactTab}
+      />
+    ) : (
+      runlessNote
+    );
+
+  // ── Loop tab 内容 ──
+  const loopContent = (
+    <div className="neo-host-list">
+      {loopsError ? (
+        <div className="neo-host-empty neo-host-empty--fill neo-host-empty--err">
+          {t('neo.host.loopsError', { defaultValue: 'Loop 数据加载失败' })}：{loopsError}
+        </div>
+      ) : !runId ? (
+        runlessNote
+      ) : loops === null ? (
+        <div className="neo-host-tree-note neo-host-tree-note--pad">
+          {t('neo.host.loading', { defaultValue: '读取中…' })}
+        </div>
+      ) : loops.length === 0 ? (
+        <div className="neo-host-empty neo-host-empty--fill">
+          {t('neo.host.noLoops', { defaultValue: '该运行没有 Loop 迭代记录' })}
+        </div>
+      ) : (
+        loops.map((loop) => {
+          const maxes = metricMaxes(loop);
+          return (
+            <div
+              key={loop.loop_id}
+              className="neo-host-loop-card"
+              style={{ marginLeft: loop.depth * 14 }}
+            >
+              <div className="neo-host-loop-head">
+                <span className={`neo-host-pill ${LOOP_STATUS_CLASS[loop.status]}`}>
+                  {t(`neo.host.loopStatus.${loop.status}`, { defaultValue: loop.status })}
+                </span>
+                <span className="neo-host-loop-kind">
+                  {t(`neo.host.loopKind.${loop.kind}`, { defaultValue: loop.kind })}
+                </span>
+                <span className="neo-host-loop-setpoint">
+                  {loop.setpoint.metric} {loop.setpoint.op} {loop.setpoint.value}
+                </span>
+                <span className="neo-host-loop-count">
+                  {t('neo.host.iterations', { defaultValue: '{{count}} 轮', count: loop.iteration_count })}
+                </span>
+              </div>
+              <div className="neo-host-loop-iters">
+                {loop.iterations.map((it) => {
+                  const metricKeys = Object.keys(it.metrics ?? {}).slice(0, 4);
+                  return (
+                    <div key={`${it.loop_id}-${it.index}`} className="neo-host-iter">
+                      <div className="neo-host-iter-head">
+                        <span className="neo-host-iter-k">
+                          {t('neo.host.iterK', { defaultValue: '第 {{k}} 轮', k: it.index + 1 })}
+                        </span>
+                        <span className="neo-host-iter-score">
+                          score {typeof it.verifier_score === 'number' ? it.verifier_score.toFixed(2) : '—'}
+                        </span>
+                        {it.evidence.sensor && (
+                          <span className="neo-host-iter-sensor">
+                            {it.evidence.sensor.classification}
+                          </span>
+                        )}
+                      </div>
+                      {metricKeys.length > 0 && (
+                        <div className="neo-host-iter-metrics">
+                          {metricKeys.map((mk) => {
+                            const v = it.metrics[mk];
+                            const max = maxes[mk] || 1;
+                            const pct = Math.min(100, (Math.abs(v) / max) * 100);
+                            return (
+                              <div key={mk} className="neo-host-metric">
+                                <span className="neo-host-metric-label" title={mk}>{mk}</span>
+                                <span className="neo-host-metric-track">
+                                  <span className="neo-host-metric-fill" style={{ width: `${pct}%` }} />
+                                </span>
+                                <span className="neo-host-metric-val">{v}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* verifier 面板：每轮 rationale + claims（端点未就绪 → 干净空态） */}
+              <LoopVerdicts runId={runId} loopId={loop.loop_id} active={session.isStreaming} />
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
+  // ── 产物预览 tab 内容（Neo 自有 NeoArtifactPreview：done.html filecard 视觉）──
+  const artifactTabContent = (tab: ArtifactTab) => {
+    const cached = artifactContents[tab.id];
+    return (
+      <div className="neo-host-artifact-preview">
+        <NeoArtifactPreview
+          url={tab.url}
+          type={tab.type}
+          content={cached ?? ''}
+          sessionId={tab.sessionId}
+          filename={tab.filename}
+          isComplete={tab.isComplete}
+          loading={cached === undefined && artifactLoading}
+          onRefresh={() => {
+            setArtifactContents((m) => {
+              const next = { ...m };
+              delete next[tab.id];
+              return next;
+            });
+            setArtifactTick((n) => n + 1);
+          }}
+          onClose={() => closeArtifactTab(tab.id)}
+        />
+      </div>
+    );
+  };
+
+  // ── 过程 / 编队 tab 内容（2026-08-19 导航架构统一：原 Loop tab 并入——
+  //    迭代环是 DAG 执行图的一部分，PDCA 卡直接挂在过程视图下方）──
+  const processContent = runId ? (
+    <div className="neo-host-process">
+      <ProcessView runId={runId} active={session.isStreaming && activeTab === 'team'} />
+      <div className="neo-host-loop-fold">
+        <div className="neo-host-loop-fold-head">
+          <Repeat size={13} strokeWidth={1.9} aria-hidden />
+          {t('neo.host.loopFold', { defaultValue: '迭代环' })}
+        </div>
+        {loopContent}
+      </div>
+      {/* B40：memory-graph / training-dataset 投影露出（L6 证据层） */}
+      <div className="neo-host-loop-fold">
+        <div className="neo-host-loop-fold-head">
+          <Database size={13} strokeWidth={1.9} aria-hidden />
+          {t('neo.host.evidenceFold', { defaultValue: '证据投影' })}
+        </div>
+        <EvidencePanel runId={runId} active={session.isStreaming && activeTab === 'team'} />
+      </div>
+    </div>
+  ) : (
+    runlessNote
+  );
+
+  // 编队 tab 内容（2026-11-01 双入口）：① NeoRail 团队 target 态；
+  // ② 团队群会话（convTeamEntry）→ 从群聊右栏直接可编辑 DAG / 查看运行。
+  const teamContent =
+    target?.kind === 'team' ? (
+      <TeamPanel
+        teamId={target.id}
+        teamName={target.name}
+        perNodeChunks={session.perNodeChunks}
+        streaming={session.isStreaming}
+        onNavigate={onNavigate}
+      />
+    ) : convTeamEntry ? (
+      <TeamPanel
+        teamId={convTeamEntry.id}
+        groupId={conversation?.groupId ?? undefined}
+        teamName={convTeamEntry.name}
+        perNodeChunks={session.perNodeChunks}
+        streaming={session.isStreaming}
+        onNavigate={onNavigate}
+      />
+    ) : null;
+
+  // ── runId 为空不再整栏空态（2026-08-19）：会话/目标态右栏常驻，直接进
+  //    tab 壳 —— 工作空间文件树可用，产物/过程/Loop 走 runlessNote 空态。 ──
+
+  return (
+    <div className="neo-host">
+      {/* ── Agent 检查器浮层（2026-11-05 Task#11，ZCode 后台运行式）──────────
+          群聊点 agent 头像 → NeoApp 下发 inspectAgent → 右栏整体覆盖为该
+          agent 的后台活动流 + 发起私聊；× 关闭回落常规 tab（tab 保活不丢态）。 */}
+      {inspectAgent && (
+        <div className="neo-host-inspect" data-testid="neo-host-inspect">
+          <NeoAgentInspector
+            agentId={inspectAgent.agentId}
+            name={inspectAgent.name}
+            groupId={inspectAgent.groupId}
+            onOpenDm={(dmGroupId) => {
+              onCloseInspectAgent?.();
+              onNavigate({ view: 'conversation', groupId: dmGroupId });
+            }}
+            onClose={() => onCloseInspectAgent?.()}
+          />
+        </div>
+      )}
+      {/* tab 栏：条件 tab 打头（编队 / 灵魂 / 定时任务，按上下文）+ 固定 tab
+          （工作空间/产物）+ 动态产物 tab（可关闭）+ 「+」
+          （2026-08-15 任务 V：ClawsGo 大图标盒形态 — 44px hairline 盒 + 下方小标签） */}
+      <div className="neo-host-header">
+        <span className="neo-host-title" data-testid="neo-host-title">
+          {/* ClawHub（2026-10-30）：agent 上下文统一 DiceBear 头像（未配置按
+              名字 hash 稳定生成）+ 名 */}
+          {soulAgentRecord && (
+            <AgentAvatar
+              name={soulAgentRecord.name}
+              style={soulAgentRecord.avatar_style}
+              seed={soulAgentRecord.avatar_seed ?? soulAgentRecord.name}
+              image={soulAgentRecord.avatar_image ?? null}
+              size={22}
+              className="neo-host-title-avatar"
+            />
+          )}
+          {/* 2026-11-04 用户反馈：团队群标题不再固定「团队的主机」，跟随
+              群聊名称灵活变化（NeoApp 下发的 conversation.teamName 即群
+              record 的 name）；群名缺失时回落「团队的主机」。 */}
+          {isTeamConv
+            ? (conversation?.teamName || t('neo.host.teamTitle', { defaultValue: '团队的主机' }))
+            : t('neo.host.title', { defaultValue: 'Agent 的主机' })}
+        </span>
+        <div className="neo-host-tabs" ref={tabbarRef}>
+          {/* 2026-11-06 用户反馈：条件 tab 打头 —— 群聊/团队上下文「编队」排
+              第一；agent 上下文「灵魂 / 定时任务」排第一、二；其后才是固定
+              tab（工作空间 / 产物）与动态产物 tab。 */}
+          {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
+            <button
+              type="button"
+              data-tab="team"
+              className={`neo-host-tab${activeTab === 'team' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('team')}
+              data-testid="neo-host-team-tab"
+            >
+              <span className="neo-host-tab-box">
+                <Waypoints size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.team', { defaultValue: '编队' })}</span>
+            </button>
+          )}
+          {/* 灵魂 tab：agent 上下文（agent-target / agent 的 DM 会话）时出现，
+              内嵌 NeoAgentSoul（persona/系统提示词编辑，PATCH /api/agents） */}
+          {soulAgent && (
+            <button
+              type="button"
+              data-tab="soul"
+              className={`neo-host-tab${activeTab === 'soul' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('soul')}
+              data-testid="neo-host-soul-tab"
+            >
+              <span className="neo-host-tab-box">
+                <Sparkles size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.soul', { defaultValue: '灵魂' })}</span>
+            </button>
+          )}
+          {/* 定时任务 tab（os-unified 2026-11-04 用户反馈）：从灵魂面板内部
+              提出来，独立 tab —— tab 顺序 灵魂 / 定时任务 / 工作空间 / 产物
+              （/ 编队按上下文打头），与 agent 上下文同条件。 */}
+          {soulAgent && (
+            <button
+              type="button"
+              data-tab="schedules"
+              className={`neo-host-tab${activeTab === 'schedules' ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab('schedules')}
+              data-testid="neo-host-schedules-tab"
+            >
+              <span className="neo-host-tab-box">
+                <CalendarClock size={20} strokeWidth={1.75} />
+              </span>
+              <span className="neo-host-tab-label">{t('neo.host.schedules', { defaultValue: '定时任务' })}</span>
+            </button>
+          )}
+          {fixedTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              data-tab={tab.id}
+              className={`neo-host-tab${activeTab === tab.id ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span className="neo-host-tab-box">{tab.icon}</span>
+              <span className="neo-host-tab-label">{tab.label}</span>
+            </button>
+          ))}
+          {artifactTabs.map((tab) => (
+            <span
+              key={tab.id}
+              data-tab={`artifact:${tab.id}`}
+              className={`neo-host-tab neo-host-tab--artifact${activeTab === `artifact:${tab.id}` ? ' neo-host-tab--on' : ''}`}
+              onClick={() => setActiveTab(`artifact:${tab.id}`)}
+            >
+              <span className="neo-host-tab-box">
+                <Package size={20} strokeWidth={1.75} />
+                <button
+                  type="button"
+                  className="neo-host-tab-close"
+                  title={t('neo.host.close', { defaultValue: '关闭' })}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeArtifactTab(tab.id);
+                  }}
+                >
+                  <X size={10} strokeWidth={2} />
+                </button>
+              </span>
+              <span className="neo-host-tab-label neo-host-tab-ellipsis">{tab.filename}</span>
+            </span>
+          ))}
+          {/* 「+」先不实现功能（产物出现时自动开 tab），保留视觉位 */}
+          <button
+            type="button"
+            className="neo-host-tab neo-host-tab--plus"
+            title={t('neo.host.plusSoon', { defaultValue: '新标签页（即将支持）' })}
+            aria-disabled="true"
+          >
+            <span className="neo-host-tab-box">
+              <Plus size={18} strokeWidth={1.8} />
+            </span>
+          </button>
+          <span
+            className="neo-host-tabs-bar"
+            style={{
+              left: bar.left,
+              width: bar.width,
+              opacity: bar.visible ? 1 : 0,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* tab 内容：全部 pane 常驻挂载，hidden 保活（display:none），切 tab 不丢
+          滚动位置 / 选中文件 / 预览模式（done.html a_010）；fade 在 pane 首次挂载时播放 */}
+      <div className="neo-host-content">
+        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'workspace'}>
+          {workspaceContent}
+        </div>
+        <div className="neo-host-pane neo-host-fade" hidden={activeTab !== 'artifacts'}>
+          {artifactsContent}
+        </div>
+        {soulAgent && (
+          <div
+            className="neo-host-pane neo-host-fade neo-host-soul-pane"
+            hidden={activeTab !== 'soul'}
+          >
+            <NeoAgentSoul agentId={soulAgent.id} />
+          </div>
+        )}
+        {/* 定时任务 pane：AgentSchedulesPanel 从灵魂面板移出（独立 tab）。 */}
+        {soulAgent && (
+          <div
+            className="neo-host-pane neo-host-fade neo-host-schedules-pane"
+            hidden={activeTab !== 'schedules'}
+            data-testid="neo-host-schedules-pane"
+          >
+            {soulAgentRecord ? (
+              <AgentSchedulesPanel
+                agentId={soulAgentRecord.agent_id}
+                workspaceId={soulAgentRecord.workspace_id}
+              />
+            ) : (
+              <div className="neo-host-tree-note">{t('neo.host.loading', { defaultValue: '读取中…' })}</div>
+            )}
+          </div>
+        )}
+        {/* 编队 pane（os-unified 2026-11-04 三合一）：过程视图（runId 非空时
+            ProcessView + 迭代环 + 证据投影）+ 团队编队面板（TeamPanel），
+            纵向排布。 */}
+        {(target?.kind === 'team' || convTeamEntry || isTeamConv) && (
+          <div
+            className="neo-host-pane neo-host-fade neo-host-pane--team"
+            hidden={activeTab !== 'team'}
+            data-testid="neo-host-team-pane"
+          >
+            {runId && (
+              <div className="neo-host-teamsec">
+                <div className="neo-host-teamsec-head">
+                  <GitBranch size={12} strokeWidth={1.8} aria-hidden />
+                  {t('neo.host.process', { defaultValue: '过程' })}
+                </div>
+                {processContent}
+              </div>
+            )}
+            {(target?.kind === 'team' || convTeamEntry) && (
+              <div className="neo-host-teamsec">
+                <div className="neo-host-teamsec-head">
+                  <Waypoints size={12} strokeWidth={1.8} aria-hidden />
+                  {t('neo.host.teamWorkflow', { defaultValue: '工作流' })}
+                </div>
+                {teamContent}
+              </div>
+            )}
+            {/* 2026-11-04 用户反馈批：编队 pane 只保留前部 TeamPanel 的
+                成员 / 工作流 / 协作策略三节 —— 尾部重复的 GroupMembersPanel
+                （成员+工作流摘要+简报）与一级「封驳矩阵」section 移除
+                （用户判定重复冗余）。 */}
+          </div>
+        )}
+        {artifactTabs.map((tab) => (
+          <div
+            key={tab.id}
+            className="neo-host-pane neo-host-fade"
+            hidden={activeTab !== `artifact:${tab.id}`}
+          >
+            {artifactTabContent(tab)}
+          </div>
+        ))}
+      </div>
+
+      {/* 新建文件弹窗（2026-11-04 用户反馈批）：window.prompt 原生框替换为
+          应用内 neo-modal 弹窗（Enter 确认 / Esc 取消 / busy 失效）。 */}
+      {newFileOpen && (
+        <div
+          className="neo-modal-mask"
+          onClick={() => {
+            if (!newFileBusy) setNewFileOpen(false);
+          }}
+        >
+          <div
+            className="neo-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('neo.host.newFile', { defaultValue: '新建文件' })}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (newFileBusy) return;
+              if (e.key === 'Enter') void createFile();
+              if (e.key === 'Escape') setNewFileOpen(false);
+            }}
+            data-testid="neo-host-new-file-modal"
+          >
+            <h2 className="neo-modal-title">{t('neo.host.newFile', { defaultValue: '新建文件' })}</h2>
+            <label className="neo-modal-label" htmlFor="neo-host-new-file-input">
+              {t('neo.host.newFilePrompt', { defaultValue: '新建文件名（可带子目录，如 docs/notes.md）' })}
+            </label>
+            <input
+              id="neo-host-new-file-input"
+              className="neo-modal-input"
+              value={newFileName}
+              autoFocus
+              disabled={newFileBusy}
+              onChange={(e) => setNewFileName(e.target.value)}
+              data-testid="neo-host-new-file-input"
+            />
+            {newFileError && (
+              <div className="neo-modal-error" role="alert" data-testid="neo-host-new-file-error">
+                {newFileError}
+              </div>
+            )}
+            <div className="neo-modal-actions">
+              <button
+                type="button"
+                className="neo-modal-cancel"
+                onClick={() => setNewFileOpen(false)}
+                disabled={newFileBusy}
+                data-testid="neo-host-new-file-cancel"
+              >
+                {t('common.cancel', { defaultValue: '取消' })}
+              </button>
+              <button
+                type="button"
+                className="neo-btn-primary"
+                onClick={() => void createFile()}
+                disabled={newFileBusy || !newFileName.trim()}
+                data-testid="neo-host-new-file-confirm"
+              >
+                {t('common.confirm', { defaultValue: '确定' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default NeoHost;

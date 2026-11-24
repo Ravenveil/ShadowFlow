@@ -1,0 +1,172 @@
+/* turn-rail.css — 会话侧轮次锚点垂直滚动条（2026-11-08）。
+   视觉：单一色调（统一墨色 rgba(23,22,45,*)）的标准网页滚动条——
+   上下箭头按钮 + 细轨道 + 每轮一枚小刻度线 + 实心滑块，无深浅补丁块。
+   本文件故意不进 @layer：无层规则天然压过 product-app.css 的 @layer components，
+   从而不动那个并行编辑中的大样式表也能修正滚动链（grid 行/项缺 min-height 会把
+   消息列表撑出视口 → 滚轮失效、底部消息被绝对定位的输入框坞遮挡）。 */
+
+/* ── 滚动链修复：让 .sf-chat-scroll 真正被约束在视口内 ───────────────── */
+.sf-chat-layout {
+  grid-template-rows: minmax(0, 1fr);
+}
+.sf-chat-layout > * {
+  min-height: 0;
+}
+/* 输入框坞高度（含任务面板）由 TurnRail 用 ResizeObserver 写入；
+   底部留白随坞高伸缩，最后一轮对话不再被遮挡。 */
+.sf-chat-scroll {
+  padding-bottom: calc(var(--sf-dock-h, 150px) + 30px);
+  scrollbar-width: none;
+}
+.sf-chat-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ── 轮次滚动条本体 ───────────────────────────────────────────────── */
+.sf-turn-rail {
+  position: absolute;
+  right: 8px;
+  top: 18px;
+  bottom: calc(var(--sf-dock-h, 150px) + 28px);
+  width: 14px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+  opacity: 0.6;
+  transition: opacity 0.18s;
+}
+.sf-turn-rail:hover,
+.sf-turn-rail:focus-visible,
+.sf-turn-rail.dragging {
+  opacity: 1;
+}
+
+/* 上下箭头按钮（网页滚动条经典样式，三角形同色调） */
+.sf-turn-arrow {
+  flex: 0 0 13px;
+  height: 13px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.sf-turn-arrow::after {
+  content: "";
+  display: block;
+  border: 3.5px solid transparent;
+}
+.sf-turn-arrow.up::after {
+  border-bottom-color: rgba(23, 22, 45, 0.5);
+  margin-top: 1.5px;
+}
+.sf-turn-arrow.down::after {
+  border-top-color: rgba(23, 22, 45, 0.5);
+  margin-bottom: 1.5px;
+}
+.sf-turn-arrow:hover::after {
+  border-bottom-color: rgba(23, 22, 45, 0.85);
+  border-top-color: rgba(23, 22, 45, 0.85);
+}
+
+.sf-turn-track {
+  position: relative;
+  flex: 1;
+  border-radius: 4px;
+  background: rgba(23, 22, 45, 0.04);
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* 每一轮对话一格：透明命中区（整轮可点），无刻度装饰 */
+.sf-turn-cell {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: block;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+/* 序号默认收起，悬停该格随预览一起浮现 */
+.sf-turn-cell em {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(23, 22, 45, 0.55);
+  font: 500 8px "DM Mono";
+  font-style: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.sf-turn-cell:hover em {
+  opacity: 1;
+}
+
+/* 悬停提示：轮次预览 */
+.sf-turn-tip {
+  position: absolute;
+  right: 26px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid #e2e2e0;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 8px 22px -10px rgba(22, 22, 28, 0.28);
+  color: #444;
+  font-size: 10px;
+  line-height: 1.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.sf-turn-tip strong {
+  color: rgba(23, 22, 45, 0.75);
+  font: 500 9px "DM Mono";
+}
+.sf-turn-cell:hover .sf-turn-tip {
+  opacity: 1;
+}
+
+/* 滑块：同色调实心圆角条，可拖拽滑动页面 */
+.sf-turn-thumb {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  border-radius: 5px;
+  background: rgba(23, 22, 45, 0.45);
+  cursor: grab;
+  transition: background 0.15s;
+}
+.sf-turn-thumb:hover,
+.sf-turn-thumb.dragging {
+  background: rgba(23, 22, 45, 0.68);
+}
+.sf-turn-thumb.dragging {
+  cursor: grabbing;
+}
+/* 键盘聚焦可见性 */
+.sf-turn-rail:focus-visible .sf-turn-thumb {
+  background: rgba(23, 22, 45, 0.68);
+  outline: 2px solid rgba(23, 22, 45, 0.35);
+  outline-offset: 1px;
+}
+
+/* 窄屏：收薄 */
+@media (max-width: 900px) {
+  .sf-turn-rail {
+    right: 3px;
+    width: 10px;
+  }
+}
