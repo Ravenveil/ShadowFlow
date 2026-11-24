@@ -2,12 +2,11 @@
 # Gates: lint + typecheck + test + docker build on every PR and push to main.
 # NFR S1 red line: never print secrets to logs.
 #
-# 2026-11-05: backend moved to Node/TS (server/). The old Python gates
-# (ruff / mypy / pytest / contracts.py drift check) no longer describe the
-# running backend — they failed on every PR and on main itself, so the
-# signal was worthless. They are replaced by tsc + vitest for server/.
-# The legacy Python package is still built by Dockerfile.api (see
-# build (docker)), so packaging regressions are still caught.
+# 2026-11-05: backend moved to Node/TS. The old Python gates (ruff / mypy /
+# pytest / contracts.py drift check) failed on every PR and on main itself —
+# replaced by tsc + vitest.
+# 2026-11-24: ADR-0001 生效 —— backend/python 已退役并删除，render.yaml /
+# Dockerfile.api / pytest 门禁一并移除；单后端 = backend/node。
 
 name: ci
 
@@ -46,7 +45,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            frontend/package-lock.json
+            frontend/legacy/package-lock.json
             backend/node/package-lock.json
 
       - name: Install npm dependencies
@@ -77,7 +76,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            frontend/package-lock.json
+            frontend/legacy/package-lock.json
             backend/node/package-lock.json
 
       - name: Install npm dependencies (backend/node)
@@ -107,7 +106,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            frontend/package-lock.json
+            frontend/legacy/package-lock.json
             backend/node/package-lock.json
 
       - name: Install npm dependencies (backend/node)
@@ -136,17 +135,48 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            frontend/package-lock.json
+            frontend/legacy/package-lock.json
             backend/node/package-lock.json
 
       - name: Install npm dependencies (frontend)
-        run: cd frontend && npm ci
+        run: cd frontend/legacy && npm ci
 
       - name: vitest (web project)
         # 固定 2 个 worker：32 核机器上默认会起十几个 worker，transform 抢 IO 时
         # React.lazy 的 chunk 偶发加载失败，表现为「本机绿、CI 红」的随机假失败。
         # CI runner 本来就只有 2 核，这个值和线上行为一致。
-        run: cd frontend && npx vitest run --project web --maxWorkers=2
+        run: cd frontend/legacy && npx vitest run --project web --maxWorkers=2
+
+  # ------------------------------------------------------------------
+  # paper 前端门禁：typecheck + 约定机检 + 纯函数测试。
+  # paper 的依赖走 legacy 那份 node_modules（本机是 junction，CI 上用 symlink）。
+  # 注意 vitest 必须走 package.json 的本地入口，不能 npx（会拉到缓存里
+  # 另一份 vitest，describe 注册进错池 → "No test suite found"）。
+  # ------------------------------------------------------------------
+  check-paper:
+    name: check (frontend/paper)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/legacy/package-lock.json
+
+      - name: Install npm dependencies (frontend/legacy)
+        run: cd frontend/legacy && npm ci
+
+      - name: Link paper node_modules
+        run: ln -s ../legacy/node_modules frontend/paper/node_modules
+
+      - name: paper check
+        run: cd frontend/paper && npm run check
 
   # ------------------------------------------------------------------
   # Frontend E2E — Playwright route smoke (catches ErrorBoundary crashes)
@@ -168,7 +198,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            frontend/package-lock.json
+            frontend/legacy/package-lock.json
             backend/node/package-lock.json
 
       - name: Install npm dependencies (root + frontend + backend/node)
@@ -178,27 +208,26 @@ jobs:
         # vite / @playwright/test 在 frontend/node_modules，三边都要装。
         run: |
           npm ci
-          cd frontend && npm ci
-          cd ../backend/node && npm ci
+          cd frontend/legacy && npm ci
+          cd ../../backend/node && npm ci
 
       - name: Install Playwright browsers
-        run: cd frontend && npx playwright install --with-deps chromium
+        run: cd frontend/legacy && npx playwright install --with-deps chromium
 
       - name: Run route smoke tests
-        run: cd frontend && npx playwright test tests/e2e/route-smoke.spec.ts
+        run: cd frontend/legacy && npx playwright test tests/e2e/route-smoke.spec.ts
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: frontend/playwright-report/
+          path: frontend/legacy/playwright-report/
           retention-days: 7
 
   # ------------------------------------------------------------------
   # Docker image build verification — do not push, only prove builds
-  # Dockerfile.api still packages the legacy Python service; building it
-  # keeps that path honest without gating on pip-level lint/tests.
+  # (ADR-0001：Python 服务已退役，Dockerfile.api 已删；只验 node/web 镜像)
   # ------------------------------------------------------------------
   build-docker:
     name: build (docker)
@@ -210,17 +239,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Build Dockerfile.api
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/Dockerfile.api
-          push: false
-          load: false
-          tags: shadowflow-api:ci
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
 
       - name: Build Dockerfile.web
         uses: docker/build-push-action@v5
