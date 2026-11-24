@@ -5,6 +5,14 @@
 > 本文档回答两件事：① 架构深化候选 1–6 的执行步骤与顺序；② 让
 > [AutoResearchClaw](https://github.com/aiming-lab/AutoResearchClaw)（ARC）在 paper
 > 前端真正可观测、可检查、可干预的前端工作台方案。
+>
+> **2026-11-24（第二批）落地「管线页」**：后端新增 `domains/research/` 四件套
+> （ARC run 观测面，`/api/arc/*`，扫 checkpoint / stage-XX / decision.json /
+> pipeline_summary / deliverables），前端 paper 右栏新增「管线」tab——
+> 23 阶段按 8 相位分组的时间线 + 审批门徽标 + 阶段产物预览 + 引用核验清单 +
+> 质量门裁决 + refine/pivot 决策史 + 终稿（PDF 原生预览）。运行中每 10s 轮询。
+> 用本机 `~/AutoResearchClaw/artifacts` 三个真实 run 端到端验证：列表/详情/
+> 引用核验 13/13、质量门 6/10、终稿 PDF 直链、目录穿越防护全过。
 
 ---
 
@@ -130,15 +138,24 @@ figma-plugin 两代合一。
 - **M1（已完成 2026-11-24）管线视图**：`mappers.applyRunState` 把会话流里的真实动静
   投影到存图节点（交过话 → done + 交付摘录；roster busy → running；其余 wait）；
   有「审批」交接进入的节点显示门徽标（虚线框 + 盾牌角标）；选中节点在页脚显示
-  「最近交付」摘录。纯数据层投影，无新端点，`arc.test.ts` 钉住行为（vitest 修复后跑）。
-- **M2（部分完成 2026-11-24）结果检查**：产物 tab 已识别 ARC 目录约定——
-  `deliverables/`（终稿）、`verification_report.json`（核验）、`paper.tex` /
-  `paper_draft.md`（论文）、`references.bib`（文献）、`charts/`（图表）置顶打标
-  （`data/arc.ts` 纯函数识别）。⏭ 待做：pdf.js 预览 `.pdf` 终稿；
-  verification_report.json 渲染成引用核验清单。
+  「最近交付」摘录。纯数据层投影，无新端点，`arc.test.ts` 钉住行为。
+- **M2（已完成 2026-11-24）结果检查**：
+  - 产物 tab 识别 ARC 目录约定置顶打标（`data/arc.ts` 纯函数）✅
+  - **PDF 终稿预览**：浏览器原生 `<iframe>` 直链（`/api/fs/raw`），零新依赖 ✅
+  - **引用核验清单**：`verification_report.json` 渲染成 verified/存疑/虚构 清单 ✅
+  - **「管线」tab（第二批，本批）**：右栏新页直接观测 23 阶段 run——
+    后端 `domains/research/`（model 23 阶段目录 + 状态推断纯函数 /
+    repository 接口 / infra 文件扫描 / use_cases / adapters `/api/arc/*`），
+    前端 `data/http/arc.ts` 映射 + `panel/PipelineView.tsx`（相位分组时间线、
+    审批门徽标、多轮 attempt 计数、decision（proceed/refine/pivot）、
+    耗时、引用核验、质量门裁决、决策史、终稿与交付、运行中 10s 轮询）。
+    判定规则：decision.json 的 status 优先，其次 checkpoint 断点，
+    再其次「目录在但 decision 未落 = running」；多轮 attempt 冲突取最高轮次
+    （真实数据里 stage-13 原始轮 retry、v2 done，曾靠 I/O 完成顺序定胜负——已修）。
 - **M3 干预**：把 HITL（approve/reject/guide）包进 WorkspaceSource 新动作；
   univer 预览 experiment 表格（可选）。
-- **M4 观测**：cost/用量条接 ARC budget；SSE → WebSocket adapter 评估。
+- **M4 观测**：cost/用量条接 ARC budget；SSE → WebSocket adapter 评估；
+  「管线」tab 从 10s 轮询升级为 `/api/groups/:id/events` SSE 或 ARC ws 事件流。
 
 每步验收同 §五门槛；新增规则文案一律进 `src/content`，数据一律过
 `WorkspaceSource`（`check-conventions.mjs` 机检）。

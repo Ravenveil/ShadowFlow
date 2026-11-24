@@ -204,6 +204,7 @@ export const PANEL = {
    */
   tabs: [
     { id: 'run', label: '执行' },
+    { id: 'pipeline', label: '管线' },
     { id: 'team', label: '编队' },
     { id: 'artifacts', label: '产物' },
   ] as const,
@@ -254,6 +255,71 @@ export const PANEL = {
   artifactsImageFail: '这张图读不出来（后端没给直链），先显示源码。',
   artifactsZoom: '点开看大图',
   stepState: { done: '已完成', running: '进行中', wait: '等待' } as const,
+};
+
+/**
+ * PIPE — 右栏「管线」页（ARC run 观测）的文案。
+ * 阶段名/相位名不在文案表里：它们是数据（后端 research 域返回），不是硬编码。
+ */
+export const PIPE = {
+  kicker: 'ARC PIPELINE',
+  runsSection: (n: number) => `Run · ${n}`,
+  loading: '读取管线…',
+  loadFail: (reason: string) => `读不到管线：${reason}`,
+  refresh: '刷新',
+  noRuns: '这条会话还没有 ARC run',
+  noRunsHint: '给论文专家团发一条课题，23 阶段管线就会出现在这里；独立跑的 run 也会列出来。',
+  progress: (done: number, total: number) => `${done} / ${total} 阶段完成`,
+  topicFallback: '未记录课题',
+  statusLabel: {
+    running: '进行中',
+    succeeded: '已完成',
+    failed: '失败',
+    paused: '等待审批',
+    unknown: '未启动',
+  } as const,
+  stageStatus: {
+    pending: '待启动',
+    running: '进行中',
+    done: '已完成',
+    failed: '失败',
+    paused: '等批准',
+    skipped: '跳过',
+  } as const,
+  gateBadge: '审批门',
+  gateHint: '这一阶段需要人工批准后管线才会继续',
+  attemptsLabel: (n: number) => `${n} 轮`,
+  durationLabel: (sec: number) => `${sec >= 60 ? `${Math.round(sec / 60)} 分` : `${Math.round(sec)} 秒`}`,
+  decisionLabel: {
+    proceed: '通过',
+    refine: '返回精炼',
+    pivot: '换方向',
+  } as const,
+  stageArtifacts: (n: number) => `阶段产物 · ${n}`,
+  stageOpen: '打开',
+  stageBack: '返回管线',
+  phaseMeta: (n: number) => `${n} 个阶段`,
+  deliverTitle: '终稿与交付',
+  deliverEmpty: '这一 run 还没有终稿目录',
+  verifyTitle: '引用核验',
+  verifyMeta: (verified: number, total: number) => `${verified} / ${total} 条已核验`,
+  verifyIntegrity: (pct: number) => `完整性 ${pct}%`,
+  verifyEmpty: '这一 run 没有引用核验报告（stage-23）',
+  verifySuspicious: (n: number) => `${n} 条存疑`,
+  verifyHallucinated: (n: number) => `${n} 条疑似虚构`,
+  qualityTitle: '质量门裁决',
+  qualityScore: (score: number) => `${score} / 10`,
+  qualityEmpty: '这一 run 没有质量门报告（stage-20）',
+  strengthsTitle: '亮点',
+  weaknessesTitle: '待改进',
+  decisionsTitle: '决策史（refine / pivot 回环）',
+  decisionsEmpty: '没有触发过回环',
+  decisionRow: (decision: string, stage: number | null, attempt: number | null) =>
+    `${decision}${stage ? ` → 回到阶段 ${stage}` : ''}${attempt ? ` · 第 ${attempt} 次` : ''}`,
+  previewLoadFail: (reason: string) => `打不开：${reason}`,
+  previewTruncated: '文件较大，只显示了开头部分',
+  rawUnavailable: '演示态没有二进制直链，请在真后端环境查看',
+  autoRefreshHint: '运行中每 10 秒自动刷新',
 };
 
 export const POLICY = {

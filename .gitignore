@@ -118,6 +118,7 @@ _bmad-output/
 _evidence/
 _handoff_tmp/
 research/
+!backend/node/src/domains/research/
 logs/
 demo-runtime/
 ppt/

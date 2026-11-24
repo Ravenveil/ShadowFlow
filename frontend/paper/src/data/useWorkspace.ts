@@ -23,6 +23,8 @@ import {
 } from './source';
 import type {
   AppSettings,
+  ArcPipelineView,
+  ArcRunCard,
   ArtifactContent,
   ArtifactListing,
   CliProbe,
@@ -97,6 +99,14 @@ export interface WorkspaceApi {
   ) => Promise<void>;
   /** 拉「项目与 Agent」树里的项目列表。 */
   listProjects: () => Promise<ProjectNode[]>;
+  /** 这条会话相关的 ARC run 摘要卡（「管线」页）。 */
+  loadArcRuns: (sessionId: string) => Promise<ArcRunCard[]>;
+  /** 一次 ARC run 的完整观测视图（阶段 / 终稿 / 引用核验 / 质量门）。 */
+  loadArcPipeline: (runId: string) => Promise<ArcPipelineView>;
+  /** 读 run 内文本产物。 */
+  readArcArtifact: (runId: string, relPath: string) => Promise<ArtifactContent>;
+  /** run 内二进制产物直链（终稿 pdf / 图表）；空串 = 看不了。 */
+  arcArtifactRawUrl: (runId: string, relPath: string) => string;
 }
 
 export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
@@ -343,6 +353,35 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
     [src],
   );
 
+  const loadArcRuns = useCallback(
+    async (sessionId: string) =>
+      src.loadArcRuns ? src.loadArcRuns(sessionId) : ([] as ArcRunCard[]),
+    [src],
+  );
+
+  const loadArcPipeline = useCallback(
+    async (runId: string): Promise<ArcPipelineView> => {
+      if (!src.loadArcPipeline) throw new Error('数据源不支持 ARC 管线观测');
+      const view = await src.loadArcPipeline(runId);
+      if (!view) throw new Error('这条 run 不存在或已删除');
+      return view;
+    },
+    [src],
+  );
+
+  const readArcArtifact = useCallback(
+    async (runId: string, relPath: string) =>
+      src.readArcArtifact
+        ? src.readArcArtifact(runId, relPath)
+        : { content: '', size: 0, truncated: false },
+    [src],
+  );
+
+  const arcArtifactRawUrl = useCallback(
+    (runId: string, relPath: string) => src.arcArtifactRawUrl?.(runId, relPath) ?? '',
+    [src],
+  );
+
   return {
     data,
     status,
@@ -366,5 +405,9 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
     resolveDm,
     resolveApproval,
     listProjects,
+    loadArcRuns,
+    loadArcPipeline,
+    readArcArtifact,
+    arcArtifactRawUrl,
   };
 }

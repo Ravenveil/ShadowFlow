@@ -19,6 +19,8 @@
  */
 import { DEMO } from '../content/app';
 import {
+  ARC_PIPELINE_DEMO,
+  ARC_RUNS_DEMO,
   ARTIFACT_FILES,
   COMPOSER_DATA,
   DAG_CANVAS,
@@ -34,6 +36,8 @@ import {
 import { httpSource } from './http';
 import type {
   AppSettings,
+  ArcPipelineView,
+  ArcRunCard,
   ArtifactContent,
   ArtifactListing,
   CliProbe,
@@ -144,6 +148,17 @@ export interface WorkspaceSource {
     decision: 'approve' | 'reject',
     comment?: string,
   ): Promise<void>;
+  /**
+   * ARC 管线观测（右栏「管线」页）：这条会话相关的 run 摘要卡。
+   * 没实现（演示态另有兜底数据）时界面显示空态。
+   */
+  loadArcRuns?(sessionId: string): Promise<ArcRunCard[]>;
+  /** 一次 ARC run 的完整观测视图（阶段时间线 / 终稿 / 引用核验 / 质量门）。 */
+  loadArcPipeline?(runId: string): Promise<ArcPipelineView>;
+  /** 读 run 内文本产物（阶段产物 / 终稿 md / 核验 json）。 */
+  readArcArtifact?(runId: string, relPath: string): Promise<ArtifactContent>;
+  /** run 内二进制产物（终稿 pdf / 图表）直链；空串 = 该源不提供直链。 */
+  arcArtifactRawUrl?(runId: string, relPath: string): string;
 }
 
 /* ── mock 实现 ─────────────────────────────────────────────────────── */
@@ -309,6 +324,31 @@ export const mockSource: WorkspaceSource = {
   async reset() {
     settingsState = clone(SETTINGS_SEED);
     return mockSource.load();
+  },
+
+  async loadArcRuns() {
+    await sleep(400);
+    return clone(ARC_RUNS_DEMO);
+  },
+
+  async loadArcPipeline(runId: string) {
+    await sleep(400);
+    const hit = ARC_PIPELINE_DEMO.find((run) => run.runId === runId);
+    if (!hit) throw new Error(`演示数据里没有这条 run：${runId}`);
+    return clone(hit);
+  },
+
+  async readArcArtifact(_runId: string, relPath: string) {
+    const demo = ARC_PIPELINE_DEMO[0];
+    const stage = demo.stages.find((s) => relPath.startsWith(`stage-${String(s.index).padStart(2, '0')}`));
+    const name = relPath.slice(relPath.lastIndexOf('/') + 1);
+    const body = name === 'goal.md' ? `# ${demo.topic ?? '研究课题'}\n\n演示数据：课题目标与硬件画像。` : `{\n  "demo": true,\n  "stage": ${stage?.index ?? 0},\n  "file": "${name}"\n}`;
+    return { content: body, size: body.length, truncated: false };
+  },
+
+  arcArtifactRawUrl() {
+    // 演示态没有真二进制；终稿 pdf 在演示里以空直链表示，界面回落成提示
+    return '';
   },
 };
 

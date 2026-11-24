@@ -6,6 +6,8 @@
  */
 import { COMMANDS } from './commands';
 import type {
+  ArcPipelineView,
+  ArcRunCard,
   DagEdgeDef,
   DagNodeDef,
   Message,
@@ -355,3 +357,108 @@ export const COMPOSER_DATA: ComposerData = {
 
 /* 设置缺省值挪到 defaults.ts（http 映射层共用），这里只做转发。 */
 export { SETTINGS_SEED } from './defaults';
+
+/* ── ARC 管线演示数据（「管线」tab 的演示态；形状 = 后端 research 域响应） ── */
+
+const ARC_STAGE_TABLE: Array<[number, string, string, string, string, boolean, 'done' | 'running' | 'pending' | 'paused', number | null]> = [
+  [1, 'TOPIC_INIT', '课题初始化', 'A', '研究界定', false, 'done', 12.4],
+  [2, 'PROBLEM_DECOMPOSE', '问题分解', 'A', '研究界定', false, 'done', 31.8],
+  [3, 'SEARCH_STRATEGY', '检索策略', 'B', '文献发现', false, 'done', 45.2],
+  [4, 'LITERATURE_COLLECT', '文献收集', 'B', '文献发现', false, 'done', 388.6],
+  [5, 'LITERATURE_SCREEN', '文献筛选', 'B', '文献发现', true, 'done', 96.1],
+  [6, 'KNOWLEDGE_EXTRACT', '知识抽取', 'B', '文献发现', false, 'done', 244.3],
+  [7, 'SYNTHESIS', '知识综合', 'C', '知识综合', false, 'done', 120.5],
+  [8, 'HYPOTHESIS_GEN', '假设生成', 'C', '知识综合', false, 'done', 154.9],
+  [9, 'EXPERIMENT_DESIGN', '实验设计', 'D', '实验设计', true, 'done', 88.7],
+  [10, 'CODE_GENERATION', '代码生成', 'D', '实验设计', false, 'done', 210.2],
+  [11, 'RESOURCE_PLANNING', '资源规划', 'D', '实验设计', false, 'done', 18.9],
+  [12, 'EXPERIMENT_RUN', '实验执行', 'E', '实验执行', false, 'done', 302.6],
+  [13, 'ITERATIVE_REFINE', '迭代精炼', 'E', '实验执行', false, 'done', 596.4],
+  [14, 'RESULT_ANALYSIS', '结果分析', 'F', '分析决策', false, 'done', 132.7],
+  [15, 'RESEARCH_DECISION', '研究决策', 'F', '分析决策', false, 'done', 26.3],
+  [16, 'PAPER_OUTLINE', '论文提纲', 'G', '论文写作', false, 'done', 64.8],
+  [17, 'PAPER_DRAFT', '论文初稿', 'G', '论文写作', false, 'done', 428.1],
+  [18, 'PEER_REVIEW', '同行评审', 'G', '论文写作', false, 'done', 197.5],
+  [19, 'PAPER_REVISION', '论文修订', 'G', '论文写作', false, 'done', 283.4],
+  [20, 'QUALITY_GATE', '质量门', 'H', '最终化', true, 'done', 58.2],
+  [21, 'KNOWLEDGE_ARCHIVE', '知识归档', 'H', '最终化', false, 'done', 42.6],
+  [22, 'EXPORT_PUBLISH', '导出发布', 'H', '最终化', false, 'done', 175.9],
+  [23, 'CITATION_VERIFY', '引用核验', 'H', '最终化', false, 'done', 91.3],
+];
+
+function arcStageFile(index: number, names: string[]) {
+  return names.map((name) => ({
+    name,
+    path: `stage-${String(index).padStart(2, '0')}/${name}`,
+    kind: name.endsWith('.json') ? 'json' : name.endsWith('.md') ? 'markdown' : 'other',
+    size: 2048,
+  }));
+}
+
+export const ARC_RUNS_DEMO: ArcRunCard[] = [
+  {
+    runId: 'rc-demo-20261124-090000-a1b2c3',
+    status: 'succeeded',
+    doneCount: 23,
+    total: 23,
+    updatedAt: '2026-11-24T09:16:53+00:00',
+    topic: '扩散模型引导的物理世界生成：方法、评测与局限',
+  },
+];
+
+export const ARC_PIPELINE_DEMO: ArcPipelineView[] = [
+  {
+    runId: 'rc-demo-20261124-090000-a1b2c3',
+    status: 'succeeded',
+    doneCount: 23,
+    total: 23,
+    updatedAt: '2026-11-24T09:16:53+00:00',
+    topic: '扩散模型引导的物理世界生成：方法、评测与局限',
+    stages: ARC_STAGE_TABLE.map(([index, key, label, phase, phaseLabel, isGate, status, duration]) => ({
+      index,
+      key,
+      label,
+      phase,
+      phaseLabel,
+      isGate,
+      status,
+      attempts: index === 13 ? 3 : 1,
+      decision: index === 15 ? 'proceed' : index === 13 ? 'refine' : null,
+      durationSec: duration,
+      error: null,
+      artifacts: arcStageFile(index, index === 1 ? ['goal.md', 'hardware_profile.json'] : index === 9 ? ['exp_plan.yaml', 'domain_profile.json'] : index === 20 ? ['quality_report.json'] : index === 23 ? ['verification_report.json', 'paper_final_verified.md'] : ['decision.json']),
+    })),
+    deliverables: [
+      { name: 'paper_final.md', path: 'deliverables/paper_final.md', kind: 'markdown', size: 45324 },
+      { name: 'paper.pdf', path: 'deliverables/paper.pdf', kind: 'pdf', size: 4574905 },
+      { name: 'paper.tex', path: 'deliverables/paper.tex', kind: 'tex', size: 50856 },
+      { name: 'references.bib', path: 'deliverables/references.bib', kind: 'bib', size: 5675 },
+      { name: 'verification_report.json', path: 'deliverables/verification_report.json', kind: 'json', size: 5193 },
+      { name: 'charts', path: 'deliverables/charts', kind: 'other', size: 0 },
+    ],
+    verification: {
+      total: 13,
+      verified: 13,
+      suspicious: 0,
+      hallucinated: 0,
+      integrityScore: 1.0,
+      items: [
+        { citeKey: 'zhang2024physdreamer', title: 'PhysDreamer: Physics-Based Interaction with 3D Objects', status: 'verified', method: 'doi', confidence: 1.0 },
+        { citeKey: 'liu2024physgen', title: 'PhysGen: Rigid-Body Physics-Grounded Image-to-Video Generation', status: 'verified', method: 'doi', confidence: 1.0 },
+        { citeKey: 'geng2025motion', title: 'Motion Prompting: Controlling Video Generation with Motion Trajectories', status: 'verified', method: 'doi', confidence: 1.0 },
+        { citeKey: 'bansal2024videophy', title: 'VideoPhy: Evaluating Physical Commonsense for Video Generation', status: 'verified', method: 'datacite', confidence: 1.0 },
+      ],
+    },
+    quality: {
+      score: 6,
+      verdict: 'Accept with minor revisions —— 实验记录内部一致、scope 诚实，但格式缺陷与缺失的统计确认待补。',
+      strengths: ['汇报数字与实验 summary 完全一致，无捏造', '负结果如实报告并作为 headline 发现'],
+      weaknesses: ['格式缺陷', '缺 rank-test 统计确认'],
+    },
+    decisions: [
+      { decision: 'refine', rollbackTarget: 'ITERATIVE_REFINE', rollbackStage: 13, attempt: 1, timestamp: '2026-11-24T08:47:55+00:00' },
+      { decision: 'refine', rollbackTarget: 'ITERATIVE_REFINE', rollbackStage: 13, attempt: 2, timestamp: '2026-11-24T09:02:16+00:00' },
+      { decision: 'proceed', rollbackTarget: null, rollbackStage: null, attempt: 3, timestamp: '2026-11-24T09:14:41+00:00' },
+    ],
+  },
+];

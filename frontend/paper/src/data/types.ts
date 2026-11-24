@@ -404,3 +404,89 @@ export interface AppSettings {
   notify: PrefItem[];
   privacy: PrefItem[];
 }
+
+/* ── ARC 管线观测（AutoResearchClaw run 的阶段视图 / 终稿 / 核验） ──── */
+
+/** ARC run 的整体状态。 */
+export type ArcRunStatus = 'running' | 'succeeded' | 'failed' | 'paused' | 'unknown';
+
+/** run 里的一份文件（相对 run 目录的路径，读内容/直链都用它）。 */
+export interface ArcRunFile {
+  name: string;
+  path: string;
+  kind: string;
+  size: number;
+}
+
+/** 管线里的一个阶段（右栏「管线」时间线的一行 + 展开后的产物清单）。 */
+export interface ArcStageView {
+  index: number;
+  key: string;
+  label: string;
+  /** 相位字母 A..H 与中文名（时间线按相位分组）。 */
+  phase: string;
+  phaseLabel: string;
+  /** 审批门：需要人批准的阶段（虚线框 + 盾牌徽标）。 */
+  isGate: boolean;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'paused' | 'skipped';
+  /** 该阶段的尝试轮次（ITERATIVE_REFINE 多轮 = 2+）。 */
+  attempts: number;
+  /** decision.json 的决定（proceed / refine / pivot），链路可解释。 */
+  decision: string | null;
+  durationSec: number | null;
+  error: string | null;
+  artifacts: ArcRunFile[];
+}
+
+/** 引用核验清单的一行（verification_report.json → 界面直接渲染）。 */
+export interface ArcVerifyItem {
+  citeKey: string;
+  title: string;
+  status: string;
+  method: string | null;
+  confidence: number | null;
+}
+
+/** 一次 ARC run 的完整观测视图。 */
+export interface ArcPipelineView {
+  runId: string;
+  status: ArcRunStatus;
+  doneCount: number;
+  total: number;
+  updatedAt: string | null;
+  /** 课题（stage-01/goal.md 的一级标题），可能为空。 */
+  topic: string | null;
+  stages: ArcStageView[];
+  deliverables: ArcRunFile[];
+  verification: {
+    total: number;
+    verified: number;
+    suspicious: number;
+    hallucinated: number;
+    integrityScore: number | null;
+    items: ArcVerifyItem[];
+  } | null;
+  quality: {
+    score: number | null;
+    verdict: string | null;
+    strengths: string[];
+    weaknesses: string[];
+  } | null;
+  decisions: Array<{
+    decision: string;
+    rollbackTarget: string | null;
+    rollbackStage: number | null;
+    attempt: number | null;
+    timestamp: string | null;
+  }>;
+}
+
+/** run 列表里的一张摘要卡。 */
+export interface ArcRunCard {
+  runId: string;
+  status: ArcRunStatus;
+  doneCount: number;
+  total: number;
+  updatedAt: string | null;
+  topic: string | null;
+}

@@ -68,6 +68,16 @@ export const ROUTES = {
     `/api/fs/read?path=${encodeURIComponent(file)}&root=${encodeURIComponent(root)}`,
   fsRaw: (file: string, root: string) =>
     `/api/fs/raw?path=${encodeURIComponent(file)}&root=${encodeURIComponent(root)}`,
+
+  /** ARC（AutoResearchClaw）管线观测：run 列表 / 详情 / 文本产物 / 二进制直链。root 收窄扫描到某个工作目录。 */
+  arcRuns: (root?: string) =>
+    root ? `/api/arc/runs?root=${encodeURIComponent(root)}` : '/api/arc/runs',
+  arcRun: (runId: string, root?: string) =>
+    `/api/arc/runs/${encodeURIComponent(runId)}${root ? `?root=${encodeURIComponent(root)}` : ''}`,
+  arcArtifact: (runId: string, path: string, root?: string) =>
+    `/api/arc/runs/${encodeURIComponent(runId)}/artifact?path=${encodeURIComponent(path)}${root ? `&root=${encodeURIComponent(root)}` : ''}`,
+  arcRaw: (runId: string, path: string, root?: string) =>
+    `/api/arc/runs/${encodeURIComponent(runId)}/raw?path=${encodeURIComponent(path)}${root ? `&root=${encodeURIComponent(root)}` : ''}`,
 } as const;
 
 export class ApiError extends Error {

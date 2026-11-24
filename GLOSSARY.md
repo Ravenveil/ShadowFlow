@@ -28,7 +28,11 @@
   `listArtifacts / readArtifact / artifactRawUrl` 三件套访问（Candidate 4 修复后
   已接到 Shell → AgentPanel）。
 - **ARC Run**：一次 AutoResearchClaw 管线执行（23 stages / 8 phases）；在
-  ShadowFlow 里对应一条论文专家团群聊会话。
+  ShadowFlow 里对应一条论文专家团群聊会话。观测面：后端 `domains/research/`
+  的 `/api/arc/*`（结构化读 ARC 产物目录），前端右栏「管线」页消费。
+- **ARC Stage View**：一次 run 里某个阶段的可观测状态（status / decision /
+  attempts / duration / artifacts）。判定序：decision.json → checkpoint 断点 →
+  「目录在但 decision 未落 = running」；多轮 attempt（stage-NN_vK）冲突取最高轮次。
 - **ARC Gate**：ARC 管线中需人批准的阶段（5 / 9 / 20）；对应既有审批门。
 - **ARC Deliverables**：ARC 产物约定目录（paper.tex / references.bib /
   verification_report.json / charts/）；产物 tab 的置顶识别目标。

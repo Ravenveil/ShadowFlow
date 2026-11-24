@@ -41,6 +41,10 @@ export function Shell({ onExit }: { onExit: () => void }) {
     listArtifacts,
     readArtifact,
     artifactRawUrl,
+    loadArcRuns,
+    loadArcPipeline,
+    readArcArtifact,
+    arcArtifactRawUrl,
   } = useWorkspace();
   /**
    * 演示态的默认会话；接真后端时这个 id 不存在，会自动回落到列表第一条
@@ -195,6 +199,10 @@ export function Shell({ onExit }: { onExit: () => void }) {
           listArtifacts={listArtifacts}
           readArtifact={readArtifact}
           artifactRawUrl={artifactRawUrl}
+          loadArcRuns={loadArcRuns}
+          loadArcPipeline={loadArcPipeline}
+          readArcRunArtifact={readArcArtifact}
+          arcRunRawUrl={arcArtifactRawUrl}
           onSavePolicy={savePolicy}
           onResolveApproval={(decision) => {
             const nodeId = data.panel.approval?.nodeId;

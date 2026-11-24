@@ -15,6 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentAvatar, AVATAR_SIZE } from '../avatar';
 import { PANEL as PANEL_COPY } from '../content/app';
 import type {
+  ArcPipelineView,
+  ArcRunCard,
   ArtifactContent,
   ArtifactEntry,
   ArtifactListing,
@@ -27,6 +29,7 @@ import { pinDeliverables } from '../data/arc';
 import { PolicyMatrix } from '../panel/PolicyMatrix';
 import { DagFlow } from '../panel/DagFlow';
 import { RosterGrid } from '../panel/RosterGrid';
+import { PipelineView } from '../panel/PipelineView';
 import { sizeLabel, stampLabel } from '../ui/format';
 import {
   IconArrowUp,
@@ -37,6 +40,7 @@ import {
   IconFile,
   IconFolder,
   IconImage,
+  IconLayers,
   IconShield,
   IconSparkle,
   IconUsers,
@@ -70,6 +74,7 @@ function fileIcon(ext: string): (p: { size?: number }) => JSX.Element {
 /** tab 的图标注册表；标签文案在 content 里，靠 id 对上。 */
 const TAB_ICON: Record<TabId, (p: { size?: number }) => JSX.Element> = {
   run: IconSparkle,
+  pipeline: IconLayers,
   team: IconUsers,
   artifacts: IconFile,
 };
@@ -85,6 +90,10 @@ export function AgentPanel({
   listArtifacts,
   readArtifact,
   artifactRawUrl,
+  loadArcRuns,
+  loadArcPipeline,
+  readArcRunArtifact,
+  arcRunRawUrl,
 }: {
   panel: PanelSummary;
   roster: RosterMember[];
@@ -100,6 +109,11 @@ export function AgentPanel({
   listArtifacts?: (sessionId: string, dir?: string) => Promise<ArtifactListing>;
   readArtifact?: (sessionId: string, filePath: string) => Promise<ArtifactContent>;
   artifactRawUrl?: (sessionId: string, filePath: string) => string;
+  /** ARC 管线四件套（同 seam 透传）：run 列表 / 详情 / 文本产物 / 二进制直链。 */
+  loadArcRuns?: (sessionId: string) => Promise<ArcRunCard[]>;
+  loadArcPipeline?: (runId: string) => Promise<ArcPipelineView>;
+  readArcRunArtifact?: (runId: string, relPath: string) => Promise<ArtifactContent>;
+  arcRunRawUrl?: (runId: string, relPath: string) => string;
 }) {
   const [tab, setTab] = useState<TabId>('run');
   /** 产物页：当前这一层目录、拉到的东西、以及点开的预览。 */
@@ -113,6 +127,12 @@ export function AgentPanel({
   const [deciding, setDeciding] = useState(false);
   /** 连点两个目录时只认最后一次请求的结果。 */
   const artSeq = useRef(0);
+  /** 管线页：run 列表 + 当前 run 的观测视图。 */
+  const [arcRuns, setArcRuns] = useState<ArcRunCard[]>([]);
+  const [arcRunId, setArcRunId] = useState<string | null>(null);
+  const [arcView, setArcView] = useState<ArcPipelineView | null>(null);
+  const [arcLoading, setArcLoading] = useState(false);
+  const [arcError, setArcError] = useState<string | null>(null);
 
   const loadDir = useCallback(
     async (dir?: string) => {
@@ -142,6 +162,67 @@ export function AgentPanel({
     setListing(null);
     void loadDir();
   }, [tab, sessionId, loadDir]);
+
+  /* ── 管线页（ARC run 观测）：进 tab 才拉；运行中 10s 轮询 ─────────── */
+
+  const refreshArcView = useCallback(
+    async (runId: string) => {
+      if (!loadArcPipeline) return;
+      try {
+        const view = await loadArcPipeline(runId);
+        setArcView(view);
+        setArcError(null);
+      } catch (err) {
+        setArcError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [loadArcPipeline],
+  );
+
+  useEffect(() => {
+    if (tab !== 'pipeline') return;
+    let alive = true;
+    setArcLoading(true);
+    setArcError(null);
+    setArcRuns([]);
+    setArcView(null);
+    void (async () => {
+      try {
+        if (!loadArcRuns || !sessionId) return;
+        const runs = await loadArcRuns(sessionId);
+        if (!alive) return;
+        setArcRuns(runs);
+        const target = runs[0]?.runId ?? null;
+        setArcRunId(target);
+        if (!target || !loadArcPipeline) return;
+        const view = await loadArcPipeline(target);
+        if (!alive) return;
+        setArcView(view);
+      } catch (err) {
+        if (alive) setArcError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (alive) setArcLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [tab, sessionId, loadArcRuns, loadArcPipeline]);
+
+  useEffect(() => {
+    if (tab !== 'pipeline' || arcView?.status !== 'running' || !arcRunId) return;
+    const timer = window.setInterval(() => void refreshArcView(arcRunId), 10_000);
+    return () => window.clearInterval(timer);
+  }, [tab, arcView?.status, arcRunId, refreshArcView]);
+
+  const pickArcRun = useCallback(
+    (runId: string) => {
+      setArcRunId(runId);
+      setArcView(null);
+      void refreshArcView(runId);
+    },
+    [refreshArcView],
+  );
 
   const openEntry = useCallback(
     async (entry: ArtifactEntry) => {
@@ -316,6 +397,21 @@ export function AgentPanel({
               </div>
             </div>
           </>
+        ) : null}
+
+        {/* 管线：ARC run 的 23 阶段观测 —— 阶段状态 / 审批门 / 引用核验 / 质量门 / 终稿 */}
+        {tab === 'pipeline' ? (
+          <PipelineView
+            runs={arcRuns}
+            view={arcView}
+            activeRunId={arcRunId}
+            loading={arcLoading}
+            error={arcError}
+            onPickRun={pickArcRun}
+            onRefresh={() => arcRunId && void refreshArcView(arcRunId)}
+            readArtifact={readArcRunArtifact}
+            artifactRawUrl={arcRunRawUrl}
+          />
         ) : null}
 
         {/* 编队：成员 / 工作流 / 策略举证，三节竖排同一个滚动面板 ——

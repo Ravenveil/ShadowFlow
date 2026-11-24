@@ -22,6 +22,12 @@ import type {
   SshHost,
 } from '../types';
 import { API_BASE, ROUTES, mayGet, pickData, postBinary, request } from './client';
+import {
+  arcArtifactRawUrl as fetchArcRawUrl,
+  loadArcPipeline as fetchArcPipeline,
+  loadArcRuns as fetchArcRuns,
+  readArcArtifact as fetchArcArtifact,
+} from './arc';
 import type {
   AgentDto,
   ByokDto,
@@ -480,5 +486,26 @@ export const httpSource: WorkspaceSource = {
         status: s.status,
       })),
     }));
+  },
+
+  /** 这条会话工作目录里的 ARC run；该会话还没跑过时回全部已知 run（独立跑的也能看）。 */
+  async loadArcRuns(sessionId: string) {
+    const root = await workspaceDirOf(sessionId);
+    const scoped = await fetchArcRuns(root || undefined);
+    return scoped.length ? scoped : fetchArcRuns();
+  },
+
+  async loadArcPipeline(runId: string) {
+    const view = await fetchArcPipeline(runId);
+    if (!view) throw new Error('这条 run 不存在或已删除');
+    return view;
+  },
+
+  readArcArtifact(runId: string, relPath: string) {
+    return fetchArcArtifact(runId, relPath);
+  },
+
+  arcArtifactRawUrl(runId: string, relPath: string): string {
+    return fetchArcRawUrl(runId, relPath);
   },
 };

@@ -74,6 +74,8 @@ import projectsRouter from './routes/projects/projects';
 import memoryEntriesRouter from './routes/memory/memory-entries';
 import memosRouter from './domains/memos/adapters/memos';
 import newsRouter from './domains/news/adapters/news';
+// ARC（AutoResearchClaw）管线观测面：run 列表 / 阶段视图 / 终稿与核验产物
+import arcRouter from './domains/research/adapters/arc-http';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
 import memoryLessonsRouter from './routes/memory/memory-lessons';
 import dashboardRouter from './routes/dashboard/dashboard';
@@ -244,6 +246,8 @@ app.use('/api/memory-entries', memoryEntriesRouter);
 app.use('/api/memos', memosRouter);
 // 新闻看板（2026-11-21）：订阅源 + RSS 聚合，前端「新闻」页使用
 app.use('/api/news', newsRouter);
+// ARC 管线观测（2026-11-24）：论文专家团 run 的阶段视图 / 终稿 / 引用核验
+app.use('/api/arc', arcRouter);
 // 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂载顺序无关（ADR-0001 后无 fallback）。
 app.use('/api/memory/lessons', memoryLessonsRouter);
 app.use('/api/memory/handoff', memoryHandoffRouter);
