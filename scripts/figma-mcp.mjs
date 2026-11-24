@@ -125,7 +125,11 @@ async function main() {
   if (cmd === 'call') {
     const [name, argsJson] = rest;
     await connect();
-    const result = await rpc('tools/call', { name, arguments: argsJson ? JSON.parse(argsJson) : {} });
+    // 支持 @file.json：use_figma 的 code 里有大量引号/换行，走 shell 转义必炸。
+    const raw = argsJson?.startsWith('@')
+      ? readFileSync(argsJson.slice(1), 'utf8')
+      : argsJson;
+    const result = await rpc('tools/call', { name, arguments: raw ? JSON.parse(raw) : {} });
     console.log(JSON.stringify(result, null, 2));
     return;
   }

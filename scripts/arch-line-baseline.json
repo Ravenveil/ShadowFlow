@@ -16,8 +16,8 @@
   "backend/node/src/storage/merchant-board.ts": 1267,
   "backend/node/src/transport/api-clients/claude-code-cli-api-client.ts": 1031,
   "backend/node/src/transport/api-clients/openai-compat-api-client.ts": 638,
-  "frontend/src/api/runs.ts": 637,
-  "frontend/src/api/runSessions.ts": 752,
-  "frontend/src/common/types/memory.ts": 718,
-  "frontend/src/core/hooks/useRunSession.ts": 1168
+  "frontend/legacy/src/api/runs.ts": 637,
+  "frontend/legacy/src/api/runSessions.ts": 752,
+  "frontend/legacy/src/common/types/memory.ts": 718,
+  "frontend/legacy/src/core/hooks/useRunSession.ts": 1168
 }

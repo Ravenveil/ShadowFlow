@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BACKEND = path.join(ROOT, 'backend', 'node', 'src');
-const FRONTEND = path.join(ROOT, 'frontend', 'src');
+const FRONTEND = path.join(ROOT, 'frontend', 'legacy', 'src');
 
 const errors = [];
 function err(file, line, rule, msg) {
@@ -167,9 +167,9 @@ if (!fs.existsSync(BASELINE_PATH)) {
 
 // ── 汇总 ─────────────────────────────────────────────────────────────────
 if (errors.length > 0) {
-  console.error(`\n[arch-check] ✗ ${errors.length} 处违反 ARCHITECTURE.md 红线：\n`);
+  console.error(`\n[arch-check] ✗ ${errors.length} 处违反 documentation/ARCHITECTURE.md 红线：\n`);
   for (const e of errors) console.error(`  ${e}`);
-  console.error('\n规范见 ARCHITECTURE.md §8；棘轮基线见 scripts/arch-line-baseline.json。');
+  console.error('\n规范见 documentation/ARCHITECTURE.md §8；棘轮基线见 scripts/arch-line-baseline.json。');
   process.exit(1);
 }
 console.log('[arch-check] ✓ 红线全过（model 纯净 / use_cases 边界 / lib 不反向 / 600 行棘轮）');
