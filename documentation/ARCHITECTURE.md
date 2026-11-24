@@ -5,6 +5,12 @@
 >
 > 建立于 2026-11-19，来自一次全量重构的实践（8 个业务域、9 次提交、1551 → 1885 测试零回归）。
 > 方法论来源见文末「参考」。
+>
+> **2026-11-24 更新：单后端是唯一事实（[ADR-0001](ADR-0001-single-backend.md)）。**
+> `backend/python/` 已删除；render.yaml / Dockerfile.api / SF_BACKEND_MODE /
+> proxyFallback 一并移除。所有 `/api/*` 由 backend/node 承载；未迁移端点命中
+> 返回 BACKEND_GAP 结构化 404（计数见 `/health/backend-gaps`）。本文档中残留的
+> 「Python / 双后端 / proxyFallback」表述一律按历史记录读，不再是现行约束。
 
 ---
 

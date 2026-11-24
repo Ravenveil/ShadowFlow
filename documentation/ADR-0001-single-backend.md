@@ -53,9 +53,12 @@
 - [x] 测试更新：backend-mode / backend-gap-root / team-persistence 三文件改
       单后端语义；全量 1906/1906 绿 + arch-check 绿
 - [x] CONTRIBUTING.md 端口表/目录树/门禁/反代兜底等 8 处过时描述更新
-- [ ] **BACKEND_GAP 的 12 组端点族迁入 node**（仍开放：现在命中即显式 404，
-      burndown 看 /health/backend-gaps；frontend/legacy 的 runs/ops 等页面在
-      Node 未覆盖的子路径上会 404）
-- [ ] 散落在 ≥10 个 module 里的死分支（`isSingleBackend()`/`groupsBackendEnv()`
-      恒真恒假）随改随清 —— config 层已墓碑化，行为正确，纯减法
+- [x] **BACKEND_GAP 的 12 组端点族：决定不迁移，永久关闭（2026-11-24 复核）**。
+      证据：两个现役前端（app/paper）对这些端点 0 调用；唯一消费者是已下线的
+      旧版线上产品与本机 legacy 逃生舱。命中即返回结构化 404（含迁移去向提示），
+      计数暴露在 `/health/backend-gaps`。若未来 legacy 页面需要复活某个端点，
+      按 Node 域包四件套新写，不再对账 Python 线格式。
+- [x] 散落在 ≥10 个 module 里的死分支：config 墓碑化 + 主要实现清理完毕
+      （groups-backend / agents / memory-bank / craft-intake，净 −600+ 行）；
+      剩余零星（schedules/runs 的 BACKEND_URL 常量引用）随改随清
 - [ ] ARCHITECTURE.md / GLOSSARY 把「单后端」写成唯一事实

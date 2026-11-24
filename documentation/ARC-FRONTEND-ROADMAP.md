@@ -124,8 +124,9 @@ Dockerfile.api 删除、compose 去 python 成员、proxy-fallback/python-backen
 backend-mode 墓碑化（恒 single）、dev.mjs/package.json/CONTRIBUTING 同步清理、
 PYTHON_BACKEND_URL → BACKEND_URL（指向 Node 自身 loopback）。
 全量 1906/1906 测试 + arch-check 绿。决定记录：`documentation/ADR-0001-single-backend.md`。
-⏭ 仍开放：BACKEND_GAP 12 组端点族迁入 node（现在命中即显式 404）；
-散点死分支随改随清。**frontend/legacy 逃生舱在 Node 未覆盖的子路径上会 404。**
+⏭ 仍开放：BACKEND_GAP 12 组端点族 **决定不迁移**（ADR-0001 复核：现役前端
+0 调用，唯一消费者已下线）——命中即显式 404，legacy 逃生舱相应页面降级；
+散点死分支随改随清。
 
 ### 次级雷达（排期后置）
 fs-browse 写路径安全规则抽 fsGateway、memory-handoff 用例上移、analytics 告警

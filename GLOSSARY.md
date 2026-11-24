@@ -4,6 +4,13 @@
 > 架构词汇（module / interface / depth / seam / adapter / leverage / locality）
 > 语义见 mattpocock/skills `codebase-design`；本表只收**领域词汇**。
 
+## 后端拓扑（ADR-0001 后的唯一事实）
+
+- **单后端**：backend/node 是唯一后端（ADR-0001，2026-11-24）。Python 已删除；
+  render.yaml / Dockerfile.api / SF_BACKEND_MODE / proxyFallback 均已移除。
+- **BACKEND_GAP**：Node 未覆盖的 `/api/*` 前缀返回的结构化 404（code=BACKEND_GAP），
+  计数见 `/health/backend-gaps` —— 是进度条，不是错误。
+
 ## 平台与角色
 
 - **ShadowFlow**：人 + AI agent 协作的作业平台；agent 以群聊/单聊承接任务。
