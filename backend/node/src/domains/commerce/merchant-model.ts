@@ -194,3 +194,169 @@ export function wantsCompare(v: unknown): boolean {
 export function conversionRate(converted: number, uv: number): number {
   return uv ? Math.round((converted / uv) * 1000) / 10 : 0;
 }
+
+// ── 维度经济口径（渠道 / 产品 / 客户三张卡同源）───────────────────────────────
+//
+// channelEconomics / productEconomics / customerEconomics 原本各自内联一份
+// 「营收=收入−退款、毛利=营收−成本、占比、单均」循环（三份近重复 ~350 行）。
+// 这里抽成纯规则：SQL 在 storage 只按维度键聚合出原始三项/三数，口径全在此。
+
+/** 一行维度里「钱 + 单」的共有字段；各卡在此基础上加自己的专属列。 */
+export interface EconomicCore {
+  orders_total: number;
+  paid_orders: number;
+  refunded_orders: number;
+  revenue_cents: number;
+  cost_cents: number;
+  gross_profit_cents: number;
+  gross_margin_pct: number | null;
+}
+
+/** SQL 侧输入：按维度键聚合好的流水三项。 */
+export interface DimensionMoneyRow {
+  income: number;
+  refund: number;
+  expense: number;
+}
+
+/** SQL 侧输入：按维度键聚合好的订单三数。 */
+export interface DimensionOrderRow {
+  total: number;
+  paid: number;
+  refunded: number;
+}
+
+/** 0.1% 精度占比；分母为 0 → null（不编占比）。毛利/份额共用这条规则。 */
+export function sharePct(part: number, total: number): number | null {
+  return total ? Math.round((part / total) * 1000) / 10 : null;
+}
+
+/** 整数分摊（单均实收 / 单均毛利）；分母为 0 → null（没成交过就没有「单均」）。 */
+export function unitAvg(part: number, total: number): number | null {
+  return total ? Math.round(part / total) : null;
+}
+
+/**
+ * 钱 + 单两侧合并出各维度行的核心口径。
+ * 两侧谁有数谁建行（blankRow 给该维度的空行，含专属列缺省）——渠道可能只有
+ * 流水没订单、产品可能只有订单没流水，钱和单都不丢。
+ * 口径与 buildOverviewCore 单一同源：营收 = income − refund；毛利 = 营收 − 成本。
+ */
+export function mergeDimensionRows<K extends string, R extends EconomicCore>(
+  money: Array<{ key: K; income: number; refund: number; expense: number }>,
+  orders: Array<{ key: K; total: number; paid: number; refunded: number }>,
+  blankRow: (key: K) => R,
+): Map<K, R> {
+  const map = new Map<K, R>();
+  const row = (key: K): R => {
+    const r = map.get(key) ?? blankRow(key);
+    map.set(key, r);
+    return r;
+  };
+  for (const m of money) {
+    const r = row(m.key);
+    r.revenue_cents = m.income - m.refund;
+    r.cost_cents = m.expense;
+    r.gross_profit_cents = r.revenue_cents - r.cost_cents;
+    r.gross_margin_pct = sharePct(r.gross_profit_cents, r.revenue_cents);
+  }
+  for (const o of orders) {
+    const r = row(o.key);
+    r.orders_total = o.total;
+    r.paid_orders = o.paid;
+    r.refunded_orders = o.refunded;
+  }
+  return map;
+}
+
+/** 维度合计：逐字段累加，比率字段按合计重算（不是平均平均数），可当场对账。 */
+export function sumEconomicCore<R extends EconomicCore>(rows: R[]): EconomicCore {  const t: EconomicCore = {
+    orders_total: 0,
+    paid_orders: 0,
+    refunded_orders: 0,
+    revenue_cents: 0,
+    cost_cents: 0,
+    gross_profit_cents: 0,
+    gross_margin_pct: null,
+  };
+  for (const r of rows) {
+    t.orders_total += r.orders_total;
+    t.paid_orders += r.paid_orders;
+    t.refunded_orders += r.refunded_orders;
+    t.revenue_cents += r.revenue_cents;
+    t.cost_cents += r.cost_cents;
+    t.gross_profit_cents += r.gross_profit_cents;
+  }
+  t.gross_margin_pct = sharePct(t.gross_profit_cents, t.revenue_cents);
+  return t;
+}
+
+/** 客户卡专属列：成交单数（已付+已退）与复购标记（成交 ≥2 单即复购客户）。 */
+export interface RepeatMark {
+  paid_orders: number;
+  refunded_orders: number;
+  transacted_orders: number;
+  is_repeat: boolean;
+}
+
+/**
+ * 客户行的成交/复购派生（复购规则单一真源：transacted = 已付 + 已退，≥2 即复购）。
+ * 在 mergeDimensionRows 之后对客户行调用一次。
+ */
+export function markRepeatRows<R extends RepeatMark>(rows: R[]): void {
+  for (const r of rows) {
+    r.transacted_orders = r.paid_orders + r.refunded_orders;
+    r.is_repeat = r.transacted_orders >= 2;
+  }
+}
+
+/** 复购拆分的最小行：客户卡在钱口径上多「成交单数 + 是否复购」。 */
+export interface RepeatRow {
+  revenue_cents: number;
+  transacted_orders: number;
+  is_repeat: boolean;
+}
+
+export interface RepeatSummary {
+  /** 有成交（≥1 单已付/已退）的客户数；只下单未付的不算 */
+  customers: number;
+  /** 成交 ≥2 单的客户数 */
+  repeat_customers: number;
+  /** 复购率 = repeat_customers ÷ customers（0.1% 精度）；没有客户时为 null */
+  repeat_rate_pct: number | null;
+  /** 复购客户（成交≥2）在窗口内的营收合计 */
+  repeat_customer_revenue_cents: number;
+  /** 单次/未成交客户的营收合计；与上一行相加恒等于总营收 */
+  single_customer_revenue_cents: number;
+  /** 复购客户营收占比（0.1% 精度）；总营收为 0 时为 null */
+  repeat_revenue_share_pct: number | null;
+  /** 客户均贡献 = 营收 ÷ 客户数；没有客户时为 null */
+  avg_revenue_per_customer_cents: number | null;
+}
+
+/**
+ * 复购摘要（人群口径，一眼可对账）：成交 ≥1 单算客户，≥2 单是复购客户；
+ * 复购人群营收 + 其余人群营收恒等于总营收，不会出现拆不平的缺口。
+ */
+export function buildRepeatSummary(rows: RepeatRow[]): RepeatSummary {
+  const totalRevenue = rows.reduce((a, r) => a + r.revenue_cents, 0);
+  let customers = 0;
+  let repeatCustomers = 0;
+  let repeatRevenue = 0;
+  for (const r of rows) {
+    if (r.transacted_orders >= 1) customers += 1;
+    if (r.is_repeat) {
+      repeatCustomers += 1;
+      repeatRevenue += r.revenue_cents;
+    }
+  }
+  return {
+    customers,
+    repeat_customers: repeatCustomers,
+    repeat_rate_pct: sharePct(repeatCustomers, customers),
+    repeat_customer_revenue_cents: repeatRevenue,
+    single_customer_revenue_cents: totalRevenue - repeatRevenue,
+    repeat_revenue_share_pct: sharePct(repeatRevenue, totalRevenue),
+    avg_revenue_per_customer_cents: unitAvg(totalRevenue, customers),
+  };
+}

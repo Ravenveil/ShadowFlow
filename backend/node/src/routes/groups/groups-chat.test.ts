@@ -1,28 +1,23 @@
 /**
- * groups-chat.test.ts — integration test for the Node chat gateway.
+ * groups-chat.test.ts — 单后端群聊网关集成测试（ADR-0001，2026-11-24 重写）。
  *
- * Run from server/:  npx tsx src/routes/groups-chat.test.ts
+ * Run from backend/node/:  npx tsx src/routes/groups/groups-chat.test.ts
  *
- * Standalone tsx script (matches proxy-fallback.test.ts style; server/ has no
- * vitest runner). We verify the parts that don't need a real LLM/CLI:
+ * 旧版（双后端时代）验证「gateway 持久化到 (mock) Python + X-SF-No-Dispatch
+ * 抑制头」契约；Python 退役后该契约作废 —— 现在验证单后端语义：
  *
- *   1. user message → gateway persists it to (mock) Python WITH the
- *      X-SF-No-Dispatch header set (so Python's own bridge stays quiet)
- *   2. gateway returns 201 immediately (does not block on reply generation)
- *   3. non-user (agent/system) message → persisted WITHOUT the suppress header
- *      and triggers NO fan-out
+ *   1. user message → 201 立即返回，消息落 Node store（groups-store SQLite），
+ *      且因群内 agent_ids=[] 回复 fan-out 短路（只补一条系统通告，无 agent 回复）
+ *   2. agent message → 201 落库，且不触发任何 fan-out
+ *   3. 群不存在 → 502 PERSIST_FAILED（与原 Python 语义一致）
  *
- * Reply fan-out (resolveCallable → CLI/API turn()) is verified in the browser
- * (CLI/API both need real backends); mocking the ESM dispatcher in a plain tsx
- * script isn't worth the harness. The gateway's persistence + header contract
- * is what this guards.
- *
- * PYTHON_BACKEND_URL is pointed at an ephemeral mock Python via env BEFORE the
- * router module (which reads it transitively) is imported.
+ * 真正的回复生成（resolveCallable → CLI/API turn()）需要真后端，浏览器手测；
+ * agent 选择 / fanout 编排在 groups-chat-*.test.ts（vitest）里覆盖。
  */
 import express from 'express';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import * as store from '../../storage/groups-store';
 
 let passCount = 0;
 let failCount = 0;
@@ -37,47 +32,15 @@ function check(label: string, cond: boolean, detail?: unknown) {
   }
 }
 
-interface Captured {
-  path: string;
-  noDispatch: boolean;
-  body: Record<string, unknown>;
-}
-
 async function main() {
-  const captured: Captured[] = [];
-
-  // ── mock Python backend ────────────────────────────────────────────────
-  const mockPy = http.createServer((req, res) => {
-    let raw = '';
-    req.on('data', (c) => (raw += c));
-    req.on('end', () => {
-      const body = raw ? JSON.parse(raw) : {};
-      if (req.method === 'POST' && /\/api\/groups\/.+\/messages$/.test(req.url ?? '')) {
-        captured.push({
-          path: req.url ?? '',
-          noDispatch: req.headers['x-sf-no-dispatch'] === '1',
-          body,
-        });
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ...body, message_id: 'm-' + captured.length }));
-        return;
-      }
-      if (req.method === 'GET' && /\/api\/groups\/[^/]+$/.test(req.url ?? '')) {
-        // group record — NO agents so fan-out short-circuits (writes a system
-        // notice via POST, which we also capture but don't assert on).
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ data: { group_id: 'g1', agent_ids: [], messages: [] } }));
-        return;
-      }
-      res.writeHead(404);
-      res.end('{}');
-    });
+  // 建一个专用测试群（agent_ids=[] → fan-out 短路）。名字带时间戳便于辨认；
+  // store 没有 deleteGroup，测试残留一条空群可接受（sqlite dev 库）。
+  const g = store.createGroup({
+    name: `it-chat-gateway-${Date.now()}`,
+    agent_ids: [],
   });
-  await new Promise<void>((r) => mockPy.listen(0, '127.0.0.1', r));
-  const pyPort = (mockPy.address() as AddressInfo).port;
-  process.env.PYTHON_BACKEND_URL = `http://127.0.0.1:${pyPort}`;
+  const groupId = g.group_id;
 
-  // Import the router AFTER env is set (python-backend.ts reads it at module load).
   const { groupsChatRouter } = await import('./groups-chat');
 
   const app = express();
@@ -88,43 +51,60 @@ async function main() {
   const nodePort = (nodeSrv.address() as AddressInfo).port;
   const base = `http://127.0.0.1:${nodePort}`;
 
-  // ── 1+2. user message: persisted w/ suppress header, 201 returned ───────
-  const r1 = await fetch(`${base}/api/groups/g1/messages`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: 'hi', sender_kind: 'user', executor: 'byok:zhipu' }),
-  });
-  check('user POST returns 201', r1.status === 201, r1.status);
-  // give the fire-and-forget fanout a tick to hit the mock (it'll write a
-  // "no agents" system notice since group has no agent_ids)
-  await new Promise((r) => setTimeout(r, 150));
-  const userWrite = captured.find((c) => c.body.sender_kind === 'user');
-  check('user message persisted to Python', !!userWrite, captured);
-  check('user write carries X-SF-No-Dispatch', !!userWrite?.noDispatch, userWrite);
+  const post = async (body: Record<string, unknown>) =>
+    fetch(`${base}/api/groups/${groupId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
 
-  // ── 3. agent message: persisted WITHOUT suppress header, no fanout ──────
-  captured.length = 0;
-  const r2 = await fetch(`${base}/api/groups/g1/messages`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: 'reply', sender_kind: 'agent', sender_name: 'Bot' }),
+  // ── 1. user message: 201 立即返回 + 落库 ────────────────────────────────
+  const r1 = await post({ content: 'hi', sender_kind: 'user', executor: 'byok:zhipu' });
+  check('user POST returns 201', r1.status === 201, r1.status);
+  const afterUser = store.listGroupMessages(groupId);
+  check(
+    'user message persisted to Node store',
+    afterUser.some((m) => m.sender_kind === 'user' && m.content === 'hi'),
+    afterUser.map((m) => `${m.sender_kind}:${String(m.content).slice(0, 12)}`),
+  );
+
+  // ── 2. agent message: 201 落库，且不触发 fan-out ────────────────────────
+  const r2 = await post({
+    content: 'agent reporting in',
+    sender_kind: 'agent',
+    sender_name: 'agent-a',
+    agent_id: 'agent-a',
   });
   check('agent POST returns 201', r2.status === 201, r2.status);
-  await new Promise((r) => setTimeout(r, 100));
-  const agentWrite = captured.find((c) => c.body.sender_kind === 'agent');
-  check('agent message persisted', !!agentWrite, captured);
-  check('agent write has NO suppress header', agentWrite?.noDispatch === false, agentWrite);
-  // agent send must NOT trigger a GET group (no fanout) → only the 1 POST captured
-  check('agent send triggers no fanout', captured.length === 1, captured);
+  const afterAgent = store.listGroupMessages(groupId);
+  check(
+    'agent message persisted',
+    afterAgent.some((m) => m.sender_kind === 'agent' && m.content === 'agent reporting in'),
+    afterAgent.map((m) => `${m.sender_kind}:${String(m.content).slice(0, 12)}`),
+  );
+
+  // agent 消息不触发回复：等待可能的异步 fan-out 后消息数不增长（agent_ids=[] 本就短路）
+  await new Promise((r) => setTimeout(r, 150));
+  const settled = store.listGroupMessages(groupId);
+  const replies = settled.filter((m) => m.sender_kind === 'agent' && m.content !== 'agent reporting in');
+  check('agent send triggers no fanout', replies.length === 0, replies.map((m) => m.content));
+
+  // ── 3. 群不存在 → 502 PERSIST_FAILED ────────────────────────────────────
+  const r3 = await fetch(`${base}/api/groups/no-such-group/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: 'x', sender_kind: 'user' }),
+  });
+  check('unknown group → 502 PERSIST_FAILED', r3.status === 502, r3.status);
+  const body3 = (await r3.json()) as { error?: { code?: string } };
+  check('502 envelope carries code', body3.error?.code === 'PERSIST_FAILED', body3);
 
   nodeSrv.close();
-  mockPy.close();
-
-  console.log(`\n${passCount} passed, ${failCount} failed`);
-  process.exit(failCount === 0 ? 0 : 1);
+  console.log(`\ngroups-chat gateway: ${passCount} passed, ${failCount} failed`);
+  if (failCount > 0) process.exit(1);
 }
 
-main().catch((e) => {
-  console.error(e);
+main().catch((err) => {
+  console.error(err);
   process.exit(1);
 });

@@ -125,7 +125,6 @@ import {
 // 占位/流式片段/错误/msg_foot）经 run 管线 emit，B2 timeline 自动归并回放。
 import { startGatewayRun } from '../../lib/gateway-run';
 // 2026-11-07 BE-06 — 审批裁定（含意见）落 action journal 可回放留痕。
-import { recordAction } from '../../lib/action-journal';
 
 const router = Router();
 
@@ -137,42 +136,27 @@ const MAX_FANOUT_AGENTS = 5;
 const activeDagRuns = new Map<string, AbortController>();
 
 // ── 2026-11-05 OpenBot 审批纪律 — chat DAG approve 边的人工审批门 ─────────────
-// pendingApprovals: "${groupId}:${nodeId}" → resolve。执行器 deps.approval.request
-// 挂起等 Promise；用户两条路批/拒：
-//   1) 显式 API：POST /api/groups/:id/approvals/:nodeId { decision: 'approve'|'reject' }
-//   2) 会话内自然语言（解析规则见 domains/collaboration/approval-model.ts）。
-// 纯规则（ApprovalVerdict / parseApprovalDecision / parseApprovalVerdict）已迁出到
-// 域 model 层；此处保留会话状态（pendingApprovals 注册表）与消费逻辑。
+// 审批状态 module（挂起注册表 / 三条决定路径 / swapDagRun 拒收场 / GET+POST
+// 处理器）已拆到 ./approval-gate.ts；此处保留兼容 re-export（测试与老引用不动），
+// 纯规则（ApprovalVerdict / parseApprovalDecision / parseApprovalVerdict）在域 model。
 import {
+  approvalDecisionHandler,
+  pendingApprovalsHandler,
+  registerPendingApproval,
+  swapDagRun,
+  tryResolveApprovalFromText,
+} from './approval-gate';
+export {
+  approvalDecisionHandler,
+  clearPendingApprovals,
+  pendingApprovalsHandler,
+  registerPendingApproval,
+  swapDagRun,
+  tryResolveApprovalFromText,
+  parseApprovalDecision,
   parseApprovalVerdict,
-  type ApprovalVerdict,
-} from '../../domains/collaboration/approval-model';
-export { parseApprovalDecision, parseApprovalVerdict } from '../../domains/collaboration/approval-model';
-export type { ApprovalVerdict } from '../../domains/collaboration/approval-model';
-
-const pendingApprovals = new Map<string, (v: ApprovalVerdict) => void>();
-
-/** 测试可见：清空审批注册表（groups-chat 路由单测隔离用）。 */
-export function clearPendingApprovals(): void {
-  pendingApprovals.clear();
-}
-
-/** 处理该群下一条用户消息里可能隐含的审批决定。返回是否消费了一条 pending。 */
-export function tryResolveApprovalFromText(groupId: string, text: string): boolean {
-  const entries = [...pendingApprovals.entries()].filter(([k]) => k.startsWith(`${groupId}:`));
-  if (entries.length === 0) return false;
-  const verdict = parseApprovalVerdict(text);
-  if (!verdict) return false;
-  for (const [key, resolve] of entries) {
-    pendingApprovals.delete(key);
-    try {
-      resolve(verdict);
-    } catch {
-      /* resolver 异常不阻断聊天主链路 */
-    }
-  }
-  return true;
-}
+} from './approval-gate';
+export type { ApprovalVerdict } from './approval-gate';
 
 // ── 2026-11-07 记忆闭环 — 聊天 agent 提示词注入经验记忆（recall）──────────────
 // 走查发现：memory_lessons 写入侧（chat 回合失败/中断 → recordRunLesson，域
@@ -285,40 +269,6 @@ export function nextChatTurnSeq(groupId: string): number {
 }
 
 /**
- * 注册一次节点审批挂起，返回等决定的 Promise（决定路径①②③的单一注册真源）。
- * deps.approval.request 接线与回归测试共用。外部取消（用户插话换轮/停止生成）
- * 由 swapDagRun 拒收场；这里另挂 30 分钟兜底超时（与 run 超时同量级，避免永久
- * pending 占内存）——超时视作拒绝，审批 promise 永不悬挂。
- */
-export function registerPendingApproval(groupId: string, nodeId: string): Promise<ApprovalVerdict> {
-  return new Promise<ApprovalVerdict>((resolve) => {
-    const key = `${groupId}:${nodeId}`;
-    pendingApprovals.set(key, resolve);
-    setTimeout(() => {
-      if (pendingApprovals.delete(key)) {
-        try { resolve({ decision: 'rejected' }); } catch { /* settled */ }
-      }
-    }, 30 * 60_000).unref?.();
-  });
-}
-
-// 测试可见:登记本轮 controller 并取消同 group 上一轮,返回本轮 controller。
-export function swapDagRun(groupId: string, registry: Map<string, AbortController>): AbortController {
-  registry.get(groupId)?.abort();
-  // 2026-11-05 审批门 — 换轮即取消上一轮挂起的节点审批（视作拒绝收场）：
-  // 用户插话/重发 = 放弃上一轮，审批 promise 不悬挂（executor 侧 blocked 收口）。
-  for (const key of [...pendingApprovals.keys()]) {
-    if (!key.startsWith(`${groupId}:`)) continue;
-    const resolve = pendingApprovals.get(key);
-    pendingApprovals.delete(key);
-    try { resolve?.({ decision: 'rejected' }); } catch { /* settled */ }
-  }
-  const ac = new AbortController();
-  registry.set(groupId, ac);
-  return ac;
-}
-
-/**
  * 2026-11-04 群聊「停止生成」— 主动取消该群当前 fan-out 轮：
  *   1) abort 该群的 fan-out AbortController（DAG 路径 runTeamDagFanout 停止
  *      调度后续节点；串行路径 for-await 断流，上游 LLM call 一并取消）；
@@ -404,7 +354,7 @@ export function planGateNoticeFor(
 // 直调 SQLite store，否则 HTTP 打 Python（现状）。下面三个薄封装保持原签名，
 // 让 runFanout / timeline 等调用点零改动。agent 读取仍走 Python HTTP（pyGetAgent）。
 
-import { PYTHON_BACKEND_URL } from '../../python-backend';
+import { BACKEND_URL } from '../../config/backend-url';
 import {
   applyCraftMarkers,
   ingestProductMaterial,
@@ -426,7 +376,7 @@ async function pyGet<T>(path: string): Promise<T | null> {
   }
   // 非群路径：HTTP 打 Python（agent 等）。
   try {
-    const res = await fetch(`${PYTHON_BACKEND_URL}${path}`);
+    const res = await fetch(`${BACKEND_URL}${path}`);
     if (!res.ok) return null;
     const json = (await res.json()) as { data?: T } | T;
     return ((json as { data?: T }).data ?? json) as T;
@@ -2210,61 +2160,13 @@ router.post('/:id/messages', (req: Request, res: Response) => {
 
 /**
  * POST /api/groups/:id/approvals/:nodeId — 显式审批决定（2026-11-05，决定路径①）。
- * body: { decision: 'approve' | 'reject', comment?: string }（BE-06：可附审批意见，
- * ≤500 字，落 action journal 留痕 + 响应带回）。
- * 命中挂起 → resolve 执行器 promise（执行器会补系统留痕消息 + plan_card blocked）；
- * 未命中 → 409（已决定/超时/无此挂起）。
- * 处理器导出供回归测试直打（不起真 Express）。
+ * body: { decision: 'approve' | 'reject', comment?: string }（BE-06：≤500 字意见，
+ * 落 action journal 留痕 + 响应带回）。命中挂起 resolve；未命中 409。
+ * GET /api/groups/:id/approvals — 当前挂起的审批门 nodeId 列表（paper 前端用）。
+ * 两个处理器都住在 ./approval-gate.ts（审批状态 module）。
  */
-export function approvalDecisionHandler(
-  req: { params: { id: string; nodeId: string }; body?: unknown },
-  res: { status(code: number): { json(body: unknown): void }; json(body: unknown): void },
-): void {
-  const groupId = req.params.id;
-  const nodeId = req.params.nodeId;
-  const body = (req.body ?? {}) as { decision?: unknown; comment?: unknown };
-  const decision = body.decision;
-  if (decision !== 'approve' && decision !== 'reject') {
-    res.status(400).json({
-      error: { code: 'BAD_DECISION', message: "decision must be 'approve' or 'reject'" },
-    });
-    return;
-  }
-  // BE-06 审批意见：显式 API 路径的意见是自由文本，类型/长度校验，不静默截断。
-  let comment: string | undefined;
-  if (body.comment !== undefined) {
-    if (typeof body.comment !== 'string' || body.comment.trim().length > 500) {
-      res.status(400).json({
-        error: { code: 'BAD_COMMENT', message: 'comment must be a string of at most 500 characters' },
-      });
-      return;
-    }
-    const trimmedComment = body.comment.trim();
-    if (trimmedComment) comment = trimmedComment;
-  }
-  const key = `${groupId}:${nodeId}`;
-  const resolve = pendingApprovals.get(key);
-  if (!resolve) {
-    res.status(409).json({
-      error: { code: 'NO_PENDING_APPROVAL', message: `no pending approval for node ${nodeId} in group ${groupId}` },
-    });
-    return;
-  }
-  pendingApprovals.delete(key);
-  // BE-06 留痕：裁定（连同意见）落 action journal，「谁批/拒了什么、说了什么」可回放。
-  recordAction({
-    tool_name: 'group.approval',
-    phase: 'decided',
-    decision: decision === 'approve' ? 'approve' : 'deny',
-    detail: { group_id: groupId, node_id: nodeId, ...(comment ? { comment } : {}) },
-  });
-  try {
-    resolve({ decision: decision === 'approve' ? 'approved' : 'rejected', ...(comment ? { comment } : {}) });
-  } catch { /* resolver 已 settle — 幂等 */ }
-  res.json({ group_id: groupId, node_id: nodeId, decision, ...(comment ? { comment } : {}) });
-}
-
 router.post('/:id/approvals/:nodeId', approvalDecisionHandler);
+router.get('/:id/approvals', pendingApprovalsHandler);
 
 export { router as groupsChatRouter };
 export default router;

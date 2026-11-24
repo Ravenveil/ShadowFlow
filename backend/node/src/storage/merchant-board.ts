@@ -39,6 +39,12 @@ import {
   rangeClause,
   pctDelta,
   buildOverviewCore,
+  buildRepeatSummary,
+  markRepeatRows,
+  mergeDimensionRows,
+  sharePct,
+  sumEconomicCore,
+  unitAvg,
   wantsCompare,
   conversionRate,
   MerchantDomainError,
@@ -716,9 +722,11 @@ export function channelEconomics(input: { start?: unknown; end?: unknown } = {})
     .all(...orderParams) as Array<{ channel: string; total: number; paid: number; refunded: number }>;
 
   // 两侧合并：渠道可能只有一侧有数（只点了广告没成交、或老单没埋点），谁有数谁建行。
-  const map = new Map<string, ChannelEconomicRow>();
-  const row = (channel: string): ChannelEconomicRow => {
-    const r = map.get(channel) ?? {
+  // 钱/单口径（营收=收入−退款、毛利、占比）在 merchant-model.mergeDimensionRows 单一真源。
+  const map = mergeDimensionRows(
+    moneyRows.map((m) => ({ key: m.channel, income: m.income, refund: m.refund, expense: m.expense })),
+    orderRows.map((o) => ({ key: o.channel, total: o.total, paid: o.paid, refunded: o.refunded })),
+    (channel): ChannelEconomicRow => ({
       channel,
       orders_total: 0,
       paid_orders: 0,
@@ -728,58 +736,21 @@ export function channelEconomics(input: { start?: unknown; end?: unknown } = {})
       gross_profit_cents: 0,
       gross_margin_pct: null,
       revenue_share_pct: null,
-    };
-    map.set(channel, r);
-    return r;
-  };
-  for (const m of moneyRows) {
-    const r = row(m.channel);
-    r.revenue_cents = m.income - m.refund;
-    r.cost_cents = m.expense;
-    r.gross_profit_cents = r.revenue_cents - r.cost_cents;
-    r.gross_margin_pct = r.revenue_cents
-      ? Math.round((r.gross_profit_cents / r.revenue_cents) * 1000) / 10
-      : null;
-  }
-  for (const o of orderRows) {
-    const r = row(o.channel);
-    r.orders_total = o.total;
-    r.paid_orders = o.paid;
-    r.refunded_orders = o.refunded;
-  }
+    }),
+  );
 
-  const totalRevenue = Array.from(map.values()).reduce((a, r) => a + r.revenue_cents, 0);
-  for (const r of map.values()) {
-    r.revenue_share_pct = totalRevenue
-      ? Math.round((r.revenue_cents / totalRevenue) * 1000) / 10
-      : null;
+  const rows = Array.from(map.values());
+  const totalRevenue = rows.reduce((a, r) => a + r.revenue_cents, 0);
+  for (const r of rows) {
+    r.revenue_share_pct = sharePct(r.revenue_cents, totalRevenue);
   }
 
   // 营收降序（同营收按渠道名，排序稳定）；占比高的渠道一眼在最上面。
-  const channels = Array.from(map.values()).sort(
+  const channels = rows.sort(
     (a, b) => b.revenue_cents - a.revenue_cents || a.channel.localeCompare(b.channel),
   );
 
-  const total: ChannelEconomics['total'] = {
-    orders_total: 0,
-    paid_orders: 0,
-    refunded_orders: 0,
-    revenue_cents: 0,
-    cost_cents: 0,
-    gross_profit_cents: 0,
-    gross_margin_pct: null,
-  };
-  for (const r of channels) {
-    total.orders_total += r.orders_total;
-    total.paid_orders += r.paid_orders;
-    total.refunded_orders += r.refunded_orders;
-    total.revenue_cents += r.revenue_cents;
-    total.cost_cents += r.cost_cents;
-    total.gross_profit_cents += r.gross_profit_cents;
-  }
-  total.gross_margin_pct = total.revenue_cents
-    ? Math.round((total.gross_profit_cents / total.revenue_cents) * 1000) / 10
-    : null;
+  const total = sumEconomicCore(channels);
 
   return { range: { from, to }, channels, total };
 }
@@ -873,9 +844,11 @@ export function productEconomics(input: { start?: unknown; end?: unknown } = {})
   }
 
   // 两侧合并：产品可能只有一侧有数（只下了单没付款、或退款跨窗口），谁有数谁建行。
-  const map = new Map<string, ProductEconomicRow>();
-  const row = (product_id: string): ProductEconomicRow => {
-    const r = map.get(product_id) ?? {
+  // 钱/单口径在 merchant-model.mergeDimensionRows 单一真源（与渠道/客户卡同源）。
+  const map = mergeDimensionRows(
+    moneyRows.map((m) => ({ key: m.product_id, income: m.income, refund: m.refund, expense: m.expense })),
+    orderRows.map((o) => ({ key: o.product_id, total: o.total, paid: o.paid, refunded: o.refunded })),
+    (product_id): ProductEconomicRow => ({
       product_id,
       product_name: catalog.get(product_id)?.name ?? '(unknown)',
       list_price_cents: catalog.get(product_id)?.price_cents ?? null,
@@ -889,40 +862,22 @@ export function productEconomics(input: { start?: unknown; end?: unknown } = {})
       avg_realized_price_cents: null,
       unit_gross_profit_cents: null,
       revenue_share_pct: null,
-    };
-    map.set(product_id, r);
-    return r;
-  };
-  for (const m of moneyRows) {
-    const r = row(m.product_id);
-    r.revenue_cents = m.income - m.refund;
-    r.cost_cents = m.expense;
-    r.gross_profit_cents = r.revenue_cents - r.cost_cents;
-    r.gross_margin_pct = r.revenue_cents
-      ? Math.round((r.gross_profit_cents / r.revenue_cents) * 1000) / 10
-      : null;
-  }
-  for (const o of orderRows) {
-    const r = row(o.product_id);
-    r.orders_total = o.total;
-    r.paid_orders = o.paid;
-    r.refunded_orders = o.refunded;
-  }
+    }),
+  );
 
-  const totalRevenue = Array.from(map.values()).reduce((a, r) => a + r.revenue_cents, 0);
-  for (const r of map.values()) {
-    r.revenue_share_pct = totalRevenue
-      ? Math.round((r.revenue_cents / totalRevenue) * 1000) / 10
-      : null;
+  const rows = Array.from(map.values());
+  const totalRevenue = rows.reduce((a, r) => a + r.revenue_cents, 0);
+  for (const r of rows) {
+    r.revenue_share_pct = sharePct(r.revenue_cents, totalRevenue);
     // 单均实收/单均毛利的分母是「成交过的单数」（已付 + 已退）——
     // 全退的产品单均实收如实是 0（钱确实没留住），没成交过才是 null。
     const transacted = r.paid_orders + r.refunded_orders;
-    r.avg_realized_price_cents = transacted ? Math.round(r.revenue_cents / transacted) : null;
-    r.unit_gross_profit_cents = transacted ? Math.round(r.gross_profit_cents / transacted) : null;
+    r.avg_realized_price_cents = unitAvg(r.revenue_cents, transacted);
+    r.unit_gross_profit_cents = unitAvg(r.gross_profit_cents, transacted);
   }
 
   // 营收降序（同营收按产品名/ID，排序稳定）；贡献高的产品一眼在最上面。
-  const products = Array.from(map.values()).sort(
+  const products = rows.sort(
     (a, b) =>
       b.revenue_cents - a.revenue_cents ||
       a.product_name.localeCompare(b.product_name) ||
@@ -930,34 +885,13 @@ export function productEconomics(input: { start?: unknown; end?: unknown } = {})
   );
 
   const total: ProductEconomics['total'] = {
-    orders_total: 0,
-    paid_orders: 0,
-    refunded_orders: 0,
-    revenue_cents: 0,
-    cost_cents: 0,
-    gross_profit_cents: 0,
-    gross_margin_pct: null,
+    ...sumEconomicCore(products),
     avg_realized_price_cents: null,
     unit_gross_profit_cents: null,
   };
-  for (const r of products) {
-    total.orders_total += r.orders_total;
-    total.paid_orders += r.paid_orders;
-    total.refunded_orders += r.refunded_orders;
-    total.revenue_cents += r.revenue_cents;
-    total.cost_cents += r.cost_cents;
-    total.gross_profit_cents += r.gross_profit_cents;
-  }
-  total.gross_margin_pct = total.revenue_cents
-    ? Math.round((total.gross_profit_cents / total.revenue_cents) * 1000) / 10
-    : null;
   const totalTransacted = total.paid_orders + total.refunded_orders;
-  total.avg_realized_price_cents = totalTransacted
-    ? Math.round(total.revenue_cents / totalTransacted)
-    : null;
-  total.unit_gross_profit_cents = totalTransacted
-    ? Math.round(total.gross_profit_cents / totalTransacted)
-    : null;
+  total.avg_realized_price_cents = unitAvg(total.revenue_cents, totalTransacted);
+  total.unit_gross_profit_cents = unitAvg(total.gross_profit_cents, totalTransacted);
 
   return { range: { from, to }, products, total };
 }
@@ -1062,9 +996,11 @@ export function customerEconomics(input: { start?: unknown; end?: unknown } = {}
     .all(...orderParams) as Array<{ customer_id: string; total: number; paid: number; refunded: number }>;
 
   // 两侧合并：客户可能只有一侧有数（只下了单没付款、或退款跨窗口），谁有数谁建行。
-  const map = new Map<string, CustomerEconomicRow>();
-  const row = (customer_id: string): CustomerEconomicRow => {
-    const r = map.get(customer_id) ?? {
+  // 钱/单口径在 merchant-model.mergeDimensionRows 单一真源（与渠道/产品卡同源）。
+  const map = mergeDimensionRows(
+    moneyRows.map((m) => ({ key: m.customer_id, income: m.income, refund: m.refund, expense: m.expense })),
+    orderRows.map((o) => ({ key: o.customer_id, total: o.total, paid: o.paid, refunded: o.refunded })),
+    (customer_id): CustomerEconomicRow => ({
       customer_id,
       orders_total: 0,
       paid_orders: 0,
@@ -1077,92 +1013,36 @@ export function customerEconomics(input: { start?: unknown; end?: unknown } = {}
       unit_gross_profit_cents: null,
       transacted_orders: 0,
       is_repeat: false,
-    };
-    map.set(customer_id, r);
-    return r;
-  };
-  for (const m of moneyRows) {
-    const r = row(m.customer_id);
-    r.revenue_cents = m.income - m.refund;
-    r.cost_cents = m.expense;
-    r.gross_profit_cents = r.revenue_cents - r.cost_cents;
-    r.gross_margin_pct = r.revenue_cents
-      ? Math.round((r.gross_profit_cents / r.revenue_cents) * 1000) / 10
-      : null;
-  }
-  for (const o of orderRows) {
-    const r = row(o.customer_id);
-    r.orders_total = o.total;
-    r.paid_orders = o.paid;
-    r.refunded_orders = o.refunded;
-    r.transacted_orders = o.paid + o.refunded;
-    r.is_repeat = r.transacted_orders >= 2;
-  }
+    }),
+  );
 
-  const totalRevenue = Array.from(map.values()).reduce((a, r) => a + r.revenue_cents, 0);
-  for (const r of map.values()) {
+  const rows = Array.from(map.values());
+  // 成交单数与复购标记：派生规则（≥2 单即复购）在 merchant-model.markRepeatRows。
+  markRepeatRows(rows);
+  for (const r of rows) {
     // 单均实收/单均毛利的分母是「成交过的单数」（已付 + 已退）——与产品卡同口径。
-    const transacted = r.transacted_orders;
-    r.avg_realized_price_cents = transacted ? Math.round(r.revenue_cents / transacted) : null;
-    r.unit_gross_profit_cents = transacted ? Math.round(r.gross_profit_cents / transacted) : null;
+    r.avg_realized_price_cents = unitAvg(r.revenue_cents, r.transacted_orders);
+    r.unit_gross_profit_cents = unitAvg(r.gross_profit_cents, r.transacted_orders);
   }
 
-  // 摘要：复购率看「人」，复购贡献看「钱」——两行相加恒等于总营收。
-  let customers = 0;
-  let repeatCustomers = 0;
-  let repeatRevenue = 0;
-  for (const r of map.values()) {
-    if (r.transacted_orders >= 1) customers += 1;
-    if (r.is_repeat) {
-      repeatCustomers += 1;
-      repeatRevenue += r.revenue_cents;
-    }
-  }
-  const summary: CustomerEconomics['summary'] = {
-    customers,
-    repeat_customers: repeatCustomers,
-    repeat_rate_pct: customers ? Math.round((repeatCustomers / customers) * 1000) / 10 : null,
-    repeat_customer_revenue_cents: repeatRevenue,
-    single_customer_revenue_cents: totalRevenue - repeatRevenue,
-    repeat_revenue_share_pct: totalRevenue ? Math.round((repeatRevenue / totalRevenue) * 1000) / 10 : null,
-    avg_revenue_per_customer_cents: customers ? Math.round(totalRevenue / customers) : null,
-  };
+  // 摘要：复购率看「人」，复购贡献看「钱」——两群营收相加恒等于总营收。
+  const summary = buildRepeatSummary(rows);
 
   // Top 客户：营收降序（同营收按 ID，排序稳定），贡献大的人一眼在最上面。
-  const top = Array.from(map.values())
+  const top = rows
+    .slice()
     .sort((a, b) => b.revenue_cents - a.revenue_cents || a.customer_id.localeCompare(b.customer_id))
     .slice(0, 5);
 
   const total: CustomerEconomics['total'] = {
-    orders_total: 0,
-    paid_orders: 0,
-    refunded_orders: 0,
-    revenue_cents: 0,
-    cost_cents: 0,
-    gross_profit_cents: 0,
-    gross_margin_pct: null,
+    ...sumEconomicCore(rows),
     avg_realized_price_cents: null,
     unit_gross_profit_cents: null,
-    transacted_orders: 0,
+    // transacted 是客户卡专属列，sumEconomicCore 不认识 —— 单独累加
+    transacted_orders: rows.reduce((a, r) => a + r.transacted_orders, 0),
   };
-  for (const r of map.values()) {
-    total.orders_total += r.orders_total;
-    total.paid_orders += r.paid_orders;
-    total.refunded_orders += r.refunded_orders;
-    total.revenue_cents += r.revenue_cents;
-    total.cost_cents += r.cost_cents;
-    total.gross_profit_cents += r.gross_profit_cents;
-    total.transacted_orders += r.transacted_orders;
-  }
-  total.gross_margin_pct = total.revenue_cents
-    ? Math.round((total.gross_profit_cents / total.revenue_cents) * 1000) / 10
-    : null;
-  total.avg_realized_price_cents = total.transacted_orders
-    ? Math.round(total.revenue_cents / total.transacted_orders)
-    : null;
-  total.unit_gross_profit_cents = total.transacted_orders
-    ? Math.round(total.gross_profit_cents / total.transacted_orders)
-    : null;
+  total.avg_realized_price_cents = unitAvg(total.revenue_cents, total.transacted_orders);
+  total.unit_gross_profit_cents = unitAvg(total.gross_profit_cents, total.transacted_orders);
 
   return { range: { from, to }, summary, top, total };
 }

@@ -20,6 +20,7 @@ import {
   clearPendingApprovals,
   parseApprovalDecision,
   parseApprovalVerdict,
+  pendingApprovalsHandler,
   registerPendingApproval,
   swapDagRun,
   tryResolveApprovalFromText,
@@ -364,5 +365,49 @@ describe('approvalDecisionHandler — comment 参数（BE-06）', () => {
     approvalDecisionHandler(mkReq({ decision: 'approve', comment }), res);
     expect(out.status).toBeUndefined();
     await expect(p).resolves.toEqual({ decision: 'approved', comment });
+  });
+});
+
+describe('pendingApprovalsHandler（GET /:id/approvals，2026-11-24 paper 前端用）', () => {
+  function mkGetRes() {
+    const out: { body?: unknown } = {};
+    return {
+      res: { json(body: unknown) { out.body = body; } },
+      out,
+    };
+  }
+
+  it('无挂起 → pending 空数组', () => {
+    const { res, out } = mkGetRes();
+    pendingApprovalsHandler({ params: { id: 'g1' } }, res);
+    expect(out.body).toEqual({ group_id: 'g1', pending: [] });
+  });
+
+  it('挂起列出该组全部 nodeId，跨组隔离', () => {
+    registerPendingApproval('g1', 'n1');
+    registerPendingApproval('g1', 'n2');
+    registerPendingApproval('g9', 'n3');
+    const { res, out } = mkGetRes();
+    pendingApprovalsHandler({ params: { id: 'g1' } }, res);
+    expect(out.body).toEqual({ group_id: 'g1', pending: expect.arrayContaining(['n1', 'n2']) });
+    // 只含本组
+    expect(((out.body as { pending: string[] }).pending).some((n) => n === 'n3')).toBe(false);
+  });
+
+  it('决定后被清掉的挂起不再出现（与 POST 幂等联动）', () => {
+    registerPendingApproval('g1', 'n1');
+    const { res: postRes, out: postOut } = (() => {
+      const o: { status?: number; body?: unknown } = {};
+      const r = {
+        status(code: number) { o.status = code; return r; },
+        json(body: unknown) { o.body = body; return r; },
+      };
+      return { res: r, out: o };
+    })();
+    approvalDecisionHandler({ params: { id: 'g1', nodeId: 'n1' }, body: { decision: 'approve' } }, postRes);
+    expect(postOut.status).toBeUndefined();
+    const { res, out } = mkGetRes();
+    pendingApprovalsHandler({ params: { id: 'g1' } }, res);
+    expect(out.body).toEqual({ group_id: 'g1', pending: [] });
   });
 });
