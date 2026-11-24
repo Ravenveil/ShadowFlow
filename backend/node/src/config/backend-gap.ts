@@ -1,21 +1,18 @@
 /**
- * backend-gap.ts — 单后端迁移「进度条」：记录仍漏向 Python 的路由。
+ * backend-gap.ts — 未迁移端点的「显式 404 进度条」。
  *
- * 单后端不是一次切换，而是一批端点迁移。此模块提供三件事：
- *   1. installSingleBackendGapHandler()：single 模式下替代 proxyFallback，
- *      对未迁移的 /api/* 返回结构化 404（code=BACKEND_GAP），前端能明确
- *      识别"这个端点还没迁到 Node"，而不是拿到含糊的 503 或 HTML。
+ * 2026-11-24 ADR-0001：Python 后端已退役，proxyFallback 已删除 —— 命中本
+ * handler 的端点族现在是**永久 404**（不再是“暂时转 Python”）。三件事不变：
+ *   1. installSingleBackendGapHandler()：对未迁移的 /api/* 返回结构化 404
+ *      （code=BACKEND_GAP），前端能明确识别“这个端点还没迁到 Node”。
  *   2. installRootGapHandler()：同口径覆盖裸路径（/workflow/*、/tools/* 等
- *      Python 侧未加 /api 前缀的端点），但排除静态资源、健康检查与前端 SPA
- *      导航路由；独立可调用，因为它的挂点与 /api handler 不同（见 index.ts）。
- *   3. getGapSnapshot()：按一级前缀聚合命中次数，供 /health/backend-gaps
- *      查询。跑一轮前端 e2e 后拉一次，就知道还剩哪些端点、优先级多高。
+ *      Python 侧未加 /api 前缀的端点），排除静态资源、健康检查与前端 SPA。
+ *   3. getGapSnapshot()：按一级前缀聚合命中次数，供 /health/backend-gaps 查询。
  *
  * 纯内存计数，进程重启清零；不持久化、不影响任何业务路径。
  */
 
 import type { Express, Request, Response, NextFunction } from 'express';
-import { isSingleBackend } from './backend-mode';
 
 export interface BackendGapHit {
   prefix: string;
@@ -57,19 +54,14 @@ export function resetGapSnapshot(): void {
 }
 
 /**
- * 在 index.ts 的 proxyFallback 位置调用：
- *   - legacy：什么都不做（仍挂原 proxyFallback）
- *   - single：挂一个 gap handler，暴露命中 + 暴露 /health/backend-gaps 查询端点
- *
- * 必须在 404 catch-all 之前挂载。
+ * 在 index.ts 的（已删除的）proxyFallback 位置调用：挂 gap handler，
+ * 暴露命中 + /health/backend-gaps 查询端点。必须在 404 catch-all 之前挂载。
  */
-export function installSingleBackendGapHandler(app: Express, env: NodeJS.ProcessEnv = process.env): boolean {
-  if (!isSingleBackend(env)) return false;
-
+export function installSingleBackendGapHandler(app: Express): boolean {
   app.get('/health/backend-gaps', (_req: Request, res: Response) => {
     res.json({
       mode: 'single',
-      note: '仍命中未迁移端点的请求；prefix 计数越高越该优先迁到 Node',
+      note: 'Python 已退役（ADR-0001）：这些是未迁移到 Node 的端点，命中即永久 404',
       gaps: getGapSnapshot(),
     });
   });
@@ -81,7 +73,7 @@ export function installSingleBackendGapHandler(app: Express, env: NodeJS.Process
       error: {
         code: 'BACKEND_GAP',
         message: `此端点尚未迁移到单后端（Node）：${req.method} ${path}`,
-        hint: '在 legacy 模式（SF_BACKEND_MODE=legacy）下此请求会转发给 Python；请迁移该端点后再切 single。',
+        hint: 'Python 后端已退役（ADR-0001），不会再转发；迁移清单见 documentation/ADR-0001-single-backend.md。',
         prefix: gapPrefix(path),
       },
     });
@@ -90,22 +82,21 @@ export function installSingleBackendGapHandler(app: Express, env: NodeJS.Process
   return true;
 }
 
-// ── 根级裸路径 gap（single 全路径覆盖）──────────────────────────────────────
+// ── 根级裸路径 gap ─────────────────────────────────────────────────────
 // Python 侧有一批未加 /api 前缀的裸路径端点（/workflow/*、/builder/*、
 // /evals/*、/tools/*、/regression/*、/runs/*、/chat/sessions/*、/citations/*、
-// /archive/*、/ops/*、/policy/*、/templates/* 等）。旧 /api gap handler 只
-// 挂在 /api 上，这些请求在 single 模式下静默落 404 catch-all，既不进 gap
-// 统计也无从观测。installRootGapHandler 用一个根级 middleware 兜住它们。
+// /archive/*、/ops/*、/policy/*、/templates/* 等）。/api gap handler 只挂在
+// /api 上，这些请求会静默落 404 catch-all，既不进 gap 统计也无从观测。
+// installRootGapHandler 用一个根级 middleware 兜住它们。
 //
 // 为什么是独立函数而不是给 installSingleBackendGapHandler 加参数：两者挂点
-// 不同——/api handler 在 proxyFallback 分支（index.ts ~:343），根级 handler
-// 必须在 static /projects 之后、404 catch-all 之前（index.ts ~:372）。两边
-// 都自行 isSingleBackend() 门控，legacy 模式零行为变化。
+// 不同——/api handler 在（已删的）proxyFallback 位置，根级 handler 必须在
+// static /projects 之后、404 catch-all 之前（见 index.ts）。
 
 /**
  * 纯前端导航路由（无扩展名）。生产由 nginx、dev 由 Vite 服务，Node 不该吞。
  * 只做「整路径精确匹配」：/runs 是 SPA 页，/runs/graph 仍是裸路径 gap。
- * 前 6 个来自全路径覆盖任务约束，其余来自 frontend/src/AppRoutes.tsx。
+ * 前 6 个来自全路径覆盖任务约束，其余来自 frontend/legacy/src/AppRoutes.tsx。
  */
 const SPA_PAGE_ROUTES = new Set([
   '/',
@@ -180,17 +171,11 @@ function acceptsHtml(req: Request): boolean {
 }
 
 /**
- * 在 static /projects 挂载之后、404 catch-all 之前调用：
- *
- *   installRootGapHandler(app);
- *
- * 独立可调用（内部自行判断 single/legacy），返回是否真的安装。
+ * 在 static /projects 挂载之后、404 catch-all 之前调用：installRootGapHandler(app)。
  * 只拦「GET + 裸路径 + 非白名单 + 非浏览器导航」，其余交回 next()。
  * 信封与计数口径与 /api gap handler 完全一致（两条 handler 必须保持同步）。
  */
-export function installRootGapHandler(app: Express, env: NodeJS.ProcessEnv = process.env): boolean {
-  if (!isSingleBackend(env)) return false;
-
+export function installRootGapHandler(app: Express): boolean {
   app.use((req: Request, res: Response, next: NextFunction): void => {
     // 写端点未来可能在 Node 原生实现，非 GET 一律不吞
     if (req.method !== 'GET') {
@@ -215,7 +200,7 @@ export function installRootGapHandler(app: Express, env: NodeJS.ProcessEnv = pro
       error: {
         code: 'BACKEND_GAP',
         message: `此端点尚未迁移到单后端（Node）：${req.method} ${path}`,
-        hint: '在 legacy 模式（SF_BACKEND_MODE=legacy）下此请求会转发给 Python；请迁移该端点后再切 single。',
+        hint: 'Python 后端已退役（ADR-0001），不会再转发；迁移清单见 documentation/ADR-0001-single-backend.md。',
         prefix: gapPrefix(path),
       },
     });

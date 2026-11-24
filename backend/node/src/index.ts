@@ -26,7 +26,7 @@ import clawhubRouter from './routes/skills/clawhub';
 import acpRouter from './routes/system/acp';
 import { groupsChatRouter } from './routes/groups/groups-chat';
 // 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
-// 时挂载，挂在 proxyFallback 之前）。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
+// 时挂载，挂载顺序无关（ADR-0001 后无 fallback））。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
 import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
 import { fsBrowseRouter } from './routes/system/fs-browse';
@@ -72,6 +72,8 @@ import { detectAll } from './detectors/cli-detector';
 import { detectAcpAgents } from './detectors/acp-detector';
 import projectsRouter from './routes/projects/projects';
 import memoryEntriesRouter from './routes/memory/memory-entries';
+import memosRouter from './domains/memos/adapters/memos';
+import newsRouter from './domains/news/adapters/news';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
 import memoryLessonsRouter from './routes/memory/memory-lessons';
 import dashboardRouter from './routes/dashboard/dashboard';
@@ -92,12 +94,9 @@ import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/projects/conversations';
 import authRouter from './routes/system/auth';
-import { proxyFallback } from './proxy-fallback';
-import {
-  getBackendMode,
-  groupsBackendEnv,
-  shouldMountProxyFallback,
-} from './config/backend-mode';
+// 2026-11-24 ADR-0001 — Python 后端退役：proxyFallback / python-backend 已删，
+// 单后端恒 single；未迁移端点由 gap handler 显式 404（见 config/backend-gap.ts）。
+// backend-mode 的 mode 函数保留为常量真源（恒 single / 恒 node），调用方无痛过渡。
 import { installSingleBackendGapHandler, installRootGapHandler } from './config/backend-gap';
 import { initSqlite } from './storage/sqlite';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
@@ -177,16 +176,16 @@ initSqlite();
 app.use('/api/run-sessions', runSessionsRouter);
 app.use('/api/runs', runsRouter);
 // 2026-08-23 — 完成态「后续建议」：GET /api/runs/:runId/suggestions。
-// 独立 router 同挂 /api/runs（路径不与 runs.ts 冲突），必须在 proxyFallback 之前。
+// 独立 router 同挂 /api/runs（路径不与 runs.ts 冲突），挂载顺序无关（ADR-0001 后无 fallback）。
 app.use('/api/runs', runSuggestionsRouter);
 app.use('/api/agents', agentsRouter);
 // impl-c 第三批（bc1cfaf4）— runtime registry + agent packs（/registry* 路径面，
 // 与 agentsRouter 的 /{agent_id} 不重叠；registry 内部静态路由已先于
-// /registry/:agent_id 注册，packs 不被吞）。须挂 proxyFallback 之前。
+// /registry/:agent_id 注册，packs 不被吞）。挂载顺序无关（ADR-0001 后无 fallback）。
 app.use('/api/agents', registryRouter);
-// S0.7 — Team DAG endpoints (yaml-backed). Mounted before proxyFallback so
+// S0.7 — Team DAG endpoints (yaml-backed). Mounted unconditionally (no fallback since ADR-0001)
 // /:id/dag and /:id/dag/validate hit Node; non-matching /api/teams paths
-// (root list, create, etc.) fall through to Python via proxyFallback.
+// (root list, create, etc.) now return a structured BACKEND_GAP 404.
 app.use('/api/teams', teamsRouter);
 app.use('/api/skills', skillsRouter);
 app.use('/api/design-systems', designSystemsRouter);
@@ -206,15 +205,16 @@ app.use('/api/sessions', sessionsRouter);
 // 启动轮询引擎（30s 磁盘轮询 .shadowflow/schedules/，与 Python APScheduler
 // 同一数据目录）。legacy 下不挂路由不启引擎，/api/schedules 继续转 Python，
 // 避免双后端同时轮询同一目录双触发。
-if (!shouldMountProxyFallback()) {
+// schedules（sched-impl 4ae8bdca）— Node 接管并启动轮询引擎（30s 磁盘轮询
+// .shadowflow/schedules/，与原 Python APScheduler 同一数据目录）。
+// 2026-11-24 ADR-0001：Python 已退役，无双跑风险，无条件挂载。
+{
   app.use('/api/schedules', schedulesRouter);
   startSchedulerEngine();
 }
 // opc（opc-impl 77841b05）— 单路由覆盖全部 31 条端点（router 内部路径不含
-// /api/opc 前缀）。独立 opc.sqlite 与 Python 同一物理文件，legacy↔single 数据
-// 兼容；与 schedules 不同，无轮询引擎无双跑风险，但为保持「legacy 语义零变化」
-// 原则（/api/opc 继续转 Python），同样条件挂载。
-if (!shouldMountProxyFallback()) {
+// /api/opc 前缀）。独立 opc.sqlite 与原 Python 同一物理文件，数据兼容。
+{
   app.use('/api/opc', opcRouter);
 }
 // impl-c 第三批（bc1cfaf4）— approvals 根挂载：覆盖 /api/approvals/*、
@@ -240,7 +240,11 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/projects', projectScopedConversationsRouter);
 // Story 16.1 — River Memory CRUD
 app.use('/api/memory-entries', memoryEntriesRouter);
-// 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂在 proxyFallback 之前。
+// 个人工作备忘 / 日程（2026-11-21）：前端「备忘」页的 /api/memos CRUD
+app.use('/api/memos', memosRouter);
+// 新闻看板（2026-11-21）：订阅源 + RSS 聚合，前端「新闻」页使用
+app.use('/api/news', newsRouter);
+// 经验记忆（自动沉淀 + 分域召回）与数据看板聚合。必须挂载顺序无关（ADR-0001 后无 fallback）。
 app.use('/api/memory/lessons', memoryLessonsRouter);
 app.use('/api/memory/handoff', memoryHandoffRouter);
 // 单后端迁移第三批（d7ad88ec）— memory state stub（与 memory/handoff 同前缀
@@ -265,22 +269,20 @@ app.use('/api/ops', opsRouter);
 app.use('/api/conversations', conversationsRouter);
 // Chat/DM/群聊 发消息网关 — 拦下 POST /api/groups/:id/messages 用 Node dispatcher
 // 生成回复（CLI + API 都真生效）。其余 /api/groups/* 不在此定义 → next() →
-// proxyFallback 转 Python。必须挂在 proxyFallback 之前。
+// proxyFallback 转 Python。必须挂载顺序无关（ADR-0001 后无 fallback）。
 // 2026-05-30 修：此前只 import 未 app.use，发消息漏过网关落到 Python chat-bridge，
 // 导致 CLI executor 永远走不通（Python spawn 不了 CLI）。
 app.use('/api/groups', groupsChatRouter);
 // 1b — Node 自服务 /api/groups（建群/list/get/patch/messages 读+兜底持久化/reactions/
 // pin/user-settings/SSE）。挂在 groupsChatRouter **之后**（POST /:id/messages +
-// GET /:id/timeline 仍先被网关拦截跑回复/聚合），proxyFallback **之前**。仅
-// SF_GROUPS_BACKEND==='node' 时挂载；默认（python/未设）不挂 → /api/groups/* 仍
-// 经 proxyFallback 转 Python，行为零变化。DM resolve 在 /api/chat/* 下单独挂。
-if (groupsBackendEnv() === 'node') {
+// groups Node 自服务（ADR-0001 后无条件挂载）：/api/groups + DM resolve。
+{
   app.use('/api/groups', groupsNodeRouter);
   app.post('/api/chat/dm/:agent_id/resolve', handleDmResolve);
   console.log('[groups] groups backend=node — /api/groups served by Node SQLite store');
 }
 // 后端目录浏览器(GET /api/fs/list|home|validate)。Node 读本机磁盘列目录,前端逐层
-// 点选 → 回传真实绝对路径当 CLI cwd。挂在 proxyFallback 之前,否则会被转去 Python。
+// 点选 → 回传真实绝对路径当 CLI cwd。挂载顺序无关（ADR-0001 后无 fallback）,否则会被转去 Python。
 app.use('/api/fs', fsBrowseRouter);
 // 2026-11-07 知识库统一批：本地仓库 vaults（/api/knowledge-vaults）下线，
 // 本地文件夹语义并入多模态记忆库目录摄入（/api/memory-bank/packs/{id}/folders）。
@@ -288,14 +290,14 @@ app.use('/api/fs', fsBrowseRouter);
 // otherwise /api/llm/* would be forwarded to Python instead of handled here.
 app.use('/api/llm', llmRouter);
 // 语音输入转写（2026-11-07）：POST /api/asr/transcribe，Node 直调 OpenAI 兼容
-// /audio/transcriptions（whisper-1 等）。同须挂 proxyFallback 之前。
+// /audio/transcriptions（whisper-1 等）。同挂载顺序无关（ADR-0001 后无 fallback）。
 app.use('/api/asr', asrRouter);
 // OpenBot 对齐批（2026-11-07）— 连接器注册表（/api/connectors）与行动留痕
 // （/api/actions）。语义：每个工具动作执行前按连接器策略裁定（auto/prompt/
 // block）、执行后记 action-journal；同挂 proxyFallback 之前。
 app.use('/api/connectors', connectorsRouter);
 app.use('/api/actions', actionsRouter);
-// 单后端迁移第一批 — 纯 JSON 端点接管（必须在 proxyFallback/gap 之前）：
+// 单后端迁移第一批 — 纯 JSON 端点接管（挂载顺序无关（ADR-0001 后无 fallback））：
 //   /api/wallet/{status,activity,skin-pack}  ← Python system/wallet.py
 //   /api/messages/:mid/feedback (GET+POST)   ← Python groups.py L1 feedback 段
 //   /api/artifacts/:id/pin                   ← Python runs/artifacts.py（已并入 artifactsRouter）
@@ -309,9 +311,7 @@ app.use('/api/messages', messageFeedbackRouter);
 // briefboard 并入 groups-node.ts（随 /api/groups 条件挂载，本文件无需改动）。
 app.use('/api/workspaces', workspacesRouter);
 app.use('/api', templatesRouter);
-if (groupsBackendEnv() === 'node') {
-  app.use('/api', inboxRouter);
-}
+app.use('/api', inboxRouter);
 // impl-c teams 域补挂（2026-11-09）：teams-store.ts 的完整 CRUD（GET / + /:id +
 // PATCH/DELETE + workflow/policy/validation-hooks/versions/branch/restore/chat）
 // 交付时未接线。挂载顺序在 teamsRouter（DAG/plan 子集）之后即可——两者路径不
@@ -336,19 +336,11 @@ app.use('/api/catalog', catalogRouter);
 
 // ── Fallback to Python FastAPI (default :8000) ────────────────────────────────
 // Single-port UX: any /api/* not matched by the 12 Node routers above is
-// transparently proxied to the Python backend. Mounted BEFORE the 404 catch-all
-// so unmatched /api/* paths reach Python instead of returning a Node 404.
-//
-// 单后端迁移（第一批）：SF_BACKEND_MODE=single 时不挂 proxyFallback，改挂 gap
-// handler——对未迁移端点返回结构化 404 并计数，暴露 /health/backend-gaps。
-// legacy（默认）行为完全不变。
-if (shouldMountProxyFallback()) {
-  app.use('/api', proxyFallback);
-} else {
+// 2026-11-24 ADR-0001 — proxyFallback 已随 Python 退役删除；
+// 未迁移端点由 gap handler 显式 404 并计数，暴露 /health/backend-gaps。
+{
   const installed = installSingleBackendGapHandler(app);
-  console.log(
-    `[backend] mode=single — proxyFallback disabled, gap handler installed=${installed}`,
-  );
+  console.log(`[backend] mode=single — gap handler installed=${installed}`);
 }
 
 // ── Static artifacts (Story 15.2) ─────────────────────────────────────────────
@@ -378,7 +370,7 @@ console.log(`[index] static /projects → ${projectsRoot}`);
 // 裸路径 gap handler（gap-ext-worker d02cab8d）— 挂在 static /projects 之后、
 // 404 catch-all 之前：single 默认下任何未迁移的裸路径端点（/workflow/*、
 // /builder/* 等）返回结构化 BACKEND_GAP 而非静默 404；/health、/projects/*、
-// /api/*、SPA 页面路由、静态资源一律放行。内部自行 isSingleBackend 门控，
+// /api/*、SPA 页面路由、静态资源一律放行。ADR-0001 后恒安装，
 // legacy 下不安装（行为零变化）。
 installRootGapHandler(app);
 

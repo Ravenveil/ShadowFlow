@@ -105,7 +105,7 @@ beforeAll(async () => {
   process.env.SF_PLAN_GATE_PATH = planGateTmp;
   process.chdir(tmp);
   fs.mkdirSync(path.join(tmp, '.shadowflow', 'agents'), { recursive: true });
-  process.env.PYTHON_BACKEND_URL = 'http://127.0.0.1:9';
+  process.env.BACKEND_URL = 'http://127.0.0.1:9';
   for (const envName of Object.values(PROVIDER_ENV_VAR)) {
     savedEnv[envName] = process.env[envName];
     delete process.env[envName];
@@ -124,7 +124,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   process.chdir(origCwd);
-  delete process.env.PYTHON_BACKEND_URL;
+  delete process.env.BACKEND_URL;
   delete process.env.SF_PLAN_GATE_PATH;
   for (const [k, v] of Object.entries(savedEnv)) {
     if (v === undefined) delete process.env[k];

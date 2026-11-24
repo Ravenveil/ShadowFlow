@@ -10,7 +10,7 @@
  *
  * 与 teams-dag-write-validate.test.ts 同风格：chdir 到 temp cwd（agent-yaml 的
  * module-level cwd 常量指向空目录）+ http.request 打真实端口。
- * PYTHON_BACKEND_URL 指到不可达端口，roster 解析确定性走兜底路径。
+ * BACKEND_URL 指到不可达端口，roster 解析确定性走兜底路径。
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
@@ -105,7 +105,7 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(tmp, '.shadowflow', 'agents'), { recursive: true });
 
   // roster 的 Python fetch 不可达 → 确定性兜底；LLM 已被 mock，不受影响。
-  process.env.PYTHON_BACKEND_URL = 'http://127.0.0.1:9';
+  process.env.BACKEND_URL = 'http://127.0.0.1:9';
   // 清掉所有 provider 环境变量，无 key 用例才确定（开发机可能全局配了 key）。
   for (const envName of Object.values(PROVIDER_ENV_VAR)) {
     savedEnv[envName] = process.env[envName];
@@ -125,7 +125,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await new Promise<void>((r) => server.close(() => r()));
   process.chdir(origCwd);
-  delete process.env.PYTHON_BACKEND_URL;
+  delete process.env.BACKEND_URL;
   for (const [k, v] of Object.entries(savedEnv)) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;

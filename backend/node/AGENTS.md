@@ -3,7 +3,7 @@
 Node + TypeScript 后端（端口 8002）。负责 SSE streaming、tool dispatch、
 skill / agent / team 数据层、Anthropic / GLM / OpenAI BYOK provider 路由。
 
-**架构与目录是硬约束**：改代码前先读仓库根 [ARCHITECTURE.md](../../ARCHITECTURE.md)
+**架构与目录是硬约束**：改代码前先读仓库根 [ARCHITECTURE.md](../../documentation/ARCHITECTURE.md)
 （域包四件套、三问自检、放置决策树、红线）。样板域见 `src/domains/memory/README.md`。
 
 ## 启动

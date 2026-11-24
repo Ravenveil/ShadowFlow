@@ -14,7 +14,7 @@
  * 容错：Python 不可达 / 404（普通对话 run 没有 Python run 记录）/ 超时——
  * 一律静默放弃。watcher 是增强通道，不是 run 执行的依赖。
  */
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { BACKEND_URL } from '../config/backend-url';
 
 const POLL_INTERVAL_MS = 2500;
 const FETCH_TIMEOUT_MS = 2000;
@@ -44,7 +44,7 @@ export function startLoopWatcher(
     void (async () => {
       try {
         const res = await fetch(
-          `${PYTHON_BACKEND_URL}/api/runs/${encodeURIComponent(sessionId)}/loops`,
+          `${BACKEND_URL}/api/runs/${encodeURIComponent(sessionId)}/loops`,
           { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
         );
         if (!res.ok) return; // 无 Python run 记录（普通对话）等——静默

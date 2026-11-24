@@ -25,7 +25,7 @@ import {
 } from './craft-profit';
 import { getSetting } from './settings';
 import { parseCraftMarkers, type CraftAction, type CraftTag } from '../lib/craft-markers';
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { BACKEND_URL } from '../config/backend-url';
 import { isSingleBackend } from '../config/backend-mode';
 
 /** 团队 setup 写入的 settings key（craft-team-setup.ts 同用）。 */
@@ -247,7 +247,7 @@ async function kbFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), KB_TIMEOUT_MS);
-    const res = await fetch(`${PYTHON_BACKEND_URL}${path}`, {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
       ...init,
       headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
       signal: controller.signal,

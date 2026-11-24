@@ -5,22 +5,22 @@
  *   npm run dev
  *
  * 做四件事:
- *   1. 拉起 Node 网关(:8002) + Vite 前端(:3008)；legacy 模式额外拉 Python(:8000)
+ *   1. 拉起 Node 网关(:8002) + Vite 前端(:3008)。ADR-0001 后无 Python。
  *   2. 就绪探测:所需服务全部 HTTP 可达后才开浏览器(避免落地白屏/报错)
  *   3. 自动打开浏览器 http://localhost:3008
  *   4. Ctrl+C 或任一进程退出 → 整棵进程树一起停,不留孤儿
  *
- * 端口被占用时启动前直接报错退出;Python 解释器自动探测
- * (SF_PYTHON 环境变量 > 根目录 .venv > 系统 python)。
+ * 端口被占用时启动前直接报错退出。
+ * 
  *
- * 可选参数:--no-open 不开浏览器;--no-python 强制不启 Python;--legacy 用旧前端。
+ * 可选参数:--no-open 不开浏览器;--legacy 用旧前端。
  *
  * 单后端为默认（2026-11-21 起）：所有后端端点已迁到 Node，默认只起网关+前端，
- * 不再拉 Python。仅显式 SF_BACKEND_MODE=legacy 才回退双后端（逃生舱）。
+ * 不再拉 Python。2026-11-24 ADR-0001：Python 后端已退役并删除，恒单后端。
  * 未迁移端点返回结构化 BACKEND_GAP 404,
  * 访问 http://localhost:8002/health/backend-gaps 看剩余清单。
  */
-import { spawn, execFile, execFileSync } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -35,19 +35,18 @@ const PY_PORT = 8000;
 
 const args = new Set(process.argv.slice(2));
 
-// --paper：跑新版论文前端（frontend-paper，端口 3008，直接连 8002；
-// 旧前端 3007 保持可用，随时可回退）。--mock 让它用演示数据（不连后端）。
-// 新前端已是默认（--legacy 回旧前端，--mock 用演示数据）
-const PAPER = !args.has('--legacy');
+// 默认跑 frontend/app（merged 版对话工作台，端口 3008，直接连 8002）。
+// --paper 跑 frontend/paper（论文版数据驱动前端，可回退）。
+// --legacy 回旧前端 frontend/legacy（3007）。--mock 搭配 --paper 用演示数据（不连后端）。
+const PAPER = args.has('--paper');
+const LEGACY = args.has('--legacy');
 const PAPER_MOCK = PAPER && args.has('--mock');
-const WEB_PORT = PAPER ? 3008 : 3007;
+const WEB_DIR = LEGACY ? 'frontend/legacy' : PAPER ? 'frontend/paper' : 'frontend/app';
+const WEB_PORT = LEGACY ? 3007 : 3008;
 
 const OPEN_BROWSER = !args.has('--no-open');
-// 与 backend/node/src/config/backend-mode.ts 的 getBackendMode() 对齐：
-// 默认 single（不启 Python），仅显式 SF_BACKEND_MODE=legacy 才回退双后端。
-const SINGLE_BACKEND = (process.env.SF_BACKEND_MODE ?? '').trim().toLowerCase() !== 'legacy';
-// --no-python 可在 legacy 模式下强制关掉 Python。
-const WITH_PYTHON = !args.has('--no-python') && !SINGLE_BACKEND;
+// 单后端（ADR-0001，2026-11-24）：Python 已删除，dev 恒单后端。
+const SINGLE_BACKEND = true;
 
 const C = {
   py: '\x1b[34m', // blue
@@ -63,16 +62,6 @@ const C = {
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// ── Python 解释器探测 ─────────────────────────────────────────────────────────
-function resolvePython() {
-  if (process.env.SF_PYTHON) return process.env.SF_PYTHON;
-  const venvPy = IS_WIN
-    ? path.join(ROOT, '.venv', 'Scripts', 'python.exe')
-    : path.join(ROOT, '.venv', 'bin', 'python');
-  if (fs.existsSync(venvPy)) return venvPy;
-  return 'python';
-}
 
 // ── 端口/HTTP 就绪探测 ────────────────────────────────────────────────────────
 /**
@@ -253,46 +242,18 @@ function openBrowser(url) {
 }
 
 // ── 主流程 ────────────────────────────────────────────────────────────────────
-/**
- * Python 侧是 legacy 服务(FastAPI)，Node 网关才是现在的产品面。
- * 但它的依赖不在 repo 里：新同学 clone 完直接 `npm run dev`，py 进程起不来
- * 就整棵树收摊，前端一行都干不了。所以启动前先探一次——依赖不全就明确告警
- * 后跳过 Python，网关照常起，只有 legacy 路由会 503。
- */
-function pythonUsable(pyBin) {
-  try {
-    execFileSync(pyBin, ['-c', 'import uvicorn, yaml, fastapi'], {
-      stdio: 'ignore',
-      timeout: 20_000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 async function main() {
   const uiUrl = `http://localhost:${WEB_PORT}`;
-  const pyBin = resolvePython();
-  let withPython = WITH_PYTHON;
-  if (withPython && !pythonUsable(pyBin)) {
-    withPython = false;
-    console.log(
-      `${C.yellow}⚠ Python 侧依赖不全，已跳过 legacy FastAPI(:${PY_PORT})${C.reset}\n` +
-        `${C.dim}  解释器: ${pyBin}\n` +
-        `  受影响：legacy 路由会 503，其余功能正常。\n` +
-        `  补齐依赖: ${pyBin} -m pip install -e "./backend/python[server]"\n` +
-        `  显式跳过: npm run dev -- --no-python${C.reset}\n`,
-    );
-  }
 
   console.log(`
 ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.reset}
   ────────────────────────────────────────────
-  ${C.cyan}UI${C.reset}      ${uiUrl}${C.dim}  ${PAPER ? (PAPER_MOCK ? 'frontend-paper · 演示数据' : 'frontend-paper · 接后端') : 'frontend'}${C.reset}
+  ${C.cyan}UI${C.reset}      ${uiUrl}${C.dim}  ${LEGACY ? 'frontend/legacy · legacy' : PAPER ? (PAPER_MOCK ? 'frontend/paper · 演示数据' : 'frontend/paper · 接后端') : 'frontend/app · 接后端'}${C.reset}
   ${C.cyan}网关${C.reset}    http://localhost:${GW_PORT}/health
-  ${C.cyan}模式${C.reset}    ${SINGLE_BACKEND ? `${C.green}单后端（默认，仅 Node）${C.reset}` : `${C.yellow}双后端 legacy（显式回退）${C.reset}`}${SINGLE_BACKEND ? `\n  ${C.dim}剩余缺口: http://localhost:${GW_PORT}/health/backend-gaps${C.reset}` : ''}
-  ${withPython ? `${C.cyan}Python${C.reset}  http://localhost:${PY_PORT}/docs` : `${C.dim}Python  已跳过${C.reset}`}
+  ${C.cyan}模式${C.reset}    ${C.green}单后端（仅 Node）${C.reset}
+  ${C.dim}剩余缺口: http://localhost:${GW_PORT}/health/backend-gaps${C.reset}
+
   ${C.dim}Ctrl+C 停止全部服务${C.reset}
 `);
 
@@ -300,7 +261,6 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
   const need = [
     { port: WEB_PORT, name: 'Vite 前端' },
     { port: GW_PORT, name: 'Node 网关' },
-    ...(withPython ? [{ port: PY_PORT, name: 'Python FastAPI' }] : []),
   ];
   const busy = [];
   for (const n of need) if (await portInUse(n.port)) busy.push(n);
@@ -310,24 +270,13 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
     process.exit(1);
   }
 
-  // 2) 依次拉起三个进程(直连入口,不经过 npm 壳,进程树干净好杀)
-  if (withPython) {
-    launch('py', C.py, pyBin, [
-      '-m', 'uvicorn', 'shadowflow.server:app',
-      '--host', '127.0.0.1', '--port', String(PY_PORT), '--reload',
-      // 监视收窄到 shadowflow/：全树监视会被 .workbuddy/tmp 等杂散 .py 抖动
-      // 反复触发 reload（Windows 上旧 worker 不退 → 新 worker 抢不到 8000
-      // → uvicorn 退出 code=1 → dev.mjs 整树收摊，2026-11-07 连崩两次实证）。
-      '--reload-dir', path.join(ROOT, 'backend', 'python', 'shadowflow'),
-    ], { cwd: path.join(ROOT, 'backend', 'python') });
-    console.log(`${C.dim}  [py] ${pyBin}${C.reset}`);
-  }
+  // 2) 依次拉起进程(直连入口,不经过 npm 壳,进程树干净好杀)
   launch('gw', C.gw, process.execPath, [
     path.join('node_modules', 'tsx', 'dist', 'cli.mjs'),
     'watch', 'src/index.ts',
   ], { cwd: path.join(ROOT, 'backend', 'node') });
   console.log(`${C.dim}  [gw] tsx watch backend/node/src/index.ts${C.reset}`);
-  const webDir = path.join(ROOT, PAPER ? 'frontend-paper' : 'frontend');
+  const webDir = path.join(ROOT, WEB_DIR);
   launch('web', C.web, process.execPath, [
     path.join(webDir, 'node_modules', 'vite', 'bin', 'vite.js'),
   ], {
@@ -337,15 +286,12 @@ ${C.bold}  ShadowFlow Dev${C.reset} ${C.dim}— one command,对标 dsh web${C.re
       ...(PAPER ? { VITE_WS_SOURCE: PAPER_MOCK ? 'mock' : 'http' } : {}),
     },
   });
-  console.log(`${C.dim}  [web] vite (${PAPER ? 'frontend-paper' : 'frontend'})${C.reset}\n`);
+  console.log(`${C.dim}  [web] vite (${WEB_DIR})${C.reset}\n`);
 
   // 3) 就绪探测(任一进程死掉会走 exit handler 直接收摊,这里只会等超时)
   const waiting = [
     waitReady(WEB_PORT, '/', 'Vite 前端').then(() => console.log(`${C.green}✓${C.reset} 前端就绪 :${WEB_PORT}`)),
     waitReady(GW_PORT, '/health', 'Node 网关').then(() => console.log(`${C.green}✓${C.reset} 网关就绪 :${GW_PORT}`)),
-    ...(withPython
-      ? [waitReady(PY_PORT, '/docs', 'Python FastAPI').then(() => console.log(`${C.green}✓${C.reset} Python 就绪 :${PY_PORT}`))]
-      : []),
   ];
   try {
     await Promise.all(waiting);

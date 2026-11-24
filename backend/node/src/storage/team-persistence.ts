@@ -9,7 +9,7 @@
  *
  * 本模块补这一环：组装完成（complete）时，把 roster 经 HTTP 写入 Python 后端
  * （POST /api/agents × N → POST /api/teams），与 groups-chat.ts 直调
- * PYTHON_BACKEND_URL 的既有架构一致。Python 侧 D2 写时校验（team 引用的 agent
+ * BACKEND_URL 的既有架构一致。Python 侧 D2 写时校验（team 引用的 agent
  * 必须存在于 store）由「先建 agent、再建 team」的顺序天然满足。
  *
  * 纪律：所有失败路径只 console.warn + 返回 null —— 落库是组装的附带动作，
@@ -19,7 +19,7 @@
  * 的规则放在 src/ 根（与 assembler.ts / python-backend.ts 同层）。
  */
 
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { BACKEND_URL } from '../config/backend-url';
 
 /** 组装产出的单个 agent 草稿（来自 <sf:node> 事件 / compiled teamConfig / recipe）。 */
 export interface AssembledAgentDraft {
@@ -46,7 +46,7 @@ interface Envelope<T> {
 /** 薄封装：POST Python，非 2xx / 网络错误都归一为 null（调用方兜底）。 */
 async function pyPost<T>(path: string, body: unknown): Promise<T | null> {
   try {
-    const res = await fetch(`${PYTHON_BACKEND_URL}${path}`, {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

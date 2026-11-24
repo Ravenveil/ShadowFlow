@@ -71,7 +71,7 @@ vi.stubGlobal('fetch', vi.fn(async (url: string) => {
   }
   return new Response('{}', { status: 404 });
 }));
-vi.mock('../../python-backend', () => ({ PYTHON_BACKEND_URL: 'http://127.0.0.1:1' }));
+vi.mock('../../python-backend', () => ({ BACKEND_URL: 'http://127.0.0.1:1' }));
 
 // dispatcher：可观测 fake，捕获 system/prompt 原样。
 const turnCalls: Array<{ system: string; prompt: string }> = [];

@@ -121,18 +121,23 @@ check(
 );
 
 // ── C. Python durable → 表 ─────────────────────────────────────────────────
-const pySource = readFileSync(
-  path.join(REPO_ROOT, 'backend', 'python', 'shadowflow', 'runtime', 'run_event_log.py'),
-  'utf-8',
-);
-const durableBlock = pySource.match(/DURABLE_EVENT_TYPES[^=]*=\s*frozenset\(([\s\S]*?)\)/)?.[1] ?? '';
-const durableTypes = [...durableBlock.matchAll(/"([a-z_.]+)"/g)].map((m) => m[1]!);
-const missingDurable = durableTypes.filter((t) => !doc.includes(`\`${t}\``));
-check(
-  `C. Python ${durableTypes.length} 个 DURABLE_EVENT_TYPES 全部出现在命名表`,
-  durableTypes.length > 0 && missingDurable.length === 0,
-  missingDurable.length ? `未登记: ${missingDurable.join(', ')}` : undefined,
-);
+// ADR-0001（2026-11-24）：backend/python 已退役删除 —— Python 对账节降级为
+// skip（与「命名表不在仓库里」同一待遇），不再 hard-crash。
+const pyEventLog = path.join(REPO_ROOT, 'backend', 'python', 'shadowflow', 'runtime', 'run_event_log.py');
+if (existsSync(pyEventLog)) {
+  const pySource = readFileSync(pyEventLog, 'utf-8');
+  const durableBlock = pySource.match(/DURABLE_EVENT_TYPES[^=]*=\s*frozenset\(([\s\S]*?)\)/)?.[1] ?? '';
+  const durableTypes = [...durableBlock.matchAll(/"([a-z_.]+)"/g)].map((m) => m[1]!);
+  const missingDurable = durableTypes.filter((t) => !doc.includes(`\`${t}\``));
+  check(
+    `C. Python ${durableTypes.length} 个 DURABLE_EVENT_TYPES 全部出现在命名表`,
+    durableTypes.length > 0 && missingDurable.length === 0,
+    missingDurable.length ? `未登记: ${missingDurable.join(', ')}` : undefined,
+  );
+} else {
+  skipped += 1;
+  check(`C. Python DURABLE_EVENT_TYPES 对账（backend/python 已退役，跳过）`, true, undefined);
+}
 
 // ── D. message kind → 表 §3 ────────────────────────────────────────────────
 const projector = readFileSync(path.join(SERVER_ROOT, 'src', 'lib', 'timeline-projector.ts'), 'utf-8');

@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-# ShadowFlow Paper Web —— 新版论文工作台（frontend-paper）→ nginx
+# ShadowFlow Paper Web —— 新版论文工作台（frontend/paper）→ nginx
 #
 # 与 Dockerfile.web 的差别只有「构建哪个目录」：
-#   Dockerfile.web    frontend/        （旧前端，Neo 工作台）
-#   Dockerfile.paper  frontend-paper/  （新前端，四栏论文工作台）
+#   Dockerfile.web    frontend/legacy/  （旧前端，Neo 工作台）
+#   Dockerfile.paper  frontend/paper/   （新前端，四栏论文工作台）
 # 运行期完全一样：静态站点 + /api 反代 shadowflow-node:8002（SSE 不缓冲）。
 #
 # 切生产：把 docker-compose.yml 里 shadowflow-web 的 dockerfile 从
@@ -14,16 +14,16 @@ FROM node:20.14.0-alpine AS builder
 
 WORKDIR /app
 
-# frontend-paper 不维护 package-lock（node_modules 在仓库里是指向 frontend 的
-# junction，不能进镜像），所以用 npm install 而非 npm ci。
-COPY frontend-paper/package.json ./frontend-paper/
-RUN cd frontend-paper && npm install --no-audit --no-fund
+# frontend/paper 不维护 package-lock（node_modules 在仓库里是指向 frontend/legacy
+# 的 junction，不能进镜像），所以用 npm install 而非 npm ci。
+COPY frontend/paper/package.json ./frontend/paper/
+RUN cd frontend/paper && npm install --no-audit --no-fund
 
-COPY frontend-paper/tsconfig.json frontend-paper/vite.config.ts frontend-paper/index.html ./frontend-paper/
-COPY frontend-paper/src ./frontend-paper/src
+COPY frontend/paper/tsconfig.json frontend/paper/vite.config.ts frontend/paper/index.html ./frontend/paper/
+COPY frontend/paper/src ./frontend/paper/src
 
 # 直接调 vite：容器里不必跑 tsc（类型与约定由 `npm run check` 在 CI 把关）。
-RUN cd frontend-paper && npx vite build
+RUN cd frontend/paper && npx vite build
 
 
 FROM nginx:1.27.4-alpine AS runtime
@@ -62,7 +62,7 @@ server {
 }
 NGINXCONF
 
-COPY --from=builder /app/frontend-paper/dist /usr/share/nginx/html
+COPY --from=builder /app/frontend/paper/dist /usr/share/nginx/html
 RUN chown -R appuser:appgroup /usr/share/nginx/html /var/cache/nginx /var/log/nginx \
     && (chown appuser:appgroup /var/run 2>/dev/null || true)
 

@@ -75,7 +75,7 @@ vi.stubGlobal('fetch', vi.fn(async (url: string) => {
   }
   return new Response('{}', { status: 404 });
 }));
-vi.mock('../../python-backend', () => ({ PYTHON_BACKEND_URL: 'http://127.0.0.1:1' }));
+vi.mock('../../python-backend', () => ({ BACKEND_URL: 'http://127.0.0.1:1' }));
 
 // dispatcher：可观测 fake，捕获 system/prompt/history 原样；回复带调用序水印
 // （第 2 个 agent 的 history 里应能看到第 1 个 agent 的回复水印）。

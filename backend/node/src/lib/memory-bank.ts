@@ -17,7 +17,7 @@
  * 导出签名不变：coercePackIds / fetchMemoryBankHits / renderKnowledgeBlock /
  * knowledgeBlock —— 调用方（run-sessions、groups-chat）零改动。
  */
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { BACKEND_URL } from '../config/backend-url';
 import { isSingleBackend } from '../config/backend-mode';
 
 export interface MemoryBankHitLite {
@@ -90,7 +90,7 @@ async function httpHits(packId: string, q: string): Promise<MemoryBankHitLite[]>
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(
-      `${PYTHON_BACKEND_URL}/api/memory-bank/packs/${encodeURIComponent(packId)}/query`,
+      `${BACKEND_URL}/api/memory-bank/packs/${encodeURIComponent(packId)}/query`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -20,7 +20,7 @@
 import { CraftProfitError } from './craft-profit';
 import { CRAFT_TEAM_KEY, SECRETARY_AGENT_ID, type CraftTeamRef } from './craft-intake';
 import { getSetting, setSetting } from './settings';
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { BACKEND_URL } from '../config/backend-url';
 
 const PY_TIMEOUT_MS = 8000;
 
@@ -32,7 +32,7 @@ async function pyJson<T>(path: string, init?: RequestInit): Promise<T | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PY_TIMEOUT_MS);
   try {
-    const res = await fetch(`${PYTHON_BACKEND_URL}${path}`, {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
       ...init,
       headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
       signal: controller.signal,

@@ -41,7 +41,7 @@ import { listAgentFileIds, readAgentFile, toAgentWireRecord } from '../../lib/ag
 const router = Router();
 
 const PYTHON_BASE =
-  process.env.PYTHON_BACKEND_URL ?? 'http://localhost:8000';
+  process.env.BACKEND_URL ?? 'http://localhost:8000';
 
 /** Map a yaml template to the AgentRecord shape FE expects (mirrors the
  *  yaml-template branch of the old `listAllAgents` for byte-compatibility). */

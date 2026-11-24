@@ -15,13 +15,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { BACKEND_URL } from '../config/backend-url';
 import {
   persistAssembledTeam,
   tapAssemblyTeamPersistence,
   deriveTeamName,
 } from '../storage/team-persistence';
 
-const PY = 'http://localhost:8000';
+const PY = BACKEND_URL;
 
 interface FetchCall {
   url: string;

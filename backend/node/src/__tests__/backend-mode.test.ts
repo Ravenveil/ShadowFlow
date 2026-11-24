@@ -69,13 +69,13 @@ describe('getBackendMode', () => {
     expect(groupsBackendEnv()).toBe('node');
   });
 
-  it('显式 legacy → 双后端，isSingleBackend false、挂 proxyFallback、沿用既有 SF_GROUPS_BACKEND', () => {
+  it('ADR-0001：恒 single —— 显式 legacy 也不再回退双后端', () => {
     process.env.SF_BACKEND_MODE = 'legacy';
-    expect(getBackendMode()).toBe('legacy');
-    expect(isSingleBackend()).toBe(false);
-    expect(shouldMountProxyFallback()).toBe(true);
+    expect(getBackendMode()).toBe('single');
+    expect(isSingleBackend()).toBe(true);
+    expect(shouldMountProxyFallback()).toBe(false);
     process.env.SF_GROUPS_BACKEND = 'dual';
-    expect(groupsBackendEnv()).toBe('dual');
+    expect(groupsBackendEnv()).toBe('node');
     process.env.SF_GROUPS_BACKEND = 'node';
     expect(groupsBackendEnv()).toBe('node');
   });
@@ -90,10 +90,10 @@ describe('gapPrefix', () => {
 });
 
 describe('installSingleBackendGapHandler', () => {
-  it('legacy 模式不安装', () => {
+  it('ADR-0001：恒安装（不再有 legacy 分支）', () => {
     process.env.SF_BACKEND_MODE = 'legacy';
     const app = express();
-    expect(installSingleBackendGapHandler(app)).toBe(false);
+    expect(installSingleBackendGapHandler(app)).toBe(true);
   });
 
   it('single 模式：native 路由照常、未迁移端点返回 BACKEND_GAP 404 并计数', async () => {

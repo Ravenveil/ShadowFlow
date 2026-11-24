@@ -71,7 +71,7 @@ vi.stubGlobal('fetch', vi.fn(async (url: string) => {
   }
   return new Response('{}', { status: 404 });
 }));
-vi.mock('../../python-backend', () => ({ PYTHON_BACKEND_URL: 'http://127.0.0.1:1' }));
+vi.mock('../../python-backend', () => ({ BACKEND_URL: 'http://127.0.0.1:1' }));
 
 // dispatcher：fake callable 按 streamScript 吐片（标签故意切断在 chunk 边界）。
 type StreamChunk = { type: 'text-delta'; value: string };

@@ -3,38 +3,11 @@
 #   cp .env.example .env && docker compose -f docker/docker-compose.yml up -d
 # to bring up the full MVP.
 #
-# Service map:
-#   shadowflow-api  : Python FastAPI (business logic, agents/teams/wallet)  :8000
-#   shadowflow-node : Node.js Skill Studio (run-sessions/cli/acp + reverse  :8002
-#                     proxy fallback to shadowflow-api for unmatched /api)
+# Service map (2026-11-24 单后端，ADR-0001：Python 服务已退役):
+#   shadowflow-node : Node.js 网关（全部业务域 + run-sessions/cli/acp）:8002
 #   shadowflow-web  : Vite-built static frontend                            :3000
 
 services:
-  shadowflow-api:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.api
-    image: shadowflow/api:dev
-    container_name: shadowflow-api
-    ports:
-      - "8000:8000"
-    env_file:
-      # long-form + required:false（Compose ≥ 2.24）：没有 .env 也能起，
-      # 只是缺省空 key（走前端 BYOK）。避免 "env file ../.env not found" 直接起不来。
-      - path: ../.env
-        required: false
-    environment:
-      PYTHONUNBUFFERED: "1"
-    networks:
-      - shadowflow-net
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/').status==200 else 1)"]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-
   shadowflow-node:
     build:
       context: ../backend/node
@@ -45,11 +18,7 @@ services:
       - "8002:8002"
     environment:
       NODE_ENV: development
-      PYTHON_BACKEND_URL: http://shadowflow-api:8000
       PORT: "8002"
-    depends_on:
-      shadowflow-api:
-        condition: service_healthy
     volumes:
       - ../backend/node:/app
       - /app/node_modules            # prevent host node_modules from clobbering image-installed deps
@@ -75,8 +44,6 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      shadowflow-api:
-        condition: service_healthy
       shadowflow-node:
         condition: service_healthy
     networks:

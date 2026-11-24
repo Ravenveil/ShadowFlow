@@ -4,7 +4,7 @@
  * 背景
  * ----
  * groups-chat.ts 的回复网关需要读/写群消息做持久化。1b 之前它直连 Python
- * （pyGet/pyPostMessage → PYTHON_BACKEND_URL）。现在引入一层「群后端」抽象，
+ * （pyGet/pyPostMessage → BACKEND_URL）。现在引入一层「群后端」抽象，
  * 让网关只依赖三个方法（getGroup / appendMessage / listMessages），由开关
  * `SF_GROUPS_BACKEND` 决定走 Python(HTTP) 还是 Node(直调 groups-store)。
  *
@@ -22,7 +22,7 @@
  * 所以 groups-chat.ts 的 GroupRecord/ChatMessageItem 解构无需区分后端。
  */
 
-import { PYTHON_BACKEND_URL } from '../python-backend';
+import { BACKEND_URL } from '../config/backend-url';
 import { groupsBackendEnv } from '../config/backend-mode';
 import * as store from './groups-store';
 
@@ -76,7 +76,7 @@ const pythonBackend: GroupsBackend = {
   async getGroup(groupId) {
     try {
       const res = await fetch(
-        `${PYTHON_BACKEND_URL}/api/groups/${encodeURIComponent(groupId)}`,
+        `${BACKEND_URL}/api/groups/${encodeURIComponent(groupId)}`,
       );
       if (!res.ok) return null;
       const json = (await res.json()) as { data?: BackendGroup } | BackendGroup;
@@ -90,7 +90,7 @@ const pythonBackend: GroupsBackend = {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (opts.noDispatch) headers['X-SF-No-Dispatch'] = '1';
     const res = await fetch(
-      `${PYTHON_BACKEND_URL}/api/groups/${encodeURIComponent(groupId)}/messages`,
+      `${BACKEND_URL}/api/groups/${encodeURIComponent(groupId)}/messages`,
       { method: 'POST', headers, body: JSON.stringify(body) },
     );
     if (!res.ok) {

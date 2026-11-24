@@ -53,17 +53,15 @@ function withCatchAll(app: Express): Express {
 }
 
 describe('installRootGapHandler', () => {
-  it('legacy 模式不安装：裸路径仍落普通 404，不计 gap', async () => {
-    // 默认模式已切 single，legacy 必须显式声明（见 backend-mode.ts）
+  it('ADR-0001：恒安装（不再有 legacy 分支）——显式设 legacy 也照样装', async () => {
     process.env.SF_BACKEND_MODE = 'legacy';
     const app = express();
-    expect(installRootGapHandler(app)).toBe(false);
+    expect(installRootGapHandler(app)).toBe(true);
     withCatchAll(app);
 
     const res = await request(app).get('/workflow/runs/x/graph');
     expect(res.status).toBe(404);
-    expect(res.body).toEqual({ error: 'Not found' });
-    expect(getGapSnapshot()).toHaveLength(0);
+    expect(res.body.error.code).toBe('BACKEND_GAP');
   });
 
   it('默认（未设 env）现为 single：根级 handler 默认安装', async () => {
@@ -84,7 +82,7 @@ describe('installRootGapHandler', () => {
     expect(gap.body.error.code).toBe('BACKEND_GAP');
     expect(gap.body.error.prefix).toBe('/workflow');
     expect(gap.body.error.message).toContain('GET /workflow/runs/x/graph');
-    expect(gap.body.error.hint).toContain('SF_BACKEND_MODE=legacy');
+    expect(gap.body.error.hint).toContain('ADR-0001');
     expect(gap.body.error).toHaveProperty('prefix');
 
     // 同前缀聚合 + 另一前缀独立计数
