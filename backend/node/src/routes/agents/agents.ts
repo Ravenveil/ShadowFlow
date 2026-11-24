@@ -1,33 +1,19 @@
 /**
- * agents.ts — thin forwarder to Python FastAPI (port 8000) + local yaml merge.
+ * agents.ts — /api/agents（单后端：本地 `.shadowflow/agents/*.json` 真源 + yaml 模板）。
  *
- * 2026-05-28 split-brain fix (see memory/bug_quick_hire_dangling_agent.md).
+ * 历史：双后端时代本路由把 POST/DELETE 转发 Python（split-brain 修复，见
+ * git log），GET 合并 Python 列表 + yaml 模板。ADR-0001（2026-11-24）后
+ * Python 删除，全部读写走本地：
+ *   - 真源 = `.shadowflow/agents/<id>.json`（Catalog fork / POST / PATCH 落点，
+ *     与原 Python store 同目录同格式，经 lib/agent-store 读写）
+ *   - 设计模板 = `.shadowflow/agents/<语义 id>.agent.yaml`（只读展示 + overrides
+ *     sidecar 承载头像 / Claw 绑定，见 lib/agent-overrides）
  *
- * Background: Node used to own /api/agents POST/GET/DELETE on its own sqlite
- * store (`storage/agents.ts`, randomUUID() ids). But /api/teams falls through
- * to Python (this router only owns DAG sub-paths), so every team got created
- * on Python with `agent_ids` pointing at Node-only UUIDs that Python had never
- * heard of. Result: every "帮我创建一个开发工程师" team had a dangling
- * agent_id, the chat group thought it had a member but the member did not
- * exist in the team store's universe.
- *
- * Fix: agents move to Python (single source of truth, matches the
- * CLAUDE.md dual-backend rule that Python owns teams/groups/inbox). Node's
- * /api/agents POST + DELETE now forward to Python. GET still merges Python's
- * agent list with local `.shadowflow/agents/*.agent.yaml` templates so the
- * existing "agents + design-time soul templates" UI keeps working without a
- * Python-side schema change.
- *
- * The legacy sqlite store (storage/agents.ts) is now dormant but kept in
- * place — internal callers / tests still import it, and zero rows is a safe
- * state. A follow-up sweep can remove it once nothing else reads it.
- *
- * Frontend client: src/api/agents.ts
- *   - All success responses wrap payload in { data, meta } (Envelope<T>).
- *   - DELETE returns 204 with no body.
+ * 前端 client：src/api/agents.ts —— 成功响应包 { data, meta } 信封；DELETE 204 无 body。
  */
 
 import { Router, Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { listAgents as listYamlAgents, deleteAgent as deleteYamlAgent } from '../../lib/agent-yaml';
 import {
   applyAgentOverrides,
@@ -36,12 +22,16 @@ import {
   type AgentOverrideField,
 } from '../../lib/agent-overrides';
 import type { AgentRecord } from '../../storage/agents';
-import { listAgentFileIds, readAgentFile, toAgentWireRecord } from '../../lib/agent-store';
+import {
+  type LocalAgentRecord,
+  listAgentFileIds,
+  readAgentFile,
+  writeAgentFile,
+  deleteAgentFile,
+  toAgentWireRecord,
+} from '../../lib/agent-store';
 
 const router = Router();
-
-const PYTHON_BASE =
-  process.env.BACKEND_URL ?? 'http://localhost:8000';
 
 /** Map a yaml template to the AgentRecord shape FE expects (mirrors the
  *  yaml-template branch of the old `listAllAgents` for byte-compatibility). */
@@ -75,107 +65,40 @@ function yamlToRecordWithOverrides(workspaceId: string | undefined): AgentRecord
   );
 }
 
-/** Forward arbitrary body to Python, return its raw response. */
-async function forwardJson(
-  method: 'POST' | 'DELETE',
-  pathSuffix: string,
-  body: unknown,
-): Promise<{ status: number; payload: unknown }> {
-  const url = `${PYTHON_BASE}/api/agents${pathSuffix}`;
-  const init: RequestInit = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  };
-  if (body !== undefined && method !== 'DELETE') {
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(url, init);
-  const text = await res.text();
-  let payload: unknown = text;
-  if (text.length > 0) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      // not JSON — bubble up raw text under a synthetic error envelope
-      payload = { error: { code: 'PYTHON_NON_JSON', message: text } };
-    }
-  }
-  return { status: res.status, payload };
+/** 本地 JSON agent 库（Catalog fork / POST 产物；单后端下唯一真源）。 */
+function localJsonAgents(workspaceId: string | undefined): AgentRecord[] {
+  return listAgentFileIds()
+    .map((id) => readAgentFile(id))
+    .filter((a): a is NonNullable<typeof a> => !!a)
+    .filter((a) => !workspaceId || !a['workspace_id'] || a['workspace_id'] === workspaceId)
+    .map((a) => toAgentWireRecord(a) as unknown as AgentRecord);
 }
 
-// ─── GET /api/agents — Python agents + local yaml templates merged ──────────
+// ─── GET /api/agents — 本地 JSON + yaml 模板合并 ─────────────────────────────
 router.get('/', async (req: Request, res: Response) => {
   const workspaceId =
     typeof req.query.workspace_id === 'string'
       ? req.query.workspace_id
       : undefined;
-  // ?source=sqlite is the legacy "no yaml merge" flag — now means
-  // "Python-only, skip yaml templates".
+  // ?source=sqlite 是旧「不合并 yaml」标记 —— 现在语义为「只看真源，跳过模板」。
   const noYamlMerge = req.query.source === 'sqlite';
 
-  // Python agents (real, persisted)
-  let pythonAgents: AgentRecord[] = [];
-  try {
-    const qs = workspaceId
-      ? `?workspace_id=${encodeURIComponent(workspaceId)}`
-      : '';
-    const pyRes = await fetch(`${PYTHON_BASE}/api/agents${qs}`);
-    if (pyRes.ok) {
-      const env = (await pyRes.json()) as { data?: AgentRecord[] };
-      pythonAgents = Array.isArray(env.data) ? env.data : [];
-    } else {
-      // Python down or unhappy — return what we can (yaml-only) but log.
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[agents-route] Python /api/agents returned ${pyRes.status}; falling back to yaml-only`,
-      );
-    }
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      '[agents-route] Python /api/agents fetch failed; falling back to yaml-only:',
-      err,
-    );
-  }
-
+  const merged = localJsonAgents(workspaceId);
   if (noYamlMerge) {
-    res.json({ data: pythonAgents, meta: {} });
+    res.json({ data: merged, meta: {} });
     return;
   }
 
-  // 本地 JSON agent 库（Catalog fork 产物，与 Python store 同目录同格式）：
-  // 单后端不启 Python 时这是唯一真源，不合并的话 fork 出来的 9 个 ARC agent
-  // 在建群选人列表里看不到。
-  const localJsonAgents = listAgentFileIds()
-    .map((id) => readAgentFile(id))
-    .filter((a): a is NonNullable<typeof a> => !!a)
-    .filter((a) => !workspaceId || !a['workspace_id'] || a['workspace_id'] === workspaceId)
-    .map((a) => toAgentWireRecord(a) as unknown as AgentRecord);
-
-  const seen = new Set(pythonAgents.map((a) => a.agent_id));
-  const merged = [...pythonAgents];
-  for (const a of localJsonAgents) {
-    if (!seen.has(a.agent_id)) {
-      seen.add(a.agent_id);
-      merged.push(a);
-    }
-  }
-
-  // Merge with local yaml templates. Python wins on id collision (defensive —
-  // in practice they don't collide: Python uses `agent-*`, yaml uses semantic
-  // names like "reader", "pm").
+  // 合并 yaml 模板（语义 id：reader / pm / dev…；与 JSON id 不碰撞）。
+  const seen = new Set(merged.map((a) => a.agent_id));
   const yamlAgents = yamlToRecordWithOverrides(workspaceId).filter(
     (a) => !seen.has(a.agent_id),
   );
   res.json({ data: [...merged, ...yamlAgents], meta: {} });
 });
 
-// ─── GET /api/agents/:id — Python first, fall back to local yaml template ───
-// 2026-10-31 — 此前缺这个路由：单个 GET 落到 proxyFallback 直打 Python，
-// Python 只认 .shadowflow/agents/*.json（agent-*），Node 侧合并进列表的
-// .agent.yaml 模板（dev/arch/writer 等语义 id）全部 404 —— 右栏「灵魂」tab
-// 打开即 Agent API error 404。现对齐 GET '/' 的合并语义：Python 命中返回；
-// 404/网络失败 → 查 yaml 模板；都没有 → 404。
+// ─── GET /api/agents/:id — 本地 JSON → yaml 模板 → 404 ──────────────────────
+// 2026-10-31 起补单条 GET：右栏「灵魂」tab 直打 /:id；合并语义与 GET '/' 一致。
 router.get('/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   const workspaceId =
@@ -187,34 +110,14 @@ router.get('/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  // 本地 JSON agent 库优先（Catalog fork 产物；单后端下 Python 不在，
-  // 这里是唯一真源）。命中即返回，避免 DAG/右栏灵魂 tab 掉 404。
+  // 本地 JSON 优先（真源；DAG / 灵魂 tab 都从这里读）。
   const localRec = readAgentFile(id);
   if (localRec) {
     res.json({ data: toAgentWireRecord(localRec), meta: {} });
     return;
   }
 
-  // Python first（真实持久化 agent-*）
-  try {
-    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
-    const pyRes = await fetch(`${PYTHON_BASE}/api/agents/${encodeURIComponent(id)}${qs}`);
-    if (pyRes.ok) {
-      res.status(pyRes.status).json(await pyRes.json());
-      return;
-    }
-    if (pyRes.status !== 404 && pyRes.status !== 400) {
-      // 非「不存在」类错误也回落 yaml（列表语义如此，保持一致）
-      // eslint-disable-next-line no-console
-      console.warn(`[agents-route] Python GET /:id returned ${pyRes.status}; falling back to yaml`);
-    }
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[agents-route] Python GET /:id failed; falling back to yaml:', err);
-  }
-
-  // yaml 模板回落（语义 id：dev / arch / writer / pm …）；overrides（头像等
-  // 运行时字段）一并贴回，保证 GET /:id 与列表语义一致。
+  // yaml 模板回落（语义 id）；overrides（头像等运行时字段）一并贴回。
   const tpl = yamlToRecordWithOverrides(workspaceId).find((a) => a.agent_id === id);
   if (tpl) {
     res.json({ data: tpl, meta: {} });
@@ -223,71 +126,60 @@ router.get('/:id', async (req: Request, res: Response) => {
   res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });
 });
 
-// ─── POST /api/agents — forward to Python ───────────────────────────────────
+// ─── POST /api/agents — 落本地 JSON ──────────────────────────────────────────
 router.post('/', async (req: Request, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : '';
+  if (!name) {
+    res.status(400).json({ error: { code: 'INVALID_AGENT', message: 'name is required' } });
+    return;
+  }
+  const agentId =
+    typeof body.agent_id === 'string' && body.agent_id.trim()
+      ? body.agent_id.trim()
+      : `agent-${randomUUID()}`;
+  const record: Record<string, unknown> = {
+    ...body,
+    agent_id: agentId,
+    name,
+    status: typeof body.status === 'string' ? body.status : 'idle',
+    created_at: typeof body.created_at === 'string' ? body.created_at : new Date().toISOString(),
+  };
   try {
-    const { status, payload } = await forwardJson('POST', '', req.body);
-    res.status(status).json(payload);
+    writeAgentFile(record);
   } catch (err) {
-    res.status(502).json({
+    res.status(400).json({
       error: {
-        code: 'PYTHON_UNREACHABLE',
-        message: `Cannot reach Python at ${PYTHON_BASE}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        code: 'INVALID_AGENT',
+        message: err instanceof Error ? err.message : String(err),
       },
     });
+    return;
   }
+  res.status(201).json({ data: toAgentWireRecord(record as unknown as LocalAgentRecord), meta: {} });
 });
 
-// ─── DELETE /api/agents/:id — Python first, fall back to local yaml ──────────
-// Real Python agents (`agent-*`) delete via Python. Local yaml soul-templates
-// (semantic ids like "reader"/"arch" surfaced by the GET merge) aren't in
-// Python → it 404s → we delete their .shadowflow/agents/<id>.agent.yaml file
-// instead, so the talent pool's delete works for both kinds.
+// ─── DELETE /api/agents/:id — 本地 JSON → yaml 模板 → 404 ────────────────────
+// 真源 agent（JSON）删文件；yaml 灵魂模板（语义 id）删 .agent.yaml 文件
+// （deleteYamlAgent），人才池的删除对两种来源都生效。
 router.delete('/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
-  try {
-    const { status, payload } = await forwardJson(
-      'DELETE',
-      `/${encodeURIComponent(id)}`,
-      undefined,
-    );
-    if (status === 204 || status === 200) {
-      res.status(204).send();
-      return;
-    }
-    // Not a Python agent — try the local yaml template.
-    if (status === 404 && deleteYamlAgent(id)) {
-      res.status(204).send();
-      return;
-    }
-    res.status(status).json(payload);
-  } catch (err) {
-    // Python unreachable — a yaml-template delete can still succeed locally.
-    if (deleteYamlAgent(id)) {
-      res.status(204).send();
-      return;
-    }
-    res.status(502).json({
-      error: {
-        code: 'PYTHON_UNREACHABLE',
-        message: `Cannot reach Python at ${PYTHON_BASE}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      },
-    });
+  if (deleteAgentFile(id)) {
+    res.status(204).send();
+    return;
   }
+  if (deleteYamlAgent(id)) {
+    res.status(204).send();
+    return;
+  }
+  res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });
 });
 
-// ─── PATCH /api/agents/:id — Python first, fall back to yaml overrides ──────
-// 2026-11-04 — 此前缺 PATCH：保存头像 / Claw 绑定（灵魂页「保存头像」钮）落到
-// proxyFallback 直打 Python，Python 只认 agent-*.json，语义 id（pm / dev /
-// reader…）一律 404 AGENT_NOT_FOUND → 前端红条 Agent API error 404。GET 有
-// yaml 回退而 PATCH 没有，属合并语义缺口。现对齐：Python 命中转发；404/不可达
-// → 该 id 是 yaml 模板时，把白名单字段（Claw 绑定 / 头像）写 sidecar
-// <id>.overrides.json（GET 合并时贴回）。设计时字段（name/soul/skills/tools）
-// 不进 sidecar —— yaml 模板本体仍由模板文件/re-seed 管理。
+// ─── PATCH /api/agents/:id — JSON 真源浅合并 / yaml 模板走 overrides sidecar ─
+// 2026-11-04 — 补 PATCH：保存头像 / Claw 绑定（灵魂页「保存头像」钮）。
+// 语义 id（pm / dev / reader…）是 yaml 模板本体：设计时字段（name/soul/skills/
+// tools）只读，展示层白名单字段写 <id>.overrides.json sidecar（GET 合并贴回）。
+// JSON 真源 agent：浅合并整个 body 后写回（它就是本仓自己的存储）。
 interface AgentPatchBody {
   name?: unknown;
   soul?: unknown;
@@ -312,28 +204,27 @@ router.patch('/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   const body = (req.body ?? {}) as AgentPatchBody;
 
-  // Python first（真实持久化 agent-*：PATCH 语义全字段走 Python 原端点）
-  try {
-    const pyRes = await fetch(`${PYTHON_BASE}/api/agents/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (pyRes.ok) {
-      res.status(pyRes.status).json(await pyRes.json());
+  // JSON 真源 agent：浅合并写回。
+  const rec = readAgentFile(id);
+  if (rec) {
+    const merged: Record<string, unknown> = {
+      ...(rec as unknown as Record<string, unknown>),
+      ...(body as Record<string, unknown>),
+      agent_id: id,
+    };
+    try {
+      writeAgentFile(merged);
+    } catch (err) {
+      res.status(400).json({
+        error: { code: 'INVALID_AGENT', message: err instanceof Error ? err.message : String(err) },
+      });
       return;
     }
-    if (pyRes.status !== 404 && pyRes.status !== 400) {
-      // 非「不存在」类错误原样透传（保持 Python 错误语义，不吞）
-      res.status(pyRes.status).json(await pyRes.json().catch(() => ({ error: { code: 'PYTHON_ERROR', message: `Python PATCH returned ${pyRes.status}` } })));
-      return;
-    }
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[agents-route] Python PATCH /:id failed; falling back to yaml overrides:', err);
+    res.json({ data: toAgentWireRecord(merged as unknown as LocalAgentRecord), meta: {} });
+    return;
   }
 
-  // yaml 模板回落：仅白名单展示层字段可覆盖；name/soul 等设计时字段明确拒绝
+  // yaml 模板回落：仅白名单展示层字段可覆盖；name/soul 等设计时字段明确拒绝。
   const isYamlTemplate = listYamlAgents().agents.some((a) => a.id === id);
   if (!isYamlTemplate) {
     res.status(404).json({ error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } });

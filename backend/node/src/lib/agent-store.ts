@@ -88,6 +88,33 @@ export function agentsDirExists(): boolean {
   return fs.existsSync(repoDataFile('agents'));
 }
 
+/** 校验 agent id：只许安全文件名字符（防路径穿越）。 */
+function assertSafeAgentId(id: string): void {
+  if (!id || /[\\/]/.test(id) || id.includes('..')) {
+    throw new Error(`invalid agent_id: ${JSON.stringify(id)}`);
+  }
+}
+
+/** 原子写一条本地 agent 记录（POST/PATCH /api/agents 的持久化终点）。 */
+export function writeAgentFile(record: Record<string, unknown>): void {
+  const id = String(record.agent_id ?? '');
+  assertSafeAgentId(id);
+  const file = repoDataFile('agents', `${id}.json`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(record, null, 2), 'utf-8');
+  fs.renameSync(tmp, file);
+}
+
+/** 删除本地 agent JSON；文件不存在返回 false（yaml 模板删除走 agent-yaml）。 */
+export function deleteAgentFile(agentId: string): boolean {
+  assertSafeAgentId(agentId);
+  const file = repoDataFile('agents', `${agentId}.json`);
+  if (!fs.existsSync(file)) return false;
+  fs.unlinkSync(file);
+  return true;
+}
+
 /** 转成 /api/agents 的 wire 记录形状（缺失字段补安全默认）。 */
 export function toAgentWireRecord(rec: LocalAgentRecord): Record<string, unknown> {
   return {
