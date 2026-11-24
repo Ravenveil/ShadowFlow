@@ -5,20 +5,16 @@
  * 检索命中，渲染成「知识库参考」文本块，与经验记忆块并列注入 skill 层尾部，
  * 让 Agent 回答真正引用知识库内容。
  *
- * 单后端迁移（2026-11-18）：不再硬编码 Python URL。分流规则（team-lead 裁决）：
- *   - SF_BACKEND_MODE=single 或 SF_MEMORY_BANK_MODE=node → 直调本地 Node 实现
- *     （backend/node/src/memory-bank/service.ts），零网络；
- *   - SF_MEMORY_BANK_MODE=python → 维持原 HTTP 到 Python sidecar；
- *   - 默认 auto → 先本地，本地抛错时回退 HTTP（Python 未起则按 fail-soft 跳包）。
+ * 单后端（ADR-0001，2026-11-24）：只有一条路径 —— 直调本地 Node 实现
+ * （backend/node/src/memory-bank/service.ts），零网络。SF_MEMORY_BANK_MODE
+ * 环境变量作废；原 python/auto HTTP 回退已删。
  *
- * fail-soft 契约（与经验记忆块一致，保持不变）：本地异常 / Python 未起 / 超时 /
- * 单包失败 → 跳过该包；全军覆没或零命中 → 返回 ''，绝不阻塞 run。
+ * fail-soft 契约（与经验记忆块一致，保持不变）：本地异常 / 单包失败 →
+ * 跳过该包；全军覆没或零命中 → 返回 ''，绝不阻塞 run。
  *
  * 导出签名不变：coercePackIds / fetchMemoryBankHits / renderKnowledgeBlock /
  * knowledgeBlock —— 调用方（run-sessions、groups-chat）零改动。
  */
-import { BACKEND_URL } from '../config/backend-url';
-import { isSingleBackend } from '../config/backend-mode';
 
 export interface MemoryBankHitLite {
   text: string;
@@ -28,30 +24,12 @@ export interface MemoryBankHitLite {
 
 /** 每包命中条数（对话场景 4 条够用，控上下文长度）。 */
 const TOP_K = 4;
-/** 单包 HTTP 检索超时（毫秒）。仅 python/auto 回退路径使用；本地路径同步无需超时。 */
-const TIMEOUT_MS = 4000;
 /** pack id 数量上限（防御：别让一个 payload 拖一串请求）。 */
 const MAX_PACKS = 8;
 /** 单条命中文本截断（字符）。 */
 const HIT_TEXT_CAP = 400;
 /** 整块渲染上限（字符），超限丢尾部命中。 */
 const BLOCK_CAP = 4000;
-
-type DispatchMode = 'node' | 'python' | 'auto';
-
-function dispatchMode(): DispatchMode {
-  const raw = (process.env.SF_MEMORY_BANK_MODE ?? '').trim().toLowerCase();
-  if (raw === 'node' || raw === 'python' || raw === 'auto') return raw;
-  return 'auto';
-}
-
-/** auto/local 语义：本地优先（本地 fail 时回退 HTTP；node 模式不回退）。 */
-function prefersLocal(): boolean {
-  const mode = dispatchMode();
-  if (mode === 'node') return true;
-  if (mode === 'python') return false;
-  return true; // auto
-}
 
 /** 请求体/会话字段里的 pack id 数组 → 干净的 id 列表（非法项丢弃）。 */
 export function coercePackIds(raw: unknown): string[] {
@@ -67,7 +45,7 @@ export function coercePackIds(raw: unknown): string[] {
   return out;
 }
 
-/** 本地实现检索单包。异常抛给上层分流回退。 */
+/** 本地实现检索单包。异常抛给上层 fail-soft。 */
 async function localHits(packId: string, q: string): Promise<MemoryBankHitLite[]> {
   // 动态 import：避免冷启动加载整条解析/检索链
   const { query } = await import('../memory-bank/service');
@@ -84,56 +62,12 @@ async function localHits(packId: string, q: string): Promise<MemoryBankHitLite[]
   return hits;
 }
 
-/** HTTP Python 检索单包（原实现保留，作为 python/auto 回退路径）。 */
-async function httpHits(packId: string, q: string): Promise<MemoryBankHitLite[]> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/api/memory-bank/packs/${encodeURIComponent(packId)}/query`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, top_k: TOP_K }),
-        signal: controller.signal,
-      },
-    );
-    if (!res.ok) return [];
-    const body = (await res.json()) as {
-      data?: { hits?: Array<{ text?: unknown; source?: unknown; score?: unknown }> };
-    };
-    const hits: MemoryBankHitLite[] = [];
-    for (const h of body.data?.hits ?? []) {
-      if (typeof h.text !== 'string' || !h.text.trim()) continue;
-      hits.push({
-        text: h.text.trim(),
-        source: typeof h.source === 'string' && h.source ? h.source : packId,
-        score: typeof h.score === 'number' ? h.score : 0,
-      });
-    }
-    return hits;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** 单包检索：分流核心。single 强制本地不回退；auto 本地失败回退 HTTP。 */
+/** 单包检索：本地实现，fail-soft 跳包（ADR-0001：无 HTTP 回退）。 */
 async function hitsForPack(packId: string, q: string): Promise<MemoryBankHitLite[]> {
-  const mode = dispatchMode();
-  const forcedPython = mode === 'python';
-  const single = isSingleBackend();
-  if (!forcedPython) {
-    try {
-      return await localHits(packId, q);
-    } catch {
-      if (mode === 'node' || single) return []; // 无 HTTP 可回退 → fail-soft 跳包
-      // auto：继续尝试 HTTP
-    }
-  }
   try {
-    return await httpHits(packId, q);
+    return await localHits(packId, q);
   } catch {
-    return [];
+    return []; // 本地异常 → 跳包，绝不阻塞 run
   }
 }
 
@@ -191,6 +125,3 @@ export async function knowledgeBlock(
     return '';
   }
 }
-
-/** auto 语义常量：本地优先。保留 prefersLocal 供测试断言分流逻辑。 */
-export const _prefersLocal = prefersLocal;

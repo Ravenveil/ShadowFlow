@@ -1,13 +1,18 @@
 /**
  * memory-bank.test.ts — 记忆库检索辅助模块契约（对话框知识库接线）。
  *
- * stubGlobal fetch 测：
+ * ADR-0001（2026-11-24）后只有一条本地路径（直调 memory-bank/service，
+ * 零网络）。用临时 SHADOWFLOW_DATA_DIR 建真实 pack 验证：
  *   - coercePackIds：清洗 / 去重 / 上限 8 / 非法项丢弃
- *   - fetchMemoryBankHits：多包聚合、score 降序、单包失败跳过、坏命中清洗
+ *   - fetchMemoryBankHits：多包聚合、score 降序、幽灵包 fail-soft、零 HTTP
  *   - renderKnowledgeBlock：来源标注、单条截断、整块截断、零命中 ''
- *   - knowledgeBlock：fail-soft（全挂返回 ''，绝不抛）
+ *   - knowledgeBlock：fail-soft（异常返回 ''，绝不抛）
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { randomBytes } from 'crypto';
 import {
   coercePackIds,
   fetchMemoryBankHits,
@@ -15,36 +20,41 @@ import {
   knowledgeBlock,
 } from '../lib/memory-bank';
 
-// 这些用例通过 stubGlobal('fetch') 检验 lib/memory-bank 对 HTTP 响应的聚合 /
-// 清洗 / fail-soft 契约，必须强制走 HTTP 回退路径，与全局默认后端模式解耦：
-// 默认 single 时 isSingleBackend()=true，auto 模式本地失败后不再回退 HTTP，
-// 会导致 fetchMock 不被调用。显式 python 模式直连 HTTP，与实现分流无关。
-const ORIGINAL_ENV = {
-  SF_MEMORY_BANK_MODE: process.env.SF_MEMORY_BANK_MODE,
-  SF_BACKEND_MODE: process.env.SF_BACKEND_MODE,
-} as const;
+let tmpDir = '';
+const prevDataDir = process.env.SHADOWFLOW_DATA_DIR;
+let packLow = '';
+let packHigh = '';
+let packGhost = '';
 
-function restoreEnv() {
-  for (const key of ['SF_MEMORY_BANK_MODE', 'SF_BACKEND_MODE'] as const) {
-    const value = ORIGINAL_ENV[key];
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+beforeAll(async () => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mb-lib-'));
+  process.env.SHADOWFLOW_DATA_DIR = tmpDir;
+  const service = await import('../memory-bank/service');
+  // 两包造分差：高频重复关键词的包得分更高（检索按词频相关度打分）。
+  packHigh = randomBytes(16).toString('hex');
+  service.createPack('高分包', '', {}, packHigh);
+  service.ingestTextTyped(
+    packHigh,
+    '氢能 氢能 氢能：氢能是零碳能源载体，氢能产业集群正在成型。',
+    { source_name: 'b.md' },
+  );
+  packLow = randomBytes(16).toString('hex');
+  service.createPack('低分包', '', {}, packLow);
+  service.ingestTextTyped(packLow, '氢能有一点相关：顺带提了一句别的。', {
+    source_name: 'a.md',
+  });
+  packGhost = randomBytes(16).toString('hex');
+});
+
+afterAll(() => {
+  if (prevDataDir === undefined) delete process.env.SHADOWFLOW_DATA_DIR;
+  else process.env.SHADOWFLOW_DATA_DIR = prevDataDir;
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
   }
-}
-
-beforeEach(() => {
-  process.env.SF_MEMORY_BANK_MODE = 'python';
 });
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-  restoreEnv();
-});
-
-function okJson(body: unknown) {
-  return { ok: true, status: 200, json: async () => body } as Response;
-}
 
 describe('coercePackIds', () => {
   it('returns [] for non-array input', () => {
@@ -67,80 +77,39 @@ describe('coercePackIds', () => {
 });
 
 describe('fetchMemoryBankHits', () => {
-  it('returns [] without packs or with blank query', async () => {
+  it('returns [] without packs or with blank query — 零网络', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     expect(await fetchMemoryBankHits([], 'q')).toEqual([]);
-    expect(await fetchMemoryBankHits(['p1'], '   ')).toEqual([]);
+    expect(await fetchMemoryBankHits([packHigh], '   ')).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
-  it('queries each pack with top_k=4 and aggregates hits by score desc', async () => {
-    const fetchMock = vi.fn(async (url: unknown, init?: { body?: unknown }) => {
-      const u = String(url);
-      if (u.includes('/packs/p1/query')) {
-        return okJson({
-          data: { hits: [{ text: '低分命中', source: 'a.md', score: 0.3 }] },
-        });
-      }
-      return okJson({
-        data: { hits: [{ text: '高分命中', source: 'b.md', score: 0.9 }] },
-      });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const hits = await fetchMemoryBankHits(['p1', 'p2'], '氢能');
-    expect(hits.map((h) => h.text)).toEqual(['高分命中', '低分命中']);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
-    expect(body).toEqual({ query: '氢能', top_k: 4 });
+  it('queries both packs and aggregates hits by score desc', async () => {
+    const hits = await fetchMemoryBankHits([packLow, packHigh], '氢能');
+    // 两包各贡献一条；聚合后按 score 降序（分值细节是 service 的黑盒）
+    expect(hits.map((h) => h.source).sort()).toEqual(['a.md', 'b.md']);
+    for (let i = 1; i < hits.length; i += 1) {
+      expect(hits[i - 1].score).toBeGreaterThanOrEqual(hits[i].score);
+    }
   });
 
-  it('skips failing pack but keeps others (fail-soft)', async () => {
-    const fetchMock = vi.fn(async (url: unknown) => {
-      const u = String(url);
-      if (u.includes('/packs/bad/query')) return { ok: false, status: 500, json: async () => ({}) } as Response;
-      if (u.includes('/packs/boom/query')) throw new Error('ECONNREFUSED');
-      return okJson({ data: { hits: [{ text: '幸存命中', source: 's', score: 1 }] } });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const hits = await fetchMemoryBankHits(['bad', 'boom', 'good'], 'q');
-    expect(hits).toEqual([{ text: '幸存命中', source: 's', score: 1 }]);
+  it('skips ghost pack but keeps real one (fail-soft)', async () => {
+    const hits = await fetchMemoryBankHits([packGhost, packHigh], '氢能');
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.every((h) => h.source === 'b.md')).toBe(true);
   });
 
-  it('cleans malformed hits: drops empty text, falls back source to packId', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        okJson({
-          data: {
-            hits: [
-              { text: '   ', source: 's', score: 1 },
-              { source: 'only-source.md', score: 1 },
-              { text: 42, source: 's', score: 1 },
-              { text: ' 有效 ', source: '', score: 'NaN-ish' },
-            ],
-          },
-        }),
-      ),
-    );
-
-    const hits = await fetchMemoryBankHits(['pk'], 'q');
-    expect(hits).toEqual([{ text: '有效', source: 'pk', score: 0 }]);
-  });
-
-  it('defaults to single: never falls back to HTTP even when local lookup fails', async () => {
-    // 固化「默认 single 不回退 HTTP」契约：auto + single 下本地失败即 fail-soft，
-    // 绝不发 HTTP 请求（防止未来改动再次引入隐式回退）。
-    process.env.SF_BACKEND_MODE = 'single';
-    process.env.SF_MEMORY_BANK_MODE = 'auto';
+  it('single path: 绝不发 HTTP（stub 后本地照常命中）', async () => {
+    // 固化 ADR-0001 契约：检索只走本地实现，任何情况下不发网络请求
+    // （防止未来改动再次引入隐式 HTTP 回退）。
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-
-    const hits = await fetchMemoryBankHits(['p1'], 'q');
-    expect(Array.isArray(hits)).toBe(true);
+    const hits = await fetchMemoryBankHits([packHigh], '氢能');
+    expect(hits.length).toBeGreaterThan(0);
     expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });
 
@@ -178,19 +147,14 @@ describe('renderKnowledgeBlock', () => {
 });
 
 describe('knowledgeBlock', () => {
-  it('returns rendered block on happy path', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => okJson({ data: { hits: [{ text: '知识', source: 'k', score: 1 }] } })),
-    );
-    const block = await knowledgeBlock(['p1'], '问题');
+  it('returns rendered block from the real pack', async () => {
+    const block = await knowledgeBlock([packHigh], '氢能');
     expect(block).toContain('## 知识库参考');
-    expect(block).toContain('（来源：k）知识');
+    expect(block).toContain('（来源：b.md）');
   });
 
-  it('fails soft to empty string when fetch blows up', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
-    await expect(knowledgeBlock(['p1'], 'q')).resolves.toBe('');
+  it('fails soft to empty string on ghost pack', async () => {
+    await expect(knowledgeBlock([packGhost], '任意')).resolves.toBe('');
   });
 
   it('returns empty string for undefined packIds', async () => {
@@ -198,5 +162,6 @@ describe('knowledgeBlock', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(knowledgeBlock(undefined, 'q')).resolves.toBe('');
     expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

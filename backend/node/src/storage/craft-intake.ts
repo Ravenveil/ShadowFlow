@@ -25,16 +25,11 @@ import {
 } from './craft-profit';
 import { getSetting } from './settings';
 import { parseCraftMarkers, type CraftAction, type CraftTag } from '../lib/craft-markers';
-import { BACKEND_URL } from '../config/backend-url';
-import { isSingleBackend } from '../config/backend-mode';
 
 /** 团队 setup 写入的 settings key（craft-team-setup.ts 同用）。 */
 export const CRAFT_TEAM_KEY = 'craft_profit.team';
 /** 记忆库 pack 名（产品资料统一沉淀处）。 */
 export const CRAFT_PACK_NAME = '手工艺品资料';
-
-/** 单次记忆库 HTTP 超时（sidecar 不该拖死聊天链路）。 */
-const KB_TIMEOUT_MS = 4000;
 
 export interface CraftTeamRef {
   team_id?: string;
@@ -184,16 +179,6 @@ export function applyCraftMarkers(
 
 let packCache: string | null = null;
 
-interface Envelope<T> {
-  data?: T;
-}
-
-function memoryBankDispatch(): 'node' | 'python' | 'auto' {
-  const raw = (process.env.SF_MEMORY_BANK_MODE ?? '').trim().toLowerCase();
-  if (raw === 'node' || raw === 'python' || raw === 'auto') return raw;
-  return 'auto';
-}
-
 /** 本地实现：listPacks → ensure → ingestText。异常向上抛给 kbFetch 的 fail-soft。 */
 async function localEnsureCraftPackId(): Promise<string> {
   const { listPacks, createPack } = await import('../memory-bank/service');
@@ -211,13 +196,13 @@ async function localIngestText(packId: string, text: string, sourceName: string)
   ingestTextTyped(packId, text, { source_name: sourceName, deduplicate: true });
 }
 
+/**
+ * kbFetch — 本地直调 memory-bank service 的薄适配（ADR-0001：无 HTTP 回退）。
+ * 原实现按 SF_MEMORY_BANK_MODE 分流 node/python/auto；python/auto 的 HTTP
+ * 分支已随 Python 退役删除，未识别路径 fail-soft 返回 null。
+ */
 async function kbFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
-  const mode = memoryBankDispatch();
-  const single = isSingleBackend();
-  const tryLocal = mode !== 'python';
-  const tryHttp = mode === 'python' || (mode === 'auto' && !single);
-  if (tryLocal) {
-    try {
+  try {
       if (path === '/api/memory-bank/packs' && (!init?.method || init.method === 'GET')) {
         const { listPacks } = await import('../memory-bank/service');
         return { packs: listPacks().map((p) => ({ pack_id: p.pack_id, name: p.name })) } as unknown as T;
@@ -237,28 +222,11 @@ async function kbFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
         localIngestText(m[1], body.text ?? '', body.source_name || '产品资料.txt');
         return {} as T;
       }
-      // 未识别的本地路径：抛错走回退
+      // 未识别的本地路径：抛错走 fail-soft
       throw new Error(`local path not supported: ${path}`);
     } catch {
-      if (!tryHttp) return null; // node 模式 / single：无回退
-      // auto：掉到 HTTP
+      return null; // 无 HTTP 回退（ADR-0001）
     }
-  }
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), KB_TIMEOUT_MS);
-    const res = await fetch(`${BACKEND_URL}${path}`, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const json = (await res.json()) as Envelope<T> | T;
-    return ((json as Envelope<T>).data ?? json) as T;
-  } catch {
-    return null;
-  }
 }
 
 /** 「手工艺品资料」pack：有则复用、无则建（缓存 pack id）。 */

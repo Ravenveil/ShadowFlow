@@ -1,11 +1,10 @@
 /**
- * dispatch.test.ts — 去硬编码分流验证（lib/memory-bank.ts 与 storage/craft-intake.ts）。
+ * dispatch.test.ts — 单路径检索验证（lib/memory-bank.ts 与 storage/craft-intake.ts）。
  *
- * 断言：
- *   - auto（默认）：本地 pack 有数据 → knowledgeBlock 走本地（无需 Python 在线）；
- *   - python 模式：本地不命中（若本地有 pack）→ 证明走了 HTTP 分支（fetch 失败 fail-soft）；
- *   - craft-intake：ingestProductMaterial 在 node 模式 + 本地实现下成功建 pack 并落库；
- *     craft fail-soft：异常路径返回 null 不抛。
+ * ADR-0001（2026-11-24）后只有一条本地路径：
+ *   - 本地 pack 有数据 → knowledgeBlock 直出（SF_MEMORY_BANK_MODE 已作废）；
+ *   - craft-intake：ingestProductMaterial 本地建 pack 并落库，二次去重；
+ *     fail-soft：异常路径返回 null 不抛。
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import fs from 'fs';
@@ -52,18 +51,17 @@ describe('lib/memory-bank 分流', () => {
     expect(lib.coercePackIds(['a', 'a', 1, '', 'b'])).toEqual(['a', 'b']);
   });
 
-  it('python 模式：本地 pack 被跳过（HTTP 不可达 → fail-soft 空块）', async () => {
+  it('SF_MEMORY_BANK_MODE 已作废（ADR-0001）：显式 python 也走本地', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'python';
     const service = await import('../service');
     const lib = await import('../../lib/memory-bank');
     const packId = randomBytes(16).toString('hex');
     service.createPack('py模式包', '', {}, packId);
-    service.ingestTextTyped(packId, 'python 模式不应从本地读 py-mode-check 8888。', {
+    service.ingestTextTyped(packId, 'python 标签不再分流，本地必中 py-mode-check 8888。', {
       source_name: 'p.txt',
     });
     const hits = await lib.fetchMemoryBankHits([packId], 'py-mode-check');
-    expect(hits).toHaveLength(0);
-    expect(await lib.knowledgeBlock([packId], 'py-mode-check')).toBe('');
+    expect(hits.length).toBeGreaterThan(0);
     delete process.env.SF_MEMORY_BANK_MODE;
   });
 
