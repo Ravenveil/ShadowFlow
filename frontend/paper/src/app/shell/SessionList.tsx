@@ -392,7 +392,7 @@ export function SessionList({
                 {s.members.length > 1 ? (
                   <AvatarStack labels={s.members} max={2} size={AVATAR_SIZE.list} showRest={false} />
                 ) : (
-                  <span className="slist-card-dot" />
+                  <AgentAvatar label={s.members[0] ?? s.title} size={AVATAR_SIZE.list} status={false} />
                 )}
                 <span className="slist-card-title">{s.title}</span>
                 {s.status === 'active' ? <i className="slist-card-live" /> : null}
