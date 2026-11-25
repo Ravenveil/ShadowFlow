@@ -13,7 +13,6 @@ import {
   authLogin,
   authRegister,
   authSubscribe,
-  useAuthState,
 } from '@/shared/data/auth';
 import {
   AUTH_MODAL,
@@ -100,7 +99,6 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authDone, setAuthDone] = useState(false);
-  const auth = useAuthState();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -140,13 +138,13 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
     setAuthOpen(true);
   }
 
-  /** 入口合并：已登录直接进工作台；未登录先弹登录，成功后进工作台。 */
+  /**
+   * 入口统一先弹登录框：邮箱登录 / 游客进入 / 跳过三选一（用户 2026-11-25 反馈「看不到邮箱登录」）。
+   * 之前 auth.user 非空（refreshAuth 会静默签游客）就直接进工作台，把邮箱登录入口堵死了。
+   * 弹窗里的「跳过」和「游客进入」仍可零摩擦进工作台。
+   */
   function enterWorkbench() {
-    if (auth.user) {
-      onEnter();
-    } else {
-      openAuth('login');
-    }
+    openAuth('login');
   }
 
   function submitForm(event: FormEvent<HTMLFormElement>) {

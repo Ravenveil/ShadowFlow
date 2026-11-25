@@ -535,12 +535,39 @@
 
 .rail-foot {
   margin-top: auto;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   padding: 8px;
   border-top: 1px solid var(--line);
 }
+
+/* 账号行：头像在左、设置在右（用户定版 2026-11-25） */
+.rail-account {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.rail-account:hover { background: var(--wash); }
+.rail-account span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+.rail-foot .rail-settings { flex: 0 0 auto; padding: 8px; }
+.rail-foot .rail-settings span { display: none; }
 
 /* ============ 第二栏：会话列表 ============ */
 .slist {

@@ -5,6 +5,9 @@
  * 点左上角品牌回落地页）。
  */
 import { CHAT, RAIL } from '@/shared/content/app';
+import { ACCOUNT } from '@/shared/content/settings';
+import { AgentAvatar, AVATAR_SIZE } from '@/shared/ui/avatar';
+import { useAuthState } from '@/shared/data/auth';
 import {
   IconBrain,
   IconChat,
@@ -35,15 +38,18 @@ const NAV_ICON: Record<string, (p: { size?: number }) => JSX.Element> = {
 
 export function Rail({
   onOpenSettings,
+  onOpenAccount,
   onHome,
   activeView = 'chat',
   onNavigate,
 }: {
   onOpenSettings: () => void;
+  onOpenAccount: () => void;
   onHome: () => void;
   activeView?: ViewId;
   onNavigate: (id: ViewId) => void;
 }) {
+  const { user } = useAuthState();
   return (
     <aside className="rail">
       <button className="rail-brand" onClick={onHome} title={CHAT.backHome} aria-label={CHAT.backHome}>
@@ -91,6 +97,19 @@ export function Rail({
       </div>
 
       <div className="rail-foot">
+        {/* 用户定版（2026-11-25）：头像在左、设置在右一行；点头像进账号/登录。 */}
+        <button className="rail-account" onClick={onOpenAccount} title={ACCOUNT.title}>
+          <AgentAvatar
+            label={user?.email || user?.address || ACCOUNT.notSignedIn}
+            size={AVATAR_SIZE.list}
+            status={false}
+          />
+          <span>
+            {user && user.auth_type !== 'guest'
+              ? user.display_name || ACCOUNT.signedInAs
+              : ACCOUNT.notSignedIn}
+          </span>
+        </button>
         <button className="rail-nav-item rail-settings" onClick={onOpenSettings}>
           <IconSettings size={15} />
           <span>{RAIL.settings}</span>

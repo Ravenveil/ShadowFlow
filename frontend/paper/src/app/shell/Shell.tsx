@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { Rail } from '@/app/shell/Rail';
 import { SessionList } from '@/app/shell/SessionList';
+import { AccountDialog } from '@/app/shell/AccountDialog';
 import { TeamPane } from '@/app/shell/panes/TeamPane';
 import { KnowledgePane } from '@/app/shell/panes/KnowledgePane';
 import { ProjectsPane } from '@/app/shell/panes/ProjectsPane';
@@ -129,6 +130,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
   /** 当前工作台视图：chat 走四栏对话壳，其余走单页子视图。 */
   const [view, setView] = useState<ViewId>('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>('appearance');
   /** 选中的模型 id；空表示还没选过，用数据里的第一个。 */
   const [modelId, setModelId] = useState<string | null>(null);
@@ -430,6 +432,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
 
   const railProps = {
     onOpenSettings: () => setSettingsOpen(true),
+    onOpenAccount: () => setAccountOpen(true),
     onHome: onExit,
     activeView: view,
     onNavigate: navigate,
@@ -608,6 +611,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
           onExit();
         }}
       />
+      {accountOpen ? <AccountDialog onClose={() => setAccountOpen(false)} /> : null}
     </>
   );
 }
