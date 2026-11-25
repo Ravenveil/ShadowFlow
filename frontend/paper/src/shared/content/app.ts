@@ -86,10 +86,10 @@ export const LIST = {
   recentCollapse: '折叠最近对话',
   /** 会话列表右缘拖动热区的无障碍标签。 */
   resizeLabel: '拖动调整侧边栏宽度',
-  /** 分组卡片菜单（对齐参考设计）。 */
-  groupNewTask: '新建任务',
   /** 一键建项目的默认名。 */
   untitledProject: '新项目',
+  /** 名册条目无角色/备注时的兜底。 */
+  agentFallbackRole: 'Agent',
   groupNew: '新建分组',
   groupNewName: '输入分组名称',
   groupNewFolder: '关联文件夹路径（可选）',

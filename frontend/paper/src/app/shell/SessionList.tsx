@@ -419,8 +419,6 @@ export function SessionList({
           <button
             type="button"
             className="slist-group-more"
-            title={LIST.groupNewTask}
-            aria-label={LIST.groupNewTask}
             onClick={() => {
               // 用户定版（2026-11-25）：建项目和建对话一样一键直建，不弹菜单不填名。
               void createProject?.(LIST.untitledProject);
@@ -580,7 +578,7 @@ export function SessionList({
                   <AgentAvatar label={a.name} size="sm" />
                   <span>
                     <strong>{a.name}</strong>
-                    <small>{a.role || a.note || 'Agent'}</small>
+                    <small>{a.role || a.note || LIST.agentFallbackRole}</small>
                   </span>
                   <i className={a.state === 'busy' ? 'is-working' : ''} />
                 </button>
