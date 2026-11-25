@@ -243,9 +243,9 @@ export const PROJECTS = {
   open: '打开',
 };
 
-/** 工作空间文件浏览（legacy 工作空间 抢救，/api/fs/*） */
+/** 文件浏览（/api/fs/*）——项目页内嵌 + 会话列表跳转用，不再单独占导航位。 */
 export const FILES = {
-  title: '工作空间',
+  title: '项目文件',
   loading: '读取目录…',
   loadFailed: '读取失败',
   empty: '这个目录是空的',

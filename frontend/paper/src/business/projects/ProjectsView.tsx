@@ -1,12 +1,14 @@
 /**
  * ProjectsView — 项目（工作台子页）。
  *
- * 选哪个项目由第二栏（ProjectsPane）决定：这页呈现该项目下的会话，
- * 点一条就回到对话页打开它 —— 项目在这里是「会话的分组」，不是另一个容器。
+ * 选哪个项目由第二栏（ProjectsPane）决定：正文上半是该项目的会话
+ * （点一条回对话页打开），下半是该项目的文件（workspace_path 直读）。
+ * 项目在这里 = 会话分组 + 它的成果文件，一个入口说清。
  */
 import { useEffect } from 'react';
 import { PROJECTS, SUBVIEW } from '@/shared/content/views';
 import { projectKey, projectsStore } from './projects';
+import FilesView from '@/runtime/host/FilesView';
 
 export default function ProjectsView({
   selected,
@@ -23,6 +25,7 @@ export default function ProjectsView({
 
   const active = projects.find((p) => projectKey(p) === selected) ?? null;
   const sessions = active?.sessions ?? [];
+  const wsDir = active?.workspace_path ?? '';
 
   if (state === 'error') {
     return (
@@ -60,6 +63,12 @@ export default function ProjectsView({
               </button>
             );
           })}
+        </div>
+      ) : null}
+
+      {active && wsDir ? (
+        <div className="proj-files">
+          <FilesView initialDir={wsDir} embedded />
         </div>
       ) : null}
     </section>

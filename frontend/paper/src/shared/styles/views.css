@@ -944,3 +944,18 @@ button.subview-card:hover {
   font-size: 11.5px;
   color: var(--ink-3);
 }
+
+/* ============ 项目页内嵌文件区（工作空间并入项目 2026-11-25） ============ */
+.proj-files {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.subview--embedded {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  max-height: 480px;
+  overflow: auto;
+}

@@ -27,8 +27,8 @@ const parentOf = (dir: string): string => {
 const isDirectory = (entry: FsEntry): boolean =>
   entry.type === 'dir' || entry.type === 'directory';
 
-export default function FilesView() {
-  const [dir, setDir] = useState<string>(readWorkspace);
+export default function FilesView({ initialDir, embedded }: { initialDir?: string; embedded?: boolean } = {}) {
+  const [dir, setDir] = useState<string>(() => initialDir ?? readWorkspace());
   const [listing, setListing] = useState<FsListing | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [reload, setReload] = useState(0);
@@ -49,6 +49,11 @@ export default function FilesView() {
   }, [dir]);
 
   useEffect(() => {
+    if (initialDir && initialDir !== dir) setDir(initialDir);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDir]);
+
+  useEffect(() => {
     load();
   }, [load, reload]);
 
@@ -58,10 +63,12 @@ export default function FilesView() {
   const root = listing?.root ?? dir;
 
   return (
-    <section className="subview">
-      <header className="subview-head">
-        <h1 className="subview-title">{FILES.title}</h1>
-      </header>
+    <section className={embedded ? 'subview subview--embedded' : 'subview'}>
+      {!embedded ? (
+        <header className="subview-head">
+          <h1 className="subview-title">{FILES.title}</h1>
+        </header>
+      ) : null}
 
       {!dir ? (
         <div className="subview-state">{FILES.noSession}</div>

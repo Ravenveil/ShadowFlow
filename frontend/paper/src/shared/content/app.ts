@@ -24,11 +24,10 @@ export const RAIL = {
     { id: 'cron', label: '定时任务' },
     { id: 'news', label: '新闻' },
   ] satisfies RailItem[],
-  workspaceTitle: '工作空间',
-  /** legacy 抢救进来的能力入口：项目管理 / 工作空间文件。主机面板已并入设置「本地 CLI」。 */
+  workspaceTitle: '项目',
+  /** 项目 = 会话分组 + 项目文件（files 视图保留给会话列表跳转，不再单独占导航位）。 */
   workspace: [
     { id: 'project', label: '项目' },
-    { id: 'files', label: '工作空间' },
   ] satisfies RailItem[],
   settings: '设置',
 };

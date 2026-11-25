@@ -465,6 +465,8 @@ export interface ProjectBrief {
   id?: string;
   name: string;
   sessions?: { session_id?: string; title?: string; status?: string }[];
+  /** 项目绑定的真实目录（后端 workspace_path）——项目页文件区数据源。 */
+  workspace_path?: string;
 }
 export const getProjects = async (): Promise<ProjectBrief[]> => {
   const res = await mayGet<ProjectBrief[] | { data?: ProjectBrief[] }>('/api/projects');
