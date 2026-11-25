@@ -86,14 +86,10 @@ export function MessageRail({
   if (!ticks.length) return null;
 
   return (
-    <nav
-      className="msg-rail"
-      aria-label="消息导航"
-      onClick={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        jumpRatio(Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height)));
-      }}
-    >
+    <nav className="msg-rail" onClick={(e) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      jumpRatio(Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height)));
+    }}>
       <span className="msg-rail-cursor" style={{ top: `${progress * 100}%` }} />
       {ticks.map((t) => (
         <button
@@ -102,7 +98,6 @@ export function MessageRail({
           className="msg-rail-tick"
           data-kind={t.kind}
           style={{ top: `${(t.track / (MAX_TRACKS - 1)) * 100}%` }}
-          title="跳到这条消息"
           onClick={(e) => {
             e.stopPropagation();
             jumpTo(t.id);

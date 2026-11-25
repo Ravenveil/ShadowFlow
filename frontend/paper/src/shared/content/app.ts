@@ -50,6 +50,8 @@ export const LIST = {
   drawerSubtitle: '搜索、新建或继续任何会话',
   /** 新建菜单 */
   newConversation: '新建对话',
+  /** 顶层新建未命名时落的默认标题。 */
+  untitledConversation: '新对话',
   newGroup: '发起群聊',
   groupPickHint: '在下方选择成员',
   groupNamePlaceholder: '群名称（可留空）',

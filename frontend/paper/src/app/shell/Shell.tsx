@@ -16,7 +16,7 @@ import { usePaneWidth } from '@/app/shell/usePaneWidth';
 import { ChatArea } from '@/runtime/chat/ChatArea';
 import { AgentPanel } from '@/runtime/panel/AgentPanel';
 import { SettingsSheet, type SettingsSection } from '@/app/settings/SettingsSheet';
-import { CHAT } from '@/shared/content/app';
+import { CHAT, LIST } from '@/shared/content/app';
 import type { Outbound } from '@/shared/data/types';
 import { DEFAULT_SESSION_ID } from '@/shared/data/source';
 import { useWorkspace } from '@/shared/data/useWorkspace';
@@ -491,7 +491,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
               onSelect={select}
               onCreate={(title) => {
                 // 空标题 = 直接建（用户定版 2026-11-25：新建对话不弹输入框），标题落「新对话」。
-                void createConversation(title.trim() || '新对话')
+                void createConversation(title.trim() || LIST.untitledConversation)
                   .then((gid) => {
                     setActiveId(gid);
                     reload();
