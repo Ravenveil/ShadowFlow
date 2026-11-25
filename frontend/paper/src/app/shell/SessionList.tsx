@@ -421,7 +421,10 @@ export function SessionList({
             className="slist-group-more"
             title={LIST.groupNewTask}
             aria-label={LIST.groupNewTask}
-            onClick={() => { setNewTaskOpen((v) => !v); setGroupForm(null); }}
+            onClick={() => {
+              // 用户定版（2026-11-25）：建项目和建对话一样一键直建，不弹菜单不填名。
+              void createProject?.(LIST.untitledProject);
+            }}
           >
             <IconPlus size={14} />
           </button>

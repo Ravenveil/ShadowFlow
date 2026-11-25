@@ -88,6 +88,8 @@ export const LIST = {
   resizeLabel: '拖动调整侧边栏宽度',
   /** 分组卡片菜单（对齐参考设计）。 */
   groupNewTask: '新建任务',
+  /** 一键建项目的默认名。 */
+  untitledProject: '新项目',
   groupNew: '新建分组',
   groupNewName: '输入分组名称',
   groupNewFolder: '关联文件夹路径（可选）',
