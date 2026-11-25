@@ -20,7 +20,7 @@ import {
   listProducts,
   type AgentEvent,
 } from './infra-profit';
-import { getSetting, setSetting } from '../../storage/settings';
+import { getSetting, setSetting } from '../../application/settings/infra-store';
 import {
   AUTO_KEY,
   readAutoOpsConfig,

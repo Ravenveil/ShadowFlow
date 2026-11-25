@@ -20,8 +20,8 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/memory/memory-handoff').default;
-let sqlite: typeof import('../storage/sqlite');
+let router: typeof import('../application/memory/http-handoff').default;
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 let lessons: typeof import('../application/memory/infra/storage-memory-lessons');
 
 function app() {
@@ -37,10 +37,10 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-handoff-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   lessons = await import('../application/memory/infra/storage-memory-lessons');
-  router = (await import('../routes/memory/memory-handoff')).default;
+  router = (await import('../application/memory/http-handoff')).default;
   sqlite.getDb();
 
   // 三条经验：通用 / 同域 / 跨域（跨域那条绝不能被交接包带走）

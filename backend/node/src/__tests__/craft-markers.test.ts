@@ -3,7 +3,7 @@
  * 全离线零 IO。Run: npx vitest run --project=server craft-markers
  */
 import { describe, expect, it } from 'vitest';
-import { parseCraftMarkers } from '../lib/craft-markers';
+import { parseCraftMarkers } from '../application/craft/infra-markers';
 
 describe('parseCraftMarkers — 标记识别与剥除', () => {
   it('单行紧凑 JSON：解析动作且从 cleaned 剥掉', () => {

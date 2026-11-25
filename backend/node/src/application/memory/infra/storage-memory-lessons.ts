@@ -11,7 +11,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { getSetting } from '../../../storage/settings';
+import { getSetting } from '../../../application/settings/infra-store';
 import { SqliteLessonRepository } from './sqlite-lesson.repository';
 import {
   makeRemember,

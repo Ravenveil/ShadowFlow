@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import express from 'express';
 import http from 'http';
-import asrRouter from '../routes/system/asr';
+import asrRouter from '../application/adapters/asr';
 
 interface HttpResp {
   status: number;

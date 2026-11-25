@@ -47,17 +47,17 @@ vi.mock('../detectors/acp-detector', () => ({
   }),
 }));
 
-import connectorsRouter from '../routes/system/connectors';
-import actionsRouter from '../routes/system/actions';
-import { recordAction, listActions, type ActionJournalEntry } from '../lib/action-journal';
-import { getConnectorPolicy, coerceConnectorIds } from '../lib/connector-registry';
+import connectorsRouter from '../application/connectors/http';
+import actionsRouter from '../application/connectors/http-actions';
+import { recordAction, listActions, type ActionJournalEntry } from '../application/connectors/infra-journal';
+import { getConnectorPolicy, coerceConnectorIds } from '../application/connectors/infra-registry';
 import {
   ToolRunner,
   registerToolExecutor,
   _resetToolExecutorsForTests,
-} from '../lib/tool-runner';
-import { ToolRegistry } from '../lib/tool-spec';
-import { PermissionPolicyV2 } from '../lib/permission-policy-v2';
+} from '../application/runtime/tool-runner';
+import { ToolRegistry } from '../application/runtime/tool-spec';
+import { PermissionPolicyV2 } from '../application/runtime/permission-policy-v2';
 
 interface HttpResp {
   status: number;

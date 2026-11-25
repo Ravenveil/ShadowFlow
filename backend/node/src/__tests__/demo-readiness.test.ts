@@ -43,7 +43,7 @@ type CliOutput = { items: CheckItem[]; summary: Summary };
 
 let tmp: string;
 let origCwd: string;
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 let board: typeof import('../application/merchant/infra-store');
 let router: typeof import('../application/merchant/http').default;
 let server: ReturnType<express.Express['listen']>;
@@ -90,7 +90,7 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-readiness-test-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   board = await import('../application/merchant/infra-store');
   router = (await import('../application/merchant/http')).default;

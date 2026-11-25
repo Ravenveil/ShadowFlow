@@ -23,19 +23,19 @@ let intake: typeof import('../application/craft/infra-intake');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let profit: typeof import('../application/craft/infra-profit');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let settings: typeof import('../storage/settings');
+let settings: typeof import('../application/settings/infra-store');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 
 beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-craft-intake-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   profit = await import('../application/craft/infra-profit');
   intake = await import('../application/craft/infra-intake');
-  settings = await import('../storage/settings');
+  settings = await import('../application/settings/infra-store');
   sqlite.getDb();
   profit.listProducts(); // 触发 cp_* 懒建表
 });

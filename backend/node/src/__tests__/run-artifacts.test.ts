@@ -16,27 +16,27 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { captureBlueprintArtifact, type CapturedArtifact } from '../routes/runs/run-sessions';
+import { captureBlueprintArtifact, type CapturedArtifact } from '../application/runs/sessions-src';
 
 let tmp: string;
 let origCwd: string;
-let sqlite: typeof import('../storage/sqlite');
-let runsStore: typeof import('../storage/runs');
-let projectsStore: typeof import('../storage/projects');
-let projectsRouter: typeof import('../routes/projects/projects').default;
-let runsRouter: typeof import('../routes/runs/runs').default;
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
+let runsStore: typeof import('../application/runs/infra-store');
+let projectsStore: typeof import('../application/conversations/infra-projects');
+let projectsRouter: typeof import('../application/conversations/http-projects').default;
+let runsRouter: typeof import('../application/runs/http').default;
 
 beforeAll(async () => {
   // sqlite 数据文件落在 cwd/.shadowflow/ — 切到临时目录跑隔离库。
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-run-artifacts-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
-  runsStore = await import('../storage/runs');
-  projectsStore = await import('../storage/projects');
-  projectsRouter = (await import('../routes/projects/projects')).default;
-  runsRouter = (await import('../routes/runs/runs')).default;
+  runsStore = await import('../application/runs/infra-store');
+  projectsStore = await import('../application/conversations/infra-projects');
+  projectsRouter = (await import('../application/conversations/http-projects')).default;
+  runsRouter = (await import('../application/runs/http')).default;
 });
 
 afterAll(() => {
@@ -45,7 +45,7 @@ afterAll(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function makeRecord(overrides: Partial<import('../storage/runs').RunRecord> = {}) {
+function makeRecord(overrides: Partial<import('../application/runs/infra-store').RunRecord> = {}) {
   return {
     run_id: 'run-art1',
     session_id: 'sess-art1',

@@ -27,7 +27,7 @@ let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let router: typeof import('../application/social/http').default;
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 let merchant: typeof import('../application/merchant/infra-store');
 
 function app() {
@@ -41,7 +41,7 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-social-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   router = (await import('../application/social/http')).default;
   merchant = await import('../application/merchant/infra-store');

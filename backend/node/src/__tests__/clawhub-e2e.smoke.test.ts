@@ -23,7 +23,7 @@ let app: express.Express;
 let clawhubRouter: express.Router;
 let cliRouter: express.Router;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let clawInstaller: typeof import('../lib/claw-installer');
+let clawInstaller: typeof import('../application/skills/infra-claw-installer.ts');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let cliDetector: typeof import('../detectors/cli-detector');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -35,11 +35,11 @@ beforeAll(async () => {
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-clawhub-e2e-'));
   process.chdir(tmp);
 
-  clawInstaller = await import('../lib/claw-installer');
+  clawInstaller = await import('../application/skills/infra-claw-installer');
   cliDetector = await import('../detectors/cli-detector');
   cliRegistry = await import('../detectors/cli-registry');
-  clawhubRouter = (await import('../routes/skills/clawhub')).default;
-  cliRouter = (await import('../routes/system/cli')).default;
+  clawhubRouter = (await import('../application/skills/http/clawhub')).default;
+  cliRouter = (await import('../application/adapters/cli')).default;
 
   // 注入 node 为白名单 pm（真实 spawn 用，与单测同法）
   restoreNodePm = clawInstaller.__testInjectPm('node');

@@ -19,7 +19,7 @@
  */
 import { CraftProfitError } from './infra-profit';
 import { CRAFT_TEAM_KEY, SECRETARY_AGENT_ID, type CraftTeamRef } from './infra-intake';
-import { getSetting, setSetting } from '../../storage/settings';
+import { getSetting, setSetting } from '../../application/settings/infra-store';
 import { BACKEND_URL } from '../../config/backend-url';
 
 const PY_TIMEOUT_MS = 8000;

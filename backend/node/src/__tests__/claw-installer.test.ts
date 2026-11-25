@@ -19,7 +19,7 @@ import {
   startInstall,
   startUninstall,
   type InstallSession,
-} from '../lib/claw-installer';
+} from '../application/skills/infra-claw-installer';
 import { KNOWN_CLIS, findCli } from '../detectors/cli-registry';
 
 afterAll(() => {

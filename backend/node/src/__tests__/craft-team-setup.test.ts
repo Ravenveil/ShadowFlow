@@ -18,13 +18,13 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let setupMod: typeof import('../application/craft/infra-team-setup');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let intake: typeof import('../application/craft/infra-intake');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let settings: typeof import('../storage/settings');
+let settings: typeof import('../application/settings/infra-store');
 
 interface Call {
   method: string;
@@ -104,11 +104,11 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-craft-team-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   sqlite.getDb();
   intake = await import('../application/craft/infra-intake');
-  settings = await import('../storage/settings');
+  settings = await import('../application/settings/infra-store');
   setupMod = await import('../application/craft/infra-team-setup');
 });
 

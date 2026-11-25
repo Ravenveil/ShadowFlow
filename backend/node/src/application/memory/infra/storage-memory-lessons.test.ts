@@ -25,7 +25,7 @@ import {
   KIND_LESSON,
   KIND_PREF,
 } from './storage-memory-lessons';
-import { _resetForTests } from '../../../storage/sqlite';
+import { _resetForTests } from '../../adapters/sqlite-impl';
 
 let failures = 0;
 function check(name: string, cond: boolean): void {

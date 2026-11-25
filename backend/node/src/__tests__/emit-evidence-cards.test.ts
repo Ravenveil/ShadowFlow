@@ -8,9 +8,9 @@
  *     per-agent 槽测试）。
  */
 import { describe, it, expect } from 'vitest';
-import { emitCommitCard, emitFileDiffCards } from '../routes/groups/groups-chat';
-import type { TimelineMessage, MessagePatch } from '../lib/contracts';
-import type { GitFileDiff } from '../lib/git-introspect';
+import { emitCommitCard, emitFileDiffCards } from '../application/conversations/chat-orchestrator';
+import type { TimelineMessage, MessagePatch } from '../application/runtime/contracts';
+import type { GitFileDiff } from '../application/adapters/git-introspect';
 
 function makeGw() {
   const emitted: TimelineMessage[] = [];

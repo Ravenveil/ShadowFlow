@@ -15,7 +15,7 @@ beforeAll(() => {
   process.chdir(tmpRoot);
 });
 afterAll(async () => {
-  const { _resetForTests } = await import('../../../storage/sqlite');
+  const { _resetForTests } = await import('../../adapters/sqlite-impl');
   _resetForTests();
   try {
     fs.rmSync(tmpRoot, { recursive: true, force: true });

@@ -20,7 +20,7 @@ import {
   persistAssembledTeam,
   tapAssemblyTeamPersistence,
   deriveTeamName,
-} from '../storage/team-persistence';
+} from '../application/teams/infra-team-persistence';
 
 const PY = BACKEND_URL;
 

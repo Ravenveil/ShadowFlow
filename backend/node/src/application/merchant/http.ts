@@ -63,7 +63,7 @@ import {
   evidenceMarkdown,
   evidenceOrdersCsv,
   evidenceScorecard,
-} from '../../storage/evidence';
+} from '../../application/analytics/infra-evidence';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();

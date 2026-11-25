@@ -23,10 +23,10 @@ import {
   type NewsDeps,
   type Result,
 } from './use_cases/news';
-import { DEFAULT_MODELS } from '../../transport/api-clients';
-import { resolveProviderKey } from '../../transport/byokKey';
+import { DEFAULT_MODELS } from '../adapters/transport/api-clients/index';
+import { resolveProviderKey } from '../adapters/transport/byokKey';
 import { enrichBatch, ENRICH_BATCH_SIZE, ENRICH_MAX_ITEMS, type VerdictInput } from './enrich';
-import { mapLimit } from '../../lib/chat-dag/map-limit';
+import { mapLimit } from '../../application/runtime/chat-dag/map-limit';
 function sendResult<T>(
   res: Response,
   result: Result<T>,

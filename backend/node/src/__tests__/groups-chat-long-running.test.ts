@@ -20,7 +20,7 @@ import {
   dagTimeoutOptsFor,
   isLongRunningExecutor,
   isNoWorktreeExecutor,
-} from '../routes/groups/groups-chat';
+} from '../application/conversations/chat-orchestrator';
 
 describe('isLongRunningExecutor', () => {
   it('cli:autoresearchclaw（23 阶段研究管线）判为长任务', () => {

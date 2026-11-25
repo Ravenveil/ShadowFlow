@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { apiGuard, isLoopbackAddress } from '../middleware/api-guard';
 import merchantBoardRouter from '../application/merchant/http';
-import memoryHandoffRouter from '../routes/memory/memory-handoff';
+import memoryHandoffRouter from '../application/memory/http-handoff';
 
 const ORIGINAL_TOKEN = process.env.SF_API_TOKEN;
 

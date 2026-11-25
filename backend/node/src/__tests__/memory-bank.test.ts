@@ -18,7 +18,7 @@ import {
   fetchMemoryBankHits,
   renderKnowledgeBlock,
   knowledgeBlock,
-} from '../lib/memory-bank';
+} from '../application/memory-bank/检索辅助';
 
 let tmpDir = '';
 const prevDataDir = process.env.SHADOWFLOW_DATA_DIR;
@@ -89,7 +89,7 @@ describe('fetchMemoryBankHits', () => {
   it('queries both packs and aggregates hits by score desc', async () => {
     const hits = await fetchMemoryBankHits([packLow, packHigh], '氢能');
     // 两包各贡献一条；聚合后按 score 降序（分值细节是 service 的黑盒）
-    expect(hits.map((h) => h.source).sort()).toEqual(['a.md', 'b.md']);
+    expect(hits.map((h: any) => h.source).sort()).toEqual(['a.md', 'b.md']);
     for (let i = 1; i < hits.length; i += 1) {
       expect(hits[i - 1].score).toBeGreaterThanOrEqual(hits[i].score);
     }
@@ -98,7 +98,7 @@ describe('fetchMemoryBankHits', () => {
   it('skips ghost pack but keeps real one (fail-soft)', async () => {
     const hits = await fetchMemoryBankHits([packGhost, packHigh], '氢能');
     expect(hits.length).toBeGreaterThan(0);
-    expect(hits.every((h) => h.source === 'b.md')).toBe(true);
+    expect(hits.every((h: any) => h.source === 'b.md')).toBe(true);
   });
 
   it('single path: 绝不发 HTTP（stub 后本地照常命中）', async () => {

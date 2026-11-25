@@ -19,7 +19,7 @@ import http from 'http';
 import path from 'path';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
-import fsBrowseRouter from '../routes/system/fs-browse';
+import fsBrowseRouter from '../application/adapters/fs-browse';
 
 interface HttpResp {
   status: number;

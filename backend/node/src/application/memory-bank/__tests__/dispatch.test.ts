@@ -35,7 +35,7 @@ describe('lib/memory-bank 分流', () => {
     delete process.env.SF_MEMORY_BANK_MODE;
     delete process.env.SF_BACKEND_MODE;
     const service = await import('../service');
-    const lib = await import('../../../lib/memory-bank');
+    const lib = await import('../检索辅助');
     const packId = randomBytes(16).toString('hex');
     service.createPack('分流包', '', {}, packId);
     service.ingestTextTyped(packId, '分流验证：本地检索应命中的内容 dispatch-check 7777。', {
@@ -54,7 +54,7 @@ describe('lib/memory-bank 分流', () => {
   it('SF_MEMORY_BANK_MODE 已作废（ADR-0001）：显式 python 也走本地', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'python';
     const service = await import('../service');
-    const lib = await import('../../../lib/memory-bank');
+    const lib = await import('../检索辅助');
     const packId = randomBytes(16).toString('hex');
     service.createPack('py模式包', '', {}, packId);
     service.ingestTextTyped(packId, 'python 标签不再分流，本地必中 py-mode-check 8888。', {
@@ -68,7 +68,7 @@ describe('lib/memory-bank 分流', () => {
   it('node 模式（single 语义）：本地命中且不发 HTTP', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'node';
     const service = await import('../service');
-    const lib = await import('../../../lib/memory-bank');
+    const lib = await import('../检索辅助');
     const packId = randomBytes(16).toString('hex');
     service.createPack('node模式包', '', {}, packId);
     service.ingestTextTyped(packId, 'node 模式本地必中 node-mode-check 9999。', { source_name: 'n.txt' });
@@ -79,7 +79,7 @@ describe('lib/memory-bank 分流', () => {
 
   it('不存在的 pack：fail-soft 返回空，绝不抛', async () => {
     delete process.env.SF_MEMORY_BANK_MODE;
-    const lib = await import('../../../lib/memory-bank');
+    const lib = await import('../检索辅助');
     const ghost = randomBytes(16).toString('hex');
     const hits = await lib.fetchMemoryBankHits([ghost], '任意查询词');
     expect(hits).toHaveLength(0);

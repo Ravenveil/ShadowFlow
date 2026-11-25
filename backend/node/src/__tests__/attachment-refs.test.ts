@@ -6,8 +6,8 @@
  *   - goalWithAttachments：goal+块拼接（空 goal 只出块、无附件原样返回 goal）
  */
 import { describe, it, expect } from 'vitest';
-import { attachmentPromptBlock, goalWithAttachments } from '../lib/attachment-refs';
-import type { UserAttachment } from '../lib/contracts';
+import { attachmentPromptBlock, goalWithAttachments } from '../application/runtime/attachment-refs';
+import type { UserAttachment } from '../application/runtime/contracts';
 
 const img: UserAttachment = {
   name: 'a.png',

@@ -7,7 +7,7 @@
  */
 
 import { getDb } from '../../adapters/sqlite';
-import { getSetting } from '../../../storage/settings';
+import { getSetting } from '../../../application/settings/infra-store';
 import type { MemoryLesson } from '../lessons-model';
 import type { LessonListOptions, LessonRepository } from '../lessons-repository';
 

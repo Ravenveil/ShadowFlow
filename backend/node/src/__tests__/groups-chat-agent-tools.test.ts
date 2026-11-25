@@ -17,7 +17,7 @@ import {
   AGENT_FILE_TOOL_NAMES,
   AGENT_REMOTE_TOOL_NAME,
   agentToolNames,
-} from '../routes/groups/groups-chat';
+} from '../application/conversations/chat-orchestrator';
 
 describe('agentToolNames', () => {
   it('未配置远端主机：只给文件工具', () => {

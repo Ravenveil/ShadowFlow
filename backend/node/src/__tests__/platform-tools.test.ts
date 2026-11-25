@@ -17,19 +17,19 @@ import {
   builtinTools,
   builtinExecutors,
   builtinDefaultModes,
-} from '../lib/tools/builtin';
-import { webSearchExecutor } from '../lib/tools/builtin/web-search';
-import { sendEmailExecutor } from '../lib/tools/builtin/send-email';
-import { imReadExecutor } from '../lib/tools/builtin/im-read';
-import { imSendExecutor } from '../lib/tools/builtin/im-send';
+} from '../application/runtime/tools/builtin';
+import { webSearchExecutor } from '../application/runtime/tools/builtin/web-search';
+import { sendEmailExecutor } from '../application/runtime/tools/builtin/send-email';
+import { imReadExecutor } from '../application/runtime/tools/builtin/im-read';
+import { imSendExecutor } from '../application/runtime/tools/builtin/im-send';
 import {
   githubRequestExecutor,
   githubWriteExecutor,
-} from '../lib/tools/builtin/github';
-import { imageGenerateExecutor } from '../lib/tools/builtin/image-generate';
-import { videoGenerateExecutor } from '../lib/tools/builtin/video-generate';
-import { generate3dExecutor } from '../lib/tools/builtin/three-d-generate';
-import type { BuiltinToolContext } from '../lib/tools/builtin/types';
+} from '../application/runtime/tools/builtin/github';
+import { imageGenerateExecutor } from '../application/runtime/tools/builtin/image-generate';
+import { videoGenerateExecutor } from '../application/runtime/tools/builtin/video-generate';
+import { generate3dExecutor } from '../application/runtime/tools/builtin/three-d-generate';
+import type { BuiltinToolContext } from '../application/runtime/tools/builtin/types';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 

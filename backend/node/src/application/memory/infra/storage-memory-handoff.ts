@@ -19,7 +19,7 @@
  */
 
 import { createHash, randomUUID } from 'crypto';
-import { getDb } from '../../../storage/sqlite';
+import { getDb } from '../../adapters/sqlite-impl';
 import { recallLessons } from './storage-memory-lessons';
 import {
   DAY_MS,

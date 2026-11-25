@@ -12,10 +12,10 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let projectsRouter: typeof import('../routes/projects/projects').default;
-let sqlite: typeof import('../storage/sqlite');
-let projectsStore: typeof import('../storage/projects');
-let conversationsStore: typeof import('../storage/conversations');
+let projectsRouter: typeof import('../application/conversations/http-projects').default;
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
+let projectsStore: typeof import('../application/conversations/infra-projects');
+let conversationsStore: typeof import('../application/conversations/infra-conversations');
 
 function app() {
   const a = express();
@@ -29,11 +29,11 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-projects-ws-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
-  projectsStore = await import('../storage/projects');
-  conversationsStore = await import('../storage/conversations');
-  projectsRouter = (await import('../routes/projects/projects')).default;
+  projectsStore = await import('../application/conversations/infra-projects');
+  conversationsStore = await import('../application/conversations/infra-conversations');
+  projectsRouter = (await import('../application/conversations/http-projects')).default;
 });
 
 afterAll(() => {

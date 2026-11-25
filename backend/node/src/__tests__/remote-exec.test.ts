@@ -14,7 +14,7 @@ import express from 'express';
 import request from 'supertest';
 
 // settings 走内存 Map，避免测试污染真实 $CWD/.shadowflow/settings.json
-vi.mock('../storage/settings', () => {
+vi.mock('../application/settings/infra-store', () => {
   const store = new Map<string, unknown>();
   return {
     getSetting: (k: string) => store.get(k) ?? null,
@@ -25,8 +25,8 @@ vi.mock('../storage/settings', () => {
   };
 });
 
-vi.mock('../lib/ssh-exec', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/ssh-exec')>();
+vi.mock('../application/adapters/ssh-exec.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../application/adapters/ssh-exec.ts')>();
   return {
     ...actual,
     sshProbe: vi.fn(async () => ({
@@ -38,7 +38,7 @@ vi.mock('../lib/ssh-exec', async (importOriginal) => {
   };
 });
 
-import remoteExecRouter from '../routes/system/remote-exec';
+import remoteExecRouter from '../application/adapters/remote-exec';
 import {
   validateSshConfig,
   mergeSshConfig,
@@ -46,9 +46,9 @@ import {
   saveSshConfig,
   SSH_CONFIG_KEY,
   type SshConfig,
-} from '../lib/ssh-exec';
-import { sshProbe, sshExec } from '../lib/ssh-exec';
-import { setSetting } from '../storage/settings';
+} from '../application/adapters/ssh-exec';
+import { sshProbe, sshExec } from '../application/adapters/ssh-exec';
+import { setSetting } from '../application/settings/infra-store';
 
 function app() {
   const a = express();

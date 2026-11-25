@@ -25,10 +25,10 @@ import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadTeam } from '../lib/team-yaml';
-import { runDag } from '../workflow/scheduler';
-import type { LlmCallable } from '../transport/LlmCallable';
-import type { TurnChunk } from '../workflow/types';
+import { loadTeam } from '../application/teams/infra-yaml';
+import { runDag } from '../application/runtime/workflow/scheduler';
+import type { LlmCallable } from '../application/adapters/transport/LlmCallable';
+import type { TurnChunk } from '../application/runtime/workflow/types';
 
 function mkWorkspace(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'sf-bmad-e2e-'));

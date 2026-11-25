@@ -24,11 +24,11 @@ let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let merchantRouter: typeof import('../application/merchant/http').default;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let handoffRouter: typeof import('../routes/memory/memory-handoff').default;
-let sqlite: typeof import('../storage/sqlite');
-let evidence: typeof import('../storage/evidence');
+let handoffRouter: typeof import('../application/memory/http-handoff').default;
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
+let evidence: typeof import('../application/analytics/infra-evidence');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let hopsStore: typeof import('../storage/agent-hops');
+let hopsStore: typeof import('../application/agents/infra-hops-store.ts');
 
 function app() {
   const a = express();
@@ -42,12 +42,12 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-evidence-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   merchantRouter = (await import('../application/merchant/http')).default;
-  handoffRouter = (await import('../routes/memory/memory-handoff')).default;
-  evidence = await import('../storage/evidence');
-  hopsStore = await import('../storage/agent-hops');
+  handoffRouter = (await import('../application/memory/http-handoff')).default;
+  evidence = await import('../application/analytics/infra-evidence');
+  hopsStore = await import('../application/agents/infra-hops-store');
   sqlite.getDb();
 });
 

@@ -11,74 +11,74 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
-import runSessionsRouter, { shutdownActiveRuns } from './routes/runs/run-sessions';
-import runsRouter from './routes/runs/runs';
-import runSuggestionsRouter from './routes/runs/run-suggestions';
-import agentsRouter from './routes/agents/agents';
-import teamsRouter from './routes/agents/teams';
-import skillsRouter from './routes/skills/skills';
-import designSystemsRouter from './routes/system/design-systems';
-import exportRouter from './routes/system/export';
-import settingsRouter from './routes/system/settings';
-import cliRouter from './routes/system/cli';
+import runSessionsRouter, { shutdownActiveRuns } from './application/runs/sessions-src/index';
+import runsRouter from './application/runs/http';
+import runSuggestionsRouter from './application/runs/infra-suggestions';
+import agentsRouter from './application/agents/http';
+import teamsRouter from './application/teams/http';
+import skillsRouter from './application/skills/http/skills';
+import designSystemsRouter from './application/settings/http-design-systems';
+import exportRouter from './application/adapters/export';
+import settingsRouter from './application/settings/http';
+import cliRouter from './application/adapters/cli';
 // ClawHub（2026-06）— 安装会话 REST + SSE
-import clawhubRouter from './routes/skills/clawhub';
-import acpRouter from './routes/system/acp';
-import { groupsChatRouter } from './routes/groups/groups-chat';
+import clawhubRouter from './application/skills/http/clawhub';
+import acpRouter from './application/adapters/acp';
+import { groupsChatRouter } from './application/conversations/chat-orchestrator';
 // 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
 // 时挂载，挂载顺序无关（ADR-0001 后无 fallback））。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
-import { groupsNodeRouter, handleDmResolve } from './routes/groups/groups-node';
+import { groupsNodeRouter, handleDmResolve } from './application/conversations/http-groups-node';
 // 2026-05-30 — 后端目录浏览器(给 CLI cwd 选工作目录;浏览器拿不到真实磁盘路径)
-import { fsBrowseRouter } from './routes/system/fs-browse';
+import { fsBrowseRouter } from './application/adapters/fs-browse';
 // Story 15.14 — POST /api/artifacts/lint（+ 单后端迁移：/:id/pin）
-import artifactsRouter from './routes/system/artifacts';
+import artifactsRouter from './application/adapters/artifacts';
 // 单后端迁移第一批 — 三个纯 JSON 端点（移植自 Python，读仓库根 .shadowflow）
-import walletRouter from './routes/system/wallet';
-import messageFeedbackRouter from './routes/groups/message-feedback';
+import walletRouter from './application/settings/http-wallet';
+import messageFeedbackRouter from './application/conversations/infra-message-feedback';
 // 单后端迁移第二批 — workspaces（纯 JSON）/ templates（共享 yaml）/ inbox（sqlite）
-import workspacesRouter from './routes/projects/workspaces';
-import templatesRouter from './routes/system/templates';
-import inboxRouter from './routes/groups/inbox';
+import workspacesRouter from './application/conversations/http-workspaces';
+import templatesRouter from './application/settings/http-templates';
+import inboxRouter from './application/conversations/http-inbox';
 // 单后端迁移收尾 — catalog（/catalog + /api/catalog 双前缀，对齐 Python server.py:262-265）
-import catalogRouter from './routes/projects/catalog';
+import catalogRouter from './application/conversations/http-catalog';
 // 多模态记忆库 — createMemoryBankRouter()，router 内部自带 10mb parser，
 // 必须挂在全局 1mb parser（:106）之前，否则 >1mb 文本入库请求被 413 挡掉。
 import { createMemoryBankRouter } from './application/memory-bank/routes';
 // 单后端迁移第三批（2026-11-18）— settings 缺口端点 + sessions
-import settingsExtRouter from './routes/system/settings-ext';
-import remoteExecRouter from './routes/system/remote-exec';
-import sessionsRouter from './routes/runs/sessions';
+import settingsExtRouter from './application/settings/http-ext';
+import remoteExecRouter from './application/adapters/remote-exec';
+import sessionsRouter from './application/runs/http-sessions';
 // 单后端迁移第三批 — schedules 5 端点 + 调度引擎（sched-impl 4ae8bdca）
-import schedulesRouter from './routes/runs/schedules';
-import { startSchedulerEngine } from './scheduler/engine';
+import schedulesRouter from './application/schedules/http';
+import { startSchedulerEngine } from './application/schedules/engine/engine';
 // 单后端迁移第三批 — opc 全域 31 端点（opc-impl 77841b05）
 import opcRouter from './application/opc/routes/opc';
 // 单后端迁移第三批 — impl-c agents 邻接域（bc1cfaf4）
-import registryRouter from './routes/agents/registry';
-import approvalsRouter from './routes/runs/approvals';
-import { a2aRouter } from './routes/system/acp';
+import registryRouter from './application/agents/infra-registry';
+import approvalsRouter from './application/runs/http-approvals';
+import { a2aRouter } from './application/adapters/acp';
 // 单后端迁移第三批 — memory state stub + agent state（裸 /state 前缀）
 import memoryStateRouter from './application/memory/http-state';
-import agentStateRouter from './routes/agents/agent-state';
+import agentStateRouter from './application/agents/infra-state';
 import memoryProfilesRouter from './application/memory/http-profiles';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
-import llmRouter from './routes/system/llm';
-import asrRouter from './routes/system/asr';
+import llmRouter from './application/adapters/llm';
+import asrRouter from './application/adapters/asr';
 // OpenBot 对齐批（2026-11-07）：连接器注册表（策略 = 执行前裁定）+
 // 行动留痕查询（执行后留痕）。
-import connectorsRouter from './routes/system/connectors';
-import actionsRouter from './routes/system/actions';
+import connectorsRouter from './application/connectors/http';
+import actionsRouter from './application/connectors/http-actions';
 import { detectAll } from './detectors/cli-detector';
 import { detectAcpAgents } from './detectors/acp-detector';
-import projectsRouter from './routes/projects/projects';
+import projectsRouter from './application/conversations/http-projects';
 import memoryEntriesRouter from './application/memory/http-entries';
 import memosRouter from './application/memos/http';
 import newsRouter from './application/news/http';
 // ARC（AutoResearchClaw）管线观测面：run 列表 / 阶段视图 / 终稿与核验产物
-import arcRouter from './domains/research/adapters/arc-http';
+import arcRouter from './application/research/adapters/arc-http';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
 import memoryLessonsRouter from './application/memory/http-lessons';
-import dashboardRouter from './routes/dashboard/dashboard';
+import dashboardRouter from './application/analytics/http-dashboard-compat';
 // 功能线③ 另一半（2026-11-05）：agent 间记忆交接 + 长期画像写回。外接 Router，
 // 主入口只挂一行，不新增服务/端口，也不改既有路由语义。
 import memoryHandoffRouter from './application/memory/http-handoff';
@@ -94,23 +94,23 @@ import socialPublishRouter from './application/social/http';
 import opsRouter from './application/shipping/http';
 import conversationsRouter, {
   projectScopedConversationsRouter,
-} from './routes/projects/conversations';
-import authRouter from './routes/system/auth';
+} from './application/conversations/http-conversations';
+import authRouter from './application/auth/http';
 // 2026-11-24 ADR-0001 — Python 后端退役：proxyFallback / python-backend 已删，
 // 单后端恒 single；未迁移端点由 gap handler 显式 404（见 config/backend-gap.ts）。
 // backend-mode 的 mode 函数保留为常量真源（恒 single / 恒 node），调用方无痛过渡。
 import { installSingleBackendGapHandler, installRootGapHandler } from './config/backend-gap';
-import { initSqlite } from './storage/sqlite';
+import { initSqlite } from './application/adapters/sqlite-impl';
 // B2 中断恢复收尾 — 启动清扫上一进程遗留的孤儿 hop / NULL run_index（2026-11-05 迭代三）
-import { sweepOrphanHops } from './storage/agent-hops';
-import { sweepOrphanRunIndex } from './storage/run-index';
-import { reloadSkills } from './loaders/skills';
+import { sweepOrphanHops } from './application/agents/infra-hops-store';
+import { sweepOrphanRunIndex } from './application/runs/infra-run-index';
+import { reloadSkills } from './application/skills/loaders/skills';
 import {
   reloadDesignSystems,
   seedBuiltinDesignSystems,
-} from './loaders/design-systems';
-import { ensureBuiltinCatalogTemplates } from './lib/catalog-builtin';
-import { ensureLeadAgent } from './storage/lead-agent';
+} from './application/skills/loaders/design-systems';
+import { ensureBuiltinCatalogTemplates } from './application/catalog/infra-builtin';
+import { ensureLeadAgent } from './application/agents/infra-lead-agent';
 
 const PORT = Number(process.env.PORT ?? 8002);
 // 公网部署可配多来源（逗号分隔）：FRONTEND_ORIGIN=https://a.example.com,https://b.example.com
@@ -320,7 +320,7 @@ app.use('/api', inboxRouter);
 // PATCH/DELETE + workflow/policy/validation-hooks/versions/branch/restore/chat）
 // 交付时未接线。挂载顺序在 teamsRouter（DAG/plan 子集）之后即可——两者路径不
 // 冲突（teams.ts 只有 /:id/dag* 与 /:id/plan*）。
-import teamsStoreRouter from './routes/agents/teams-store';
+import teamsStoreRouter from './application/teams/infra-store';
 app.use('/api/teams', teamsStoreRouter);
 // 单后端迁移收尾 — catalog 双前缀挂载（对齐 Python server.py:262-265）：
 // Python 端 APIRouter(prefix="/catalog") 挂了两份，裸 /catalog 保持原路径，

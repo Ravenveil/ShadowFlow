@@ -61,7 +61,7 @@ let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let router: typeof import('../application/merchant/http').default;
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 let server: ReturnType<express.Express['listen']>;
 let baseUrl = '';
 /** 本测试窗口内打到服务端的请求（HTTP 层观察点）。 */
@@ -152,7 +152,7 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-replay-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   router = (await import('../application/merchant/http')).default;
   sqlite.getDb();

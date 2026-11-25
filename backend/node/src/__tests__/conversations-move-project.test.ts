@@ -17,11 +17,11 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let conversationsRouter: typeof import('../routes/projects/conversations').default;
+let conversationsRouter: typeof import('../application/conversations/http-conversations').default;
 let runSessionsRouter: express.Router;
-let sqlite: typeof import('../storage/sqlite');
-let projectsStore: typeof import('../storage/projects');
-let conversationsStore: typeof import('../storage/conversations');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
+let projectsStore: typeof import('../application/conversations/infra-projects');
+let conversationsStore: typeof import('../application/conversations/infra-conversations');
 
 function app() {
   const a = express();
@@ -37,12 +37,12 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-conv-move-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
-  projectsStore = await import('../storage/projects');
-  conversationsStore = await import('../storage/conversations');
-  conversationsRouter = (await import('../routes/projects/conversations')).default;
-  runSessionsRouter = (await import('../routes/runs/run-sessions')).default;
+  projectsStore = await import('../application/conversations/infra-projects');
+  conversationsStore = await import('../application/conversations/infra-conversations');
+  conversationsRouter = (await import('../application/conversations/http-conversations')).default;
+  runSessionsRouter = (await import('../application/runs/sessions-src')).default;
   // 显式加时：全量并行（CI 2 核）下连续动态 import 五个模块偶尔拖过默认
   // hookTimeout 20s（真实失败 vs 环境慢无法区分）。60s 只放宽等待、不掩盖错误。
 }, 60_000);

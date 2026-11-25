@@ -2,7 +2,7 @@
  * remote-sync.test.ts — POST /api/remote-exec/sync（远端产出一键拉回）。
  *
  * ssh 与 tar 一律 mock：
- *   - preflight 的 `sshExec` 用 vi.mock('../lib/ssh-exec') 换成固定输出；
+ *   - preflight 的 `sshExec` 用 vi.mock('../application/adapters/ssh-exec.ts') 换成固定输出；
  *   - 「远端 tar 流 → 本地解包」用 `__setStreamTarImplForTests` 注入假实现
  *     （真实现要 spawn ssh 与 tar，单测不碰）。
  *
@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-vi.mock('../storage/settings', () => {
+vi.mock('../application/settings/infra-store', () => {
   const store = new Map<string, unknown>();
   return {
     getSetting: (k: string) => store.get(k) ?? null,
@@ -28,8 +28,8 @@ vi.mock('../storage/settings', () => {
   };
 });
 
-vi.mock('../lib/ssh-exec', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/ssh-exec')>();
+vi.mock('../application/adapters/ssh-exec.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../application/adapters/ssh-exec.ts')>();
   return {
     ...actual,
     sshExec: vi.fn(async () => ({
@@ -46,7 +46,7 @@ const groupState: { group: { group_id: string; workspace_dir: string | null } | 
   group: { group_id: 'g1', workspace_dir: null },
   throw: false,
 };
-vi.mock('../storage/groups-backend', () => ({
+vi.mock('../application/conversations/infra-groups-backend', () => ({
   getGroupsBackend: () => ({
     getGroup: async (id: string) => {
       if (groupState.throw) throw new Error('group store offline');
@@ -55,10 +55,10 @@ vi.mock('../storage/groups-backend', () => ({
   }),
 }));
 
-import remoteExecRouter from '../routes/system/remote-exec';
-import { sshExec, SSH_CONFIG_KEY } from '../lib/ssh-exec';
-import { setSetting } from '../storage/settings';
-import { __setStreamTarImplForTests } from '../lib/remote-sync';
+import remoteExecRouter from '../application/adapters/remote-exec';
+import { sshExec, SSH_CONFIG_KEY } from '../application/adapters/ssh-exec';
+import { setSetting } from '../application/settings/infra-store';
+import { __setStreamTarImplForTests } from '../application/adapters/remote-sync';
 
 function app() {
   const a = express();

@@ -20,7 +20,7 @@ let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let router: typeof import('../application/craft/http-profit').default;
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let agent: typeof import('../application/craft/infra-profit-agent');
 
@@ -35,7 +35,7 @@ beforeAll(async () => {
   origCwd = process.cwd();
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-craft-agent-'));
   process.chdir(tmp);
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   router = (await import('../application/craft/http-profit')).default;
   agent = await import('../application/craft/infra-profit-agent');

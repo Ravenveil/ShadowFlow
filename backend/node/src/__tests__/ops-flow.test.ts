@@ -22,7 +22,7 @@ let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let router: typeof import('../application/shipping/http').default;
-let sqlite: typeof import('../storage/sqlite');
+let sqlite: typeof import('../application/adapters/sqlite-impl.ts');
 let merchant: typeof import('../application/merchant/infra-store');
 let social: typeof import('../application/social/infra-store');
 
@@ -44,7 +44,7 @@ beforeAll(async () => {
   tmp = mkdtempSync(path.join(tmpdir(), 'sf-ops-'));
   process.chdir(tmp);
   delete process.env.SHIP_SF_API_TOKEN;
-  sqlite = await import('../storage/sqlite');
+  sqlite = await import('../application/adapters/sqlite-impl');
   sqlite._resetForTests();
   router = (await import('../application/shipping/http')).default;
   merchant = await import('../application/merchant/infra-store');

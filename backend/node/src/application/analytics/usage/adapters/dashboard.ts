@@ -13,7 +13,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { getDb } from '../../../../storage/sqlite';
+import { getDb } from '../../../adapters/sqlite-impl';
 import {
   sumUsageBetween,
   usageDailyBetween,

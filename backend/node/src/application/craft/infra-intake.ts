@@ -23,8 +23,8 @@ import {
   insertAgentEvent,
   listProducts,
 } from './infra-profit';
-import { getSetting } from '../../storage/settings';
-import { parseCraftMarkers, type CraftAction, type CraftTag } from '../../lib/craft-markers';
+import { getSetting } from '../../application/settings/infra-store';
+import { parseCraftMarkers, type CraftAction, type CraftTag } from '../../application/craft/infra-markers';
 
 /** 团队 setup 写入的 settings key（craft-team-setup.ts 同用）。 */
 export const CRAFT_TEAM_KEY = 'craft_profit.team';

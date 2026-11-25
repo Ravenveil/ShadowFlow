@@ -11,7 +11,7 @@
  * LLM 不可用 / 失败 / 解析为空 → 该批返回 null，绝不编造评分。
  */
 
-import { callProvider, type ProviderChunk, type ProviderId } from '../../transport/api-clients';
+import { callProvider, type ProviderChunk, type ProviderId } from '../adapters/transport/api-clients/index';
 import type { NewsCategory, NewsVerdict } from './model';
 
 /** 一批喂给模型多少条（太多输出截断风险高）。 */

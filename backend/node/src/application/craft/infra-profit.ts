@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
-import { getDb } from '../../storage/sqlite';
+import { getDb } from '../adapters/sqlite';
 // 纯规则已迁至 domains/craft/profit-model.ts（盈利口径/校验/报表，单一真源，可独立单测）；
 // 本文件保留 DDL/migration/SQL 与装配，导出名原样保留，调用方零改动。
 import {

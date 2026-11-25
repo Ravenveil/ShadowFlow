@@ -20,7 +20,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { getDb } from '../../storage/sqlite';
+import { getDb } from '../adapters/sqlite';
 import {
   findPlatform,
   getAdapter,
@@ -29,7 +29,7 @@ import {
   type PublishReceipt,
 } from './infra-platforms';
 import { lintContent } from './infra-platforms/compliance-lint';
-import { recordAction } from '../../lib/action-journal';
+import { recordAction } from '../../application/connectors/infra-journal';
 // 纯规则已迁至 domains/commerce/social-model.ts（状态机/审核门/平台限制，可独立单测）；
 // 本文件保留 DDL/SQL/适配器调用与装配，导出名原样保留。
 import {

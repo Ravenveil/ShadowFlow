@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { getDb } from '../../storage/sqlite';
+import { getDb } from '../adapters/sqlite';
 import {
   findCarrier,
   getCarrierAdapter,

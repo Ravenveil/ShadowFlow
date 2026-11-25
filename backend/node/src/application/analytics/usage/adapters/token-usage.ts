@@ -14,8 +14,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import { getDb } from '../../../../storage/sqlite';
-import { getSetting } from '../../../../storage/settings';
+import { getDb } from '../../../adapters/sqlite-impl';
+import { getSetting } from '../../../../application/settings/infra-store';
 // 成本/聚合口径已迁至 domains/analytics/usage/usage-model.ts（纯规则，可独立单测）；
 // 本文件保留 SQL 与装配，导出名原样保留。
 import {

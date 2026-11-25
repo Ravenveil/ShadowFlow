@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { repoDataFile } from '../../storage/repo-root';
+import { repoDataFile } from '../adapters/infra-repo-root';
 import { MemoryBankError, packNotFound } from './errors';
 import { MEMORY_CONFIG, MB_SCHEMA, LIMITS } from './config';
 import { manifestPath, packDir, loadManifest, atomicWrite, validatePackId } from './paths';
