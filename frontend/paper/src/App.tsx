@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Shell } from './shell/Shell';
-import { Landing } from './landing/Landing';
+import { Shell } from '@/app/shell/Shell';
+import { Landing } from '@/landing/Landing';
 
 type Route = 'landing' | 'app';
 

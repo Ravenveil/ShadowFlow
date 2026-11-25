@@ -19,15 +19,27 @@ const ROOT = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '
 const SRC = join(ROOT, 'src');
 
 /** 允许出现色值的文件（相对 src）。 */
-const HEX_ALLOW = new Set(['data/identities.ts']);
+const HEX_ALLOW = new Set(['shared/data/identities.ts']);
 
 /** 允许出现中文的文件类型（非 .tsx 一律放行：content/data 本来就是文案与数据）。 */
-const CJK_EXEMPT_DIRS = ['content'];
+const CJK_EXEMPT_DIRS = ['shared/content'];
 
 /** 唯一允许直连 mock 数据的文件；别的文件必须走 WorkspaceSource。 */
-const MOCK_CONSUMERS = new Set(['data/source.ts']);
+const MOCK_CONSUMERS = new Set(['shared/data/source.ts']);
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/;
+/** 跨层 import 只许「往里指」：外层可以依赖内层，内层不许回头认外层。 */
+const ALIAS_IMPORT_RE = /from\s+['"]@\/([a-z]+)\//;
+const LAYERS = ['shared', 'runtime', 'business', 'app', 'landing'];
+const LAYER_RANK = { shared: 0, runtime: 1, business: 2, app: 3, landing: 3 };
+/** business 可以复用 runtime 的通用件；landing 是独立营销站，只认 shared。 */
+const LAYER_ALLOW = {
+  shared: ['shared'],
+  runtime: ['shared', 'runtime'],
+  business: ['shared', 'runtime', 'business'],
+  app: ['shared', 'runtime', 'business', 'app'],
+  landing: ['shared', 'landing'],
+};
 const CJK_RE = /[\u4e00-\u9fa5]/;
 const MOCK_IMPORT_RE = /from\s+['"][^'"]*\/mock['"]/;
 /** 后端路径与 fetch 只许出现在 data/http/（映射层是唯一懂后端的地方）。 */
@@ -63,8 +75,26 @@ for (const file of walk(SRC)) {
     );
   }
 
+  // 规则 5：分层方向（inner 不许依赖 outer）
+  const fromLayer = LAYERS.find((l) => rel.startsWith(`${l}/`));
+  if (fromLayer) {
+    for (const line of code.split('\n')) {
+      const m = line.match(ALIAS_IMPORT_RE);
+      if (!m) continue;
+      const to = m[1];
+      if (!LAYERS.includes(to)) continue;
+      if (!LAYER_ALLOW[fromLayer].includes(to)) {
+        problems.push(
+          `${rel}  跨层 import 反向：${fromLayer} → ${to}（${line.trim()}）→ ${fromLayer} 只许依赖 ${LAYER_ALLOW[fromLayer].join(' / ')}`,
+        );
+      } else if (LAYER_RANK[to] > LAYER_RANK[fromLayer]) {
+        problems.push(`${rel}  跨层 import 反向：${fromLayer} → ${to}（${line.trim()}）`);
+      }
+    }
+  }
+
   // 规则 4：只有 data/http/ 认识后端；组件和别的数据文件不许自己 fetch
-  if (!rel.startsWith('data/http/') && API_CALL_RE.test(code)) {
+  if (!rel.startsWith('shared/data/http/') && API_CALL_RE.test(code)) {
     problems.push(
       `${rel}  直接写了后端地址或 fetch → 收进 data/http/（组件只认 WorkspaceSource）`,
     );

@@ -7,14 +7,14 @@
  * 版式：`src/styles/landing.css`
  */
 import { FormEvent, useEffect, useState } from 'react';
-import { AgentAvatar, AVATAR_SIZE } from '../avatar';
+import { AgentAvatar, AVATAR_SIZE } from '@/shared/ui/avatar';
 import {
   authGuest,
   authLogin,
   authRegister,
   authSubscribe,
   useAuthState,
-} from '../data/auth';
+} from '@/shared/data/auth';
 import {
   AUTH_MODAL,
   CASE_SECTION,
@@ -32,7 +32,7 @@ import {
   PRICING_SECTION,
   SLOGAN,
   TEAM_SECTION,
-} from '../content/landing';
+} from '@/shared/content/landing';
 import {
   IconArrowRight,
   IconCheck,
@@ -49,10 +49,10 @@ import {
   IconSparkle,
   IconTarget,
   IconBrainCircuit,
-} from '../shell/icons';
-import { DemoShowcase } from './DemoShowcase';
-import { ProductVisual } from './ProductVisual';
-import { SectionHead } from './SectionHead';
+} from '@/shared/ui/icons';
+import { DemoShowcase } from '@/landing/DemoShowcase';
+import { ProductVisual } from '@/landing/ProductVisual';
+import { SectionHead } from '@/landing/SectionHead';
 
 type ModalKind = 'contact' | 'plan' | null;
 

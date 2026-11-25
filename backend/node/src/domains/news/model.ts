@@ -12,6 +12,18 @@ export interface NewsFeed {
   added_at: number;
 }
 
+/** LLM 内容管线产物（AIHOT 式：评分 + 中文改写 + 推荐 + 分类）。 */
+export type NewsCategory = 'model' | 'industry' | 'opinion' | 'product' | 'dev';
+
+export interface NewsVerdict {
+  /** 0-10 价值分，一位小数。 */
+  score: number;
+  title_zh?: string;
+  summary_zh?: string;
+  reason?: string;
+  category?: NewsCategory;
+}
+
 export interface NewsItem {
   /** 稳定 id：feed_id + 链接，去重与前端 key 共用。 */
   item_id: string;
@@ -23,6 +35,8 @@ export interface NewsItem {
   /** epoch ms；无法解析时为 0。 */
   published_at: number;
   fetched_at: number;
+  /** LLM 评分产物；未评分（管线失败/未跑）为 undefined，界面按无分渲染。 */
+  verdict?: NewsVerdict;
 }
 
 export interface NewsStore {

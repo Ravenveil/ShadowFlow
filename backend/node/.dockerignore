@@ -1,0 +1,4 @@
+# 宿主机 node_modules 是 Windows 二进制，绝不能 COPY 进 Linux 镜像
+node_modules
+.shadowflow
+*.log

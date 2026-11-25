@@ -5,8 +5,8 @@
  * 交互：播放 / 暂停 / 下一步 / 重置，逐步渲染事件流与右侧指标板。
  */
 import { useEffect, useRef, useState } from 'react';
-import { DEMO, type DemoEventBase } from '../content/landing';
-import { IconCheck, IconPlay, IconZap } from '../shell/icons';
+import { DEMO, type DemoEventBase } from '@/shared/content/landing';
+import { IconCheck, IconPlay, IconZap } from '@/shared/ui/icons';
 
 function EventView({ event, index }: { event: DemoEventBase; index: number }) {
   if (event.kind === 'ceo') {

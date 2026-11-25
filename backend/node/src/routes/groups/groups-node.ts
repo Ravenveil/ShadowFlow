@@ -41,6 +41,15 @@ import { Router, type Request, type Response } from 'express';
 import * as store from '../../storage/groups-store';
 import { resolveChatWorkspace } from '../../lib/chat-workspace';
 
+/**
+ * 时间线消息 id 是 `chat_<message_id>`（前端 chatMessagesToTimeline 同构约定），
+ * reactions/pin 的 URL 里带的是时间线 id → 这里剥前缀还原落库键。
+ * 兼容两种传法：裸 message_id 与 chat_ 前缀。
+ */
+function stripTimelineId(mid: string): string {
+  return mid.startsWith('chat_') ? mid.slice(5) : mid;
+}
+
 const router = Router();
 
 /**
@@ -383,7 +392,7 @@ router.post('/:id/messages/:mid/reactions', (req: Request, res: Response) => {
   // 切换语义：若该用户已用此 emoji 反应过 → 移除（on=false），否则添加（on=true）。
   // store.setReaction 的 on 参数需路由先判定当前态（对齐 Python toggle）。
   const messages = store.listGroupMessages(req.params.id);
-  const target = messages.find((m) => m.message_id === req.params.mid);
+  const target = messages.find((m) => m.message_id === stripTimelineId(req.params.mid));
   if (!target) {
     messageNotFound(res, req.params.mid);
     return;
@@ -391,7 +400,7 @@ router.post('/:id/messages/:mid/reactions', (req: Request, res: Response) => {
   const already = (target.reactions[emoji] ?? []).includes(userId);
   const reactions = store.setReaction(
     req.params.id,
-    req.params.mid,
+    target.message_id,
     emoji,
     userId,
     !already,
@@ -415,7 +424,7 @@ router.post('/:id/messages/:mid/pin', (req: Request, res: Response) => {
   const body = (req.body ?? {}) as { pinned?: boolean };
   const pinned = store.setPinned(
     req.params.id,
-    req.params.mid,
+    stripTimelineId(req.params.mid),
     body.pinned === undefined ? undefined : !!body.pinned,
   );
   if (pinned === null) {

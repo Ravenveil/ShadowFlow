@@ -129,6 +129,12 @@ export function toAgentWireRecord(rec: LocalAgentRecord): Record<string, unknown
     status: typeof rec['status'] === 'string' ? rec['status'] : 'idle',
     source: typeof rec['source'] === 'string' ? rec['source'] : 'catalog',
     created_at: typeof rec['created_at'] === 'string' ? rec['created_at'] : '',
+    // 展示层字段回传：灵魂/头像页保存后要能读回，否则前端视图丢字段。
+    ...(typeof rec['avatar_color'] === 'string' ? { avatar_color: rec['avatar_color'] } : {}),
+    ...(typeof rec['avatar_style'] === 'string' ? { avatar_style: rec['avatar_style'] } : {}),
+    ...(typeof rec['avatar_seed'] === 'string' ? { avatar_seed: rec['avatar_seed'] } : {}),
+    ...(typeof rec['avatar_image'] === 'string' ? { avatar_image: rec['avatar_image'] } : {}),
+    ...(typeof rec['claw_id'] === 'string' ? { claw_id: rec['claw_id'] } : {}),
   };
 }
 

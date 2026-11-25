@@ -26,6 +26,11 @@ export interface NewsDeps {
   newId?: () => string;
 }
 
+/** 内容管线入参（AIHOT 式评分）；undefined = 后端未配 LLM，跳过不报错。 */
+export interface EnrichDeps {
+  runEnrich?: (items: NewsItem[]) => Promise<Map<string, import('../model').NewsVerdict>>;
+}
+
 export function listFeeds(deps: NewsDeps): { feeds: NewsFeed[]; items: number } {
   const store = deps.repo.load();
   return { feeds: store.feeds, items: store.items.length };
@@ -71,11 +76,15 @@ export function removeFeed(deps: NewsDeps, feedId: string): Result<{ feed_id: st
 export interface RefreshReport {
   added: number;
   total: number;
+  enriched: number;
   failed: { feed: string; reason: string }[];
 }
 
-/** 并发抓取所有启用的订阅源，合并去重后落盘。 */
-export async function refreshNews(deps: NewsDeps): Promise<RefreshReport> {
+/**
+ * 并发抓取所有启用的订阅源，合并去重；随后跑 LLM 内容管线给新条目评分。
+ * 评分失败（无 key / LLM 挂）静默降级：条目照常落盘，verdict 缺省。
+ */
+export async function refreshNews(deps: NewsDeps, enrich?: EnrichDeps): Promise<RefreshReport> {
   const store = deps.repo.load();
   const now = (deps.now ?? (() => Date.now()))();
   const enabled = store.feeds.filter((f) => f.enabled);
@@ -108,6 +117,25 @@ export async function refreshNews(deps: NewsDeps): Promise<RefreshReport> {
 
   const before = store.items.length;
   const items = mergeItems(store.items, incoming);
+
+  // ── AIHOT 式内容管线：只评新条目（没 verdict 的），老条目保留已有评分 ──
+  let enrichedCount = 0;
+  const pending = items.filter((i) => !i.verdict).slice(0, 40);
+  if (enrich?.runEnrich && pending.length > 0) {
+    try {
+      const verdicts = await enrich.runEnrich(pending);
+      for (const [id, verdict] of verdicts) {
+        const target = items.find((i) => i.item_id === id);
+        if (target) {
+          target.verdict = verdict;
+          enrichedCount += 1;
+        }
+      }
+    } catch {
+      /* 评分失败静默：新闻照常有，只是没分 */
+    }
+  }
+
   deps.repo.persist({ feeds: store.feeds, items });
-  return { added: Math.max(0, items.length - before), total: items.length, failed };
+  return { added: Math.max(0, items.length - before), total: items.length, enriched: enrichedCount, failed };
 }

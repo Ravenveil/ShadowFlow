@@ -1,0 +1,151 @@
+{
+  "hash": "0f6b961f",
+  "configHash": "ca34c7dc",
+  "lockfileHash": "5bbee3d2",
+  "browserHash": "05f14101",
+  "optimized": {
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "99a185f5",
+      "needsInterop": true
+    },
+    "react-dom": {
+      "src": "../../node_modules/react-dom/index.js",
+      "file": "react-dom.js",
+      "fileHash": "4a8b6a7f",
+      "needsInterop": true
+    },
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "bc67e2cf",
+      "needsInterop": true
+    },
+    "react/jsx-runtime": {
+      "src": "../../node_modules/react/jsx-runtime.js",
+      "file": "react_jsx-runtime.js",
+      "fileHash": "606399b0",
+      "needsInterop": true
+    },
+    "@dicebear/collection": {
+      "src": "../../node_modules/@dicebear/collection/lib/index.js",
+      "file": "@dicebear_collection.js",
+      "fileHash": "8b7f41cc",
+      "needsInterop": false
+    },
+    "@dicebear/core": {
+      "src": "../../node_modules/@dicebear/core/lib/index.js",
+      "file": "@dicebear_core.js",
+      "fileHash": "48da68de",
+      "needsInterop": false
+    },
+    "ethers": {
+      "src": "../../node_modules/ethers/lib.esm/index.js",
+      "file": "ethers.js",
+      "fileHash": "eebe1a9b",
+      "needsInterop": false
+    },
+    "i18next": {
+      "src": "../../node_modules/i18next/dist/esm/i18next.js",
+      "file": "i18next.js",
+      "fileHash": "35edf1a4",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.mjs",
+      "file": "lucide-react.js",
+      "fileHash": "01c8c30e",
+      "needsInterop": false
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "4d650e65",
+      "needsInterop": true
+    },
+    "react-helmet-async": {
+      "src": "../../node_modules/react-helmet-async/lib/index.esm.js",
+      "file": "react-helmet-async.js",
+      "fileHash": "cebcc96a",
+      "needsInterop": false
+    },
+    "react-i18next": {
+      "src": "../../node_modules/react-i18next/dist/es/index.js",
+      "file": "react-i18next.js",
+      "fileHash": "90fda4e7",
+      "needsInterop": false
+    },
+    "react-router-dom": {
+      "src": "../../node_modules/react-router-dom/dist/index.js",
+      "file": "react-router-dom.js",
+      "fileHash": "6bd080bd",
+      "needsInterop": false
+    },
+    "reactflow": {
+      "src": "../../node_modules/reactflow/dist/esm/index.mjs",
+      "file": "reactflow.js",
+      "fileHash": "bc32f8bc",
+      "needsInterop": false
+    },
+    "xlsx": {
+      "src": "../../node_modules/xlsx/xlsx.mjs",
+      "file": "xlsx.js",
+      "fileHash": "f03fa7c9",
+      "needsInterop": false
+    },
+    "zustand": {
+      "src": "../../node_modules/zustand/esm/index.mjs",
+      "file": "zustand.js",
+      "fileHash": "946890be",
+      "needsInterop": false
+    },
+    "zustand/middleware": {
+      "src": "../../node_modules/zustand/esm/middleware.mjs",
+      "file": "zustand_middleware.js",
+      "fileHash": "20e0f116",
+      "needsInterop": false
+    },
+    "vite-plugin-node-polyfills/shims/buffer": {
+      "src": "../../node_modules/vite-plugin-node-polyfills/shims/buffer/dist/index.js",
+      "file": "vite-plugin-node-polyfills_shims_buffer.js",
+      "fileHash": "2a66d42d",
+      "needsInterop": false
+    },
+    "vite-plugin-node-polyfills/shims/global": {
+      "src": "../../node_modules/vite-plugin-node-polyfills/shims/global/dist/index.js",
+      "file": "vite-plugin-node-polyfills_shims_global.js",
+      "fileHash": "fa1d85e3",
+      "needsInterop": false
+    },
+    "vite-plugin-node-polyfills/shims/process": {
+      "src": "../../node_modules/vite-plugin-node-polyfills/shims/process/dist/index.js",
+      "file": "vite-plugin-node-polyfills_shims_process.js",
+      "fileHash": "da65701d",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-HQ72JAUH": {
+      "file": "chunk-HQ72JAUH.js"
+    },
+    "chunk-VRIYB5ZN": {
+      "file": "chunk-VRIYB5ZN.js"
+    },
+    "chunk-VVFF6H53": {
+      "file": "chunk-VVFF6H53.js"
+    },
+    "chunk-7O7LO4RI": {
+      "file": "chunk-7O7LO4RI.js"
+    },
+    "chunk-CX2W44XS": {
+      "file": "chunk-CX2W44XS.js"
+    },
+    "chunk-T3WWCZNB": {
+      "file": "chunk-T3WWCZNB.js"
+    },
+    "chunk-KTOAIN46": {
+      "file": "chunk-KTOAIN46.js"
+    }
+  }
+}

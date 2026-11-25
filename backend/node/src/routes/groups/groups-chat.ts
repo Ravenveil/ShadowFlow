@@ -869,7 +869,11 @@ async function runAgentTurn(a: RunAgentTurnArgs): Promise<{ text: string; error?
           agentName: a.agentName,
         });
       } else if (chunk.type === 'error') {
-        errMsg = chunk.error?.message ?? 'stream error';
+        // stderr 尾巴拼进消息：CLI 起不来时只报「退出码 1」等于没报，根因（如
+        // 认证失效、环境变量污染）全在 stderr 里，必须让它上屏。
+        const errPayload = chunk.error as (Record<string, unknown> & { message?: string; stderr_tail?: string }) | undefined;
+        const tail = typeof errPayload?.stderr_tail === 'string' ? errPayload.stderr_tail.trim() : '';
+        errMsg = [errPayload?.message ?? 'stream error', tail].filter(Boolean).join(' — stderr: ');
         break;
       }
       // 'usage' / 'done' 无 UI 语义，忽略（usage 已由 transport 层落 token_usage）。

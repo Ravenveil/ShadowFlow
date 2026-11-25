@@ -19,10 +19,14 @@ import {
   listItems,
   refreshNews,
   removeFeed,
+  type EnrichDeps,
   type NewsDeps,
   type Result,
 } from '../use_cases/news';
-
+import { DEFAULT_MODELS } from '../../../transport/api-clients';
+import { resolveProviderKey } from '../../../transport/byokKey';
+import { enrichBatch, ENRICH_BATCH_SIZE, ENRICH_MAX_ITEMS, type VerdictInput } from '../enrich';
+import { mapLimit } from '../../../lib/chat-dag/map-limit';
 function sendResult<T>(
   res: Response,
   result: Result<T>,
@@ -41,6 +45,39 @@ function sendResult<T>(
       res.status(400).json({ error: { code: result.code, message: result.code } });
       break;
   }
+}
+
+/**
+ * 默认内容管线：zhipu GLM（与 run-suggestions 同一 provider 选择），
+ * 分批（ENRICH_BATCH_SIZE）有界并发评完；任一批失败只丢该批。
+ */
+export function defaultEnrichDeps(
+  headers: Record<string, string | string[] | undefined>,
+): EnrichDeps {
+  const provider = 'zhipu' as const;
+  const apiKey = resolveProviderKey(provider, headers);
+  console.log(`[news-enrich] key=${apiKey ? 'resolved(' + apiKey.length + ')' : 'MISSING'} batches start`);
+  return {
+    runEnrich: async (items) => {
+      console.log(`[news-enrich] runEnrich called with ${items.length} items`);
+      const pending: VerdictInput[] = items.slice(0, ENRICH_MAX_ITEMS).map((i) => ({
+        item_id: i.item_id,
+        title: i.title,
+        summary: i.summary,
+      }));
+      const merged = new Map<string, import('../model').NewsVerdict>();
+      const batches: VerdictInput[][] = [];
+      for (let i = 0; i < pending.length; i += ENRICH_BATCH_SIZE) {
+        batches.push(pending.slice(i, i + ENRICH_BATCH_SIZE));
+      }
+      const results = await mapLimit(batches, 3, (batch) => enrichBatch({ provider, apiKey, model: DEFAULT_MODELS[provider] }, batch));
+      for (const result of results) {
+        if (!result) continue;
+        for (const [id, verdict] of result) merged.set(id, verdict);
+      }
+      return merged;
+    },
+  };
 }
 
 export function createNewsRouter(deps: NewsDeps): Router {
@@ -68,9 +105,9 @@ export function createNewsRouter(deps: NewsDeps): Router {
     sendResult(res, removeFeed(deps, req.params.id), 204, () => res.status(204).send());
   });
 
-  router.post('/refresh', async (_req: Request, res: Response) => {
+  router.post('/refresh', async (req: Request, res: Response) => {
     try {
-      res.json(await refreshNews(deps));
+      res.json(await refreshNews(deps, defaultEnrichDeps(req.headers)));
     } catch (err) {
       res.status(502).json({
         error: { code: 'REFRESH_FAILED', message: err instanceof Error ? err.message : 'refresh failed' },

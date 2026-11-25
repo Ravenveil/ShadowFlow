@@ -19,10 +19,13 @@ services:
     environment:
       NODE_ENV: development
       PORT: "8002"
+      # ARC 观测面：容器内读宿主机 AutoResearchClaw 产物（domains/research arc-fs.reader）
+      ARC_ARTIFACTS_ROOTS: /mnt/arc-artifacts
     volumes:
       - ../backend/node:/app
       - /app/node_modules            # prevent host node_modules from clobbering image-installed deps
       - shadowflow_node_data:/app/.shadowflow  # persist SQLite + projects/
+      - ${USERPROFILE}/AutoResearchClaw/artifacts:/mnt/arc-artifacts:ro  # ARC run 产物，只读
     networks:
       - shadowflow-net
     restart: unless-stopped
@@ -36,9 +39,8 @@ services:
   shadowflow-web:
     build:
       context: ..
-      # 换新前端（论文四栏工作台）：把下一行改成 docker/Dockerfile.paper，
-      # 端口 / 反代 / 依赖关系全都不用动。
-      dockerfile: docker/Dockerfile.web
+      # 新前端（论文四栏工作台 / ARC 管线观测）。
+      dockerfile: docker/Dockerfile.paper
     image: shadowflow/web:dev
     container_name: shadowflow-web
     ports:

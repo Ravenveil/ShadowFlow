@@ -6,8 +6,8 @@
  * 状态徽标的闪电气图标。内容全部来自 `content/landing.ts` 的 PREVIEW，
  * 颜色走 CSS 变量 / data-tone，组件里没有色值、没有写死的中文。
  */
-import { LANDING_CTA, PREVIEW } from '../content/landing';
-import { IconBrainCircuit, IconCheck, IconFileCheck, IconZap } from '../shell/icons';
+import { LANDING_CTA, PREVIEW } from '@/shared/content/landing';
+import { IconBrainCircuit, IconCheck, IconFileCheck, IconZap } from '@/shared/ui/icons';
 
 export function ProductVisual({ onEnter }: { onEnter: () => void }) {
   return (

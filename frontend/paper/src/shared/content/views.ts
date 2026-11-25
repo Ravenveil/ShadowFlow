@@ -1,0 +1,256 @@
+/**
+ * views.ts — 工作台子页面（新闻/团队/知识库/备忘录/定时任务/主机/文件）的**全部可见文案**。
+ *
+ * 约定同 content/app.ts：`views/**` 组件里不出现中文内容，只把这里的字符串摆到位置上。
+ * 产品改口播只改这一个文件。新页面 = 这里加一段 + views/ 加一个组件。
+ */
+
+/** 子页面通用外壳 */
+export const SUBVIEW = {
+  backToChat: '返回对话',
+  loading: '加载中…',
+  loadFailed: '加载失败',
+  retry: '重试',
+  empty: '暂无数据',
+};
+
+/**
+ * 第二栏（随导航切换的那一列）的文案。
+ *
+ * 它不是「会话列表」的别名：每一栏列的是**当前视图要选的单位** ——
+ * 对话选会话，团队选团队，知识库选包，项目选目录。列不出单位时就不出这一栏。
+ */
+export const PANE = {
+  teams: '团队',
+  packs: '知识库',
+  projects: '项目',
+  feeds: '订阅源',
+  emptyTeams: '还没有团队',
+  emptyPacks: '还没有知识包',
+  emptyProjects: '还没有项目',
+  loading: '读取中…',
+  loadFailed: '读取失败',
+  memberUnit: '位',
+  sources: (n: number) => `${n} 个来源`,
+  chunks: (n: number) => `${n} 段`,
+};
+
+/** 新闻 / 订阅源（对齐 app 的 content/news.ts） */
+export const NEWS = {
+  title: '新闻',
+  refresh: '刷新',
+  refreshing: '抓取中…',
+  all: '全部',
+  addFeed: '添加订阅',
+  addPlaceholder: 'RSS / Atom 链接',
+  add: '添加',
+  deleteFeed: '取消订阅',
+  empty: '暂无内容，点击「添加订阅」或「刷新」',
+  noFeeds: '还没有订阅源',
+  loadFailed: '新闻加载失败',
+  updated: (n: number) => `已更新 ${n} 条`,
+  failed: (n: number) => `${n} 个订阅源抓取失败`,
+  added: '订阅已添加',
+  openLink: '打开原文',
+  noDate: '更早',
+  enriched: (n: number) => `已智能评分 ${n} 条`,
+  catAll: '全部',
+  catModel: '模型',
+  catIndustry: '行业',
+  catOpinion: '观点',
+  catProduct: '产品',
+  catDev: '开发',
+  catLabel: '分类',
+  scoreBy: (v: number) => `${v.toFixed(1)} 分`,
+};
+
+/** 管理团队（对齐 app 的 content/teams.ts） */
+export const TEAMS = {
+  title: '管理团队',
+  pickerTitle: '团队列表',
+  memberUnit: '位成员',
+  loading: '加载团队…',
+  loadFailed: '团队加载失败',
+  pickHint: '选择一个团队查看详情',
+  noWorkflow: '这个团队还没配置工作流',
+  noMembers: '这个团队还没有成员',
+  workflow: '工作流',
+  policy: '策略矩阵',
+  members: '成员',
+  /** 内置模板（前端常量）与后端持久化团队的区别标记。 */
+  builtinTag: '内置',
+  savePolicy: '保存策略',
+  savingPolicy: '保存中…',
+  savedPolicy: '已保存',
+  savePolicyFailed: '策略保存失败',
+};
+
+/** 灵魂配置（legacy NeoAgentSoul 抢救：GET/PATCH/POST pause|resume/DELETE /api/agents/:id） */
+export const SOUL = {
+  title: '灵魂配置',
+  pickerTitle: '成员列表',
+  loading: '加载成员…',
+  loadFailed: '成员加载失败',
+  empty: '还没有成员',
+  pickHint: '选择一位成员查看灵魂',
+  name: '名称',
+  prompt: '人设提示词（Soul / Persona）',
+  promptHint: '描述这个成员的角色、能力边界、语气与协作方式。',
+  chars: (n: number, max: number) => `${n} / ${max}`,
+  save: '保存',
+  saving: '保存中…',
+  saved: '已保存',
+  failed: '保存失败',
+  cancel: '取消',
+  readonly: '内置模板 Agent 的灵魂只读，请编辑其 .agent.yaml 源文件。',
+  templateTag: '模板',
+  sourceTag: '本地',
+  statusLabel: '状态',
+  statusIdle: '待命',
+  statusRunning: '运行中',
+  statusPaused: '已暂停',
+  statusError: '异常',
+  pause: '暂停',
+  resume: '恢复',
+  statusFailed: '状态切换失败',
+  delete: '删除',
+  deleteTitle: '删除员工',
+  deleteConfirm: (name: string) => `确定删除员工「${name}」？此操作不可撤销。`,
+  deleteFailed: '删除失败，请重试',
+  avatar: '头像（DiceBear）',
+  avatarStyle: '风格',
+  avatarSeed: '种子',
+  avatarRandom: '换一个',
+  claw: '驱动后端（Claw）',
+  clawNone: '不绑定（默认 AI 引擎）',
+  clawMissing: '绑定的 Claw 当前未安装，对话将无法由它驱动。',
+  searchPlaceholder: '搜索成员…',
+  create: '新建成员',
+  createTitle: '新建 Agent',
+  nameLabel: '名称',
+  namePlaceholder: '我的 Agent',
+  descLabel: '一句话描述（可选）',
+  descPlaceholder: '例：负责文献调研与综述初稿的科研助手',
+  generate: '生成人设',
+  generating: '生成中…',
+  genNoKey: '未检测到可用的大模型 API Key，可在设置中配置，或直接手输人设',
+  genFailed: '人设生成失败，可直接手输',
+  personaLabel: '人设（可编辑）',
+  personaPlaceholder: '## 角色定位\n…\n## 核心能力\n- …\n## 工作边界\n- …',
+  creating: '创建中…',
+  createBtn: '创建',
+  createFailed: '创建失败',
+  created: '已创建',
+};
+
+/** 知识库（memory-bank packs） */
+export const KNOWLEDGE = {
+  title: '知识库',
+  loading: '加载知识包…',
+  loadFailed: '知识包加载失败',
+  empty: '还没有知识包',
+  sources: (n: number) => `${n} 个来源`,
+  chunks: (n: number) => `${n} 个片段`,
+  create: '新建知识包',
+  createName: '名称',
+  createDesc: '描述',
+  createSubmit: '创建',
+  cancel: '取消',
+  created: '已创建',
+  statusActive: '就绪',
+  statusOther: '处理中',
+  /* 上传 / 导入（搬 legacy MemoryBankPanel + KnowledgePage 添加菜单） */
+  upload: '上传文件',
+  uploading: '上传中…',
+  uploadFailed: '上传失败',
+  importFolder: '导入本地文件夹…',
+  importing: '导入中…',
+  importPicking: '正在打开文件夹选择…',
+  imported: (ingested: number, dedup: number, skipped: number, failed: number) =>
+    `导入完成：摄入 ${ingested} · 去重 ${dedup} · 跳过 ${skipped} · 失败 ${failed}`,
+  needPack: '请先选择或新建知识包，再导入本地文件夹。',
+  sourcesEmpty: '还没有来源，点「上传文件」或「导入本地文件夹」。',
+  deleteSource: '删除来源',
+  deletePack: '删除知识包',
+  deletedSource: '来源已删除',
+  deletedPack: '知识包已删除',
+  confirmDeleteSource: (name: string) => `确定删除来源「${name}」？同名旧版本会自动恢复为默认检索版本。`,
+  confirmDeletePack: (name: string) => `确定删除知识包「${name}」？其中的记忆库数据将一并删除。`,
+  confirm: '删除',
+  /* 检索 */
+  searchPlaceholder: '检索记忆库…',
+  searchBtn: '检索',
+  searching: '检索中…',
+  searchFailed: '检索失败',
+  hitsEmpty: '没有命中，换个说法试试。',
+  resultsTitle: (n: number) => `检索结果（${n}）`,
+  ragBackend: (b: string) => `检索引擎：${b}`,
+  /* 文件类型提示（legacy 空态文案） */
+  supportHint: '支持 TXT / MD / CSV / JSON / HTML / XLSX / DOCX / PDF / 图片',
+};
+
+/** 定时任务（/api/schedules） */
+export const SCHEDULES = {
+  title: '定时任务',
+  loading: '加载任务…',
+  loadFailed: '任务加载失败',
+  empty: '还没有定时任务',
+  new: '新建任务',
+  name: '名称',
+  cron: 'Cron 表达式',
+  prompt: '执行内容',
+  enabled: '已启用',
+  disabled: '已停用',
+  save: '保存',
+  cancel: '取消',
+  delete: '删除',
+  pause: '暂停',
+  resume: '恢复',
+  never: '从未运行',
+  /* QuickSchedule 弹窗（搬 legacy NeoQuickSchedule 四频率形态） */
+  taskLabel: '任务内容',
+  taskHint: '到点要干什么，比如：整理今天的新闻要点发到群里',
+  freqLabel: '频率',
+  freqOnce: '一次性',
+  freqDaily: '每天',
+  freqWeekly: '每周',
+  freqCron: 'Cron',
+  timeLabel: '触发时间',
+  weekdayLabel: '星期',
+  weekdays: ['一', '二', '三', '四', '五', '六', '日'],
+  cronLabel: 'Cron 表达式',
+  previewOnce: (time: string) => `一次性：${time} 触发`,
+  previewDaily: (time: string) => `每天 ${time} 触发`,
+  previewWeeklyPick: '每周：先选星期',
+  previewWeekly: (days: string, time: string) => `每周${days} ${time} 触发`,
+  previewCronEmpty: '自定义 cron 表达式',
+  errNeedTask: '先写一句任务内容',
+  errNeedTime: '选一个触发时间',
+  errBadCron: '频率参数不完整（时间/星期/cron）',
+  errCreate: '创建失败，稍后重试',
+  creating: '创建中…',
+  createBtn: '创建',
+  created: '任务已创建',
+};
+
+/** 项目（/api/projects，legacy 项目管理抢救） */
+export const PROJECTS = {
+  title: '项目',
+  loading: '加载项目…',
+  loadFailed: '项目加载失败',
+  empty: '还没有项目',
+  sessions: (n: number) => `${n} 条会话`,
+  open: '打开',
+};
+
+/** 工作空间文件浏览（legacy 工作空间 抢救，/api/fs/*） */
+export const FILES = {
+  title: '工作空间',
+  loading: '读取目录…',
+  loadFailed: '读取失败',
+  empty: '这个目录是空的',
+  up: '上级目录',
+  folder: '文件夹',
+  file: '文件',
+  noSession: '当前会话没有工作目录',
+};

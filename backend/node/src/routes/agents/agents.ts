@@ -262,4 +262,50 @@ router.patch('/:id', async (req: Request, res: Response) => {
   res.json({ data: record, meta: {} });
 });
 
+// ─── POST /api/agents/:id/pause | /resume ───────────────────────────────────
+// legacy NeoAgentSoul 头部「暂停 / 恢复」调用的端点，单后端迁移时遗漏导致
+// 前端 404。这里补齐：JSON 真源改 status 字段后写回；yaml 模板（语义 id）
+// 的 status 属运行时，模板本体只读——返回 422 与 PATCH 设计时字段同策略。
+function setAgentStatus(id: string, status: 'paused' | 'idle'): {
+  code: number;
+  body: unknown;
+} {
+  const rec = readAgentFile(id);
+  if (!rec) {
+    return {
+      code: 404,
+      body: { error: { code: 'AGENT_NOT_FOUND', message: `Agent '${id}' not found` } },
+    };
+  }
+  const merged: Record<string, unknown> = {
+    ...(rec as unknown as Record<string, unknown>),
+    agent_id: id,
+    status,
+  };
+  try {
+    writeAgentFile(merged);
+  } catch (err) {
+    return {
+      code: 400,
+      body: {
+        error: {
+          code: 'AGENT_STATUS_WRITE_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        },
+      },
+    };
+  }
+  return { code: 200, body: { data: toAgentWireRecord(merged as unknown as LocalAgentRecord), meta: {} } };
+}
+
+for (const [action, status] of [
+  ['pause', 'paused'],
+  ['resume', 'idle'],
+] as const) {
+  router.post(`/:id/${action}`, (req: Request, res: Response) => {
+    const result = setAgentStatus(req.params.id, status);
+    res.status(result.code).json(result.body);
+  });
+}
+
 export default router;

@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# 不用 # syntax 指令：它会直连 docker.io 拉 frontend 镜像，绕开 registry-mirror。
 # ShadowFlow Paper Web —— 新版论文工作台（frontend/paper）→ nginx
 #
 # 与 Dockerfile.web 的差别只有「构建哪个目录」：
@@ -10,7 +10,9 @@
 #   docker/Dockerfile.web  改成  docker/Dockerfile.paper
 # 其余不动（端口 3000、健康检查、网络都在 compose 里）。
 
-FROM node:20.14.0-alpine AS builder
+# alpine 的 musl node 在本机 WSL2 VM 里会 Segmentation fault，builder 换 glibc slim；
+# runtime 的 nginx-alpine 无此问题，保持不动。
+FROM docker.m.daocloud.io/library/node:20.14.0-slim AS builder
 
 WORKDIR /app
 
@@ -18,6 +20,11 @@ WORKDIR /app
 # 的 junction，不能进镜像），所以用 npm install 而非 npm ci。
 COPY frontend/paper/package.json ./frontend/paper/
 RUN cd frontend/paper && npm install --no-audit --no-fund
+# paper 本地无 dependencies（node_modules 走 legacy junction，不能进镜像），
+# 容器内显式安装构建所需的全部运行时依赖 + 与 legacy 同代的 vite 5 工具链。
+RUN cd frontend/paper && npm install --no-save --no-audit --no-fund --legacy-peer-deps \
+      vite@^5.0.8 @vitejs/plugin-react@^4 \
+      react react-dom lucide-react @dicebear/core@9.4.3 @dicebear/micah@9.4.2
 
 COPY frontend/paper/tsconfig.json frontend/paper/vite.config.ts frontend/paper/index.html ./frontend/paper/
 COPY frontend/paper/src ./frontend/paper/src
@@ -26,7 +33,7 @@ COPY frontend/paper/src ./frontend/paper/src
 RUN cd frontend/paper && npx vite build
 
 
-FROM nginx:1.27.4-alpine AS runtime
+FROM docker.m.daocloud.io/library/nginx:1.27.4-alpine AS runtime
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
