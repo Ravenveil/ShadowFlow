@@ -72,8 +72,8 @@ import { detectAll } from './detectors/cli-detector';
 import { detectAcpAgents } from './detectors/acp-detector';
 import projectsRouter from './routes/projects/projects';
 import memoryEntriesRouter from './routes/memory/memory-entries';
-import memosRouter from './domains/memos/adapters/memos';
-import newsRouter from './domains/news/adapters/news';
+import memosRouter from './application/memos/http';
+import newsRouter from './application/news/http';
 // ARC（AutoResearchClaw）管线观测面：run 列表 / 阶段视图 / 终稿与核验产物
 import arcRouter from './domains/research/adapters/arc-http';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）

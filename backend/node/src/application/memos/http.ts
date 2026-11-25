@@ -10,14 +10,14 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { JsonMemoRepository } from '../infra/json-memo.repository';
+import { JsonMemoRepository } from './infra/json-memo.repository';
 import {
   makeCreateMemo,
   makeDeleteMemo,
   makeListMemos,
   makeUpdateMemo,
   type Result,
-} from '../use_cases/memos';
+} from './use_cases/memos';
 
 function sendResult<T>(
   res: Response,

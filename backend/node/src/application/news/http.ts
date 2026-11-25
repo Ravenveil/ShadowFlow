@@ -11,8 +11,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { JsonNewsRepository } from '../infra/json-news.repository';
-import { fetchFeed } from '../infra/rss';
+import { JsonNewsRepository } from './infra/json-news.repository';
+import { fetchFeed } from './infra/rss';
 import {
   addFeed,
   listFeeds,
@@ -22,11 +22,11 @@ import {
   type EnrichDeps,
   type NewsDeps,
   type Result,
-} from '../use_cases/news';
-import { DEFAULT_MODELS } from '../../../transport/api-clients';
-import { resolveProviderKey } from '../../../transport/byokKey';
-import { enrichBatch, ENRICH_BATCH_SIZE, ENRICH_MAX_ITEMS, type VerdictInput } from '../enrich';
-import { mapLimit } from '../../../lib/chat-dag/map-limit';
+} from './use_cases/news';
+import { DEFAULT_MODELS } from '../../transport/api-clients';
+import { resolveProviderKey } from '../../transport/byokKey';
+import { enrichBatch, ENRICH_BATCH_SIZE, ENRICH_MAX_ITEMS, type VerdictInput } from './enrich';
+import { mapLimit } from '../../lib/chat-dag/map-limit';
 function sendResult<T>(
   res: Response,
   result: Result<T>,
@@ -65,7 +65,7 @@ export function defaultEnrichDeps(
         title: i.title,
         summary: i.summary,
       }));
-      const merged = new Map<string, import('../model').NewsVerdict>();
+      const merged = new Map<string, import('./model').NewsVerdict>();
       const batches: VerdictInput[][] = [];
       for (let i = 0; i < pending.length; i += ENRICH_BATCH_SIZE) {
         batches.push(pending.slice(i, i + ENRICH_BATCH_SIZE));
