@@ -51,7 +51,8 @@ const REGISTRY: Record<string, DicebearStyleModule<Record<string, unknown>>> = {
 
 /** 下拉里展示的风格 id（稳定顺序，第一个为默认）。 */
 export const AVATAR_STYLES = Object.keys(REGISTRY);
-export const DEFAULT_AVATAR_STYLE = 'bottts-neutral';
+/** 全站统一 micah 人脸风（2026-11-25 用户定版：不要 bottts 机器人风）。 */
+export const DEFAULT_AVATAR_STYLE = 'micah';
 
 export function normalizeStyle(style: string | null | undefined): string {
   return style && style in REGISTRY ? style : DEFAULT_AVATAR_STYLE;
