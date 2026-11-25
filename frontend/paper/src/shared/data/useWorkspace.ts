@@ -362,32 +362,52 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
     () => (src.listProjects ? src.listProjects() : Promise.resolve([] as ProjectNode[])),
     [src],
   );
+  /** 项目变更（建/改/删）后必须刷新工作区，否则侧栏列表不更新 —— 用户会以为没建成。 */
   const createProject = useCallback(
-    (name: string, workspacePath?: string) =>
-      src.createProject ? src.createProject(name, workspacePath) : Promise.reject(new Error('unsupported')),
-    [src],
+    async (name: string, workspacePath?: string) => {
+      const created = src.createProject
+        ? await src.createProject(name, workspacePath)
+        : await Promise.reject(new Error('unsupported'));
+      reload();
+      return created;
+    },
+    [src, reload],
   );
   const renameProject = useCallback(
-    (id: string, name: string) =>
-      src.renameProject ? src.renameProject(id, name) : Promise.reject(new Error('unsupported')),
-    [src],
+    async (id: string, name: string) => {
+      if (!src.renameProject) throw new Error('unsupported');
+      await src.renameProject(id, name);
+      reload();
+    },
+    [src, reload],
   );
   const deleteProject = useCallback(
-    (id: string) =>
-      src.deleteProject ? src.deleteProject(id) : Promise.reject(new Error('unsupported')),
-    [src],
+    async (id: string) => {
+      if (!src.deleteProject) throw new Error('unsupported');
+      await src.deleteProject(id);
+      reload();
+    },
+    [src, reload],
   );
   const createProjectConversation = useCallback(
-    (projectId: string, title: string) =>
-      src.createProjectConversation
-        ? src.createProjectConversation(projectId, title)
-        : Promise.reject(new Error('unsupported')),
-    [src],
+    async (projectId: string, title: string) => {
+      const gid = src.createProjectConversation
+        ? await src.createProjectConversation(projectId, title)
+        : await Promise.reject(new Error('unsupported'));
+      reload();
+      return gid;
+    },
+    [src, reload],
   );
   const createConversation = useCallback(
-    (title: string) =>
-      src.createConversation ? src.createConversation(title) : Promise.reject(new Error('unsupported')),
-    [src],
+    async (title: string) => {
+      const gid = src.createConversation
+        ? await src.createConversation(title)
+        : await Promise.reject(new Error('unsupported'));
+      reload();
+      return gid;
+    },
+    [src, reload],
   );
   const createGroupChat = useCallback(
     (input: { name?: string; agentIds: string[]; teamId?: string }) =>
