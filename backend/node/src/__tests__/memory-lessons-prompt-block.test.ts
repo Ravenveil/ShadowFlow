@@ -22,7 +22,7 @@ let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let sqlite: typeof import('../storage/sqlite');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let lessons: typeof import('../storage/memory-lessons');
+let lessons: typeof import('../application/memory/infra/storage-memory-lessons');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let settings: typeof import('../storage/settings');
 
@@ -33,7 +33,7 @@ beforeAll(async () => {
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
   sqlite.getDb();
-  lessons = await import('../storage/memory-lessons');
+  lessons = await import('../application/memory/infra/storage-memory-lessons');
   settings = await import('../storage/settings');
 });
 

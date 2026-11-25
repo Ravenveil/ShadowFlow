@@ -11,8 +11,8 @@
  */
 
 import { randomUUID } from 'crypto';
-import { getSetting } from './settings';
-import { SqliteLessonRepository } from '../domains/memory/infra/sqlite-lesson.repository';
+import { getSetting } from '../../../storage/settings';
+import { SqliteLessonRepository } from './sqlite-lesson.repository';
 import {
   makeRemember,
   makeRecall,
@@ -21,7 +21,7 @@ import {
   makeListLessons,
   makeLessonStats,
   makeForgetLesson,
-} from '../domains/memory/use_cases/lessons';
+} from '../use_cases/lessons';
 import {
   LessonDomainError,
   KIND_LESSON,
@@ -32,7 +32,7 @@ import {
   RECALL_TOP_K,
   MAX_PER_SCOPE,
   type MemoryLesson,
-} from '../domains/memory/lessons-model';
+} from '../lessons-model';
 
 // ── 装配（单例 repo，行为与迁移前一致） ──────────────────────────────────────
 const repo = new SqliteLessonRepository();

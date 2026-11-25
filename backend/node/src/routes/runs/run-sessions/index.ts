@@ -37,7 +37,7 @@ import { saveRun, saveRunArtifacts, type ArtifactType } from '../../../storage/r
 import { getSetting } from '../../../storage/settings';
 // 经验记忆自动沉淀（2026-11-05，整合 OPC-OS PR#3 memory.py 设计）：
 // run 失败→教训、用户中断→偏好，全部从已落库事实挖、零 LLM 调用。
-import { remember, promptBlock } from '../../../storage/memory-lessons';
+import { remember, promptBlock } from '../../../application/memory/infra/storage-memory-lessons';
 import { coercePackIds, knowledgeBlock } from '../../../lib/memory-bank';
 import { coerceConnectorIds } from '../../../lib/connector-registry';
 import { recordAction } from '../../../lib/action-journal';

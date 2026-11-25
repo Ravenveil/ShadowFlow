@@ -29,7 +29,7 @@ let packGhost = '';
 beforeAll(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mb-lib-'));
   process.env.SHADOWFLOW_DATA_DIR = tmpDir;
-  const service = await import('../memory-bank/service');
+  const service = await import('../application/memory-bank/service');
   // 两包造分差：高频重复关键词的包得分更高（检索按词频相关度打分）。
   packHigh = randomBytes(16).toString('hex');
   service.createPack('高分包', '', {}, packHigh);

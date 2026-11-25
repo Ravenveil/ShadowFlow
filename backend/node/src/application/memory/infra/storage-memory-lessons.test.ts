@@ -24,8 +24,8 @@ import {
   MAX_PER_SCOPE,
   KIND_LESSON,
   KIND_PREF,
-} from './memory-lessons';
-import { _resetForTests } from './sqlite';
+} from './storage-memory-lessons';
+import { _resetForTests } from '../../../storage/sqlite';
 
 let failures = 0;
 function check(name: string, cond: boolean): void {

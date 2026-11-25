@@ -6,7 +6,7 @@
  * 逐字对齐原 storage/memory-lessons.ts 的 SQL，保证零回归。
  */
 
-import { getDb } from '../../../storage/sqlite';
+import { getDb } from '../../adapters/sqlite';
 import { getSetting } from '../../../storage/settings';
 import type { MemoryLesson } from '../lessons-model';
 import type { LessonListOptions, LessonRepository } from '../lessons-repository';

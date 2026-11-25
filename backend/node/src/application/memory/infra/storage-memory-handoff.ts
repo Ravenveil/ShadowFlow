@@ -19,8 +19,8 @@
  */
 
 import { createHash, randomUUID } from 'crypto';
-import { getDb } from './sqlite';
-import { recallLessons } from './memory-lessons';
+import { getDb } from '../../../storage/sqlite';
+import { recallLessons } from './storage-memory-lessons';
 import {
   DAY_MS,
   MAX_TEXT,
@@ -35,7 +35,7 @@ import {
   capNum,
   dedupHashInput,
   parseJsonArray,
-} from '../domains/memory/handoff-model';
+} from '../handoff-model';
 
 // 常量与纯规则已从 domains/memory/handoff-model.ts 提取（单一真源，可独立单测）；
 // 本文件保留 SQL、DDL 与装配。导出名原样保留，调用方零改动。
@@ -846,7 +846,7 @@ export function profile(subjectId: string, subjectType = 'customer'): {
 }
 
 /** 规则词表：客户反馈进来自动提炼写回长期画像，零模型、零额度消耗。 */
-export { FEEDBACK_RULES } from '../domains/memory/handoff-model';
+export { FEEDBACK_RULES } from '../handoff-model';
 
 /**
  * 反馈自动写回队列（2026-11-06，功能线③「自动化」补齐）。

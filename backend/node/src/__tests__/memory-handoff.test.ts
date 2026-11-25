@@ -22,7 +22,7 @@ let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let router: typeof import('../routes/memory/memory-handoff').default;
 let sqlite: typeof import('../storage/sqlite');
-let lessons: typeof import('../storage/memory-lessons');
+let lessons: typeof import('../application/memory/infra/storage-memory-lessons');
 
 function app() {
   const a = express();
@@ -39,7 +39,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  lessons = await import('../storage/memory-lessons');
+  lessons = await import('../application/memory/infra/storage-memory-lessons');
   router = (await import('../routes/memory/memory-handoff')).default;
   sqlite.getDb();
 

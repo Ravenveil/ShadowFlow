@@ -184,7 +184,7 @@ describe('memory-bank v1 端到端', () => {
 
   it('manifest schema 不匹配 → PACK_SCHEMA_MISMATCH', async () => {
     const service = await svc();
-    const { repoDataFile } = await import('../../storage/repo-root');
+    const { repoDataFile } = await import('../../../storage/repo-root');
     const packId = randomBytes(16).toString('hex');
     fs.mkdirSync(repoDataFile('knowledge', packId), { recursive: true });
     fs.writeFileSync(

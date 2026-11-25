@@ -48,7 +48,7 @@ export function coercePackIds(raw: unknown): string[] {
 /** 本地实现检索单包。异常抛给上层 fail-soft。 */
 async function localHits(packId: string, q: string): Promise<MemoryBankHitLite[]> {
   // 动态 import：避免冷启动加载整条解析/检索链
-  const { query } = await import('../memory-bank/service');
+  const { query } = await import('../application/memory-bank/service');
   const result = query(packId, { query: q, top_k: TOP_K });
   const hits: MemoryBankHitLite[] = [];
   for (const h of result.data.hits) {

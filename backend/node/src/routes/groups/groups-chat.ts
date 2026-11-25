@@ -74,14 +74,14 @@ import {
 } from '../../storage/agent-hops';
 // 2026-11-07 回合交接锚 — 无 hop 落库的回合（无边团队）turn 号不被 agent_hops
 // 记账，交接包 shift_id 也参与编号预留（见 nextChatTurnSeq）。
-import { maxShiftTurnAnchor } from '../../storage/memory-handoff';
+import { maxShiftTurnAnchor } from '../../application/memory/infra/storage-memory-handoff';
 // 2026-11-07 — hop 播报收口（running「交接中」中间态 + 帧先于补丁 + 按 hopId 索引）。
 import { createHopBroadcaster } from '../../lib/chat-dag/hop-broadcast';
 // Polynoia 对标（2026-08-15）— INTENT_PARSE 编排拆解 + worktree 隔离闭环 + git 证据。
 import { planWithLlm, decomposeWithLlm, type ParsedTask } from '../../lib/orchestrator-parse';
 // 对话框知识库（2026-11-06）— 记忆库检索块（fail-soft），DAG/串行派发共用。
 import { coercePackIds, knowledgeBlock } from '../../lib/memory-bank';
-import { promptBlock } from '../../storage/memory-lessons';
+import { promptBlock } from '../../application/memory/infra/storage-memory-lessons';
 
 import {
   allHandsPlan,
@@ -245,7 +245,7 @@ export function sinkRoundHandoff(input: {
   return (async () => {
     // 动态 import（防循环依赖；主链路零感知）。
     const { getSetting } = await import('../../storage/settings');
-    const { createHandoff, findHandoffByShift } = await import('../../storage/memory-handoff');
+    const { createHandoff, findHandoffByShift } = await import('../../application/memory/infra/storage-memory-handoff');
     const payload = buildRoundHandoffPayload({
       ...input,
       autoLearnOff: getSetting('memory.autoLearn') === false,

@@ -3,7 +3,7 @@
  * SQL 全部锁在本文件，逐字对齐原 storage/memory-profile-configs.ts。
  */
 
-import { getDb } from '../../../storage/sqlite';
+import { getDb } from '../../adapters/sqlite';
 import {
   byUpdatedDesc,
   type MemoryProfile,

@@ -15,21 +15,21 @@
 
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
-import { SqliteProfileRepository } from '../infra/sqlite-profile.repository';
+import { SqliteProfileRepository } from './infra/sqlite-profile.repository';
 import {
   makeCreateProfile,
   makeListProfiles,
   makeGetProfile,
   makeUpdateProfile,
   makeDeleteProfile,
-} from '../use_cases/profiles';
+} from './use_cases/profiles';
 import {
   FieldViolationError,
   UUID_RE,
   NUM_CONSTRAINTS,
   DEFAULTS,
   type ProfilePatch,
-} from '../profiles-model';
+} from './profiles-model';
 
 const NUM_FIELDS = NUM_CONSTRAINTS.map((c) => c.field);
 const ENUM_FIELDS = ['writeback_policy', 'state_sync_policy', 'compression_policy'] as const;

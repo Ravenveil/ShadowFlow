@@ -41,8 +41,8 @@ import {
   runFeedbackQueue,
   submitFeedback,
   writeback,
-} from '../../../storage/memory-handoff';
-import { apiGuard } from '../../../middleware/api-guard';
+} from './infra/storage-memory-handoff';
+import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();
 

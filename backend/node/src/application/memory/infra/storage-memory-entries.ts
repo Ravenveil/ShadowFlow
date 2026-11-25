@@ -10,11 +10,11 @@
  *   - use_cases/entries.ts                   业务用例
  */
 
-import { createMemoryEntry, type MemoryEntry, type MemoryScope } from '../domains/memory/model';
-import { JsonMemoryEntryRepository } from '../domains/memory/infra/json-memory-entry.repository';
+import { createMemoryEntry, type MemoryEntry, type MemoryScope } from '../model';
+import { JsonMemoryEntryRepository } from './json-memory-entry.repository';
 
-export type { MemoryScope, MemoryEntry, MemoryStore } from '../domains/memory/model';
-export { isValidId } from '../domains/memory/model';
+export type { MemoryScope, MemoryEntry, MemoryStore } from '../model';
+export { isValidId } from '../model';
 
 const repo = new JsonMemoryEntryRepository();
 

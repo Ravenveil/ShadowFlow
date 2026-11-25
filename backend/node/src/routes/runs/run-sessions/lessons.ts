@@ -1,7 +1,7 @@
 /**
  * run-sessions/lessons.ts — 经验记忆召回块 + 自动沉淀（OPC-OS PR#3 设计整合）。
  */
-import { promptBlock, remember } from '../../../storage/memory-lessons';
+import { promptBlock, remember } from '../../../application/memory/infra/storage-memory-lessons';
 import { getSetting } from '../../../storage/settings';
 
 /**

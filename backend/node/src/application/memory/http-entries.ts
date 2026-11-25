@@ -15,8 +15,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import type { MemoryEntryRepository } from '../repository';
-import { JsonMemoryEntryRepository } from '../infra/json-memory-entry.repository';
+import type { MemoryEntryRepository } from './repository';
+import { JsonMemoryEntryRepository } from './infra/json-memory-entry.repository';
 import {
   makeCreateEntry,
   makeDeleteEntry,
@@ -25,7 +25,7 @@ import {
   makeUpdateEntry,
   makeUpdateSettings,
   type Result,
-} from '../use_cases/entries';
+} from './use_cases/entries';
 
 /** 把用例 Result 统一映射成 HTTP 响应；业务层不认识 status code。 */
 function sendResult<T>(

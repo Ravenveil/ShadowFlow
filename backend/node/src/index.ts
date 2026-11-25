@@ -43,7 +43,7 @@ import inboxRouter from './routes/groups/inbox';
 import catalogRouter from './routes/projects/catalog';
 // 多模态记忆库 — createMemoryBankRouter()，router 内部自带 10mb parser，
 // 必须挂在全局 1mb parser（:106）之前，否则 >1mb 文本入库请求被 413 挡掉。
-import { createMemoryBankRouter } from './memory-bank/routes';
+import { createMemoryBankRouter } from './application/memory-bank/routes';
 // 单后端迁移第三批（2026-11-18）— settings 缺口端点 + sessions
 import settingsExtRouter from './routes/system/settings-ext';
 import remoteExecRouter from './routes/system/remote-exec';
@@ -58,9 +58,9 @@ import registryRouter from './routes/agents/registry';
 import approvalsRouter from './routes/runs/approvals';
 import { a2aRouter } from './routes/system/acp';
 // 单后端迁移第三批 — memory state stub + agent state（裸 /state 前缀）
-import memoryStateRouter from './routes/memory/memory-state';
+import memoryStateRouter from './application/memory/http-state';
 import agentStateRouter from './routes/agents/agent-state';
-import memoryProfilesRouter from './routes/memory/memory-profiles';
+import memoryProfilesRouter from './application/memory/http-profiles';
 // Part D — LLM protocol entrypoints (Anthropic + OpenAI compatible)
 import llmRouter from './routes/system/llm';
 import asrRouter from './routes/system/asr';
@@ -71,17 +71,17 @@ import actionsRouter from './routes/system/actions';
 import { detectAll } from './detectors/cli-detector';
 import { detectAcpAgents } from './detectors/acp-detector';
 import projectsRouter from './routes/projects/projects';
-import memoryEntriesRouter from './routes/memory/memory-entries';
+import memoryEntriesRouter from './application/memory/http-entries';
 import memosRouter from './application/memos/http';
 import newsRouter from './application/news/http';
 // ARC（AutoResearchClaw）管线观测面：run 列表 / 阶段视图 / 终稿与核验产物
 import arcRouter from './domains/research/adapters/arc-http';
 // 经验记忆 + 数据看板（2026-11-05，整合 OPC-OS PR#3 设计：memory.py + ledger/看板）
-import memoryLessonsRouter from './routes/memory/memory-lessons';
+import memoryLessonsRouter from './application/memory/http-lessons';
 import dashboardRouter from './routes/dashboard/dashboard';
 // 功能线③ 另一半（2026-11-05）：agent 间记忆交接 + 长期画像写回。外接 Router，
 // 主入口只挂一行，不新增服务/端口，也不改既有路由语义。
-import memoryHandoffRouter from './routes/memory/memory-handoff';
+import memoryHandoffRouter from './application/memory/http-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
 import merchantBoardRouter from './routes/dashboard/merchant-board';
 // 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 成本 − 快递

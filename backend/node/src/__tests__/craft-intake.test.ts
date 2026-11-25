@@ -43,7 +43,7 @@ beforeAll(async () => {
 afterAll(async () => {
   // node 模式用例会打开 memory_bank.sqlite 句柄——不关则 Windows 下删临时目录 EBUSY
   try {
-    const mbDb = await import('../memory-bank/db');
+    const mbDb = await import('../application/memory-bank/db');
     mbDb.closeAll();
   } catch {
     /* node 模式用例未跑到时无句柄 */
@@ -210,7 +210,7 @@ describe('ingestProductMaterial — 产品资料自动同步知识库', () => {
     const p2 = await intake.ingestProductMaterial('苗绣杯垫，苗族手作，直径 10cm，售价 68 元。');
     expect(p2).toBe(p1);
 
-    const { listPacks } = await import('../memory-bank/service');
+    const { listPacks } = await import('../application/memory-bank/service');
     const pack = listPacks().find((pk) => pk.name === intake.CRAFT_PACK_NAME);
     expect(pack?.pack_id).toBe(p1);
     expect(fetchSpy).not.toHaveBeenCalled();

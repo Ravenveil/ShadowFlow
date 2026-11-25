@@ -8,7 +8,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { repoDataFile } from '../storage/repo-root';
+import { repoDataFile } from '../../storage/repo-root';
 import { MemoryBankError } from './errors';
 
 const PACK_ID_RE = /^[a-f0-9]{32}$/;

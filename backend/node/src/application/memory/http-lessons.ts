@@ -14,18 +14,18 @@
 
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
-import { SqliteLessonRepository } from '../infra/sqlite-lesson.repository';
+import { SqliteLessonRepository } from './infra/sqlite-lesson.repository';
 import {
   makeRemember,
   makeListLessons,
   makeLessonStats,
   makeForgetLesson,
-} from '../use_cases/lessons';
+} from './use_cases/lessons';
 import {
   LessonDomainError,
   VALID_KINDS,
   KIND_LESSON,
-} from '../lessons-model';
+} from './lessons-model';
 
 /** 装配（工厂：接收 repo，依赖倒置）。 */
 export function createMemoryLessonsRouter(repo: SqliteLessonRepository): Router {

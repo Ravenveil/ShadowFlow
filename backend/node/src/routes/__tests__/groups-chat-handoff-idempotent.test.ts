@@ -20,7 +20,7 @@ let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let sqlite: typeof import('../../storage/sqlite');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let handoffs: typeof import('../../storage/memory-handoff');
+let handoffs: typeof import('../../application/memory/infra/storage-memory-handoff');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let settings: typeof import('../../storage/settings');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -32,7 +32,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../../storage/sqlite');
   sqlite._resetForTests();
-  handoffs = await import('../../storage/memory-handoff');
+  handoffs = await import('../../application/memory/infra/storage-memory-handoff');
   settings = await import('../../storage/settings');
   chat = await import('../groups/groups-chat');
   sqlite.getDb();

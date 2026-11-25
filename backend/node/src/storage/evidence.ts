@@ -44,7 +44,7 @@ import {
   listHandoffs,
   type Handoff,
   type ProfileConflict,
-} from './memory-handoff';
+} from '../application/memory/infra/storage-memory-handoff';
 import { getDb } from './sqlite';
 // 报告口径已迁至 domains/analytics/evidence-model.ts（金额/时间/Markdown/CSV/文件名，
 // 纯函数可独立单测）；本文件保留 SQL 取数与报告拼装，导出名原样保留。

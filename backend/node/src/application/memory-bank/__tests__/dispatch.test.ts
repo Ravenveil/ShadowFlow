@@ -35,7 +35,7 @@ describe('lib/memory-bank 分流', () => {
     delete process.env.SF_MEMORY_BANK_MODE;
     delete process.env.SF_BACKEND_MODE;
     const service = await import('../service');
-    const lib = await import('../../lib/memory-bank');
+    const lib = await import('../../../lib/memory-bank');
     const packId = randomBytes(16).toString('hex');
     service.createPack('分流包', '', {}, packId);
     service.ingestTextTyped(packId, '分流验证：本地检索应命中的内容 dispatch-check 7777。', {
@@ -54,7 +54,7 @@ describe('lib/memory-bank 分流', () => {
   it('SF_MEMORY_BANK_MODE 已作废（ADR-0001）：显式 python 也走本地', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'python';
     const service = await import('../service');
-    const lib = await import('../../lib/memory-bank');
+    const lib = await import('../../../lib/memory-bank');
     const packId = randomBytes(16).toString('hex');
     service.createPack('py模式包', '', {}, packId);
     service.ingestTextTyped(packId, 'python 标签不再分流，本地必中 py-mode-check 8888。', {
@@ -68,7 +68,7 @@ describe('lib/memory-bank 分流', () => {
   it('node 模式（single 语义）：本地命中且不发 HTTP', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'node';
     const service = await import('../service');
-    const lib = await import('../../lib/memory-bank');
+    const lib = await import('../../../lib/memory-bank');
     const packId = randomBytes(16).toString('hex');
     service.createPack('node模式包', '', {}, packId);
     service.ingestTextTyped(packId, 'node 模式本地必中 node-mode-check 9999。', { source_name: 'n.txt' });
@@ -79,7 +79,7 @@ describe('lib/memory-bank 分流', () => {
 
   it('不存在的 pack：fail-soft 返回空，绝不抛', async () => {
     delete process.env.SF_MEMORY_BANK_MODE;
-    const lib = await import('../../lib/memory-bank');
+    const lib = await import('../../../lib/memory-bank');
     const ghost = randomBytes(16).toString('hex');
     const hits = await lib.fetchMemoryBankHits([ghost], '任意查询词');
     expect(hits).toHaveLength(0);
@@ -92,7 +92,7 @@ describe('lib/memory-bank 分流', () => {
 describe('craft-intake 分流', () => {
   it('auto：ingestProductMaterial 本地建包并落库，二次去重', async () => {
     delete process.env.SF_MEMORY_BANK_MODE;
-    const craft = await import('../../storage/craft-intake');
+    const craft = await import('../../../storage/craft-intake');
     const service = await import('../service');
     craft._resetCraftPackCache();
     const packId1 = await craft.ingestProductMaterial(
@@ -111,14 +111,14 @@ describe('craft-intake 分流', () => {
   });
 
   it('短消息/命令不同步（<10 字符 或 / 开头）', async () => {
-    const craft = await import('../../storage/craft-intake');
+    const craft = await import('../../../storage/craft-intake');
     expect(await craft.ingestProductMaterial('短句')).toBeNull();
     expect(await craft.ingestProductMaterial('/command something long enough')).toBeNull();
   });
 
   it('node 模式：本地路径生效', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'node';
-    const craft = await import('../../storage/craft-intake');
+    const craft = await import('../../../storage/craft-intake');
     craft._resetCraftPackCache();
     const packId = await craft.ingestProductMaterial(
       'node 模式下的产品资料同步验证，这段文字足够长可以入库。',

@@ -10,14 +10,14 @@
  */
 
 import { randomUUID } from 'crypto';
-import { SqliteProfileRepository } from '../domains/memory/infra/sqlite-profile.repository';
+import { SqliteProfileRepository } from './sqlite-profile.repository';
 import {
   makeCreateProfile,
   makeListProfiles,
   makeGetProfile,
   makeUpdateProfile,
   makeDeleteProfile,
-} from '../domains/memory/use_cases/profiles';
+} from '../use_cases/profiles';
 import {
   FieldViolationError,
   UUID_RE,
@@ -26,7 +26,7 @@ import {
   type WritebackPolicy,
   type StateSyncPolicy,
   type CompressionPolicy,
-} from '../domains/memory/profiles-model';
+} from '../profiles-model';
 
 const repo = new SqliteProfileRepository();
 const deps = { newId: () => randomUUID() };

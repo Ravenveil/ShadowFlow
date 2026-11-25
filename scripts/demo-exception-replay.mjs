@@ -79,7 +79,7 @@ const NOTICE_BODY = [
  */
 export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shadowflow') } = {}) {
   const board = await import('../backend/node/src/storage/merchant-board');
-  const memory = await import('../backend/node/src/storage/memory-handoff');
+  const memory = await import('../backend/node/src/application/memory/infra/storage-memory-handoff');
   const hopsStore = await import('../backend/node/src/storage/agent-hops');
   const evidence = await import('../backend/node/src/storage/evidence');
 

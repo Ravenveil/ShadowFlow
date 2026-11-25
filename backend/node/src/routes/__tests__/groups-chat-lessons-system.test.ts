@@ -113,7 +113,7 @@ import { runFanoutAsync, chatLessonsBlock } from '../groups/groups-chat';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let lessons: typeof import('../../storage/memory-lessons');
+let lessons: typeof import('../../application/memory/infra/storage-memory-lessons');
 
 beforeAll(async () => {
   origCwd = process.cwd();
@@ -122,7 +122,7 @@ beforeAll(async () => {
   const sqlite = await import('../../storage/sqlite');
   sqlite._resetForTests();
   sqlite.getDb();
-  lessons = await import('../../storage/memory-lessons');
+  lessons = await import('../../application/memory/infra/storage-memory-lessons');
 
   // 四条经验：通用 / pm 专属 / 聊天回合沉淀 / 无关域（绝不该进任何 agent 的块）
   lessons.remember({ content: '通用-交付必须附证据链', scope_key: '', kind: 'lesson', score: 0.9 });
