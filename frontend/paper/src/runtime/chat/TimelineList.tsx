@@ -304,7 +304,7 @@ function Row({
     case 'user_turn': {
       const attachments = msg.attachments ?? [];
       return (
-        <div className="sf-msg sf-msg--user">
+        <div className="sf-msg sf-msg--user" data-msg-id={msg.id}>
           {msg.text ? <div className="sf-msg-userbubble">{msg.text}</div> : null}
           {attachments.length ? (
             <div className="tl-refs">
@@ -391,7 +391,7 @@ function Row({
       if (inTurn) return body;
       const name = msg.agent_name || msg.sender_name || DEMO.leadAuthor;
       return (
-        <div className="sf-msg sf-msg--agent">
+        <div className="sf-msg sf-msg--agent" data-msg-id={msg.id}>
           <div className="sf-msg-gutter">
             <AgentAvatar label={name} size={AVATAR_SIZE.base} />
           </div>
@@ -611,7 +611,7 @@ function AgentTurn({
   const name = who.name || DEMO.leadAuthor;
   const lastAssistant = [...msgs].reverse().find((m) => m.kind === 'assistant_text');
   return (
-    <article className="sf-msg sf-msg--agent tl-turn">
+    <article className="sf-msg sf-msg--agent tl-turn" data-msg-id={msgs[0]?.id}>
       <div className="sf-msg-gutter">
         <AgentAvatar label={name} size={AVATAR_SIZE.base} />
       </div>

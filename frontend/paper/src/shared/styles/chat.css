@@ -2161,3 +2161,56 @@
   color: var(--ink-3);
   line-height: 1.5;
 }
+
+/* ---- 消息导航条（MessageRail，2026-11-25 学习 WorkBuddy 移动端） ---- */
+.msg-rail {
+  position: absolute;
+  right: 3px;
+  top: 56px;
+  bottom: 96px;
+  width: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 5;
+  cursor: pointer;
+}
+.msg-rail-tick {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 9px;
+  height: 2px;
+  border: 0;
+  padding: 0;
+  border-radius: 1px;
+  background: var(--ink-4);
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s, transform 0.15s;
+}
+.msg-rail-tick[data-kind='user'] {
+  background: var(--ink-3, var(--ink-4));
+  opacity: 0.75;
+}
+.msg-rail-tick:hover {
+  opacity: 1;
+  background: var(--accent, var(--ink));
+  transform: translateX(-50%) scaleX(1.4);
+}
+.msg-rail-cursor {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent, var(--ink));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, var(--ink)) 14%, transparent);
+  pointer-events: none;
+  transition: top 0.12s ease-out;
+}
+
+/* 顶栏标题前的对端头像（单聊） */
+.chat-head-main .sf-avatar {
+  flex: none;
+}

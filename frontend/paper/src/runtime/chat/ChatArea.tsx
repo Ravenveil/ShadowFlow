@@ -7,9 +7,10 @@
  * 选择依据是数据存在与否，不是开关：多一条通道时界面自己变细，少一条也不会空掉。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AvatarStack, AVATAR_SIZE } from '@/shared/ui/avatar';
+import { AgentAvatar, AvatarStack, AVATAR_SIZE } from '@/shared/ui/avatar';
 import { MessageList } from '@/runtime/chat/MessageList';
 import { TimelineList } from '@/runtime/chat/TimelineList';
+import { MessageRail } from '@/runtime/chat/MessageRail';
 import { RunSuggestions } from '@/runtime/chat/RunSuggestions';
 import { TeamSavedCard } from '@/runtime/chat/TeamSavedCard';
 import { Composer } from '@/runtime/chat/composer/Composer';
@@ -129,6 +130,12 @@ export function ChatArea({
               <IconPanel size={15} />
             </button>
           ) : null}
+          {/* 用户反馈（2026-11-25）：单聊顶栏只有名字没头像 → 标题前放对端头像（身份表 micah 脸）。 */}
+          <AgentAvatar
+            label={session.members[0] ?? session.title}
+            size={AVATAR_SIZE.md}
+            status={false}
+          />
           <h1 className="chat-head-title">{session.title}</h1>
         </div>
         <div className="chat-head-actions">
@@ -259,6 +266,9 @@ export function ChatArea({
           ) : null}
         </div>
       </div>
+
+      {/* 消息导航条（WorkBuddy 移动端同款）：右缘细条，格=消息，游标=视口位置。 */}
+      {onTimeline ? <MessageRail messages={timeline.messages} scrollRef={scrollRef} /> : null}
 
       <div className="chat-foot">
         <Composer

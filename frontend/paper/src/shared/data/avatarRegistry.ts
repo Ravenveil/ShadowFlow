@@ -55,9 +55,9 @@ function buildInfo(src: AgentAvatarSource): AgentAvatarInfo {
   const base = agentIdentity(src.name || src.agent_id);
   return {
     style: src.avatar_style || undefined,
-    // 种子带上 agent_id：身份表只按角色名给脸，角色相同的不同 Agent 会撞脸；
-    // 拼上 id 后每个 Agent 的唯一性由 id 兜住，配色仍按角色（视觉上成组）。
-    seed: src.avatar_seed || `${base.seed}:${src.agent_id}`,
+    // 用户定版（2026-11-25）：seed 固定用身份表值（如董事长恒 'CEO'），不拼 agent_id ——
+    // 拼了 id 每次后端重建 agent 脸就变，用户要求「固定之前的那个头像，不用再换」。
+    seed: src.avatar_seed || base.seed,
     color: src.avatar_color || base.color,
     image: src.avatar_image || undefined,
   };

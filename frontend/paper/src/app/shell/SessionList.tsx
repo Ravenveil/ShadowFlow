@@ -81,6 +81,7 @@ export function SessionList({
   activeId: string;
   onSelect: (id: string) => void;
   /** 顶层新建对话：真建一个空群（不是随便挑一条已有的 DM）。 */
+  /** 顶层新建对话；title 传空串 = 用默认标题直接建（用户定版：不弹输入框）。 */
   onCreate?: (title: string) => void;
   /** 建完群回调（模态在列表里自持，这里只管「进群 + 刷新」）。 */
   createGroupChat?: (input: { name?: string; agentIds: string[]; teamId?: string }) => Promise<string>;
@@ -274,8 +275,8 @@ export function SessionList({
               role="menuitem"
               onClick={() => {
                 setNewOpen(false);
-                setFormValue('');
-                setGroupForm({ mode: 'root' });
+                // 用户定版（2026-11-25）：点「新建对话」直接建，不再弹命名输入框。
+                onCreate?.('');
               }}
             >
               <IconChat size={14} />

@@ -490,7 +490,8 @@ export function Shell({ onExit }: { onExit: () => void }) {
               activeId={session.id}
               onSelect={select}
               onCreate={(title) => {
-                void createConversation(title)
+                // 空标题 = 直接建（用户定版 2026-11-25：新建对话不弹输入框），标题落「新对话」。
+                void createConversation(title.trim() || '新对话')
                   .then((gid) => {
                     setActiveId(gid);
                     reload();
