@@ -19,10 +19,10 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/dashboard/craft-profit').default;
+let router: typeof import('../application/craft/http-profit').default;
 let sqlite: typeof import('../storage/sqlite');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let agent: typeof import('../storage/craft-profit-agent');
+let agent: typeof import('../application/craft/infra-profit-agent');
 
 function app() {
   const a = express();
@@ -37,12 +37,12 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/dashboard/craft-profit')).default;
-  agent = await import('../storage/craft-profit-agent');
+  router = (await import('../application/craft/http-profit')).default;
+  agent = await import('../application/craft/infra-profit-agent');
   sqlite.getDb();
   // cp_* 建表是懒执行（首次 storage 调用时 DDL），先触发一次，否则
   // beforeEach 的 DELETE 会撞 no such table。
-  await import('../storage/craft-profit').then((m) => m.listProducts());
+  await import('../application/craft/infra-profit').then((m) => m.listProducts());
 });
 
 afterAll(() => {

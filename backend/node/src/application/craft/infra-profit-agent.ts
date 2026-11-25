@@ -19,8 +19,8 @@ import {
   listAgentEvents,
   listProducts,
   type AgentEvent,
-} from './craft-profit';
-import { getSetting, setSetting } from './settings';
+} from './infra-profit';
+import { getSetting, setSetting } from '../../storage/settings';
 import {
   AUTO_KEY,
   readAutoOpsConfig,
@@ -32,7 +32,7 @@ import {
   revenueText,
   NO_PRODUCTS_NOTE,
   AgentRoundError,
-} from '../domains/craft/agent-model';
+} from './agent-model';
 
 export class CraftAgentError extends CraftProfitError {}
 

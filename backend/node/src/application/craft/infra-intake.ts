@@ -22,9 +22,9 @@ import {
   createSale,
   insertAgentEvent,
   listProducts,
-} from './craft-profit';
-import { getSetting } from './settings';
-import { parseCraftMarkers, type CraftAction, type CraftTag } from '../lib/craft-markers';
+} from './infra-profit';
+import { getSetting } from '../../storage/settings';
+import { parseCraftMarkers, type CraftAction, type CraftTag } from '../../lib/craft-markers';
 
 /** 团队 setup 写入的 settings key（craft-team-setup.ts 同用）。 */
 export const CRAFT_TEAM_KEY = 'craft_profit.team';
@@ -181,7 +181,7 @@ let packCache: string | null = null;
 
 /** 本地实现：listPacks → ensure → ingestText。异常向上抛给 kbFetch 的 fail-soft。 */
 async function localEnsureCraftPackId(): Promise<string> {
-  const { listPacks, createPack } = await import('../application/memory-bank/service');
+  const { listPacks, createPack } = await import('../memory-bank/service');
   const hit = listPacks().find((p) => p.name === CRAFT_PACK_NAME);
   if (hit?.pack_id) return hit.pack_id;
   const created = createPack(
@@ -192,7 +192,7 @@ async function localEnsureCraftPackId(): Promise<string> {
 }
 
 async function localIngestText(packId: string, text: string, sourceName: string): Promise<void> {
-  const { ingestTextTyped } = await import('../application/memory-bank/service');
+  const { ingestTextTyped } = await import('../memory-bank/service');
   ingestTextTyped(packId, text, { source_name: sourceName, deduplicate: true });
 }
 
@@ -204,12 +204,12 @@ async function localIngestText(packId: string, text: string, sourceName: string)
 async function kbFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
       if (path === '/api/memory-bank/packs' && (!init?.method || init.method === 'GET')) {
-        const { listPacks } = await import('../application/memory-bank/service');
+        const { listPacks } = await import('../memory-bank/service');
         return { packs: listPacks().map((p) => ({ pack_id: p.pack_id, name: p.name })) } as unknown as T;
       }
       if (path === '/api/memory-bank/packs' && init?.method === 'POST') {
         const body = JSON.parse(String(init.body ?? '{}')) as { name?: string; description?: string };
-        const { createPack } = await import('../application/memory-bank/service');
+        const { createPack } = await import('../memory-bank/service');
         const manifest = createPack(body.name ?? CRAFT_PACK_NAME, body.description ?? '');
         return { pack_id: manifest.pack_id } as unknown as T;
       }

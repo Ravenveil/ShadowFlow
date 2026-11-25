@@ -4,7 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { walletStatus, walletActivity, walletSkinPack } from '../../storage/wallet';
+import { walletStatus, walletActivity, walletSkinPack } from '../../application/settings-wallet';
 
 const router = Router();
 

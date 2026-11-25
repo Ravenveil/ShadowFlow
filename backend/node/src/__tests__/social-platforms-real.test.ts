@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach, beforeEach } from 'vitest';
-import { getAdapter } from '../lib/social-platforms';
-import { marketingCopy } from '../lib/social-platforms/copy';
+import { getAdapter } from '../application/social/infra-platforms';
+import { marketingCopy } from '../application/social/infra-platforms/copy';
 
 // ── fetch mock 基建 ───────────────────────────────────────────────────────────
 

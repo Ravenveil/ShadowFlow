@@ -17,10 +17,10 @@
  *   → POST /api/groups（绑 team_id）→ settings craft_profit.team 记引用。
  * 失败上抛 CraftProfitError（setup 是用户显式动作，不 fail-soft）。
  */
-import { CraftProfitError } from './craft-profit';
-import { CRAFT_TEAM_KEY, SECRETARY_AGENT_ID, type CraftTeamRef } from './craft-intake';
-import { getSetting, setSetting } from './settings';
-import { BACKEND_URL } from '../config/backend-url';
+import { CraftProfitError } from './infra-profit';
+import { CRAFT_TEAM_KEY, SECRETARY_AGENT_ID, type CraftTeamRef } from './infra-intake';
+import { getSetting, setSetting } from '../../storage/settings';
+import { BACKEND_URL } from '../../config/backend-url';
 
 const PY_TIMEOUT_MS = 8000;
 

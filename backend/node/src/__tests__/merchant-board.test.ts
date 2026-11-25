@@ -18,7 +18,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/dashboard/merchant-board').default;
+let router: typeof import('../application/merchant/http').default;
 let sqlite: typeof import('../storage/sqlite');
 
 function app() {
@@ -40,7 +40,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/dashboard/merchant-board')).default;
+  router = (await import('../application/merchant/http')).default;
   sqlite.getDb();
 });
 
@@ -577,7 +577,7 @@ describe('概览按时间区间（「这个月赚多少」）', () => {
 
 describe('历史数据回填（已退款却没冲销成本的单）', () => {
   it('补一条负数 expense，且重复执行不会重复冲', async () => {
-    const storage = await import('../storage/merchant-board');
+    const storage = await import('../application/merchant/infra-store');
     const p = await request(app())
       .post('/api/merchant/products')
       .send({ name: '回填测试品', price_cents: 3000, cost_cents: 1200 });

@@ -29,15 +29,15 @@ import {
   productBreakdown,
   seedDemo,
   timeseries,
-} from '../../storage/craft-profit';
+} from './infra-profit';
 import {
   autoStatus,
   initAutoOps,
   listEvents,
   runRound,
   setAutoOps,
-} from '../../storage/craft-profit-agent';
-import { craftTeamStatus, setupCraftTeam } from '../../storage/craft-team-setup';
+} from './infra-profit-agent';
+import { craftTeamStatus, setupCraftTeam } from './infra-team-setup';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();

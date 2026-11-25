@@ -20,9 +20,9 @@ let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let sqlite: typeof import('../storage/sqlite');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let setupMod: typeof import('../storage/craft-team-setup');
+let setupMod: typeof import('../application/craft/infra-team-setup');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let intake: typeof import('../storage/craft-intake');
+let intake: typeof import('../application/craft/infra-intake');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let settings: typeof import('../storage/settings');
 
@@ -107,9 +107,9 @@ beforeAll(async () => {
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
   sqlite.getDb();
-  intake = await import('../storage/craft-intake');
+  intake = await import('../application/craft/infra-intake');
   settings = await import('../storage/settings');
-  setupMod = await import('../storage/craft-team-setup');
+  setupMod = await import('../application/craft/infra-team-setup');
 });
 
 afterAll(() => {

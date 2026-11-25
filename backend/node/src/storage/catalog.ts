@@ -29,7 +29,7 @@ import {
   validateBlueprintContract,
   type BlueprintValidationErrors,
   type CatalogSummaryShape,
-} from '../domains/catalog/model';
+} from '../application/catalog/model';
 
 export { isValidAppId, redactBlueprintSnapshot, summaryOf, validateBlueprintContract };
 export type { BlueprintValidationErrors };

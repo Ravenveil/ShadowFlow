@@ -25,8 +25,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { CARRIERS, realEnvContract } from '../../lib/shipping';
-import { marketingCopy } from '../../lib/social-platforms/copy';
+import { CARRIERS, realEnvContract } from './infra-providers';
+import { marketingCopy } from '../social/infra-platforms/copy';
 import {
   SocialPublishError,
   createPost,
@@ -36,7 +36,7 @@ import {
   listPosts,
   publishPost,
   type AccountRow,
-} from '../../storage/social-publish';
+} from '../social/infra-store';
 import {
   OpsShipError,
   createShipment,
@@ -47,8 +47,8 @@ import {
   shipShipment,
   stats as shipStats,
   syncShipmentTracking,
-} from '../../storage/ops-shipping';
-import { listProducts } from '../../storage/merchant-board';
+} from './infra-store';
+import { listProducts } from '../merchant/infra-store';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();

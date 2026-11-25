@@ -44,8 +44,8 @@ type CliOutput = { items: CheckItem[]; summary: Summary };
 let tmp: string;
 let origCwd: string;
 let sqlite: typeof import('../storage/sqlite');
-let board: typeof import('../storage/merchant-board');
-let router: typeof import('../routes/dashboard/merchant-board').default;
+let board: typeof import('../application/merchant/infra-store');
+let router: typeof import('../application/merchant/http').default;
 let server: ReturnType<express.Express['listen']>;
 let baseUrl = '';
 /** 挂上即让 /api/merchant/overview 报假数（营收 +1），验证「不一致必须判失败」。 */
@@ -92,8 +92,8 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  board = await import('../storage/merchant-board');
-  router = (await import('../routes/dashboard/merchant-board')).default;
+  board = await import('../application/merchant/infra-store');
+  router = (await import('../application/merchant/http')).default;
   sqlite.getDb();
 
   // 造两单（成交 + 退款）：第一单五步通、账实一致，与演示口径一致。

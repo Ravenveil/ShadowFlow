@@ -92,7 +92,7 @@ describe('lib/memory-bank 分流', () => {
 describe('craft-intake 分流', () => {
   it('auto：ingestProductMaterial 本地建包并落库，二次去重', async () => {
     delete process.env.SF_MEMORY_BANK_MODE;
-    const craft = await import('../../../storage/craft-intake');
+    const craft = await import('../../../application/craft/infra-intake');
     const service = await import('../service');
     craft._resetCraftPackCache();
     const packId1 = await craft.ingestProductMaterial(
@@ -111,14 +111,14 @@ describe('craft-intake 分流', () => {
   });
 
   it('短消息/命令不同步（<10 字符 或 / 开头）', async () => {
-    const craft = await import('../../../storage/craft-intake');
+    const craft = await import('../../../application/craft/infra-intake');
     expect(await craft.ingestProductMaterial('短句')).toBeNull();
     expect(await craft.ingestProductMaterial('/command something long enough')).toBeNull();
   });
 
   it('node 模式：本地路径生效', async () => {
     process.env.SF_MEMORY_BANK_MODE = 'node';
-    const craft = await import('../../../storage/craft-intake');
+    const craft = await import('../../../application/craft/infra-intake');
     craft._resetCraftPackCache();
     const packId = await craft.ingestProductMaterial(
       'node 模式下的产品资料同步验证，这段文字足够长可以入库。',

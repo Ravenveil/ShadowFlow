@@ -36,7 +36,7 @@ import {
   reconcile,
   stats,
   type OrderRow,
-} from './merchant-board';
+} from '../application/merchant/infra-store';
 import {
   contextReads,
   handoffStats,
@@ -62,7 +62,7 @@ import {
   STEP_LABEL,
   windowLabel,
   yuan,
-} from '../domains/analytics/evidence-model';
+} from '../application/analytics/evidence-model';
 
 export {
   csvText,

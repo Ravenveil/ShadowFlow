@@ -18,7 +18,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { getDb } from './sqlite';
+import { getDb } from '../../storage/sqlite';
 import {
   findCarrier,
   getCarrierAdapter,
@@ -26,7 +26,7 @@ import {
   type ShipMode,
   type ShipReceipt,
   type TrackReceipt,
-} from '../lib/shipping';
+} from './infra-providers';
 // 纯规则已迁至 domains/commerce/shipping-model.ts（状态机/收件校验/去重键，可独立单测）；
 // 本文件保留 DDL/SQL/适配器调用与装配，导出名原样保留。
 import {
@@ -38,7 +38,7 @@ import {
   normalizeMode,
   RANK,
   trimTo,
-} from '../domains/commerce/shipping-model';
+} from './shipping-model';
 
 const DDL = `
 CREATE TABLE IF NOT EXISTS ops_shipments (

@@ -19,9 +19,9 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let intake: typeof import('../storage/craft-intake');
+let intake: typeof import('../application/craft/infra-intake');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let profit: typeof import('../storage/craft-profit');
+let profit: typeof import('../application/craft/infra-profit');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let settings: typeof import('../storage/settings');
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -33,8 +33,8 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  profit = await import('../storage/craft-profit');
-  intake = await import('../storage/craft-intake');
+  profit = await import('../application/craft/infra-profit');
+  intake = await import('../application/craft/infra-intake');
   settings = await import('../storage/settings');
   sqlite.getDb();
   profit.listProducts(); // 触发 cp_* 懒建表

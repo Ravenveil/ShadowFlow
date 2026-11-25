@@ -360,8 +360,8 @@ import {
   ingestProductMaterial,
   isCraftGroup,
   readCraftTeamRef,
-} from '../../storage/craft-intake';
-import { setupCraftTeam } from '../../storage/craft-team-setup';
+} from '../../application/craft/infra-intake';
+import { setupCraftTeam } from '../../application/craft/infra-team-setup';
 import type { CraftAction } from '../../lib/craft-markers';
 
 /** 读一个群（经群后端抽象）。返回蛇形 record（含 messages）或 null。 */

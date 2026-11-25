@@ -15,7 +15,7 @@ beforeAll(() => {
   process.chdir(tmpRoot);
 });
 afterAll(async () => {
-  const { _resetForTests } = await import('../../storage/sqlite');
+  const { _resetForTests } = await import('../../../storage/sqlite');
   _resetForTests();
   try {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
@@ -130,7 +130,7 @@ describe('词表版本化', () => {
 // ── 集成：createPost 自动落 compliance_json / ai_label / ruleset_version ─────
 describe('sp_posts 落库集成（P0-4）', () => {
   it('createPost 默认带标 + lint 结果落行', async () => {
-    const { createAccount, createPost, getPost } = await import('../../storage/social-publish');
+    const { createAccount, createPost, getPost } = await import('../infra-store');
     const acc = createAccount({
       platform: 'xiaohongshu',
       account_name: '工坊主号',
@@ -155,7 +155,7 @@ describe('sp_posts 落库集成（P0-4）', () => {
   });
 
   it('违规内容照落库但 violations 留痕（草稿箱不阻断，人工门打回）', async () => {
-    const { createAccount, createPost } = await import('../../storage/social-publish');
+    const { createAccount, createPost } = await import('../infra-store');
     const acc = createAccount({
       platform: 'weibo',
       account_name: '微博号',
@@ -171,7 +171,7 @@ describe('sp_posts 落库集成（P0-4）', () => {
   });
 
   it('ai_label=false 显式关标落库（0）', async () => {
-    const { createAccount, createPost } = await import('../../storage/social-publish');
+    const { createAccount, createPost } = await import('../infra-store');
     const acc = createAccount({
       platform: 'weibo',
       account_name: '微博号2',

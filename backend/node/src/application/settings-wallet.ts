@@ -7,7 +7,7 @@
  */
 
 import fs from 'fs';
-import { repoDataFile } from './repo-root';
+import { repoDataFile } from '../storage/repo-root';
 
 export interface WalletStats {
   teams_published: number;

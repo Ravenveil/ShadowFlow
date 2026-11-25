@@ -56,7 +56,7 @@ import {
   refundOrder,
   stats,
   trafficCurve,
-} from '../../storage/merchant-board';
+} from './infra-store';
 import {
   buildEvidence,
   evidenceFilename,

@@ -21,10 +21,10 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/ops/ops').default;
+let router: typeof import('../application/shipping/http').default;
 let sqlite: typeof import('../storage/sqlite');
-let merchant: typeof import('../storage/merchant-board');
-let social: typeof import('../storage/social-publish');
+let merchant: typeof import('../application/merchant/infra-store');
+let social: typeof import('../application/social/infra-store');
 
 function app() {
   const a = express();
@@ -46,9 +46,9 @@ beforeAll(async () => {
   delete process.env.SHIP_SF_API_TOKEN;
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/ops/ops')).default;
-  merchant = await import('../storage/merchant-board');
-  social = await import('../storage/social-publish');
+  router = (await import('../application/shipping/http')).default;
+  merchant = await import('../application/merchant/infra-store');
+  social = await import('../application/social/infra-store');
   sqlite.getDb();
 });
 

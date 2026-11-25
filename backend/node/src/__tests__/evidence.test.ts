@@ -22,7 +22,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let merchantRouter: typeof import('../routes/dashboard/merchant-board').default;
+let merchantRouter: typeof import('../application/merchant/http').default;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let handoffRouter: typeof import('../routes/memory/memory-handoff').default;
 let sqlite: typeof import('../storage/sqlite');
@@ -44,7 +44,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  merchantRouter = (await import('../routes/dashboard/merchant-board')).default;
+  merchantRouter = (await import('../application/merchant/http')).default;
   handoffRouter = (await import('../routes/memory/memory-handoff')).default;
   evidence = await import('../storage/evidence');
   hopsStore = await import('../storage/agent-hops');

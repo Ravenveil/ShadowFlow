@@ -30,8 +30,8 @@ process.env.SHADOWFLOW_OPC_DB = path.join(tmp, '.shadowflow', 'opc.sqlite');
 delete process.env.SF_PAY_MODE; // 默认 simulated
 delete process.env.SF_PUBLIC_BASE_URL;
 
-import opcRouter from '../opc/opc';
-import { _resetOpcForTests } from '../opc/opc-store';
+import opcRouter from '../../application/opc/routes/opc';
+import { _resetOpcForTests } from '../../application/opc/routes/opc-store';
 
 afterAll(() => {
   // 顺序敏感：先切回 cwd（Windows 不能删进程当前目录）→ 关 sqlite 句柄 → 删目录

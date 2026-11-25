@@ -26,9 +26,9 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/social/social-publish').default;
+let router: typeof import('../application/social/http').default;
 let sqlite: typeof import('../storage/sqlite');
-let merchant: typeof import('../storage/merchant-board');
+let merchant: typeof import('../application/merchant/infra-store');
 
 function app() {
   const a = express();
@@ -43,8 +43,8 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/social/social-publish')).default;
-  merchant = await import('../storage/merchant-board');
+  router = (await import('../application/social/http')).default;
+  merchant = await import('../application/merchant/infra-store');
   sqlite.getDb();
 });
 

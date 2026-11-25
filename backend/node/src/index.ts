@@ -52,7 +52,7 @@ import sessionsRouter from './routes/runs/sessions';
 import schedulesRouter from './routes/runs/schedules';
 import { startSchedulerEngine } from './scheduler/engine';
 // 单后端迁移第三批 — opc 全域 31 端点（opc-impl 77841b05）
-import opcRouter from './routes/opc/opc';
+import opcRouter from './application/opc/routes/opc';
 // 单后端迁移第三批 — impl-c agents 邻接域（bc1cfaf4）
 import registryRouter from './routes/agents/registry';
 import approvalsRouter from './routes/runs/approvals';
@@ -83,15 +83,15 @@ import dashboardRouter from './routes/dashboard/dashboard';
 // 主入口只挂一行，不新增服务/端口，也不改既有路由语义。
 import memoryHandoffRouter from './application/memory/http-handoff';
 // 功能线① 商家数据看板（2026-11-05）— 外接模块，自带幂等建表，不改既有逻辑
-import merchantBoardRouter from './routes/dashboard/merchant-board';
+import merchantBoardRouter from './application/merchant/http';
 // 产品盈利看板（2026-11-07）— 手工艺品代卖业务：盈利 = 售价 − 成本 − 快递
-import craftProfitRouter from './routes/dashboard/craft-profit';
+import craftProfitRouter from './application/craft/http-profit';
 // 社交发布（2026-11-07）— 社交平台直连发布：账号/营销帖/发布回执 + 平台适配器
 // （mock/real 双模）。外接模块，自带幂等建表，不改既有逻辑。
-import socialPublishRouter from './routes/social/social-publish';
+import socialPublishRouter from './application/social/http';
 // 代运营全流程（2026-11-07）— 上架商品 → 生营销帖 → 多平台分发 → 快递寄出。
 // 营销侧复用 social 域，履约侧自带运单/轨迹表与承运商适配器（mock/real 双模）。
-import opsRouter from './routes/ops/ops';
+import opsRouter from './application/shipping/http';
 import conversationsRouter, {
   projectScopedConversationsRouter,
 } from './routes/projects/conversations';

@@ -78,7 +78,7 @@ const NOTICE_BODY = [
  * 调用方负责先切到独立临时库并 reset sqlite；返回摘要与生成的文件名。
  */
 export async function generateDemoEvidence({ outDir = path.join(repoRoot, '.shadowflow') } = {}) {
-  const board = await import('../backend/node/src/storage/merchant-board');
+  const board = await import('../backend/node/src/application/merchant/infra-store');
   const memory = await import('../backend/node/src/application/memory/infra/storage-memory-handoff');
   const hopsStore = await import('../backend/node/src/storage/agent-hops');
   const evidence = await import('../backend/node/src/storage/evidence');

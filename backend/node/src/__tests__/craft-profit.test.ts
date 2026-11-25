@@ -20,7 +20,7 @@ import path from 'node:path';
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/dashboard/craft-profit').default;
+let router: typeof import('../application/craft/http-profit').default;
 let sqlite: typeof import('../storage/sqlite');
 
 function app() {
@@ -36,7 +36,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/dashboard/craft-profit')).default;
+  router = (await import('../application/craft/http-profit')).default;
   sqlite.getDb();
 });
 

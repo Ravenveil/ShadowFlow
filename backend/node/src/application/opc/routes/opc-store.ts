@@ -18,7 +18,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { randomBytes } from 'node:crypto';
-import { repoDataDir } from '../../storage/repo-root';
+import { repoDataDir } from '../../../storage/repo-root';
 
 export type Row = Record<string, any>;
 

@@ -32,9 +32,9 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { PLATFORMS, realEnvContract, realFlow } from '../../lib/social-platforms';
-import { marketingCopy, template, isContentFormat, CONTENT_FORMATS } from '../../lib/social-platforms/copy';
-import { lintContent } from '../../lib/social-platforms/compliance-lint';
+import { PLATFORMS, realEnvContract, realFlow } from './infra-platforms';
+import { marketingCopy, template, isContentFormat, CONTENT_FORMATS } from './infra-platforms/copy';
+import { lintContent } from './infra-platforms/compliance-lint';
 import {
   SocialPublishError,
   createAccount,
@@ -50,7 +50,7 @@ import {
   reviewPost,
   stats,
   submitForReview,
-} from '../../storage/social-publish';
+} from './infra-store';
 import { apiGuard } from '../../middleware/api-guard';
 
 const router = Router();

@@ -60,7 +60,7 @@ interface CliResult {
 let tmp: string;
 let origCwd: string;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-let router: typeof import('../routes/dashboard/merchant-board').default;
+let router: typeof import('../application/merchant/http').default;
 let sqlite: typeof import('../storage/sqlite');
 let server: ReturnType<express.Express['listen']>;
 let baseUrl = '';
@@ -154,7 +154,7 @@ beforeAll(async () => {
   process.chdir(tmp);
   sqlite = await import('../storage/sqlite');
   sqlite._resetForTests();
-  router = (await import('../routes/dashboard/merchant-board')).default;
+  router = (await import('../application/merchant/http')).default;
   sqlite.getDb();
   server = buildApp().listen(0, '127.0.0.1');
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
