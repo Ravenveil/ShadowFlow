@@ -149,9 +149,8 @@ jobs:
 
   # ------------------------------------------------------------------
   # paper 前端门禁：typecheck + 约定机检 + 纯函数测试。
-  # paper 的依赖走 legacy 那份 node_modules（本机是 junction，CI 上用 symlink）。
-  # 注意 vitest 必须走 package.json 的本地入口，不能 npx（会拉到缓存里
-  # 另一份 vitest，describe 注册进错池 → "No test suite found"）。
+  # paper 的依赖在它自己的 package.json 里，不再借用 legacy 的 node_modules；
+  # paper 暂无 package-lock，因此用 npm install（生成运行时锁）而不是 npm ci。
   # ------------------------------------------------------------------
   check-paper:
     name: check (frontend/paper)
@@ -166,14 +165,10 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: |
-            package-lock.json
-            frontend/legacy/package-lock.json
+            frontend/paper/package.json
 
-      - name: Install npm dependencies (frontend/legacy)
-        run: cd frontend/legacy && npm ci
-
-      - name: Link paper node_modules
-        run: ln -s ../legacy/node_modules frontend/paper/node_modules
+      - name: Install paper dependencies
+        run: cd frontend/paper && npm install --no-audit --no-fund
 
       - name: paper check
         run: cd frontend/paper && npm run check
@@ -240,16 +235,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Dockerfile.web
+      - name: Build Dockerfile.paper
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile.web
+          file: ./docker/Dockerfile.paper
           push: false
           load: false
-          tags: shadowflow-web:ci
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          tags: shadowflow-paper:ci
+          cache-from: type=gha,scope=paper
+          cache-to: type=gha,mode=max,scope=paper
 
   # ------------------------------------------------------------------
   # Secret scanning — catch key leaks on every PR and push to main (NFR S1)

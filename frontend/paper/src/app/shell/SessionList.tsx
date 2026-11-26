@@ -20,7 +20,7 @@ import {
   IconUsers,
 } from '@/shared/ui/icons';
 import { GroupChatModal } from '@/app/shell/GroupChatModal';
-import { pickNativeDir } from '@/shared/data/http/generic';
+import { CreateProjectModal } from '@/app/shell/CreateProjectModal';
 
 /** 主控（董事长）对应的 agent id，与后端 resolveDm 的候选一致。 */
 const CEO_AGENT_ID = 'agent-shadow-secretary';
@@ -108,6 +108,8 @@ export function SessionList({
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
   /** 新建任务菜单展开。 */
   const [newTaskOpen, setNewTaskOpen] = useState(false);
+  /** 创建本地项目模态（名称 + 本地文件夹）。 */
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
   /** 分组表单：null=关闭；{mode} 新建/改名/建对话。 */
   const [groupForm, setGroupForm] = useState<
     | { mode: 'new' }
@@ -176,19 +178,10 @@ export function SessionList({
     onOpenProjectFolder?.(p.id);
   };
 
-  /** 从本地文件夹建分组：弹原生框取真实路径，名字取文件夹名。取消则无操作。 */
-  const createFromFolder = async () => {
+  /** 从本地文件夹建分组：打开「创建本地项目」模态（名称 + 文件夹，可只填名称）。 */
+  const createFromFolder = () => {
     setNewTaskOpen(false);
-    if (busy) return;
-    const dir = await pickNativeDir().catch(() => null);
-    if (!dir) return;
-    const name = dir.split(/[\\/]/).filter(Boolean).pop() || LIST.untitledProject;
-    setBusy(true);
-    try {
-      await createProject?.(name, dir);
-    } finally {
-      setBusy(false);
-    }
+    setProjectModalOpen(true);
   };
 
   const submitGroupForm = async () => {
@@ -362,6 +355,20 @@ export function SessionList({
           }}
           createGroupChat={createGroupChat}
           useTeamTemplate={useTeamTemplate}
+        />
+      ) : null}
+
+      {/* 创建本地项目：名称 + 本地文件夹（对齐 legacy 的项目建法） */}
+      {projectModalOpen ? (
+        <CreateProjectModal
+          onClose={() => setProjectModalOpen(false)}
+          onCreate={async (name, dir) => {
+            const created = await createProject?.(name, dir);
+            // 本地立刻补一次列表：reload 是异步的，别让用户对着旧侧栏等。
+            const next = await listProjects().catch(() => []);
+            setProjects(next);
+            if (created) setExpanded((all) => ({ ...all, [created.id]: true }));
+          }}
         />
       ) : null}
 

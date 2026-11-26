@@ -959,3 +959,27 @@ button.subview-card:hover {
   max-height: 480px;
   overflow: auto;
 }
+
+/* 文件文本预览（新建 / 上传后可直接看内容） */
+.subview-state--error {
+  color: var(--danger);
+}
+
+.file-preview {
+  margin-top: 10px;
+}
+
+.file-preview-body {
+  margin: 8px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--ink-2);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

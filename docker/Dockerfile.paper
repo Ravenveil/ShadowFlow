@@ -1,14 +1,10 @@
 # 不用 # syntax 指令：它会直连 docker.io 拉 frontend 镜像，绕开 registry-mirror。
 # ShadowFlow Paper Web —— 新版论文工作台（frontend/paper）→ nginx
 #
-# 与 Dockerfile.web 的差别只有「构建哪个目录」：
-#   Dockerfile.web    frontend/legacy/  （旧前端，Neo 工作台）
-#   Dockerfile.paper  frontend/paper/   （新前端，四栏论文工作台）
-# 运行期完全一样：静态站点 + /api 反代 shadowflow-node:8002（SSE 不缓冲）。
+# 生产入口就是本文件：docker-compose.yml 的 shadowflow-web 已指向 Dockerfile.paper。
+# Dockerfile.web 是 legacy 前端的残留构建，仅供旧镜像对照（CI 不再构建它）。
 #
-# 切生产：把 docker-compose.yml 里 shadowflow-web 的 dockerfile 从
-#   docker/Dockerfile.web  改成  docker/Dockerfile.paper
-# 其余不动（端口 3000、健康检查、网络都在 compose 里）。
+# 运行期：静态站点 + /api 反代 shadowflow-node:8002（SSE 不缓冲）。
 
 # alpine 的 musl node 在本机 WSL2 VM 里会 Segmentation fault，builder 换 glibc slim；
 # runtime 的 nginx-alpine 无此问题，保持不动。
@@ -16,15 +12,10 @@ FROM docker.m.daocloud.io/library/node:20.14.0-slim AS builder
 
 WORKDIR /app
 
-# frontend/paper 不维护 package-lock（node_modules 在仓库里是指向 frontend/legacy
-# 的 junction，不能进镜像），所以用 npm install 而非 npm ci。
+# paper 的依赖声明在自己的 package.json（react / dicebear / lucide / xlsx + vite 工具链）；
+# 没有 package-lock，因此用 npm install。构建所需依赖已全部声明，不再手工补装。
 COPY frontend/paper/package.json ./frontend/paper/
 RUN cd frontend/paper && npm install --no-audit --no-fund
-# paper 本地无 dependencies（node_modules 走 legacy junction，不能进镜像），
-# 容器内显式安装构建所需的全部运行时依赖 + 与 legacy 同代的 vite 5 工具链。
-RUN cd frontend/paper && npm install --no-save --no-audit --no-fund --legacy-peer-deps \
-      vite@^5.0.8 @vitejs/plugin-react@^4 \
-      react react-dom lucide-react @dicebear/core@9.4.3 @dicebear/micah@9.4.2
 
 COPY frontend/paper/tsconfig.json frontend/paper/vite.config.ts frontend/paper/index.html ./frontend/paper/
 COPY frontend/paper/src ./frontend/paper/src

@@ -241,6 +241,21 @@ export const PROJECTS = {
   empty: '还没有项目',
   sessions: (n: number) => `${n} 条会话`,
   open: '打开',
+  /* 创建本地项目（名称 + 文件夹）。 */
+  createTitle: '创建本地项目',
+  nameLabel: '名称',
+  namePlaceholder: '输入项目名称',
+  folderLabel: '文件夹',
+  folderEmptyTitle: '添加本地文件夹',
+  folderEmptyBody: '将文件夹内容用作项目上下文',
+  folderAdd: '去添加',
+  folderClear: '清空',
+  folderChange: '添加本地文件夹',
+  cancel: '取消',
+  create: '创建项目',
+  creating: '创建中…',
+  createFailed: '创建失败',
+  close: '关闭',
 };
 
 /** 文件浏览（/api/fs/*）——项目页内嵌 + 会话列表跳转用，不再单独占导航位。 */
@@ -253,4 +268,16 @@ export const FILES = {
   folder: '文件夹',
   file: '文件',
   noSession: '当前会话没有工作目录',
+  /* 新建 / 上传 / 预览（对齐 legacy NeoHost 的工作空间文件操作）。 */
+  newFile: '新建文件',
+  newFilePlaceholder: '文件名，如 notes.md',
+  newFileConfirm: '创建',
+  newFileFailed: '新建失败',
+  upload: '上传文件',
+  uploadFailed: '上传失败',
+  previewLoading: '读取文件…',
+  previewEmpty: '（空文件）',
+  previewTruncated: '文件较大，只显示前 1 MB',
+  previewFailed: '读不出这个文件',
+  previewClose: '关闭预览',
 };

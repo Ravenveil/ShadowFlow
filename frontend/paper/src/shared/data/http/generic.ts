@@ -498,6 +498,31 @@ export const listDir = (dir: string) =>
 export const fileRawUrl = (filePath: string, root: string) =>
   `${API_BASE}/api/fs/raw?path=${encodeURIComponent(filePath)}&root=${encodeURIComponent(root)}`;
 
+/** 读文本文件（目录浏览的行内预览；二进制格式不要走这里）。 */
+export const readTextFile = (file: string, root: string) =>
+  unwrap<{ content: string; size: number; truncated: boolean }>(
+    `/api/fs/read?path=${encodeURIComponent(file)}&root=${encodeURIComponent(root)}`,
+  );
+
+/** 在工作空间根内新建 / 覆盖文本文件（path 可相对 root，如只给文件名）。 */
+export const writeWorkspaceFile = (path: string, content: string, root: string) =>
+  unwrap<{ path: string; size: number }>('/api/fs/write', {
+    method: 'POST',
+    body: JSON.stringify({ path, content, root }),
+  });
+
+/** 上传文件到工作空间目录（multipart；同名覆盖，后端上限 8MB）。 */
+export const uploadWorkspaceFile = (dir: string, root: string, file: File) => {
+  const body = new FormData();
+  body.append('dir', dir);
+  body.append('root', root);
+  body.append('file', file, file.name);
+  return unwrap<{ path: string; name: string; size: number }>('/api/fs/upload', {
+    method: 'POST',
+    body,
+  });
+};
+
 /** 二进制下载（xlsx/zip 等容器格式必须走 arrayBuffer，utf8 解码即损坏）。 */
 export const fetchRawBinary = (url: string): Promise<ArrayBuffer> => fetch(url).then((r) => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
