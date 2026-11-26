@@ -22,6 +22,7 @@ import type {
   Message,
   Outbound,
   PanelStep,
+  ReplyQuote,
   RosterMember,
   Session,
 } from '@/shared/data/types';
@@ -87,6 +88,8 @@ export function ChatArea({
   >({});
   /** 建议卡点击回填 composer 的文本（Composer 内部去重消费）。 */
   const [inject, setInject] = useState<string | null>(null);
+  /** 点消息「回复」后的引用目标，灌进 Composer 引用条。 */
+  const [replyQuote, setReplyQuote] = useState<ReplyQuote | null>(null);
 
   // 过程帧读得到就用时间线画；读不到（这一步返回 unsupported）回落气泡流。
   const timeline = useTimeline(session.id, { awaiting: sending });
@@ -108,7 +111,10 @@ export function ChatArea({
   /** 发出去的那句话先上屏：真后端要等一轮 fanout 才回读得到，别让人对着空框等。 */
   const send = async (out: Outbound) => {
     timeline.echo(out.text);
-    await onSend(out);
+    // 有引用时把目标消息 id 带上，随 Outbound → httpSource 落到后端 reply_to。
+    await onSend(replyQuote ? { ...out, replyTo: replyQuote.messageId } : out);
+    // 只有成功送出才收掉引用条；失败时 Composer 保留草稿，引用也留着便于重试。
+    setReplyQuote(null);
   };
 
   useEffect(() => {
@@ -234,6 +240,7 @@ export function ChatArea({
               groupId={isGroup ? session.id : undefined}
               messageStates={msgStates}
               onMessageStates={setMsgStates}
+              onReply={setReplyQuote}
             />
           ) : messages.length ? (
             <MessageList messages={messages} packs={composer.knowledge} onOpenArtifact={onInspect} />
@@ -282,6 +289,8 @@ export function ChatArea({
           transcribe={transcribe}
           onInspect={onInspect}
           injectText={inject}
+          replyQuote={replyQuote}
+          onClearReply={() => setReplyQuote(null)}
           placeholder={isGroup ? CHAT.placeholder.group : CHAT.placeholder.dm}
         />
       </div>

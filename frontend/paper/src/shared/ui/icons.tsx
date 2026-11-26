@@ -22,6 +22,8 @@ import {
   CircleDashed,
   Clock,
   Code2,
+  Copy,
+  CornerUpLeft,
   Database,
   Download,
   Eye,
@@ -150,6 +152,8 @@ export const IconTrash = mk(Trash2);
 export const IconThumbsUp = mk(ThumbsUp);
 export const IconThumbsDown = mk(ThumbsDown);
 export const IconPin = mk(Pin);
+export const IconCopy = mk(Copy);
+export const IconReply = mk(CornerUpLeft);
 
 /* 落地页专用 */
 export const IconBarChart = mk(BarChart3);

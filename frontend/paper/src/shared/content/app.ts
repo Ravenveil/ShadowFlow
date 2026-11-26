@@ -91,8 +91,8 @@ export const LIST = {
   /** 名册条目无角色/备注时的兜底。 */
   agentFallbackRole: 'Agent',
   groupNew: '新建分组',
+  groupFromFolder: '从本地文件夹创建',
   groupNewName: '输入分组名称',
-  groupNewFolder: '关联文件夹路径（可选）',
   groupCreate: '创建',
   groupPin: '置顶',
   groupUnpin: '取消置顶',
@@ -119,6 +119,13 @@ export const CHAT = {
     react: (emoji: string) => `反应 ${emoji}`,
     pin: '置顶',
     unpin: '取消置顶',
+    copyMarkdown: '复制为 Markdown',
+    copyShort: '复制 Markdown',
+    copiedMarkdown: '已复制 Markdown',
+    reply: '回复',
+    /** 复制为 Markdown 时的角色标签（用户一轮 + 助手一轮）。 */
+    speakerYou: '你',
+    speakerAssistant: '助手',
   },
   members: (n: number) => `${n} 位`,
   /** 点击成员头像弹出的微信式成员卡。 */
@@ -211,6 +218,8 @@ export const COMPOSER = {
   dropHint: '松开以添加图片 / 文件',
   /* 附件 chip */
   attachRemove: '移除附件',
+  /* 回复引用条：显示「回复 <作者> · <内容摘录>」 */
+  replyQuoteFallback: '消息',
   /* 帮助面板 */
   helpTitle: '快捷键与命令',
   helpKeys: [

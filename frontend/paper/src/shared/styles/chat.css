@@ -1335,6 +1335,7 @@
 .msg-actions-btn[data-active='true'] {
   color: var(--accent);
 }
+.msg-actions-btn--wide { gap: 4px; padding: 3px 7px; font-size: 11px; }
 
 /* ---- 折叠卡 ---- */
 .tl-fold {

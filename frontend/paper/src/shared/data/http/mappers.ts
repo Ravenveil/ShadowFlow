@@ -138,6 +138,8 @@ export function toMessage(dto: GroupMessageDto, nameOf: AgentName): Message {
     time: clockTime(dto.timestamp),
     kind: 'text',
     text: str(dto.content),
+    // 后端按裸 message_id 存 reply_to；原文透传，发送端剥 chat_ 前缀后回填。
+    replyTo: str(dto.reply_to) || undefined,
   };
 }
 
@@ -166,6 +168,7 @@ export function frameToMessage(
       content,
       timestamp: str(d.timestamp) || new Date().toISOString(),
       agent_id: str(d.agent_id) || undefined,
+      reply_to: str(d.reply_to) || undefined,
     },
     nameOf,
   );

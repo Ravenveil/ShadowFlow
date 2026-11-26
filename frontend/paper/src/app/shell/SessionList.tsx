@@ -20,6 +20,7 @@ import {
   IconUsers,
 } from '@/shared/ui/icons';
 import { GroupChatModal } from '@/app/shell/GroupChatModal';
+import { pickNativeDir } from '@/shared/data/http/generic';
 
 /** 主控（董事长）对应的 agent id，与后端 resolveDm 的候选一致。 */
 const CEO_AGENT_ID = 'agent-shadow-secretary';
@@ -72,8 +73,8 @@ export function SessionList({
   deleteProject?: (id: string) => Promise<void>;
   createProjectConversation?: (projectId: string, title: string) => Promise<string>;
   onCreatedConversation?: (gid: string) => void;
-  /** 打开分组关联的文件夹（跳工作空间页）。 */
-  onOpenProjectFolder?: (dir: string) => void;
+  /** 请求为分组重绑工作目录：弹原生目录框由 Shell 负责，这里只发分组 id。 */
+  onOpenProjectFolder?: (projectId: string) => void;
   /** 点分组里的一条会话：回到对话页打开它。 */
   onOpenSession?: (id: string) => void;
   sessions: Session[];
@@ -115,7 +116,6 @@ export function SessionList({
     | null
   >(null);
   const [formValue, setFormValue] = useState('');
-  const [formFolder, setFormFolder] = useState('');
   const [busy, setBusy] = useState(false);
   /** 置顶分组 id（本地偏好，后端无 pinned 字段）。 */
   const [pinned, setPinned] = useState<string[]>(() => {
@@ -170,10 +170,25 @@ export function SessionList({
   const togglePin = (id: string) =>
     persistPinned(pinned.includes(id) ? pinned.filter((x) => x !== id) : [id, ...pinned]);
 
-  /** 打开分组关联文件夹（后端没有端点就用 workspacePath 跳文件页）。 */
+  /** 打开分组文件夹：弹原生目录框重绑工作目录（Shell 负责弹框与落库）。 */
   const openFolder = (p: ProjectNode) => {
     setGroupMenu(null);
-    if (p.workspacePath) onOpenProjectFolder?.(p.workspacePath);
+    onOpenProjectFolder?.(p.id);
+  };
+
+  /** 从本地文件夹建分组：弹原生框取真实路径，名字取文件夹名。取消则无操作。 */
+  const createFromFolder = async () => {
+    setNewTaskOpen(false);
+    if (busy) return;
+    const dir = await pickNativeDir().catch(() => null);
+    if (!dir) return;
+    const name = dir.split(/[\\/]/).filter(Boolean).pop() || LIST.untitledProject;
+    setBusy(true);
+    try {
+      await createProject?.(name, dir);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitGroupForm = async () => {
@@ -184,7 +199,7 @@ export function SessionList({
       if (groupForm?.mode === 'root') {
         onCreate?.(value);
       } else if (groupForm?.mode === 'new') {
-        await createProject?.(value, formFolder.trim() || undefined);
+        await createProject?.(value);
       } else if (groupForm?.mode === 'rename') {
         await renameProject?.(groupForm.id, value);
       } else if (groupForm?.mode === 'conversation') {
@@ -193,7 +208,6 @@ export function SessionList({
       }
       setGroupForm(null);
       setFormValue('');
-      setFormFolder('');
     } catch {
       /* 失败就留在表单里 */
     } finally {
@@ -428,7 +442,7 @@ export function SessionList({
           </button>
         </div>
 
-        {/* 新建任务菜单 */}
+        {/* 新建任务菜单：两条路——空分组 / 从本地文件夹 */}
         {newTaskOpen ? (
           <div className="slist-task-menu" role="menu">
             <button
@@ -436,12 +450,20 @@ export function SessionList({
               role="menuitem"
               onClick={() => {
                 setNewTaskOpen(false);
-                setFormValue(''); setFormFolder('');
+                setFormValue('');
                 setGroupForm({ mode: 'new' });
               }}
             >
-              <IconFolder size={14} />
+              <IconPlus size={14} />
               <span>{LIST.groupNew}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void createFromFolder()}
+            >
+              <IconFolder size={14} />
+              <span>{LIST.groupFromFolder}</span>
             </button>
           </div>
         ) : null}
@@ -463,14 +485,6 @@ export function SessionList({
               }
               onKeyDown={(e) => { if (e.key === 'Enter') void submitGroupForm(); }}
             />
-            {groupForm.mode === 'new' ? (
-              <input
-                className="slist-input"
-                value={formFolder}
-                onChange={(e) => setFormFolder(e.target.value)}
-                placeholder={LIST.groupNewFolder}
-              />
-            ) : null}
             <div className="slist-group-form-actions">
               <button type="button" onClick={() => setGroupForm(null)}>{LIST.cancel}</button>
               <button type="button" data-primary="true" disabled={busy || !formValue.trim()} onClick={() => void submitGroupForm()}>

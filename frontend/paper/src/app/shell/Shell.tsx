@@ -22,7 +22,7 @@ import type { Outbound } from '@/shared/data/types';
 import { DEFAULT_SESSION_ID } from '@/shared/data/source';
 import { useWorkspace } from '@/shared/data/useWorkspace';
 import { downloadJson } from '@/shared/ui/download';
-import { getAgents } from '@/shared/data/http/generic';
+import { getAgents, pickNativeDir } from '@/shared/data/http/generic';
 import { setAgentAvatars } from '@/shared/data/avatarRegistry';
 import NewsView from '@/business/news/NewsView';
 import TeamsView from '@/business/teams/TeamsView';
@@ -94,6 +94,7 @@ export function Shell({ onExit }: { onExit: () => void }) {
     createProject,
     renameProject,
     deleteProject,
+    setProjectWorkspace,
     createProjectConversation,
     createConversation,
     createGroupChat,
@@ -512,13 +513,18 @@ export function Shell({ onExit }: { onExit: () => void }) {
               renameProject={renameProject}
               deleteProject={deleteProject}
               createProjectConversation={createProjectConversation}
-              onOpenProjectFolder={(dir) => {
-                try {
-                  localStorage.setItem('sf.paper.activeWorkspaceDir', dir);
-                } catch {
-                  // 隐私模式下存不了目录，落到当前会话工作区
-                }
-                navigate('files');
+              onOpenProjectFolder={(projectId) => {
+                // 弹系统原生目录框（daemon 在用户本机，浏览器拿不到真实路径）。
+                // 取消（null）什么都不做；选中则把路径绑到该分组并刷新列表，绝不跳文件页。
+                void (async () => {
+                  const dir = await pickNativeDir();
+                  if (!dir) return;
+                  try {
+                    await setProjectWorkspace(projectId, dir);
+                  } catch (err) {
+                    console.error('[shell] setProjectWorkspace failed', err);
+                  }
+                })();
               }}
               onOpenSession={select}
               onCreatedConversation={(gid) => { setActiveId(gid); reload(); }}

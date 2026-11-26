@@ -134,6 +134,30 @@ describe('会话与消息', () => {
     expect(m.kind).toBe('text');
     expect(m.attachments).toBeUndefined();
   });
+
+  it('保留后端 reply_to 作为裸 replyTo，缺省不带该字段', () => {
+    const replied = toMessage(
+      { ...group.messages![0], reply_to: 'm-root' },
+      nameOf,
+    );
+    expect(replied.replyTo).toBe('m-root');
+    expect(toMessage(group.messages![0], nameOf).replyTo).toBeUndefined();
+  });
+
+  it('SSE 帧里的 reply_to 也保留', () => {
+    const msg = frameToMessage(
+      'agent.message',
+      {
+        message_id: 'x2',
+        content: '收到',
+        agent_id: 'a2',
+        timestamp: '2026-11-19T10:01:00Z',
+        reply_to: 'm-root',
+      },
+      nameOf,
+    );
+    expect(msg?.replyTo).toBe('m-root');
+  });
 });
 
 describe('编队 / 策略 / 工作流', () => {

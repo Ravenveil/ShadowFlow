@@ -102,6 +102,7 @@ export interface WorkspaceApi {
   createProject: (name: string, workspacePath?: string) => Promise<ProjectNode>;
   renameProject: (id: string, name: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
+  setProjectWorkspace: (id: string, workspacePath: string) => Promise<void>;
   createProjectConversation: (projectId: string, title: string) => Promise<string>;
   /** 顶层新建对话；演示态没有这个能力时返回 reject，界面据此不摆入口。 */
   createConversation: (title: string) => Promise<string>;
@@ -389,6 +390,15 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
     },
     [src, reload],
   );
+  /** 重绑分组工作目录：落库后刷新会话/项目数据（列表里 workspacePath 随之更新）。 */
+  const setProjectWorkspace = useCallback(
+    async (id: string, workspacePath: string) => {
+      if (!src.setProjectWorkspace) throw new Error('unsupported');
+      await src.setProjectWorkspace(id, workspacePath);
+      reload();
+    },
+    [src, reload],
+  );
   const createProjectConversation = useCallback(
     async (projectId: string, title: string) => {
       const gid = src.createProjectConversation
@@ -475,6 +485,7 @@ export function useWorkspace(src: WorkspaceSource = source): WorkspaceApi {
     createProject,
     renameProject,
     deleteProject,
+    setProjectWorkspace,
     createProjectConversation,
     createConversation,
     createGroupChat,

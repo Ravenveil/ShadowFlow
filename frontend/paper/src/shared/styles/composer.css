@@ -6,6 +6,51 @@
    base 部分（.composer / .composer-box / .composer-bar）仍在 chat.css。
    ============================================================ */
 
+/* ---------- 回复引用条（输入框上沿） ---------- */
+.cp-reply-quote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 8px 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+}
+.cp-reply-quote-mark {
+  display: inline-flex;
+  color: var(--accent);
+}
+.cp-reply-quote-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.cp-reply-quote-body strong {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.cp-reply-quote-body small {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cp-reply-quote-close {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.cp-reply-quote-close:hover { background: var(--bg-hover); color: var(--ink); }
+
 /* ---------- 拖拽落区 ---------- */
 .cp-drop {
   position: absolute;

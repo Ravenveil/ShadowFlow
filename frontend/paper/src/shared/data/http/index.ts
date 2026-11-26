@@ -361,12 +361,16 @@ export const httpSource: WorkspaceSource = {  id: 'http',
   },
 
   async send(sessionId, out: Outbound, opts) {
+    // 时间线消息 id 是 chat_<message_id>，后端 reply_to 按裸 id 存并按裸 id 匹配
+    // （stripTimelineId 只在 reactions/pin 端点做，messages 端点原样落库），这里先剥前缀。
+    const rawReply = out.replyTo?.startsWith('chat_') ? out.replyTo.slice(5) : out.replyTo;
     const body = {
       content: out.text,
       sender_name: 'user',
       sender_kind: 'user',
       ...(out.model ? { executor: out.model } : {}),
       ...(out.knowledge?.length ? { knowledge_pack_ids: out.knowledge } : {}),
+      ...(rawReply ? { reply_to: rawReply } : {}),
     };
     const created = await request<GroupMessageDto>(ROUTES.groupMessage(sessionId), {
       method: 'POST',
@@ -535,6 +539,13 @@ export const httpSource: WorkspaceSource = {  id: 'http',
     await request(ROUTES.projectUpdate(id), {
       method: 'PATCH',
       body: JSON.stringify({ name }),
+    });
+  },
+
+  async setProjectWorkspace(id: string, workspacePath: string): Promise<void> {
+    await request(ROUTES.projectUpdate(id), {
+      method: 'PATCH',
+      body: JSON.stringify({ workspace_path: workspacePath }),
     });
   },
 

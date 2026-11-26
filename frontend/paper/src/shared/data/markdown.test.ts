@@ -6,7 +6,7 @@
  * 不会报错。所以行内、块级、表格、列表收口、纯文本剥离各钉一组。
  */
 import { describe, expect, it } from 'vitest';
-import { parseMarkdown, safeHref, stripMarkdown, type MdBlock, type MdInline } from '@/shared/data/markdown';
+import { parseMarkdown, safeHref, speakerLinesToMarkdown, stripMarkdown, type MdBlock, type MdInline } from '@/shared/data/markdown';
 
 /** 把行内节点拼成纯文本，便于断言内容而非结构。 */
 function plain(inls: MdInline[]): string {
@@ -165,5 +165,24 @@ describe('纯文本剥离（会话列表预览）', () => {
     expect(out).not.toContain('|');
     expect(out).toContain('标题');
     expect(out).toContain('项目 x 链接');
+  });
+});
+
+describe('一轮对话导出为 Markdown（复制为 Markdown）', () => {
+  it('按传入角色标签拼正文，跳过空格，正文原样保留', () => {
+    const out = speakerLinesToMarkdown([
+      { label: '你', text: '帮我写个提纲' },
+      { label: '助手', text: '**好的**，下面是提纲。' },
+      { label: '助手', text: '   ' },
+    ]);
+    expect(out).toContain('**你**');
+    expect(out).toContain('**助手**');
+    expect(out).toContain('**好的**，下面是提纲。');
+    expect(out).not.toContain('   ');
+    expect(out).toContain('\n\n---\n\n');
+  });
+
+  it('空输入返回空串', () => {
+    expect(speakerLinesToMarkdown([])).toBe('');
   });
 });

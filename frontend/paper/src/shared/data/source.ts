@@ -153,6 +153,8 @@ export interface WorkspaceSource {
   createProject?(name: string, workspacePath?: string): Promise<ProjectNode>;
   renameProject?(id: string, name: string): Promise<void>;
   deleteProject?(id: string): Promise<void>;
+  /** 重绑分组的工作目录（「打开文件夹」弹原生框选中后落库）。 */
+  setProjectWorkspace?(id: string, workspacePath: string): Promise<void>;
   /** 在分组下新建对话（绑到该项目的群）。 */
   createProjectConversation?(projectId: string, title: string): Promise<string>;
   /** 顶层新建对话（不归属任何项目的空群）。 */

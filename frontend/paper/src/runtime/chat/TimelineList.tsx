@@ -11,9 +11,11 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AgentAvatar, AVATAR_SIZE } from '@/shared/ui/avatar';
-import { DEMO, STEP_STATUS_TEXT, TIMELINE } from '@/shared/content/app';
+import { CHAT, DEMO, STEP_STATUS_TEXT, TIMELINE } from '@/shared/content/app';
 import { clockLabel, dayKey, elapsedLabel, stampLabel } from '@/shared/ui/format';
 import { groupTimeline, approvalSignalOf, type TimelineWho } from '@/shared/data/timeline';
+import { speakerLinesToMarkdown, stripMarkdown, type MdSpeakerLine } from '@/shared/data/markdown';
+import type { ReplyQuote } from '@/shared/data/types';
 import { MarkdownText } from '@/runtime/chat/MarkdownText';
 import { MsgFeedback } from '@/runtime/chat/MsgFeedback';
 import { GroupMsgActions } from '@/runtime/chat/GroupMsgActions';
@@ -36,6 +38,40 @@ import {
 
 /** 跨天或间隔太久才插一条日期线；一轮内部不切刀。 */
 const DAY_GAP_MS = 30 * 60_000;
+
+/** 回复引用条里正文摘录的长度。 */
+const REPLY_EXCERPT = 60;
+
+/**
+ * 取某条消息所在「一轮」的 Markdown：同一 turn_id 的用户提问 + 助手正文，
+ * 按时间排好拼成可复制文本。找不到 turn 归属时至少带上自己。
+ */
+function roundMarkdown(all: readonly TimelineMessage[], anchor: TimelineMessage): string {
+  const turn = anchor.turn_id || anchor.id;
+  const inTurn = all.filter((m) => (m.turn_id || m.id) === turn);
+  const lines: MdSpeakerLine[] = [];
+  for (const m of inTurn) {
+    if (m.kind === 'user_turn' && m.text?.trim()) {
+      lines.push({ label: CHAT.msg.speakerYou, text: m.text });
+    } else if (m.kind === 'assistant_text' && m.body?.trim()) {
+      lines.push({
+        label: m.agent_name || m.sender_name || CHAT.msg.speakerAssistant,
+        text: m.body,
+      });
+    }
+  }
+  return speakerLinesToMarkdown(lines);
+}
+
+/** 从一条助手消息造回复引用（作者取说话人，正文剥 Markdown 后截断）。 */
+function replyQuoteOf(m: TimelineMessage): ReplyQuote {
+  const body = stripMarkdown(m.body ?? m.text ?? '');
+  return {
+    messageId: m.id,
+    author: m.agent_name || m.sender_name || CHAT.msg.speakerAssistant,
+    text: body.length > REPLY_EXCERPT ? `${body.slice(0, REPLY_EXCERPT)}…` : body,
+  };
+}
 
 /* ── 小件 ─────────────────────────────────────────────────────────── */
 
@@ -293,12 +329,16 @@ function Row({
   groupId,
   msgState,
   onMsgState,
+  allMessages,
+  onReply,
 }: {
   msg: TimelineMessage;
   inTurn: boolean;
   groupId?: string;
   msgState?: { reactions?: Record<string, string[]>; pinned?: boolean };
   onMsgState?: (next: { reactions?: Record<string, string[]>; pinned?: boolean }) => void;
+  allMessages: readonly TimelineMessage[];
+  onReply?: (quote: ReplyQuote) => void;
 }) {
   switch (msg.kind) {
     case 'user_turn': {
@@ -413,6 +453,8 @@ function Row({
                 onPinnedChange={(mid, pinned) =>
                   onMsgState({ ...(msgState ?? {}), [mid]: { ...(msgState ?? {}), pinned } })
                 }
+                markdown={roundMarkdown(allMessages, msg)}
+                onReply={onReply ? () => onReply(replyQuoteOf(msg)) : undefined}
               />
             ) : null}
           </div>
@@ -601,12 +643,16 @@ function AgentTurn({
   groupId,
   msgStateOf,
   onMsgState,
+  allMessages,
+  onReply,
 }: {
   msgs: TimelineMessage[];
   who: TimelineWho;
   groupId?: string;
   msgStateOf?: (id: string) => { reactions?: Record<string, string[]>; pinned?: boolean } | undefined;
   onMsgState?: (id: string, next: { reactions?: Record<string, string[]>; pinned?: boolean }) => void;
+  allMessages: readonly TimelineMessage[];
+  onReply?: (quote: ReplyQuote) => void;
 }) {
   const name = who.name || DEMO.leadAuthor;
   const lastAssistant = [...msgs].reverse().find((m) => m.kind === 'assistant_text');
@@ -621,7 +667,7 @@ function AgentTurn({
           <span className="sf-msg-time">{clockLabel(msgs[0]?.ts ?? 0)}</span>
         </div>
         {msgs.map((m) => (
-          <Row key={m.id} msg={m} inTurn />
+          <Row key={m.id} msg={m} inTurn allMessages={allMessages} onReply={onReply} />
         ))}
         {groupId && lastAssistant && onMsgState ? (
           <GroupMsgActions
@@ -635,6 +681,8 @@ function AgentTurn({
             onPinnedChange={(mid, pinned) =>
               onMsgState(mid, { ...(msgStateOf?.(mid) ?? {}), pinned })
             }
+            markdown={roundMarkdown(allMessages, lastAssistant)}
+            onReply={onReply ? () => onReply(replyQuoteOf(lastAssistant)) : undefined}
           />
         ) : null}
       </div>
@@ -648,6 +696,7 @@ export function TimelineList({
   groupId,
   messageStates,
   onMessageStates,
+  onReply,
 }: {
   messages: TimelineMessage[];
   truncated?: boolean;
@@ -656,6 +705,8 @@ export function TimelineList({
   /** 消息级 reactions/pinned 水合态（群详情拉来，调用方持有）。 */
   messageStates?: Record<string, { reactions?: Record<string, string[]>; pinned?: boolean }>;
   onMessageStates?: (next: Record<string, { reactions?: Record<string, string[]>; pinned?: boolean }>) => void;
+  /** 点消息「回复」：把引用灌进输入框。 */
+  onReply?: (quote: ReplyQuote) => void;
 }) {
   const rows = groupTimeline(messages);
   let lastTs = 0;
@@ -688,12 +739,16 @@ export function TimelineList({
                     ? (id, next) => onMessageStates({ ...(messageStates ?? {}), [id]: next })
                     : undefined
                 }
+                allMessages={messages}
+                onReply={onReply}
               />
             ) : (
               <Row
                 msg={row.msg}
                 inTurn={false}
                 groupId={groupId}
+                allMessages={messages}
+                onReply={onReply}
                 msgState={messageStates?.[row.msg.id]}
                 onMsgState={
                   onMessageStates

@@ -103,6 +103,8 @@ export interface Message {
   attachments?: AttachmentRef[];
   /** 这条消息引用的知识包 id（显示成小 chip）。 */
   knowledge?: string[];
+  /** 回复指向的裸 message id（后端 reply_to 原样存、按裸 id 匹配）。 */
+  replyTo?: string;
 }
 
 /* ── 会话时间线（对齐后端 lib/contracts.ts 的 TimelineMessage 模型）─────────
@@ -490,6 +492,17 @@ export interface Outbound {
   /** 本轮勾选的知识包 id。 */
   knowledge?: string[];
   model?: string;
+  /** 回复指向的消息：裸 message id；空表示普通消息。 */
+  replyTo?: string;
+}
+
+/** 输入框引用条：点消息「回复」后灌进 Composer 的引用目标。 */
+export interface ReplyQuote {
+  /** 时间线消息 id（发送层剥 chat_ 前缀后作 reply_to 落库）。 */
+  messageId: string;
+  author: string;
+  /** 正文摘录，只用于输入框引用条展示。 */
+  text: string;
 }
 
 /* ── 设置（settings sheet） ─────────────────────────────────────────

@@ -15,6 +15,7 @@ import type {
   ComposerCommand,
   ModelRef,
   Outbound,
+  ReplyQuote,
   RosterMember,
 } from '@/shared/data/types';
 import {
@@ -23,6 +24,7 @@ import {
   IconKeyboard,
   IconMic,
   IconPaperclip,
+  IconReply,
   IconSlash,
   IconStop,
   IconCheck,
@@ -52,6 +54,8 @@ export function Composer({
   transcribe,
   onInspect,
   injectText,
+  replyQuote,
+  onClearReply,
 }: {
   placeholder: string;
   roster: RosterMember[];
@@ -65,6 +69,10 @@ export function Composer({
   onInspect: () => void;
   /** 外部注入文本（后续建议点击回填）；变化即覆盖草稿。 */
   injectText?: string | null;
+  /** 回复引用目标（点消息「回复」后灌进来），显示在输入框上方的引用条。 */
+  replyQuote?: ReplyQuote | null;
+  /** 关闭引用条。 */
+  onClearReply?: () => void;
 }) {
   const [text, setText] = useState('');
   const [trigger, setTrigger] = useState<DetectedTrigger | null>(null);
@@ -279,6 +287,25 @@ export function Composer({
           <div className="cp-drop">
             <IconPaperclip size={20} />
             <span>{COMPOSER.dropHint}</span>
+          </div>
+        ) : null}
+
+        {replyQuote ? (
+          <div className="cp-reply-quote">
+            <span className="cp-reply-quote-mark">
+              <IconReply size={12} />
+            </span>
+            <span className="cp-reply-quote-body">
+              <strong>{replyQuote.author}</strong>
+              <small>{replyQuote.text || COMPOSER.replyQuoteFallback}</small>
+            </span>
+            <button
+              type="button"
+              className="cp-reply-quote-close"
+              onClick={onClearReply}
+            >
+              <IconClose size={12} />
+            </button>
           </div>
         ) : null}
 

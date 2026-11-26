@@ -356,3 +356,20 @@ function blocksToPlain(bs: MdBlock[]): string {
 export function stripMarkdown(text: string): string {
   return blocksToPlain(parseMarkdown(text));
 }
+
+/** 一段带说话人的正文，用于把一轮对话拼成可复制的 Markdown。 */
+export interface MdSpeakerLine {
+  label: string;
+  text: string;
+}
+
+/**
+ * 把一轮对话（用户 + 助手）拼成 Markdown 文本供「复制为 Markdown」使用。
+ * 角色标签由调用方传入（文案在 app.ts），正文原样保留（本身已是 Markdown）。
+ */
+export function speakerLinesToMarkdown(lines: MdSpeakerLine[]): string {
+  return lines
+    .filter((l) => l.text && l.text.trim())
+    .map((l) => `**${l.label}**\n\n${l.text.trim()}`)
+    .join('\n\n---\n\n');
+}
