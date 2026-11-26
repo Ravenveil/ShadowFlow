@@ -20,11 +20,11 @@ import {
   createProject,
   deleteProject,
   getProject,
+  listProjectArtifacts,
   listProjects,
   updateProject,
 } from '../../application/conversations/infra-projects';
 import { listConversations } from '../../application/conversations/infra-conversations';
-import { getDb } from '../adapters/sqlite';
 
 const router = Router();
 
@@ -178,84 +178,8 @@ router.get('/:id/artifacts', (req: Request, res: Response) => {
     return;
   }
 
-  interface ArtifactRow {
-    run_id: string;
-    goal: string;
-    artifact_type: string | null;
-    artifact_filename: string | null;
-    artifact_url: string | null;
-    completed_at: string;
-  }
-
-  interface RunArtifactRow {
-    run_id: string;
-    seq: number;
-    artifact_type: string | null;
-    artifact_filename: string | null;
-    artifact_url: string | null;
-  }
-
-  const db = getDb();
-  const runRows = db
-    .prepare(
-      `SELECT run_id, goal, artifact_type, artifact_filename, artifact_url, completed_at
-       FROM runs
-       WHERE project_id = ?
-       ORDER BY completed_at DESC`,
-    )
-    .all(req.params.id) as ArtifactRow[];
-
-  // run_artifacts 登记行（join runs 保证项目归属；seq ASC = 捕获序）。
-  const artifactRows = db
-    .prepare(
-      `SELECT ra.run_id, ra.seq, ra.artifact_type, ra.artifact_filename, ra.artifact_url
-       FROM run_artifacts ra
-       JOIN runs r ON r.run_id = ra.run_id
-       WHERE r.project_id = ?
-       ORDER BY ra.seq ASC`,
-    )
-    .all(req.params.id) as RunArtifactRow[];
-  const byRun = new Map<string, RunArtifactRow[]>();
-  for (const a of artifactRows) {
-    const list = byRun.get(a.run_id) ?? [];
-    list.push(a);
-    byRun.set(a.run_id, list);
-  }
-
-  const toRow = (
-    run: ArtifactRow,
-    artifactId: string,
-    artifactType: string | null,
-    filename: string | null,
-    url: string | null,
-  ) => {
-    const ft = (artifactType ?? 'md').toLowerCase().replace('markdown', 'md');
-    const isHtml = ft === 'html';
-    return {
-      artifact_id: artifactId,
-      title: filename ?? run.goal,
-      file_type: ft,
-      generated_at: run.completed_at,
-      download_url: url ?? null,
-      preview_url: isHtml ? (url ?? null) : null,
-      size_bytes: null,
-      run_id: run.run_id,
-    };
-  };
-
-  const artifacts = runRows.flatMap((r) => {
-    const registered = byRun.get(r.run_id);
-    if (registered && registered.length > 0) {
-      // 新式 run：登记了什么就展示什么（含 runs 三字段之外的产物）。
-      return registered.map((a) =>
-        toRow(r, `${r.run_id}#${a.seq}`, a.artifact_type, a.artifact_filename, a.artifact_url),
-      );
-    }
-    // 旧式 run：无登记行 → 回落 runs 三字段单件（保持旧行为/旧 artifact_id）。
-    return r.artifact_filename ? [toRow(r, r.run_id, r.artifact_type, r.artifact_filename, r.artifact_url)] : [];
-  });
-
-  res.json(artifacts);
+  // req 参数 → 数据访问层调用；跨表 SQL 与产物回落规则见 infra-projects.ts。
+  res.json(listProjectArtifacts(req.params.id));
 });
 
 export default router;

@@ -20,7 +20,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { repoDataFile } from '../adapters/infra-repo-root';
-// 纯规则已迁至 domains/catalog/model.ts（脱敏/app_id 白名单/契约校验/摘要视图，
+// 纯规则已迁至 application/catalog/model.ts（脱敏/app_id 白名单/契约校验/摘要视图，
 // 可独立单测）；本文件保留文件 I/O 与 fork 装配，导出名原样保留。
 import {
   isValidAppId,

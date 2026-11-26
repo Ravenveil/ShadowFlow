@@ -6,7 +6,7 @@
  *        GET  /api/agents/registry             — 列表（?status= ?team_id= 过滤）
  *        GET  /api/agents/registry/{agent_id}  — 单个（entry + 完整 manifest）
  *        POST /api/agents/registry/refresh     — 置 offline 等 re-handshake
- *      数据源：runtime/acp/registry.py 的进程内单例 → Node lib/acp-registry.ts
+ *      数据源：runtime/acp/registry.py 的进程内单例 → Node application/adapters/infra-acp-registry.ts
  *      （与 routes/system/acp.ts 的 status/sessions/task 共享同一实例）。
  *   2. backend/python/shadowflow/api/agents/registry.py 的 packs 段（Story 12.5）：
  *        GET  /api/agents/registry/packs            — 列表（?workspace_id=&tags=&q=）
@@ -40,6 +40,11 @@ import {
   type AgentRegistryEntry,
   type ToolCapability,
 } from '../adapters/infra-acp-registry';
+import {
+  compareVersions,
+  verifySignature,
+  type PackManifest,
+} from './model';
 
 const router = Router();
 
@@ -112,26 +117,6 @@ router.get('/registry', (req: Request, res: Response) => {
 // `include_router(_registry_api.router)  # before agents to avoid /{agent_id}
 // catch-all` 的挂载顺序。
 // ═════════════════════════════════════════════════════════════════════════════
-
-interface PackManifest {
-  id: string;
-  version: string;
-  name: string;
-  description: string;
-  author: string;
-  soul: string;
-  kind: string;
-  capabilities: {
-    tools: string[];
-    llm_provider: string;
-    streaming: boolean;
-    approval_required: boolean;
-    session_resume: boolean;
-    tool_calls: boolean;
-  };
-  install_cmd: string | null;
-  signature: { algorithm: string; value: string } | null;
-}
 
 interface PackIndexEntry {
   id: string;
@@ -246,50 +231,12 @@ function getInstalledVersion(packId: string, workspaceId: string): string | null
   return getInstalledRecord(packId, workspaceId)?.pack_version ?? null;
 }
 
-/** prerelease-aware 点分段版本比较；解析失败 → 0.0.0（对齐 _parse_version 兜底）。 */
-function parseVersionParts(v: string): { core: number[]; pre: string | null } {
-  const str = String(v ?? '').trim();
-  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(.*))?$/.exec(str);
-  if (!m) return { core: [0, 0, 0], pre: null };
-  return { core: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] ?? null };
-}
-
-export function compareVersions(a: string, b: string): number {
-  const pa = parseVersionParts(a);
-  const pb = parseVersionParts(b);
-  for (let i = 0; i < 3; i++) {
-    const diff = pa.core[i]! - pb.core[i]!;
-    if (diff !== 0) return diff;
-  }
-  // 无 prerelease > 有 prerelease（semver 规则）；都有则字典序。
-  if (pa.pre === null && pb.pre === null) return 0;
-  if (pa.pre === null) return 1;
-  if (pb.pre === null) return -1;
-  return pa.pre < pb.pre ? -1 : pa.pre > pb.pre ? 1 : 0;
-}
-
 function installStatus(packId: string, workspaceId: string): string {
   const manifest = packCache.manifests.get(packId);
   if (!manifest) return 'not_installed';
   const installedVer = getInstalledVersion(packId, workspaceId);
   if (installedVer === null) return 'not_installed';
   return compareVersions(manifest.version, installedVer) > 0 ? 'has_update' : 'installed';
-}
-
-/** HMAC-SHA256 over canonical yaml（sortKeys 对齐 PyYAML sort_keys=True）。 */
-function verifySignature(manifest: PackManifest): boolean {
-  if (manifest.signature === null || manifest.signature === undefined) return true;
-  const secret = (process.env.SHADOWFLOW_PACK_SECRET ?? '').trim();
-  if (!secret) return false; // 有签名但无 secret → 视为校验失败（防绕过）
-  const { signature: _ignored, ...body } = manifest;
-  void _ignored;
-  const canonical = yaml.dump(body, { sortKeys: true, lineWidth: 80, noRefs: true });
-  const expected = crypto.createHmac('sha256', secret).update(canonical, 'utf-8').digest('hex');
-  try {
-    return crypto.timingSafeEqual(Buffer.from(expected, 'utf-8'), Buffer.from(manifest.signature.value, 'utf-8'));
-  } catch {
-    return false;
-  }
 }
 
 const invalidWorkspace = (res: Response) => {
@@ -559,5 +506,8 @@ router.post('/registry/refresh', (req: Request, res: Response) => {
 // ─── 测试辅助 ─────────────────────────────────────────────────────────────────
 
 export { resetPackCacheForTests, packsRoot };
+// compareVersions 原为本模块导出（测试与调用方经 typeof import 读取），迁移到
+// model.ts 后保留 re-export，避免破坏既有契约。
+export { compareVersions } from './model';
 
 export default router;

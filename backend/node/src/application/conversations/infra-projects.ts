@@ -338,3 +338,101 @@ export function deleteProject(id: string): boolean {
     .run(id);
   return info.changes > 0;
 }
+
+/**
+ * 项目下所有 run 的产物清单（数据访问层）。
+ *
+ * 由 http-projects.ts:/:id/artifacts 收敛而来：跨表 SQL 与产物回落规则属于
+ * 数据访问职责，HTTP 层只保留 req 参数 → 本函数的映射。行为逐行不变：
+ *   1. run_artifacts 有登记行 → 逐件返回（artifact_id = run_id#seq）；
+ *   2. 无登记行 → 回落 runs.artifact_* 三字段单行（artifact_id = run_id）。
+ */
+interface ArtifactRow {
+  run_id: string;
+  goal: string;
+  artifact_type: string | null;
+  artifact_filename: string | null;
+  artifact_url: string | null;
+  completed_at: string;
+}
+
+interface RunArtifactRow {
+  run_id: string;
+  seq: number;
+  artifact_type: string | null;
+  artifact_filename: string | null;
+  artifact_url: string | null;
+}
+
+export interface ProjectArtifact {
+  artifact_id: string;
+  title: string;
+  file_type: string;
+  generated_at: string;
+  download_url: string | null;
+  preview_url: string | null;
+  size_bytes: null;
+  run_id: string;
+}
+
+export function listProjectArtifacts(projectId: string): ProjectArtifact[] {
+  const db = getDb();
+  const runRows = db
+    .prepare(
+      `SELECT run_id, goal, artifact_type, artifact_filename, artifact_url, completed_at
+       FROM runs
+       WHERE project_id = ?
+       ORDER BY completed_at DESC`,
+    )
+    .all(projectId) as ArtifactRow[];
+
+  // run_artifacts 登记行（join runs 保证项目归属；seq ASC = 捕获序）。
+  const artifactRows = db
+    .prepare(
+      `SELECT ra.run_id, ra.seq, ra.artifact_type, ra.artifact_filename, ra.artifact_url
+       FROM run_artifacts ra
+       JOIN runs r ON r.run_id = ra.run_id
+       WHERE r.project_id = ?
+       ORDER BY ra.seq ASC`,
+    )
+    .all(projectId) as RunArtifactRow[];
+  const byRun = new Map<string, RunArtifactRow[]>();
+  for (const a of artifactRows) {
+    const list = byRun.get(a.run_id) ?? [];
+    list.push(a);
+    byRun.set(a.run_id, list);
+  }
+
+  const toRow = (
+    run: ArtifactRow,
+    artifactId: string,
+    artifactType: string | null,
+    filename: string | null,
+    url: string | null,
+  ): ProjectArtifact => {
+    const ft = (artifactType ?? 'md').toLowerCase().replace('markdown', 'md');
+    const isHtml = ft === 'html';
+    return {
+      artifact_id: artifactId,
+      title: filename ?? run.goal,
+      file_type: ft,
+      generated_at: run.completed_at,
+      download_url: url ?? null,
+      preview_url: isHtml ? (url ?? null) : null,
+      size_bytes: null,
+      run_id: run.run_id,
+    };
+  };
+
+  return runRows.flatMap((r) => {
+    const registered = byRun.get(r.run_id);
+    if (registered && registered.length > 0) {
+      // 新式 run：登记了什么就展示什么（含 runs 三字段之外的产物）。
+      return registered.map((a) =>
+        toRow(r, `${r.run_id}#${a.seq}`, a.artifact_type, a.artifact_filename, a.artifact_url),
+      );
+    }
+    // 旧式 run：无登记行 → 回落 runs 三字段单件（保持旧行为/旧 artifact_id）。
+    return r.artifact_filename ? [toRow(r, r.run_id, r.artifact_type, r.artifact_filename, r.artifact_url)] : [];
+  });
+}
