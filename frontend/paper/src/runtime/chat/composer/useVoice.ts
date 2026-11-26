@@ -12,10 +12,16 @@ import { COMPOSER } from '@/shared/content/app';
 
 export type VoiceStatus = 'idle' | 'starting' | 'recording' | 'transcribing';
 
+/** 录音波形柱数量（面板宽度固定，柱数固定好排版）。 */
+export const VOICE_BARS = 22;
+const ZERO_LEVELS = Array.from({ length: VOICE_BARS }, () => 0);
+
 export interface VoiceApi {
   supported: boolean;
   status: VoiceStatus;
   seconds: number;
+  /** 0–1 的实时音量，最新一帧在末尾（录音面板画波形用）。 */
+  levels: number[];
   start: () => void;
   /** 完成录音并转写。 */
   stop: () => void;
@@ -34,11 +40,14 @@ export function useVoice({
 }): VoiceApi {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [seconds, setSeconds] = useState(0);
+  const [levels, setLevels] = useState<number[]>(ZERO_LEVELS);
   const recRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const cancelledRef = useRef(false);
   const timerRef = useRef<number | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const levelTimerRef = useRef<number | null>(null);
 
   // 回调存进 ref：录音过程里父组件重渲染不会打断正在跑的录音
   const cb = useRef({ onText, onError, transcribe });
@@ -56,8 +65,20 @@ export function useVoice({
     }
   };
 
+  /** 停掉音量采样并归还 AudioContext（波形回零）。 */
+  const clearLevels = () => {
+    if (levelTimerRef.current !== null) {
+      window.clearInterval(levelTimerRef.current);
+      levelTimerRef.current = null;
+    }
+    void audioCtxRef.current?.close().catch(() => undefined);
+    audioCtxRef.current = null;
+    setLevels(ZERO_LEVELS);
+  };
+
   const teardown = useCallback(() => {
     clearTimer();
+    clearLevels();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     recRef.current = null;
@@ -101,7 +122,32 @@ export function useVoice({
         rec.start();
         setStatus('recording');
         setSeconds(0);
+        setLevels(ZERO_LEVELS);
         timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+
+        // 音量采样：仅用于面板波形；拿不到 AudioContext 就退化为纯计时。
+        try {
+          const Ctx = window.AudioContext;
+          const ctx = new Ctx();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          audioCtxRef.current = ctx;
+          const buf = new Uint8Array(analyser.fftSize);
+          levelTimerRef.current = window.setInterval(() => {
+            analyser.getByteTimeDomainData(buf);
+            let sum = 0;
+            for (let i = 0; i < buf.length; i += 1) {
+              const v = (buf[i] - 128) / 128;
+              sum += v * v;
+            }
+            const rms = Math.sqrt(sum / buf.length);
+            setLevels((prev) => [...prev.slice(1), Math.min(1, rms * 3.2)]);
+          }, 90);
+        } catch {
+          /* 无 AudioContext：保留计时录音 */
+        }
       })
       .catch(() => {
         setStatus('idle');
@@ -122,7 +168,7 @@ export function useVoice({
     }
   }, [teardown]);
 
-  return { supported, status, seconds, start, stop, cancel };
+  return { supported, status, seconds, levels, start, stop, cancel };
 }
 
 /** 秒数 → `0:07` 形式（录音条上显示）。 */

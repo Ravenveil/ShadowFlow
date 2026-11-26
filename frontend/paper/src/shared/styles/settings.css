@@ -1547,3 +1547,384 @@
   font-size: 12px;
   color: var(--ink-3);
 }
+
+/* ── 语言分区：两张可选卡（中文 / English），选中态与风格卡同一套描边语言 ── */
+
+.st-lang-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+
+.st-lang-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.st-lang-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.st-lang-card[data-active='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.st-lang-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.st-lang-cur {
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ── 本地 CLI：ClawHub 详情抽屉 + 安装日志（2026-11-26 并入） ── */
+
+.st-cli-card[data-installed='true'],
+.st-cli-mini {
+  cursor: pointer;
+}
+
+.st-cli-card[data-installed='true']:hover,
+.st-cli-mini:hover {
+  border-color: var(--accent-line, var(--line-strong));
+}
+
+.st-cli-card:focus-visible,
+.st-cli-mini:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.st-cli-mini-install {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.st-cli-mini-install:hover {
+  filter: brightness(1.05);
+}
+
+/* 详情抽屉：从右侧滑入，遮罩盖在设置 sheet 之上 */
+.st-cli-drawer-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(10, 10, 14, 0.32);
+  animation: sf-fade 0.14s ease;
+}
+
+.st-cli-drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  height: 100%;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-float);
+  animation: st-cli-drawer-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes st-cli-drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+.st-cli-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.st-cli-drawer-head b {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.st-cli-drawer-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.st-cli-drawer-tag[data-installable='true'] {
+  color: var(--accent);
+}
+
+.st-cli-drawer-x {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.st-cli-drawer-x:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.st-cli-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.st-cli-drawer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.st-cli-drawer-row > span {
+  width: 44px;
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+.st-cli-drawer-row > b {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+
+.st-cli-drawer-row--cmd {
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.st-cli-drawer-row--cmd code {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+
+.st-cli-drawer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.st-cli-drawer-icon:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.st-cli-drawer-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+.st-cli-drawer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.st-cli-drawer-link:hover {
+  text-decoration: underline;
+}
+
+.st-cli-drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.st-cli-drawer-note {
+  margin-right: auto;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* 安装日志面板：内联卡片，不遮住工具栏 */
+.st-cli-install {
+  margin-top: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.st-cli-install-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.st-cli-install-head b {
+  color: var(--ink);
+}
+
+.st-cli-install-ico {
+  display: inline-flex;
+}
+
+.st-cli-install-ico[data-tone='run'] {
+  color: var(--accent);
+}
+
+.st-cli-install-ico[data-tone='ok'] {
+  color: var(--tone-green);
+}
+
+.st-cli-install-ico[data-tone='danger'] {
+  color: var(--danger);
+}
+
+.st-cli-install-name {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.st-cli-install-cmd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono, monospace);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.st-cli-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.st-cli-install-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.st-cli-install-log {
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: var(--bg);
+  font-family: var(--mono, monospace);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.st-cli-install-log [data-stream='stderr'] {
+  color: var(--danger);
+}
+
+.st-cli-install-empty {
+  color: var(--ink-3);
+}
+
+.st-cli-install-caret {
+  color: var(--accent);
+}
+
+.st-cli-install-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.st-cli-install-msg {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--ink-2);
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.st-cli-install-msg[data-tone='ok'] {
+  color: var(--tone-green);
+}
+
+.st-cli-install-msg[data-tone='danger'] {
+  color: var(--danger);
+}

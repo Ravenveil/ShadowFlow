@@ -118,13 +118,14 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 6px;
   padding-left: 44px;
+  animation: sf-msg-in 0.18s ease-out both;
 }
 
 .sf-msg-userbubble {
-  max-width: 100%;
-  padding: 10px 14px;
+  max-width: min(76%, 640px);
+  padding: 11px 15px;
   border-radius: var(--radius-md);
   font-size: 13.5px;
   line-height: 1.62;
@@ -132,6 +133,25 @@
   word-break: break-word;
   background: var(--bg-elev);
   color: var(--ink);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.03);
+}
+
+@keyframes sf-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-msg--user,
+  .sf-msg--agent {
+    animation: none;
+  }
 }
 
 [data-theme='ink'] .sf-msg-userbubble {
@@ -159,6 +179,7 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  animation: sf-msg-in 0.18s ease-out both;
 }
 
 .sf-msg-gutter {

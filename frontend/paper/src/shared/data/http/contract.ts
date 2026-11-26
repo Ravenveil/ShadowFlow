@@ -97,6 +97,18 @@ export interface CliItemDto {
   version: string | null;
   install_cmd?: string;
   auth_hint?: string;
+  /** true = 安装命令可自动执行；false = copy-only。 */
+  installable?: boolean;
+  /** true = 有结构化卸载规格，可自动卸载。 */
+  uninstallable?: boolean;
+  /** 手动卸载引导（不可自动卸载时展示）。 */
+  uninstall_cmd?: string;
+  /** ClawHub 门面标记。 */
+  is_claw?: boolean;
+  description?: string;
+  category?: string;
+  /** 官网 / 文档链接。 */
+  homepage?: string;
 }
 
 export interface CliDetectDto {

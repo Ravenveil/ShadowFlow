@@ -6,6 +6,7 @@
  */
 import { CHAT, RAIL } from '@/shared/content/app';
 import { ACCOUNT } from '@/shared/content/settings';
+import { useI18n } from '@/shared/i18n';
 import { AgentAvatar, AVATAR_SIZE } from '@/shared/ui/avatar';
 import { useAuthState } from '@/shared/data/auth';
 import {
@@ -50,6 +51,7 @@ export function Rail({
   onNavigate: (id: ViewId) => void;
 }) {
   const { user } = useAuthState();
+  const { t } = useI18n();
   return (
     <aside className="rail">
       <button className="rail-brand" onClick={onHome} title={CHAT.backHome} aria-label={CHAT.backHome}>
@@ -72,14 +74,14 @@ export function Rail({
               onClick={() => onNavigate(id)}
             >
               <Icon size={15} />
-              <span>{label}</span>
+              <span>{t(`nav.${id}`, label)}</span>
             </button>
           );
         })}
       </nav>
 
       <div className="rail-group">
-        <div className="rail-group-title">{RAIL.workspaceTitle}</div>
+        <div className="rail-group-title">{t('nav.workspaceTitle', RAIL.workspaceTitle)}</div>
         {RAIL.workspace.map(({ id, label }) => {
           const Icon = NAV_ICON[id] ?? IconFolder;
           return (
@@ -90,7 +92,7 @@ export function Rail({
               onClick={() => onNavigate(id)}
             >
               <Icon size={15} />
-              <span>{label}</span>
+              <span>{t(`nav.${id}`, label)}</span>
             </button>
           );
         })}
@@ -98,21 +100,21 @@ export function Rail({
 
       <div className="rail-foot">
         {/* 用户定版（2026-11-25）：头像在左、设置在右一行；点头像进账号/登录。 */}
-        <button className="rail-account" onClick={onOpenAccount} title={ACCOUNT.title}>
+        <button className="rail-account" onClick={onOpenAccount} title={t('account.title', ACCOUNT.title)}>
           <AgentAvatar
-            label={user?.email || user?.address || ACCOUNT.notSignedIn}
+            label={user?.email || user?.address || t('account.notSignedIn', ACCOUNT.notSignedIn)}
             size={AVATAR_SIZE.list}
             status={false}
           />
           <span>
             {user && user.auth_type !== 'guest'
-              ? user.display_name || ACCOUNT.signedInAs
-              : ACCOUNT.notSignedIn}
+              ? user.display_name || t('account.signedInAs', ACCOUNT.signedInAs)
+              : t('account.notSignedIn', ACCOUNT.notSignedIn)}
           </span>
         </button>
         <button className="rail-nav-item rail-settings" onClick={onOpenSettings}>
           <IconSettings size={15} />
-          <span>{RAIL.settings}</span>
+          <span>{t('nav.settings', RAIL.settings)}</span>
         </button>
       </div>
     </aside>

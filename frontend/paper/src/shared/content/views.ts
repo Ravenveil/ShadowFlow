@@ -280,4 +280,11 @@ export const FILES = {
   previewTruncated: '文件较大，只显示前 1 MB',
   previewFailed: '读不出这个文件',
   previewClose: '关闭预览',
+  /* 文本编辑（项目文件里直接改并保存） */
+  edit: '编辑',
+  save: '保存',
+  saving: '保存中…',
+  cancelEdit: '取消',
+  saveFailed: '保存失败',
+  editHint: '直接改，保存写回本机文件',
 };

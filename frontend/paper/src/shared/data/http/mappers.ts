@@ -842,6 +842,12 @@ export function toCliProbes(cli: CliDetectDto | null): CliProbe[] {
     version: item.version ?? '',
     path: item.path ?? '',
     installed: !!item.installed,
+    installable: !!item.installable,
+    uninstallable: !!item.uninstallable,
+    installCmd: item.install_cmd ?? '',
+    uninstallCmd: item.uninstall_cmd ?? '',
+    homepage: item.homepage ?? '',
+    isClaw: !!item.is_claw,
   }));
 }
 

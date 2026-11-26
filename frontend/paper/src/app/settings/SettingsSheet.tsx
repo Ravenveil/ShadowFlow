@@ -9,6 +9,7 @@
  */
 import { useEffect, type ReactNode } from 'react';
 import { SETTINGS_COPY, SETTINGS_NAV } from '@/shared/content/settings';
+import { useI18n } from '@/shared/i18n';
 import {
   IconBell,
   IconBrain,
@@ -31,6 +32,7 @@ import { CliSection } from '@/app/settings/sections/CliSection';
 import { CollabSection } from '@/app/settings/sections/CollabSection';
 import { ConnectorsSection } from '@/app/settings/sections/ConnectorsSection';
 import { DataSection } from '@/app/settings/sections/DataSection';
+import { LanguageSection } from '@/app/settings/sections/LanguageSection';
 import { MemorySection } from '@/app/settings/sections/MemorySection';
 import { ModelsSection } from '@/app/settings/sections/ModelsSection';
 import { NotifySection } from '@/app/settings/sections/NotifySection';
@@ -46,6 +48,7 @@ type IconCmp = (p: { size?: number }) => ReactNode;
 const ICONS: Record<SettingsSection, IconCmp> = {
   profile: IconUser,
   appearance: IconPalette,
+  language: IconSliders,
   writing: IconPen,
   models: IconKey,
   cli: IconTerminal,
@@ -62,6 +65,7 @@ const ICONS: Record<SettingsSection, IconCmp> = {
 const HEAD: Record<SettingsSection, { title: string; note?: string }> = {
   profile: SETTINGS_COPY.profile,
   appearance: SETTINGS_COPY.appearance,
+  language: SETTINGS_COPY.language,
   writing: SETTINGS_COPY.writing,
   models: SETTINGS_COPY.models,
   cli: SETTINGS_COPY.cli,
@@ -104,6 +108,8 @@ export function SettingsSheet({
   onReset,
   onLoggedOut,
 }: SettingsSheetProps) {
+  const { t } = useI18n();
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -124,18 +130,18 @@ export function SettingsSheet({
         className="settings"
         role="dialog"
         aria-modal="true"
-        aria-label={SETTINGS_NAV.title}
+        aria-label={t('settings.title', SETTINGS_NAV.title)}
         onClick={(e) => e.stopPropagation()}
       >
         <aside className="st-nav">
           <div className="st-nav-head">
-            <b>{SETTINGS_NAV.title}</b>
+            <b>{t('settings.title', SETTINGS_NAV.title)}</b>
           </div>
 
           <nav className="st-nav-body">
             {SETTINGS_NAV.groups.map((g) => (
               <div className="st-nav-group" key={g.group}>
-                <span className="st-nav-group-title">{g.group}</span>
+                <span className="st-nav-group-title">{t(`settings.group.${g.id}`, g.group)}</span>
                 {g.items.map((item) => {
                   const Icon = ICONS[item.id];
                   return (
@@ -148,7 +154,7 @@ export function SettingsSheet({
                       onClick={() => onSection(item.id)}
                     >
                       <Icon size={15} />
-                      {item.label}
+                      {t(`settings.nav.${item.id}`, item.label)}
                     </button>
                   );
                 })}
@@ -163,14 +169,14 @@ export function SettingsSheet({
               <HeadIcon size={16} />
             </span>
             <div className="st-head-text">
-              <h2>{head.title}</h2>
+              <h2>{t(`settings.title.${section}`, head.title)}</h2>
               {'note' in head && head.note ? <p>{head.note}</p> : null}
             </div>
             <button
               className="st-x"
               onClick={onClose}
-              aria-label={SETTINGS_NAV.close}
-              title={SETTINGS_NAV.close}
+              aria-label={t('settings.close', SETTINGS_NAV.close)}
+              title={t('settings.close', SETTINGS_NAV.close)}
             >
               <IconClose size={16} />
             </button>
@@ -189,9 +195,11 @@ export function SettingsSheet({
           </div>
 
           <footer className="st-foot">
-            {saving ? <span className="st-save" data-busy="true">{SETTINGS_NAV.saving}</span> : null}
+            {saving ? (
+              <span className="st-save" data-busy="true">{t('settings.saving', SETTINGS_NAV.saving)}</span>
+            ) : null}
             <button className="sf-btn sf-btn--solid" onClick={onClose}>
-              {SETTINGS_NAV.done}
+              {t('settings.done', SETTINGS_NAV.done)}
             </button>
           </footer>
         </div>
@@ -223,6 +231,8 @@ function renderSection(
       );
     case 'appearance':
       return <AppearanceSection />;
+    case 'language':
+      return <LanguageSection />;
     case 'writing':
       return <WritingSection settings={p.settings} onPatch={p.onPatch} />;
     case 'models':

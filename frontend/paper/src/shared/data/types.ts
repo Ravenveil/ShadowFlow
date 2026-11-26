@@ -554,6 +554,18 @@ export interface CliProbe {
   version: string;
   path: string;
   installed: boolean;
+  /** 后端 installable：false = copy-only，只能复制命令手动执行。 */
+  installable?: boolean;
+  /** 后端 uninstallable：false = 需按 uninstallCmd 手动卸载。 */
+  uninstallable?: boolean;
+  /** 安装命令原文（后端 install_cmd）。 */
+  installCmd?: string;
+  /** 手动卸载引导（后端 uninstall_cmd）。 */
+  uninstallCmd?: string;
+  /** 官网 / 文档链接（后端 homepage）。 */
+  homepage?: string;
+  /** 后端 is_claw（ClawHub 门面标记）。 */
+  isClaw?: boolean;
 }
 
 /** 连接器 / MCP：外部数据源。 */

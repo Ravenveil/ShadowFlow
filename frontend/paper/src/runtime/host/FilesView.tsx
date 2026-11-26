@@ -54,6 +54,9 @@ export default function FilesView({ initialDir, embedded }: { initialDir?: strin
   const [reload, setReload] = useState(0);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewState, setPreviewState] = useState<'loading' | 'ready' | 'error'>('ready');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -94,10 +97,12 @@ export default function FilesView({ initialDir, embedded }: { initialDir?: strin
     setPreview(null);
     setError(null);
     setNewOpen(false);
+    setEditing(false);
   }, [dir]);
 
   const openFile = (entry: FsEntry) => {
     setError(null);
+    setEditing(false);
     if (!TEXT_EXT.test(entry.name)) {
       window.open(fileRawUrl(entry.path, root), '_blank', 'noreferrer');
       return;
@@ -110,6 +115,29 @@ export default function FilesView({ initialDir, embedded }: { initialDir?: strin
         setPreviewState('ready');
       })
       .catch(() => setPreviewState('error'));
+  };
+
+  const startEdit = () => {
+    if (!preview) return;
+    setDraft(preview.content);
+    setEditing(true);
+    setError(null);
+  };
+
+  const saveEdit = async () => {
+    if (!preview || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await writeWorkspaceFile(preview.path, draft, root);
+      setPreview({ ...preview, content: draft.replace(/\r\n/g, '\n'), truncated: false });
+      setEditing(false);
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : FILES.saveFailed);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const submitNewFile = async () => {
@@ -258,18 +286,53 @@ export default function FilesView({ initialDir, embedded }: { initialDir?: strin
             <div className="subview-card file-preview">
               <div className="subview-kv">
                 <span>{preview.path}</span>
-                <button className="subview-btn" onClick={() => setPreview(null)}>
-                  {FILES.previewClose}
-                </button>
+                <span className="file-preview-actions">
+                  {editing ? (
+                    <>
+                      <button className="subview-btn" onClick={() => setEditing(false)} disabled={saving}>
+                        {FILES.cancelEdit}
+                      </button>
+                      <button
+                        className="subview-btn"
+                        data-primary="true"
+                        onClick={() => void saveEdit()}
+                        disabled={saving}
+                      >
+                        {saving ? FILES.saving : FILES.save}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="subview-btn" onClick={startEdit} disabled={previewState !== 'ready'}>
+                        {FILES.edit}
+                      </button>
+                      <button className="subview-btn" onClick={() => setPreview(null)}>
+                        {FILES.previewClose}
+                      </button>
+                    </>
+                  )}
+                </span>
               </div>
               {previewState === 'loading' ? <div className="subview-state">{FILES.previewLoading}</div> : null}
               {previewState === 'error' ? <div className="subview-state">{FILES.previewFailed}</div> : null}
               {previewState === 'ready' ? (
                 <>
-                  {preview.truncated ? <div className="subview-tag">{FILES.previewTruncated}</div> : null}
-                  <pre className="file-preview-body">
-                    {preview.content || FILES.previewEmpty}
-                  </pre>
+                  {preview.truncated && !editing ? (
+                    <div className="subview-tag">{FILES.previewTruncated}</div>
+                  ) : null}
+                  {editing ? (
+                    <textarea
+                      className="file-preview-edit"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      spellCheck={false}
+                      aria-label={FILES.editHint}
+                    />
+                  ) : (
+                    <pre className="file-preview-body">
+                      {preview.content || FILES.previewEmpty}
+                    </pre>
+                  )}
                 </>
               ) : null}
             </div>

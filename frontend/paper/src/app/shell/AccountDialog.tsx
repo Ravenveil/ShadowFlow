@@ -3,9 +3,10 @@
  *
  * 用户定版（2026-11-25）：登录入口要在工作台里，头像在左、设置在右一行。
  * 未登录时提供邮箱登录/注册/游客；已登录时显示当前账号与退出。
- * 所有可见文案走 content/landing.ts 的 AUTH_MODAL / content/app.ts 的 ACCOUNT。
+ * 文案走 i18n 词典（account.*，中文兜底见 content/landing.ts 的 AUTH_MODAL 与 content/settings.ts 的 ACCOUNT）。
  */
 import { useState, type FormEvent } from 'react';
+import { useI18n } from '@/shared/i18n';
 import { AgentAvatar } from '@/shared/ui/avatar';
 import {
   authGuest,
@@ -16,11 +17,10 @@ import {
   useAuthState,
   type AuthUser,
 } from '@/shared/data/auth';
-import { AUTH_MODAL } from '@/shared/content/landing';
-import { ACCOUNT } from '@/shared/content/settings';
 
 export function AccountDialog({ onClose }: { onClose: () => void }) {
   const { user } = useAuthState();
+  const { t } = useI18n();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
         : await authLogin(email, password);
       if (next) onClose();
     } catch {
-      setError(AUTH_MODAL.errorFallback);
+      setError(t('account.errorFallback'));
     } finally {
       setBusy(false);
     }
@@ -54,7 +54,7 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
       await authGuest();
       onClose();
     } catch {
-      setError(AUTH_MODAL.guestErrorFallback);
+      setError(t('account.guestErrorFallback'));
     } finally {
       setBusy(false);
     }
@@ -63,7 +63,7 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="lp-modal-mask" role="presentation" onMouseDown={onClose}>
       <div className="lp-modal lp-modal--auth" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="lp-modal-close" onClick={onClose} aria-label={AUTH_MODAL.close}>
+        <button className="lp-modal-close" onClick={onClose} aria-label={t('account.close')}>
           ×
         </button>
 
@@ -73,33 +73,33 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
             <div className="ac-identity">
               <AgentAvatar label={user.email || user.address || displayNameOf(user)} size="lg" status={false} />
               <div>
-                <p className="lp-kicker">{ACCOUNT.signedInAs}</p>
+                <p className="lp-kicker">{t('account.signedInAs')}</p>
                 <h2>{displayNameOf(user)}</h2>
                 <p>{user.email || user.address}</p>
               </div>
             </div>
             <div className="ac-actions">
-              <button className="lp-cta" onClick={onClose}>{AUTH_MODAL.doneCta}</button>
+              <button className="lp-cta" onClick={onClose}>{t('account.welcome')}</button>
               <button
                 className="lp-cta-outline"
                 onClick={() => { void authLogout().finally(onClose); }}
               >
-                {ACCOUNT.signOut}
+                {t('account.logout')}
               </button>
             </div>
           </>
         ) : (
           <>
-            <p className="lp-kicker">{mode === 'register' ? AUTH_MODAL.registerKicker : AUTH_MODAL.loginKicker}</p>
-            <h2>{mode === 'register' ? AUTH_MODAL.registerTitle : AUTH_MODAL.loginTitle}</h2>
-            <p>{mode === 'register' ? AUTH_MODAL.registerBody : AUTH_MODAL.loginBody}</p>
+            <p className="lp-kicker">{mode === 'register' ? t('account.registerKicker') : t('account.loginKicker')}</p>
+            <h2>{mode === 'register' ? t('account.registerTitle') : t('account.loginTitle')}</h2>
+            <p>{mode === 'register' ? t('account.registerBody') : t('account.loginBody')}</p>
 
             <div className="lp-auth-tabs" role="tablist">
               <button role="tab" aria-selected={mode === 'login'} data-on={mode === 'login' ? 'true' : undefined} onClick={() => setMode('login')}>
-                {AUTH_MODAL.tabLogin}
+                {t('account.tabLogin')}
               </button>
               <button role="tab" aria-selected={mode === 'register'} data-on={mode === 'register' ? 'true' : undefined} onClick={() => setMode('register')}>
-                {AUTH_MODAL.tabRegister}
+                {t('account.tabRegister')}
               </button>
             </div>
 
@@ -107,36 +107,36 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
             <form onSubmit={(e) => void submit(e)}>
               {mode === 'register' ? (
                 <label>
-                  {AUTH_MODAL.nameLabel}
-                  <input name="name" placeholder={AUTH_MODAL.namePlaceholder} />
+                  {t('account.nameLabel')}
+                  <input name="name" placeholder={t('account.namePlaceholder')} />
                 </label>
               ) : null}
               <label>
-                {AUTH_MODAL.emailLabel}
-                <input name="email" required type="email" placeholder={AUTH_MODAL.emailPlaceholder} autoComplete="email" />
+                {t('account.emailLabel')}
+                <input name="email" required type="email" placeholder={t('account.emailPlaceholder')} autoComplete="email" />
               </label>
               <label>
-                {AUTH_MODAL.passwordLabel}
+                {t('account.passwordLabel')}
                 <input
                   name="password"
                   required
                   type="password"
                   minLength={8}
-                  placeholder={mode === 'register' ? AUTH_MODAL.passwordRegisterPlaceholder : AUTH_MODAL.passwordLoginPlaceholder}
+                  placeholder={mode === 'register' ? t('account.passwordRegisterPlaceholder') : t('account.passwordLoginPlaceholder')}
                   autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                 />
               </label>
               <button className="lp-cta" type="submit" disabled={busy}>
-                {busy ? AUTH_MODAL.busy : mode === 'register' ? AUTH_MODAL.submitRegister : AUTH_MODAL.submitLogin}
+                {busy ? t('account.busy') : mode === 'register' ? t('account.submitRegister') : t('account.submitLogin')}
               </button>
             </form>
 
             <div className="lp-auth-foot">
               <button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-                {mode === 'login' ? AUTH_MODAL.switchToRegister : AUTH_MODAL.switchToLogin}
+                {mode === 'login' ? t('account.switchToRegister') : t('account.switchToLogin')}
               </button>
-              <button onClick={() => void guest()} disabled={busy}>{AUTH_MODAL.guest}</button>
-              <button onClick={onClose}>{AUTH_MODAL.skip}</button>
+              <button onClick={() => void guest()} disabled={busy}>{t('account.guest')}</button>
+              <button onClick={onClose}>{t('account.skip')}</button>
             </div>
           </>
         )}

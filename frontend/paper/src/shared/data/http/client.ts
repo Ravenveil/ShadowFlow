@@ -65,6 +65,13 @@ export const ROUTES = {
   preferences: '/api/settings/preferences',
   cli: '/api/cli/detect',
   cliRefresh: '/api/cli/detect/refresh',
+  /** ClawHub 安装/卸载会话（见 http/clawhub.ts）。 */
+  clawhubInstall: (cliId: string) => `/api/clawhub/install/${encodeURIComponent(cliId)}`,
+  clawhubUninstall: (cliId: string) => `/api/clawhub/uninstall/${encodeURIComponent(cliId)}`,
+  clawhubInstallStream: (installId: string) =>
+    `/api/clawhub/install/${encodeURIComponent(installId)}/stream`,
+  clawhubInstallCancel: (installId: string) =>
+    `/api/clawhub/install/${encodeURIComponent(installId)}/cancel`,
   sshConfig: '/api/remote-exec/config',
   sshTest: '/api/remote-exec/test',
 

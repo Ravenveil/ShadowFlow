@@ -13,13 +13,16 @@
   saveFailed: '保存失败',
   groups: [
     {
+      id: 'account',
       group: '账户',
       items: [
         { id: 'profile', label: '个人资料' },
         { id: 'appearance', label: '外观' },
+        { id: 'language', label: '语言' },
       ],
     },
     {
+      id: 'writing',
       group: '写作',
       items: [
         { id: 'writing', label: '写作规范' },
@@ -28,6 +31,7 @@
       ],
     },
     {
+      id: 'integration',
       group: '集成',
       items: [
         { id: 'connectors', label: '连接器' },
@@ -37,6 +41,7 @@
       ],
     },
     {
+      id: 'preference',
       group: '偏好',
       items: [
         { id: 'collab', label: '协作' },
@@ -85,6 +90,16 @@ export const SETTINGS_COPY = {
     motionLabel: '界面动画',
     motionNote: '关掉后弹出、滚动、状态切换都直接到位。',
     motionReduced: '已关闭动效',
+  },
+
+  /* ── 语言（最小 i18n：中文 / English） ── */
+  language: {
+    title: '语言',
+    note: '切换后界面立即更新，并记住在这台设备上。',
+    zh: '中文',
+    en: 'English',
+    current: '当前语言',
+    coverageNote: '目前覆盖：全局导航、设置页导航与分区标题、账号弹窗；其余文案将分批补齐。',
   },
 
   /* ── 写作规范 ── */

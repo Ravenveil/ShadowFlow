@@ -27,7 +27,6 @@ import {
   IconReply,
   IconSlash,
   IconStop,
-  IconCheck,
 } from '@/shared/ui/icons';
 import { AttachmentBar } from '@/runtime/chat/composer/AttachmentBar';
 import { HelpSheet } from '@/runtime/chat/composer/HelpSheet';
@@ -268,8 +267,6 @@ export function Composer({
     if (files?.length) attachments.add(files);
   };
 
-  const voiceBusy = voice.status === 'starting' || voice.status === 'transcribing';
-
   return (
     <div className="composer">
       <div
@@ -341,6 +338,44 @@ export function Composer({
           />
         </div>
 
+        {voice.status !== 'idle' ? (
+          <div className="cp-voice" data-state={voice.status}>
+            <span className="cp-voice-badge">
+              {voice.status === 'recording' ? <span className="cp-rec-dot" /> : <span className="cp-spin" />}
+              <b>{formatSeconds(voice.seconds)}</b>
+            </span>
+            <div className="cp-voice-wave" aria-hidden="true">
+              {voice.levels.map((level, i) => (
+                <i key={i} style={{ transform: `scaleY(${0.12 + level * 0.88})` }} />
+              ))}
+            </div>
+            <span className="cp-voice-hint">
+              {voice.status === 'starting'
+                ? COMPOSER.voiceStarting
+                : voice.status === 'transcribing'
+                  ? COMPOSER.voiceTranscribing
+                  : COMPOSER.voiceRecording}
+            </span>
+            <span className="cp-voice-actions">
+              {voice.status !== 'transcribing' ? (
+                <button type="button" className="cp-voice-btn" onClick={voice.cancel}>
+                  {COMPOSER.voiceCancel}
+                </button>
+              ) : null}
+              {voice.status === 'recording' ? (
+                <button
+                  type="button"
+                  className="cp-voice-btn"
+                  data-primary="true"
+                  onClick={voice.stop}
+                >
+                  {COMPOSER.voiceStop}
+                </button>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
+
         <div className="composer-bar">
           <div className="composer-bar-left">
             <input
@@ -388,44 +423,14 @@ export function Composer({
               @
             </button>
 
-            {voice.status === 'recording' ? (
-              <div className="cp-rec">
-                <span className="cp-rec-pill">
-                  <span className="cp-rec-dot" />
-                  <span>{formatSeconds(voice.seconds)}</span>
-                </span>
-                <button
-                  type="button"
-                  className="cp-rec-btn cp-rec-btn--ok"
-                  title={COMPOSER.voiceStop}
-                  onClick={voice.stop}
-                >
-                  <IconCheck size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="cp-rec-btn"
-                  title={COMPOSER.voiceCancel}
-                  onClick={voice.cancel}
-                >
-                  <IconClose size={13} />
-                </button>
-              </div>
-            ) : voice.supported ? (
+            {voice.supported && voice.status === 'idle' ? (
               <button
                 type="button"
                 className="sf-icon-btn"
-                title={
-                  voice.status === 'starting'
-                    ? COMPOSER.voiceStarting
-                    : voice.status === 'transcribing'
-                      ? COMPOSER.voiceTranscribing
-                      : COMPOSER.voice
-                }
-                disabled={voiceBusy}
+                title={COMPOSER.voice}
                 onClick={voice.start}
               >
-                {voiceBusy ? <span className="cp-spin" /> : <IconMic size={15} />}
+                <IconMic size={15} />
               </button>
             ) : null}
           </div>
