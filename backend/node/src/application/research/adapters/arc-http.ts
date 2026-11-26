@@ -34,13 +34,14 @@ function relPathOf(req: Request): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-/** `?root=` 把 reader 收窄到某个工作目录；缺省用全局默认根（ARC 安装位 + 会话工作区）。 */
-function depsOf(req: Request, deps: ArcDeps): ArcDeps {
+/** `?root=` 把 reader 收窄到某个目录（会话工作目录，或直接装着 run 的根）；缺省用全局默认根。 */
+function depsOf(req: Request): ArcDeps {
   const root = typeof req.query.root === 'string' ? req.query.root.trim() : '';
-  return root ? { reader: createArcFsReader([root]) } : deps;
+  // 每次请求现算：默认根里的会话工作目录是运行中才建出来的，启动时冻结的清单会漏掉它
+  return { reader: createArcFsReader(root ? [root] : undefined) };
 }
 
-export function createArcRouter(deps: ArcDeps = { reader: createArcFsReader() }): Router {
+export function createArcRouter(): Router {
   const router = Router();
 
   router.get('/pipeline', (_req: Request, res: Response) => {
@@ -49,7 +50,7 @@ export function createArcRouter(deps: ArcDeps = { reader: createArcFsReader() })
 
   router.get('/runs', async (req: Request, res: Response) => {
     try {
-      res.json({ data: await listRuns(depsOf(req, deps)) });
+      res.json({ data: await listRuns(depsOf(req)) });
     } catch (err) {
       res.status(500).json({
         error: { code: 'ARC_SCAN_FAILED', message: err instanceof Error ? err.message : 'scan failed' },
@@ -58,7 +59,7 @@ export function createArcRouter(deps: ArcDeps = { reader: createArcFsReader() })
   });
 
   router.get('/runs/:runId', async (req: Request, res: Response) => {
-    const result = await getRunDetail(depsOf(req, deps), req.params.runId);
+    const result = await getRunDetail(depsOf(req), req.params.runId);
     if (fail(res, result)) return;
     res.json({ data: result.kind === 'ok' ? result.value : null });
   });
@@ -69,7 +70,7 @@ export function createArcRouter(deps: ArcDeps = { reader: createArcFsReader() })
       res.status(400).json({ error: { code: 'BAD_PATH', message: '缺少 path 参数' } });
       return;
     }
-    const result = await readArtifact(depsOf(req, deps), req.params.runId, relPath);
+    const result = await readArtifact(depsOf(req), req.params.runId, relPath);
     if (fail(res, result)) return;
     res.json({ data: result.kind === 'ok' ? result.value : null });
   });
@@ -80,7 +81,7 @@ export function createArcRouter(deps: ArcDeps = { reader: createArcFsReader() })
       res.status(400).json({ error: { code: 'BAD_PATH', message: '缺少 path 参数' } });
       return;
     }
-    const result = await rawArtifact(depsOf(req, deps), req.params.runId, relPath);
+    const result = await rawArtifact(depsOf(req), req.params.runId, relPath);
     if (fail(res, result)) return;
     const file = result.kind === 'ok' ? result.value : null;
     if (!file) {

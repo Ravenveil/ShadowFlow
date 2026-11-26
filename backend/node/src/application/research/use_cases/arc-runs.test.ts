@@ -52,8 +52,16 @@ function fakeRun(files: Record<string, FakeFile>): { runId: string; reader: ArcR
           entries: [],
         };
         if (m[2]) {
-          const file = files[p];
-          scan.entries.push({ name: m[2], isDir: false, size: (file?.size as number) ?? 10 });
+          const [head, ...deep] = m[2].split('/');
+          if (deep.length) {
+            // 与真实 reader 一致：阶段目录扫描只看顶层，子目录以 isDir 项出现（内容由 listDir 给）
+            if (!scan.entries.some((e) => e.name === head && e.isDir)) {
+              scan.entries.push({ name: head, isDir: true, size: 0 });
+            }
+          } else {
+            const file = files[p];
+            scan.entries.push({ name: head, isDir: false, size: (file?.size as number) ?? 10 });
+          }
         }
         scans.set(m[1], scan);
       }
@@ -200,6 +208,62 @@ describe('getRunDetail', () => {
     expect(stage13?.status).toBe('done');
     expect(stage13?.attempts).toBe(3);
     expect(result.value.doneCount).toBeGreaterThanOrEqual(13);
+  });
+
+  it('多轮阶段以最高轮次的 health 为准：原始轮的 429 报错不挂在已完成阶段上（真实形状 stage-13）', async () => {
+    const fixture = fakeRun({
+      'rc-20261118-071512-3a2302/checkpoint.json': { kind: 'json', body: { last_completed_stage: 14 } },
+      'rc-20261118-071512-3a2302/stage-13/decision.json': { kind: 'json', body: { status: 'failed', decision: 'retry', error: 'All models failed. HTTP 429' } },
+      'rc-20261118-071512-3a2302/stage-13/stage_health.json': { kind: 'json', body: { duration_sec: 12.5, status: 'failed', error: 'All models failed. HTTP 429' } },
+      'rc-20261118-071512-3a2302/stage-13_v2/decision.json': { kind: 'json', body: { status: 'done', decision: 'proceed' } },
+      'rc-20261118-071512-3a2302/stage-13_v2/stage_health.json': { kind: 'json', body: { duration_sec: 15.78, status: 'done', error: null } },
+    });
+    const result = await getRunDetail(depsOf(fixture.reader), fixture.runId);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    const stage13 = result.value.stages.find((s) => s.index === 13);
+    expect(stage13?.status).toBe('done');
+    expect(stage13?.error).toBeNull();
+    expect(stage13?.durationSec).toBeCloseTo(15.78);
+  });
+
+  it('阶段目录里的子目录展开成文件项：代码生成阶段的 experiment/*.py 可见、可读（真实形状 stage-10）', async () => {
+    const fixture = fakeRun({
+      'rc-20261118-071512-3a2302/checkpoint.json': { kind: 'json', body: { last_completed_stage: 10 } },
+      'rc-20261118-071512-3a2302/stage-10/decision.json': { kind: 'json', body: { status: 'done', decision: 'proceed' } },
+      'rc-20261118-071512-3a2302/stage-10/experiment_spec.md': { kind: 'text', body: 'spec' },
+      'rc-20261118-071512-3a2302/stage-10/experiment/heuristic_system.py': { kind: 'text', body: 'print(1)', size: 7 },
+      'rc-20261118-071512-3a2302/stage-10/experiment/run_all.py': { kind: 'text', body: 'print(2)', size: 7 },
+      'rc-20261118-071512-3a2302/stage-10/experiment/__pycache__/x.cpython-314.pyc': { kind: 'text', body: '' },
+    });
+    const result = await getRunDetail(depsOf(fixture.reader), fixture.runId);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    const artifacts = result.value.stages[9].artifacts;
+    const names = artifacts.map((a) => a.name);
+    expect(names).toContain('experiment_spec.md');
+    expect(names).toContain('experiment/heuristic_system.py');
+    expect(names).toContain('experiment/run_all.py');
+    expect(names.some((n) => n.includes('__pycache__'))).toBe(false);
+    expect(artifacts.find((a) => a.name === 'experiment/run_all.py')?.path).toBe('stage-10/experiment/run_all.py');
+    expect((await readArtifact(depsOf(fixture.reader), fixture.runId, 'stage-10/experiment/run_all.py')).kind).toBe('ok');
+  });
+
+  it('交付目录里的子目录展开成文件：charts/*.png 可直接点开，目录本身不再出现', async () => {
+    const fixture = fakeRun({
+      'rc-20261118-071512-3a2302/deliverables/paper_final.md': { kind: 'text', body: '# Paper', size: 45324 },
+      'rc-20261118-071512-3a2302/deliverables/charts/fig_main_comparison.png': { kind: 'text', body: 'png', size: 81234 },
+      'rc-20261118-071512-3a2302/deliverables/charts/fig_ablation_summary.png': { kind: 'text', body: 'png', size: 2345 },
+      'rc-20261118-071512-3a2302/deliverables/viz_steps/step01/frame.png': { kind: 'text', body: 'png', size: 10 },
+    });
+    const result = await getRunDetail(depsOf(fixture.reader), fixture.runId);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    const names = result.value.deliverables.map((d) => d.name);
+    expect(names[0]).toBe('paper_final.md'); // 终稿仍置顶
+    expect(names).toContain('charts/fig_main_comparison.png');
+    expect(names).toContain('viz_steps/step01/frame.png');
+    expect(names.some((n) => n === 'charts' || n === 'viz_steps')).toBe(false);
+    const fig = result.value.deliverables.find((d) => d.name === 'charts/fig_main_comparison.png');
+    expect(fig?.path).toBe('deliverables/charts/fig_main_comparison.png');
+    expect(fig?.kind).toBe('image');
   });
 });
 

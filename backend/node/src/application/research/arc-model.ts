@@ -422,7 +422,24 @@ export interface ArcInferenceInput {
   goalText: string | null;
 }
 
-function statusForStage(index: number, input: ArcInferenceInput): ArcStageStatus {
+/** pipeline_summary.json 里表示「仍在推进」的 final_status；其余（done / failed / paused / blocked…）都是终局。 */
+const LIVE_SUMMARY_STATUS = new Set(['running', 'in_progress', 'active']);
+
+/**
+ * 汇总是否代表一次还在跑的运行。它是终局才写的，所以只要有 final_status 管线
+ * 就停了；唯一的例外是失败后续跑 —— 旧汇总还留在盘上，但心跳已经比它新。
+ */
+function summaryIsLive(summary: ArcPipelineSummary | null, heartbeat: ArcHeartbeat | null): boolean {
+  if (!summary?.finalStatus) return true;
+  if (heartbeat?.timestamp && summary.generated && heartbeat.timestamp > summary.generated) return true;
+  return LIVE_SUMMARY_STATUS.has(summary.finalStatus.toLowerCase());
+}
+
+/**
+ * `halted` = 前面已有阶段以失败/暂停收尾。此时管线不会自己往下走，后面没有
+ * 自己证据（decision.json / 目录）的阶段一律待启动。
+ */
+function statusForStage(index: number, input: ArcInferenceInput, halted: boolean): ArcStageStatus {
   const decision = input.decisions.get(index);
   if (decision) return decision.status;
 
@@ -431,7 +448,7 @@ function statusForStage(index: number, input: ArcInferenceInput): ArcStageStatus
   const summaryDone = input.summary?.finalStatus === 'done';
 
   // 断点说这一阶段已完成（decision.json 可能是旧版本 ARC 没写的）
-  if (completed >= index || (summaryDone && input.summary?.finalStage !== null && (input.summary?.finalStage ?? 0) >= index)) {
+  if (completed >= index || (summaryDone && (input.summary?.finalStage ?? 0) >= index)) {
     return 'done';
   }
   if (hasDir) {
@@ -439,16 +456,19 @@ function statusForStage(index: number, input: ArcInferenceInput): ArcStageStatus
     return 'running';
   }
 
-  // 断点之后的第一个阶段 = 正在跑的那一个；更靠后的都是待办
-  const heartbeatStage = input.heartbeat?.lastStage ?? 0;
-  const frontier = Math.max(completed, heartbeatStage, input.summary?.finalStage ?? 0);
-  if (index === frontier + 1 && !summaryDone && (input.checkpoint || input.heartbeat)) return 'running';
+  // 断点之后的第一个阶段 = 正在跑的那一个；更靠后的都是待办。
+  // 汇总已是终局时 final_stage 只说明「停在哪儿」，不能拿来把下一阶段推成进行中。
+  const live = summaryIsLive(input.summary, input.heartbeat);
+  const frontier = Math.max(completed, input.heartbeat?.lastStage ?? 0, live ? input.summary?.finalStage ?? 0 : 0);
+  if (!halted && live && index === frontier + 1 && !summaryDone && (input.checkpoint || input.heartbeat)) return 'running';
   return 'pending';
 }
 
 /** 23 个阶段的全量视图（没跑到的阶段也要出现，界面才是一条完整管线）。 */
 export function inferStages(input: ArcInferenceInput): ArcStageView[] {
-  return ARC_PIPELINE.map((meta) => {
+  const stages: ArcStageView[] = [];
+  let halted = false;
+  for (const meta of ARC_PIPELINE) {
     const attempts = input.dirs
       .filter((d) => d.index === meta.index)
       .sort((a, b) => a.attempt - b.attempt);
@@ -465,21 +485,24 @@ export function inferStages(input: ArcInferenceInput): ArcStageView[] {
             size: e.size,
           }))
       : [];
-    return {
+    const status = statusForStage(meta.index, input, halted);
+    if (status === 'failed' || status === 'paused') halted = true;
+    stages.push({
       index: meta.index,
       key: meta.key,
       label: meta.label,
       phase: meta.phase,
       phaseLabel: meta.phaseLabel,
       isGate: meta.isGate,
-      status: statusForStage(meta.index, input),
+      status,
       attempts: attempts.length,
       decision: decision?.decision ?? null,
       durationSec: health?.durationSec ?? null,
       error: decision?.error ?? health?.error ?? null,
       artifacts,
-    };
-  });
+    });
+  }
+  return stages;
 }
 
 /** run 整体状态：终局汇总优先，其次失败/暂停阶段，再有动静就是进行中。 */

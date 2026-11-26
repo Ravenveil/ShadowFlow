@@ -1,10 +1,16 @@
 /**
  * research 域 — ARC run 目录的文件系统实现（外部）
  *
- * 扫描根（按优先级合并，都存在才生效）：
+ * 扫描根（按优先级合并，存在的才生效；每次请求现算，服务启动后才出现的
+ * 会话目录不会漏）：
  *   1. env `ARC_ARTIFACTS_ROOTS` —— 分号分隔的额外根（部署时可指到挂载卷）
  *   2. `~/AutoResearchClaw/artifacts` —— ARC 官方默认安装位的产物目录
- *   3. `<cwd>/.shadowflow/projects/<会话>/artifacts` —— 经会话工作目录跑的 run
+ *   3. `<cwd>/.shadowflow/projects/<会话>/artifacts` —— 旧位置的会话工作目录
+ *   4. `<chat 根>/chat-workspaces/<会话>/artifacts` —— 现行会话工作目录
+ *      （`researchclaw run` 把 run 落在 cwd 下的 artifacts/，而 cwd = 会话工作目录）
+ *
+ * 一个根可以是「直接装着 rc-* 的目录」，也可以是会话工作目录本身（run 在其
+ * artifacts/ 下一层）：`resolveRoot` 两种形状都认，前端传会话工作目录即可。
  *
  * 安全面：run id 必须过 model 的 isValidRunId；相对路径 resolve 后必须
  * 仍在 run 目录内（resolvePath 返回 null 即拒绝），与 fs-browse 同一防线。
@@ -14,12 +20,21 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { chatWorkspacesRoot } from '../../runtime/chat-workspace';
 
 import type { ArcDirEntry, ArcRunReader, ArcRunStateFiles } from '../repository';
 import { isValidRunId, parseStageDirName, type ArcStageDirScan } from '../arc-model';
 
 const TEXT_HEAD_BYTES = 256 * 1024;
 const GOAL_HEAD_BYTES = 8 * 1024;
+
+function isDirectory(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 function existingDirs(candidates: string[]): string[] {
   const seen = new Set<string>();
@@ -30,33 +45,59 @@ function existingDirs(candidates: string[]): string[] {
     const key = resolved.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    try {
-      if (fs.statSync(resolved).isDirectory()) roots.push(resolved);
-    } catch {
-      /* 根不存在就跳过：ARC 没装、会话目录没建都是正常状态 */
-    }
+    // 根不存在就跳过：ARC 没装、会话目录没建都是正常状态
+    if (isDirectory(resolved)) roots.push(resolved);
   }
   return roots;
 }
 
-/** 默认扫描根：ARC 安装位 + 所有会话工作区下的 artifacts。 */
+/** `<parent>/<id>/artifacts`：每个会话工作目录下的 artifacts 目录（存不存在由 existingDirs 裁决）。 */
+function sessionArtifactDirs(parent: string): string[] {
+  try {
+    return fs
+      .readdirSync(parent, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(parent, entry.name, 'artifacts'));
+  } catch {
+    return []; // 没有会话目录 = 没有会话内 run
+  }
+}
+
+/** 默认扫描根：额外根 + ARC 安装位 + 所有会话工作区下的 artifacts。 */
 export function defaultArcRoots(cwd: string = process.cwd()): string[] {
   const fromEnv = (process.env.ARC_ARTIFACTS_ROOTS ?? '')
     .split(path.delimiter)
     .map((part) => part.trim())
     .filter(Boolean);
   const home = path.join(os.homedir(), 'AutoResearchClaw', 'artifacts');
-  const projects = path.join(cwd, '.shadowflow', 'projects');
-  const sessionArtifacts: string[] = [];
-  try {
-    for (const entry of fs.readdirSync(projects, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      sessionArtifacts.push(path.join(projects, entry.name, 'artifacts'));
-    }
-  } catch {
-    /* 没有项目目录 = 没有会话内 run */
-  }
+  const legacyProjects = path.join(cwd, '.shadowflow', 'projects');
+  const sessionArtifacts = [
+    ...sessionArtifactDirs(legacyProjects),
+    ...sessionArtifactDirs(chatWorkspacesRoot()),
+  ];
   return existingDirs([...fromEnv, home, ...sessionArtifacts]);
+}
+
+/** 目录下直接有 run 子目录（rc-*）。 */
+function holdsRunDirs(root: string): boolean {
+  try {
+    return fs
+      .readdirSync(root, { withFileTypes: true })
+      .some((entry) => entry.isDirectory() && isValidRunId(entry.name));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 把调用方给的根归一到「直接装着 rc-* 的目录」。会话工作目录传进来时 run 其实在
+ * artifacts/ 下一层 —— 多认这一层，调用方不必知道 ARC 的落盘约定。
+ */
+function resolveRoot(root: string): string {
+  const direct = path.resolve(root);
+  if (holdsRunDirs(direct)) return direct;
+  const nested = path.join(direct, 'artifacts');
+  return isDirectory(nested) ? nested : direct;
 }
 
 /** 在多个根下定位 run 目录；同名 run 先到先得（rc- 名含时间戳哈希，冲突罕见）。 */
@@ -163,10 +204,11 @@ async function listStageDirs(runDir: string): Promise<ArcStageDirScan[]> {
 }
 
 export function createArcFsReader(roots: string[] = defaultArcRoots()): ArcRunReader {
+  const scanRoots = existingDirs(roots.map(resolveRoot));
   return {
     async listRunIds() {
       const ids: string[] = [];
-      for (const root of roots) {
+      for (const root of scanRoots) {
         let rows: fs.Dirent[];
         try {
           rows = await fsp.readdir(root, { withFileTypes: true });
@@ -182,7 +224,7 @@ export function createArcFsReader(roots: string[] = defaultArcRoots()): ArcRunRe
 
     async runDir(runId) {
       if (!isValidRunId(runId)) return null;
-      return locateRun(roots, runId);
+      return locateRun(scanRoots, runId);
     },
 
     async readStateFiles(runId) {

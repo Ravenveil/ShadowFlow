@@ -290,6 +290,53 @@ describe('inferStages / inferRunStatus', () => {
     const stages = inferStages(input);
     expect(inferRunStatus(stages, input)).toBe('succeeded');
   });
+
+  it('失败后管线已停：失败阶段之后不再有「进行中」（真实形状 rc-20261125：summary failed / final_stage 10）', () => {
+    const dirs = Array.from({ length: 10 }, (_, i) => dir(`stage-${String(i + 1).padStart(2, '0')}`));
+    const decisions = new Map<number, NonNullable<ReturnType<typeof normalizeStageDecision>>>();
+    for (let i = 1; i <= 9; i++) decisions.set(i, normalizeStageDecision({ status: 'done', decision: 'proceed' })!);
+    decisions.set(10, normalizeStageDecision({ status: 'failed', decision: 'proceed', error: 'Topic-experiment misalignment' })!);
+    const input = emptyInput({
+      dirs,
+      decisions,
+      checkpoint: normalizeCheckpoint({ last_completed_stage: 9 }),
+      heartbeat: normalizeHeartbeat({ pid: 47980, last_stage: 9, timestamp: '2026-11-25T15:42:46+00:00' }),
+      summary: normalizePipelineSummary({ final_status: 'failed', final_stage: 10, generated: '2026-11-25T15:57:20+00:00' }),
+    });
+    const stages = inferStages(input);
+    expect(stages[9].status).toBe('failed');
+    expect(stages[10].status).toBe('pending'); // 修复前被 summary.final_stage 推成 running
+    expect(stages.slice(10).every((s) => s.status === 'pending')).toBe(true);
+    expect(inferRunStatus(stages, input)).toBe('failed');
+  });
+
+  it('阶段暂停（审批门 / blocked）后，后面的阶段都是待启动（真实形状 rc-20261117-022454：stage 17 blocked_no_metrics）', () => {
+    const dirs = Array.from({ length: 17 }, (_, i) => dir(`stage-${String(i + 1).padStart(2, '0')}`));
+    const decisions = new Map<number, NonNullable<ReturnType<typeof normalizeStageDecision>>>();
+    for (let i = 1; i <= 16; i++) decisions.set(i, normalizeStageDecision({ status: 'done', decision: 'proceed' })!);
+    decisions.set(17, normalizeStageDecision({ status: 'paused', decision: 'blocked_no_metrics' })!);
+    const input = emptyInput({
+      dirs,
+      decisions,
+      checkpoint: normalizeCheckpoint({ last_completed_stage: 16 }),
+      heartbeat: normalizeHeartbeat({ pid: 66252, last_stage: 17 }),
+    });
+    const stages = inferStages(input);
+    expect(stages[16].status).toBe('paused');
+    expect(stages[17].status).toBe('pending');
+    expect(inferRunStatus(stages, input)).toBe('paused');
+  });
+
+  it('失败后续跑：心跳比旧汇总新 → 旧汇总不算终局，断点后的阶段仍可进行中', () => {
+    const dirs = Array.from({ length: 10 }, (_, i) => dir(`stage-${String(i + 1).padStart(2, '0')}`));
+    const input = emptyInput({
+      dirs,
+      checkpoint: normalizeCheckpoint({ last_completed_stage: 10 }),
+      heartbeat: normalizeHeartbeat({ pid: 1, last_stage: 10, timestamp: '2026-11-26T01:00:00+00:00' }),
+      summary: normalizePipelineSummary({ final_status: 'failed', final_stage: 10, generated: '2026-11-25T15:57:20+00:00' }),
+    });
+    expect(inferStages(input)[10].status).toBe('running');
+  });
 });
 
 describe('isValidRunId（防目录穿越）', () => {

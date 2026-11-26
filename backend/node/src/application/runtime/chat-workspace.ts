@@ -19,6 +19,16 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
 /**
+ * 所有群工作目录的共同父目录（`<root>/chat-workspaces`）。`root` 的取法见
+ * `resolveChatWorkspace`。要枚举「各会话落在工作目录里的产物」的模块用它，
+ * 不要各自再拼一遍路径。
+ */
+export function chatWorkspacesRoot(): string {
+  const root = process.env.SHADOWFLOW_CHAT_DIR?.trim() || join(homedir(), '.shadowflow-chat');
+  return join(root, 'chat-workspaces');
+}
+
+/**
  * 解析群的工作目录。
  *
  * @param groupId  群 id（会清洗非 `\w-` 字符后用作目录名）
@@ -33,8 +43,7 @@ export function resolveChatWorkspace(groupId: string, userDir?: string | null): 
       /* user dir gone / unreadable — fall through to default scratch */
     }
   }
-  const root = process.env.SHADOWFLOW_CHAT_DIR?.trim() || join(homedir(), '.shadowflow-chat');
-  const dir = join(root, 'chat-workspaces', groupId.replace(/[^\w-]/g, '_'));
+  const dir = join(chatWorkspacesRoot(), groupId.replace(/[^\w-]/g, '_'));
   try {
     mkdirSync(dir, { recursive: true });
   } catch {
