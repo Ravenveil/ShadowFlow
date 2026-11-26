@@ -2048,6 +2048,20 @@ body.sf-panel-resizing {
 
 .pipe-files--pad { border-top: 0; padding: 0; }
 
+/* 清单里的行内提示：阶段还没产物时单独出现（自带分隔线） */
+.pipe-inline-note { margin: 0; padding: 0 10px 8px; }
+.pipe-inline-note--first { padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* 打不开的产物：报错紧跟那一行，不是可点的文件 */
+.pipe-files li.pipe-file-err {
+  display: block;
+  padding: 2px 10px 6px 25px;
+  cursor: default;
+  font-size: 11px;
+  color: var(--tone-red);
+}
+.pipe-files li.pipe-file-err:hover { background: none; }
+
 .pipe-files li {
   display: flex;
   align-items: center;

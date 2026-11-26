@@ -492,7 +492,9 @@ export function AgentPanel({
 
         {/* 管线：ARC run 的 23 阶段观测 —— 阶段状态 / 审批门 / 引用核验 / 质量门 / 终稿 */}
         {tab === 'run' ? (
+          // 换 run / 换会话就重挂载：上一条 run 里点开的阶段与预览不能留在屏上
           <PipelineView
+            key={`${sessionId ?? ''}:${arcRunId ?? ''}`}
             runs={arcRuns}
             view={arcView}
             activeRunId={arcRunId}

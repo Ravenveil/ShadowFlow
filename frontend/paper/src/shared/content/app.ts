@@ -479,6 +479,7 @@ export const PIPE = {
     pivot: '换方向',
   } as const,
   stageArtifacts: (n: number) => `阶段产物 · ${n}`,
+  stageEmpty: '这一阶段还没有落产物',
   stageOpen: '打开',
   stageBack: '返回管线',
   phaseMeta: (n: number) => `${n} 个阶段`,

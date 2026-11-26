@@ -8,7 +8,8 @@
  * 纯展示：数据与动作全从 props 进（AgentPanel 负责加载与轮询），
  * 文案在 `content/app.ts` 的 PIPE，颜色只用 data-tone。
  */
-import { useState } from 'react';
+
+import { Fragment, useState } from 'react';
 import { PIPE } from '@/shared/content/app';
 import type { ArcPipelineView, ArcRunCard, ArcRunFile, ArcStageView, ArtifactContent } from '@/shared/data/types';
 import { toneAttr, type ToneName } from '@/shared/theme/tones';
@@ -56,6 +57,16 @@ type ArcPreview =
   | { kind: 'pdf'; name: string; url: string }
   | { kind: 'text'; name: string; content: string; truncated: boolean };
 
+/** 列表视图里的「打不开」，记在打不开的那件产物上：报错贴在它那一行的正下方。 */
+type ListError = { path: string; message: string };
+
+/** 打不开的提示紧跟出错的那一行（清单可能有几十项，挂在清单末尾等于在屏外）。 */
+function fileError(file: ArcRunFile, listError: ListError | null) {
+  return listError?.path === file.path ? (
+    <li className="pipe-file-err" role="alert">{listError.message}</li>
+  ) : null;
+}
+
 function prettyJson(content: string): string {
   try {
     return JSON.stringify(JSON.parse(content), null, 2);
@@ -64,9 +75,13 @@ function prettyJson(content: string): string {
   }
 }
 
-/** decision 字段的展示文案（proceed / refine / pivot；未知原样）。 */
-function decisionText(decision: string | null): string | null {
+/**
+ * decision 字段的展示文案（proceed / refine / pivot；未知原样）。
+ * ARC 的失败阶段 decision.json 里 decision 仍是 proceed —— 与「失败」并排会读成自相矛盾。
+ */
+function decisionText(decision: string | null, status: ArcStageView['status']): string | null {
   if (!decision) return null;
+  if (status === 'failed' && decision === 'proceed') return null;
   const key = decision.toLowerCase() as keyof typeof PIPE.decisionLabel;
   return PIPE.decisionLabel[key] ?? decision;
 }
@@ -96,12 +111,19 @@ export function PipelineView({
   const [preview, setPreview] = useState<ArcPreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [listError, setListError] = useState<ListError | null>(null);
 
+  /**
+   * 点开一件产物。打不开时就地报错（目录、已被清理的文件只会得到 404，
+   * 不提示等于点了没反应）。
+   */
   const openFile = async (runId: string, file: ArcRunFile) => {
     setPreviewError(null);
+    setListError(null);
+    const fail = (message: string) => setListError({ path: file.path, message });
     const isBitmap = /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(file.name);
     const isPdf = /\.pdf$/i.test(file.name);
-    const url = (isBitmap || isPdf && !!artifactRawUrl) ? artifactRawUrl?.(runId, file.path) ?? '' : '';
+    const url = (isBitmap || isPdf) && artifactRawUrl ? artifactRawUrl(runId, file.path) : '';
     if (isPdf && url) {
       setPreview({ kind: 'pdf', name: file.name, url });
       return;
@@ -111,7 +133,7 @@ export function PipelineView({
       return;
     }
     if (!readArtifact) {
-      setPreviewError(PIPE.rawUnavailable);
+      fail(PIPE.rawUnavailable);
       return;
     }
     setPreviewBusy(true);
@@ -124,7 +146,7 @@ export function PipelineView({
         truncated: got.truncated,
       });
     } catch (err) {
-      setPreviewError(PIPE.previewLoadFail(err instanceof Error ? err.message : String(err)));
+      fail(PIPE.previewLoadFail(err instanceof Error ? err.message : String(err)));
     } finally {
       setPreviewBusy(false);
     }
@@ -250,7 +272,7 @@ export function PipelineView({
           {group.stages.map((stage) => {
             const Icon = STATUS_ICON[stage.status];
             const open = openStage === stage.index;
-            const decision = decisionText(stage.decision);
+            const decision = decisionText(stage.decision, stage.status);
             return (
               <div key={stage.index} className={`pipe-stage${stage.isGate ? ' is-gate' : ''}${open ? ' is-open' : ''}`}>
                 <button
@@ -287,13 +309,18 @@ export function PipelineView({
                 {open && stage.artifacts.length ? (
                   <ul className="pipe-files">
                     {stage.artifacts.map((file) => (
-                      <li key={file.path} onClick={() => void openFile(view.runId, file)}>
-                        <span className="pipe-file-ico"><IconFile size={12} /></span>
-                        <span className="pipe-file-name" title={file.path}>{file.name}</span>
-                        <span className="pipe-file-size">{sizeLabel(file.size)}</span>
-                      </li>
+                      <Fragment key={file.path}>
+                        <li onClick={() => void openFile(view.runId, file)}>
+                          <span className="pipe-file-ico"><IconFile size={12} /></span>
+                          <span className="pipe-file-name" title={file.path}>{file.name}</span>
+                          <span className="pipe-file-size">{sizeLabel(file.size)}</span>
+                        </li>
+                        {fileError(file, listError)}
+                      </Fragment>
                     ))}
                   </ul>
+                ) : open ? (
+                  <p className="pipe-note pipe-inline-note pipe-inline-note--first">{PIPE.stageEmpty}</p>
                 ) : null}
               </div>
             );
@@ -394,11 +421,14 @@ export function PipelineView({
         {view.deliverables.length ? (
           <ul className="pipe-files pipe-files--pad">
             {view.deliverables.map((file) => (
-              <li key={file.path} onClick={() => void openFile(view.runId, file)}>
-                <span className="pipe-file-ico"><IconFile size={13} /></span>
-                <span className="pipe-file-name" title={file.path}>{file.name}</span>
-                <span className="pipe-file-size">{sizeLabel(file.size)}</span>
-              </li>
+              <Fragment key={file.path}>
+                <li onClick={() => void openFile(view.runId, file)}>
+                  <span className="pipe-file-ico"><IconFile size={13} /></span>
+                  <span className="pipe-file-name" title={file.path}>{file.name}</span>
+                  <span className="pipe-file-size">{sizeLabel(file.size)}</span>
+                </li>
+                {fileError(file, listError)}
+              </Fragment>
             ))}
           </ul>
         ) : (
