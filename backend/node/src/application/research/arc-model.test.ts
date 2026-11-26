@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ARC_INTERRUPTED_ERROR,
   ARC_PIPELINE,
   ARC_TOTAL_STAGES,
   classifyArtifactKind,
@@ -336,6 +337,34 @@ describe('inferStages / inferRunStatus', () => {
       summary: normalizePipelineSummary({ final_status: 'failed', final_stage: 10, generated: '2026-11-25T15:57:20+00:00' }),
     });
     expect(inferStages(input)[10].status).toBe('running');
+  });
+
+  it('进程已不在（被停止 / 崩溃）：开了头没写 decision 的阶段判为已终止，不再永远「进行中」（真实形状：冒烟 rc-20261126-040300）', () => {
+    const dirs = [
+      dir('stage-01', ['decision.json']),
+      dir('stage-02', ['decision.json']),
+      dir('stage-03', ['.keep']),
+    ];
+    const decisions = new Map<number, NonNullable<ReturnType<typeof normalizeStageDecision>>>();
+    decisions.set(1, normalizeStageDecision({ status: 'done', decision: 'proceed' })!);
+    decisions.set(2, normalizeStageDecision({ status: 'done', decision: 'proceed' })!);
+    const base = emptyInput({
+      dirs,
+      decisions,
+      checkpoint: normalizeCheckpoint({ last_completed_stage: 2 }),
+      heartbeat: normalizeHeartbeat({ pid: 32152, last_stage: 2, timestamp: '2026-11-26T04:03:38+00:00' }),
+    });
+    const dead: ArcInferenceInput = { ...base, heartbeatLive: false };
+    const stages = inferStages(dead);
+    expect(stages[2].status).toBe('failed');
+    expect(stages[2].error).toBe(ARC_INTERRUPTED_ERROR);
+    expect(stages[3].status).toBe('pending');
+    expect(stages.some((s) => s.status === 'running')).toBe(false);
+    expect(inferRunStatus(stages, dead)).toBe('failed');
+
+    // 进程还在：同样的目录形状就是真的在跑；探测结果未知（缺省）保持原行为
+    expect(inferStages({ ...base, heartbeatLive: true })[2].status).toBe('running');
+    expect(inferStages(base)[2].status).toBe('running');
   });
 });
 

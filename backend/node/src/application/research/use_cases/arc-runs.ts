@@ -93,6 +93,7 @@ async function buildInferenceInput(
     dirs,
     checkpoint: normalizeCheckpoint(state.checkpoint),
     heartbeat: normalizeHeartbeat(state.heartbeat),
+    heartbeatLive: state.heartbeatLive ?? null,
     summary: normalizePipelineSummary(state.summary),
     decisions,
     healths,

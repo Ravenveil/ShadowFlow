@@ -54,6 +54,26 @@ describe('createArcFsReader 的根解析', () => {
     expect(await createArcFsReader([workspace]).listRunIds()).toEqual([]);
     expect(await createArcFsReader([path.join(tmp, 'nope')]).listRunIds()).toEqual([]);
   });
+
+  it('heartbeat 的 pid 探测：本进程 → 活着；不存在的 pid / 过期心跳 → 已终止；没有 pid → 未知', async () => {
+    const root = path.join(tmp, 'liveness');
+    const now = new Date().toISOString();
+    const twoDaysAgo = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const withHeartbeat = (runId: string, body: object) => {
+      put(root, `${runId}/stage-01/goal.md`, '# x');
+      put(root, `${runId}/heartbeat.json`, JSON.stringify(body));
+    };
+    withHeartbeat('rc-20261126-000010-alive', { pid: process.pid, last_stage: 1, timestamp: now });
+    withHeartbeat('rc-20261126-000011-dead', { pid: 2147483644, last_stage: 1, timestamp: now });
+    withHeartbeat('rc-20261126-000012-stale', { pid: process.pid, last_stage: 1, timestamp: twoDaysAgo });
+    put(root, 'rc-20261126-000013-none/stage-01/goal.md', '# x');
+
+    const reader = createArcFsReader([root]);
+    expect((await reader.readStateFiles('rc-20261126-000010-alive')).heartbeatLive).toBe(true);
+    expect((await reader.readStateFiles('rc-20261126-000011-dead')).heartbeatLive).toBe(false);
+    expect((await reader.readStateFiles('rc-20261126-000012-stale')).heartbeatLive).toBe(false);
+    expect((await reader.readStateFiles('rc-20261126-000013-none')).heartbeatLive).toBeNull();
+  });
 });
 
 describe('defaultArcRoots 每次现算', () => {

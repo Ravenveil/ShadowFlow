@@ -23,7 +23,7 @@ import path from 'node:path';
 import { chatWorkspacesRoot } from '../../runtime/chat-workspace';
 
 import type { ArcDirEntry, ArcRunReader, ArcRunStateFiles } from '../repository';
-import { isValidRunId, parseStageDirName, type ArcStageDirScan } from '../arc-model';
+import { isValidRunId, normalizeHeartbeat, parseStageDirName, type ArcStageDirScan } from '../arc-model';
 
 const TEXT_HEAD_BYTES = 256 * 1024;
 const GOAL_HEAD_BYTES = 8 * 1024;
@@ -169,6 +169,32 @@ async function readHead(file: string, maxBytes: number): Promise<{ content: stri
   }
 }
 
+/** 心跳超过这个时长就不再认它的 pid：pid 可能已被别的进程复用，会被误判成「还在跑」。 */
+const HEARTBEAT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+/** 信号 0 只做存在性探测，不真的发信号。 */
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * heartbeat.json 记着当前进程的 pid：进程还在 = run 可能仍在推进；进程已不在
+ * （被停止 / 崩溃）而汇总又没写，就是一次被中断的运行。
+ * 只对与本服务同机的 run 成立（跨机产物根上的 pid 没有意义）。
+ */
+function heartbeatLiveness(raw: unknown): boolean | null {
+  const heartbeat = normalizeHeartbeat(raw);
+  if (!heartbeat?.pid) return null;
+  if (!pidAlive(heartbeat.pid)) return false;
+  const ageMs = heartbeat.timestamp ? Date.now() - Date.parse(heartbeat.timestamp) : 0;
+  return !(Number.isFinite(ageMs) && ageMs > HEARTBEAT_MAX_AGE_MS);
+}
+
 async function readStateFiles(runDir: string): Promise<ArcRunStateFiles> {
   const [checkpoint, heartbeat, summary, decisions, goal] = await Promise.all([
     readJsonIfExists(path.join(runDir, 'checkpoint.json')),
@@ -177,7 +203,7 @@ async function readStateFiles(runDir: string): Promise<ArcRunStateFiles> {
     readJsonIfExists(path.join(runDir, 'decision_history.json')),
     readHead(path.join(runDir, 'stage-01', 'goal.md'), GOAL_HEAD_BYTES),
   ]);
-  return { checkpoint, heartbeat, summary, decisions, goalText: goal?.content ?? null };
+  return { checkpoint, heartbeat, heartbeatLive: heartbeatLiveness(heartbeat), summary, decisions, goalText: goal?.content ?? null };
 }
 
 async function listStageDirs(runDir: string): Promise<ArcStageDirScan[]> {

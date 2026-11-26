@@ -19,6 +19,11 @@ export interface ArcDirEntry {
 export interface ArcRunStateFiles {
   checkpoint: unknown;
   heartbeat: unknown;
+  /**
+   * heartbeat 里的 pid 是否还活着（infra 探测）：false = 已终止，null = 未知。
+   * 进程存亡是环境事实而不是文件内容，所以由 infra 给，model 不自己探。
+   */
+  heartbeatLive?: boolean | null;
   summary: unknown;
   decisions: unknown;
   goalText: string | null;

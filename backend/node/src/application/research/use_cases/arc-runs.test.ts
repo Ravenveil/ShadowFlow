@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ArcDirEntry, ArcRunReader, ArcRunStateFiles } from '../repository';
-import type { ArcStageDirScan } from '../arc-model';
+import { ARC_INTERRUPTED_ERROR, type ArcStageDirScan } from '../arc-model';
 import { getRunDetail, listRuns, rawArtifact, readArtifact, type ArcDeps } from './arc-runs';
 
 /** 内存 run：目录树 + 文本文件 + JSON 文件（run id 从路径推导，可放多条）。 */
@@ -32,9 +32,14 @@ function fakeRun(files: Record<string, FakeFile>): { runId: string; reader: ArcR
       return runIds.includes(id) ? `/fake/${id}` : null;
     },
     async readStateFiles(id): Promise<ArcRunStateFiles> {
+      const heartbeat = files[`${id}/heartbeat.json`]?.body;
       return {
         checkpoint: files[`${id}/checkpoint.json`]?.body ?? null,
-        heartbeat: files[`${id}/heartbeat.json`]?.body ?? null,
+        // 探测结果由 infra 给；fake 用 heartbeat 里的 alive 字段模拟（缺省 = 未知）
+        heartbeat,
+        heartbeatLive: typeof (heartbeat as { alive?: unknown } | undefined)?.alive === 'boolean'
+          ? (heartbeat as { alive: boolean }).alive
+          : null,
         summary: files[`${id}/pipeline_summary.json`]?.body ?? null,
         decisions: files[`${id}/decision_history.json`]?.body ?? null,
         goalText: (files[`${id}/stage-01/goal.md`]?.body as string) ?? null,
@@ -264,6 +269,22 @@ describe('getRunDetail', () => {
     const fig = result.value.deliverables.find((d) => d.name === 'charts/fig_main_comparison.png');
     expect(fig?.path).toBe('deliverables/charts/fig_main_comparison.png');
     expect(fig?.kind).toBe('image');
+  });
+
+  it('被停止的 run：进程已不在 → 开了头没写 decision 的阶段判为已终止，run 失败（真实形状 rc-20261126-040300）', async () => {
+    const fixture = fakeRun({
+      'rc-20261118-071512-3a2302/heartbeat.json': { kind: 'json', body: { pid: 32152, last_stage: 2, timestamp: '2026-11-26T04:03:38+00:00', alive: false } },
+      'rc-20261118-071512-3a2302/checkpoint.json': { kind: 'json', body: { last_completed_stage: 2 } },
+      'rc-20261118-071512-3a2302/stage-01/decision.json': { kind: 'json', body: { status: 'done', decision: 'proceed' } },
+      'rc-20261118-071512-3a2302/stage-02/decision.json': { kind: 'json', body: { status: 'done', decision: 'proceed' } },
+      'rc-20261118-071512-3a2302/stage-03/.keep': { kind: 'text', body: '' },
+    });
+    const result = await getRunDetail(depsOf(fixture.reader), fixture.runId);
+    if (result.kind !== 'ok') throw new Error('expected ok');
+    expect(result.value.status).toBe('failed');
+    expect(result.value.stages[2].status).toBe('failed');
+    expect(result.value.stages[2].error).toBe(ARC_INTERRUPTED_ERROR);
+    expect(result.value.stages.some((s) => s.status === 'running')).toBe(false);
   });
 });
 

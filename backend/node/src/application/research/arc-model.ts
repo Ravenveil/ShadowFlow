@@ -112,6 +112,9 @@ export interface ArcStageView {
 
 export type ArcRunStatus = 'running' | 'succeeded' | 'failed' | 'paused' | 'unknown';
 
+/** 被中断阶段（进程已不在、目录开了头没写 decision.json）的说明，显示在阶段行上。 */
+export const ARC_INTERRUPTED_ERROR = '运行已终止：进程已不在，这一阶段没有收尾';
+
 export interface ArcRunSummary {
   runId: string;
   /** run 目录绝对路径（前端不拿它拼 URL，只用于会话工作目录关联）。 */
@@ -414,6 +417,11 @@ export interface ArcInferenceInput {
   dirs: ArcStageDirScan[];
   checkpoint: ArcCheckpoint | null;
   heartbeat: ArcHeartbeat | null;
+  /**
+   * heartbeat 里的进程是否还活着（infra 按 pid 探测）：false = 已终止（被停止 / 崩溃），
+   * null / 缺省 = 未知，按「可能在跑」处理。
+   */
+  heartbeatLive?: boolean | null;
   summary: ArcPipelineSummary | null;
   /** stage index → 该阶段的 decision.json / stage_health.json 解析结果。 */
   decisions: Map<number, ArcStageDecision>;
@@ -435,13 +443,23 @@ function summaryIsLive(summary: ArcPipelineSummary | null, heartbeat: ArcHeartbe
   return LIVE_SUMMARY_STATUS.has(summary.finalStatus.toLowerCase());
 }
 
+/** 一个阶段的推断结果；`interrupted` = 因为进程已不在而判失败（不是 ARC 自己报的错）。 */
+interface StageVerdict {
+  status: ArcStageStatus;
+  interrupted: boolean;
+}
+
+const RUNNING: StageVerdict = { status: 'running', interrupted: false };
+const PENDING: StageVerdict = { status: 'pending', interrupted: false };
+const DONE: StageVerdict = { status: 'done', interrupted: false };
+
 /**
  * `halted` = 前面已有阶段以失败/暂停收尾。此时管线不会自己往下走，后面没有
  * 自己证据（decision.json / 目录）的阶段一律待启动。
  */
-function statusForStage(index: number, input: ArcInferenceInput, halted: boolean): ArcStageStatus {
+function statusForStage(index: number, input: ArcInferenceInput, halted: boolean): StageVerdict {
   const decision = input.decisions.get(index);
-  if (decision) return decision.status;
+  if (decision) return { status: decision.status, interrupted: false };
 
   const hasDir = input.dirs.some((d) => d.index === index);
   const completed = input.checkpoint?.lastCompletedStage ?? 0;
@@ -449,19 +467,20 @@ function statusForStage(index: number, input: ArcInferenceInput, halted: boolean
 
   // 断点说这一阶段已完成（decision.json 可能是旧版本 ARC 没写的）
   if (completed >= index || (summaryDone && (input.summary?.finalStage ?? 0) >= index)) {
-    return 'done';
+    return DONE;
   }
   if (hasDir) {
-    // 目录已建但 decision.json 还没落：阶段已开跑未收尾
-    return 'running';
+    // 目录已建但 decision.json 还没落：进程还在就是「已开跑未收尾」；进程已不在
+    // （被停止 / 崩溃）则是被中断的阶段 —— 再标成进行中就会永远转圈。
+    return input.heartbeatLive === false ? { status: 'failed', interrupted: true } : RUNNING;
   }
 
   // 断点之后的第一个阶段 = 正在跑的那一个；更靠后的都是待办。
-  // 汇总已是终局时 final_stage 只说明「停在哪儿」，不能拿来把下一阶段推成进行中。
-  const live = summaryIsLive(input.summary, input.heartbeat);
+  // 汇总已是终局、或进程已不在时，final_stage 只说明「停在哪儿」，不能拿来把下一阶段推成进行中。
+  const live = summaryIsLive(input.summary, input.heartbeat) && input.heartbeatLive !== false;
   const frontier = Math.max(completed, input.heartbeat?.lastStage ?? 0, live ? input.summary?.finalStage ?? 0 : 0);
-  if (!halted && live && index === frontier + 1 && !summaryDone && (input.checkpoint || input.heartbeat)) return 'running';
-  return 'pending';
+  if (!halted && live && index === frontier + 1 && !summaryDone && (input.checkpoint || input.heartbeat)) return RUNNING;
+  return PENDING;
 }
 
 /** 23 个阶段的全量视图（没跑到的阶段也要出现，界面才是一条完整管线）。 */
@@ -485,7 +504,8 @@ export function inferStages(input: ArcInferenceInput): ArcStageView[] {
             size: e.size,
           }))
       : [];
-    const status = statusForStage(meta.index, input, halted);
+    const verdict = statusForStage(meta.index, input, halted);
+    const status = verdict.status;
     if (status === 'failed' || status === 'paused') halted = true;
     stages.push({
       index: meta.index,
@@ -498,7 +518,7 @@ export function inferStages(input: ArcInferenceInput): ArcStageView[] {
       attempts: attempts.length,
       decision: decision?.decision ?? null,
       durationSec: health?.durationSec ?? null,
-      error: decision?.error ?? health?.error ?? null,
+      error: decision?.error ?? health?.error ?? (verdict.interrupted ? ARC_INTERRUPTED_ERROR : null),
       artifacts,
     });
   }
