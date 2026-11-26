@@ -20,9 +20,12 @@ function configPaths() {
 function toStored(server: McpServer): Record<string, unknown> {
   return {
     name: server.name,
+    transport: server.transport,
     command: server.command,
     args: server.args,
     env: server.env,
+    ...(server.url !== undefined ? { url: server.url } : {}),
+    ...(server.headers !== undefined ? { headers: server.headers } : {}),
     ...(server.description !== undefined ? { description: server.description } : {}),
     updated_at: server.updated_at,
   };

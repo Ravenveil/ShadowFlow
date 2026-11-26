@@ -13,7 +13,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { JsonMcpRepository } from './infra/json-mcp.repository';
-import { probeServer } from './infra/stdio-probe';
+import { probeTarget } from './infra/probe';
 import {
   createServer,
   deleteServer,
@@ -40,7 +40,7 @@ function send<T>(
 }
 
 export function createMcpRouter(
-  deps: McpDeps = { repo: new JsonMcpRepository(), probe: probeServer },
+  deps: McpDeps = { repo: new JsonMcpRepository(), probe: probeTarget },
 ): Router {
   const router = Router();
 

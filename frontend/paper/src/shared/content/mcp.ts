@@ -7,13 +7,13 @@
 
 export const MCP_COPY = {
   title: 'MCP 集成',
-  note: '接入本机的 MCP 服务器，主控就能调用它提供的工具；保存前可以先试连一次。',
+  note: '接入本机或远端的 MCP 服务器，主控就能调用它提供的工具；保存前可以先试连一次。',
 
   /* 列表与空态 */
   loading: '读取中…',
   loadFailed: '读取 MCP 服务器失败，请确认后端已启动',
   empty: '还没有 MCP 服务器',
-  emptyHint: '点「添加服务器」，填上启动命令即可；保存前可以先「试连」看它暴露了哪些工具。',
+  emptyHint: '点「添加服务器」，填启动命令或 HTTP 地址即可；保存前可以先「试连」看它暴露了哪些工具。',
   add: '添加服务器',
   edited: (name: string) => `${name} 已保存`,
   removed: (name: string) => `${name} 已删除`,
@@ -26,14 +26,27 @@ export const MCP_COPY = {
   edit: '编辑',
   remove: '删除',
 
+  /* 传输方式 */
+  transports: {
+    stdio: 'stdio',
+    http: 'HTTP·SSE',
+  },
+  transportOptions: [
+    { value: 'stdio', label: 'stdio' },
+    { value: 'http', label: 'HTTP·SSE' },
+  ],
+
   /* 添加 / 编辑表单 */
   formAdd: '添加 MCP 服务器',
   formEdit: '编辑 MCP 服务器',
   fields: {
+    transport: '传输方式',
     name: '名称',
     command: '命令',
     args: '参数',
     env: '环境变量',
+    url: 'URL',
+    headers: '请求头',
     description: '描述',
   },
   placeholders: {
@@ -41,13 +54,18 @@ export const MCP_COPY = {
     command: '例如 npx',
     args: '每行一个，或空格分隔',
     env: 'KEY=VALUE，每行一条',
+    url: '例如 https://example.com/mcp',
+    headers: 'KEY: VALUE，每行一条',
     description: '它是干什么的，给未来的自己看',
   },
   hints: {
     name: '在列表里唯一；保存后不可修改，要改就删掉重建。',
+    transport: 'stdio 在本机拉起进程；HTTP·SSE 连接已经跑起来的远端服务。',
     command: '可执行文件名或绝对路径，例如 npx / uvx / node。',
     args: '一行一个参数；只有一行时也可以直接用空格分隔。',
     env: '每行一条 KEY=VALUE，例如 GITHUB_TOKEN=ghp_…；没有就留空。',
+    url: 'http 或 https 的 MCP 端点，例如 https://example.com/sse。',
+    headers: '每行一条 KEY: VALUE（也接受 KEY=VALUE），例如 Authorization: Bearer …；没有就留空。',
   },
 
   /* 保存 / 试连 / 删除 */
@@ -57,8 +75,10 @@ export const MCP_COPY = {
   probe: '试连',
   probing: '连接中…',
   validation: '名称和命令都要填',
+  missingUrl: 'HTTP·SSE 要先填 URL',
+  invalidUrl: 'URL 格式不对：要填 http:// 或 https:// 开头的地址',
+  invalidHeaders: '请求头格式不对：每行要是 KEY: VALUE 或 KEY=VALUE',
   duplicate: '同名服务器已存在，换一个名称',
-  invalid: '字段不合法，检查命令与参数格式',
   removeTitle: (name: string) => `删除 ${name}？`,
   removeBody: '删除后主控不能再调用它提供的工具；要恢复只能重新添加。',
   removeConfirm: '确认删除',

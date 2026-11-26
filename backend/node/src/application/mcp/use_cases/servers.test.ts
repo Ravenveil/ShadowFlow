@@ -3,7 +3,7 @@
  * 注入内存 repo + fake probe，不启 server、不碰磁盘、不 import infra。
  */
 import { describe, it, expect } from 'vitest';
-import type { McpServer, ProbeResult } from '../mcp-model';
+import type { McpServer, McpTarget, ProbeResult } from '../mcp-model';
 import type { McpRepository } from '../mcp-repository';
 import {
   createServer,
@@ -37,7 +37,7 @@ class InMemoryMcpRepo implements McpRepository {
   }
 }
 
-type ProbeInput = { command: string; args: string[]; env: Record<string, string> };
+type ProbeInput = McpTarget;
 
 const okProbe = async (): Promise<ProbeResult> => ({
   ok: true,
@@ -77,13 +77,14 @@ describe('mcp 服务器用例（注入内存 repo + fake probe，零 IO）', () 
     expect(repo.raw).toEqual({ version: 1 });
   });
 
-  it('新建归一化：trim command、env 缺省为空对象、updated_at 由注入时钟生成', async () => {
+  it('新建归一化：trim command、env 缺省为空对象、旧数据缺省 stdio、updated_at 由注入时钟生成', async () => {
     const repo = new InMemoryMcpRepo();
     const server = unwrap(
       await createServer(makeDeps(repo), { ...baseServer, command: '  npx  ' }),
     );
     expect(server).toEqual({
       name: 'fs',
+      transport: 'stdio',
       command: 'npx',
       args: baseServer.args,
       env: {},
@@ -158,6 +159,7 @@ describe('mcp 服务器用例（注入内存 repo + fake probe，零 IO）', () 
     const updated = unwrap(await updateServer(deps, 'fs', { command: 'node', args: ['server.js'] }));
     expect(updated).toEqual({
       name: 'fs',
+      transport: 'stdio',
       command: 'node',
       args: ['server.js'],
       env: {},
@@ -209,7 +211,39 @@ describe('mcp 服务器用例（注入内存 repo + fake probe，零 IO）', () 
     const result = unwrap(await probeByName(deps, 'fs'));
     expect(result.ok).toBe(true);
     expect(result.tools).toEqual([{ name: 'list' }]);
-    expect(calls).toEqual([{ command: 'npx', args: baseServer.args, env: { DEBUG: '1' } }]);
+    expect(calls).toEqual([
+      { transport: 'stdio', command: 'npx', args: baseServer.args, env: { DEBUG: '1' } },
+    ]);
+  });
+
+  it('按名探测 http 服务器：传完整 target（url/headers），command/args/env 归一化为空', async () => {
+    const repo = new InMemoryMcpRepo();
+    const calls: ProbeInput[] = [];
+    const probe = async (input: ProbeInput): Promise<ProbeResult> => {
+      calls.push(input);
+      return { ok: true, tools: [], duration_ms: 1 };
+    };
+    const deps = makeDeps(repo, probe);
+    unwrap(
+      await createServer(deps, {
+        name: 'remote',
+        transport: 'http',
+        url: 'https://example.com/mcp',
+        headers: { Authorization: 'Bearer t' },
+      }),
+    );
+
+    unwrap(await probeByName(deps, 'remote'));
+    expect(calls).toEqual([
+      {
+        transport: 'http',
+        command: '',
+        args: [],
+        env: {},
+        url: 'https://example.com/mcp',
+        headers: { Authorization: 'Bearer t' },
+      },
+    ]);
   });
 
   it('按名探测失败透传 error；名字不存在 → 404 且不调 probe', async () => {
@@ -247,10 +281,123 @@ describe('mcp 服务器用例（注入内存 repo + fake probe，零 IO）', () 
     expect(unwrap(await probeAdHoc(deps, { command: 'npx', args: ['-y', 'pkg'] }))).toMatchObject({
       ok: true,
     });
-    expect(calls).toEqual([{ command: 'npx', args: ['-y', 'pkg'], env: {} }]);
+    expect(calls).toEqual([{ transport: 'stdio', command: 'npx', args: ['-y', 'pkg'], env: {} }]);
     expect(repo.writes).toBe(0);
 
     expect(errorOf(await probeAdHoc(deps, { command: '' })).code).toBe('MCP_INVALID_COMMAND');
     expect(calls).toHaveLength(1);
+  });
+
+  it('保存前试连 http：url/headers 归一化，command 丢弃', async () => {
+    const repo = new InMemoryMcpRepo();
+    const calls: ProbeInput[] = [];
+    const probe = async (input: ProbeInput): Promise<ProbeResult> => {
+      calls.push(input);
+      return { ok: true, tools: [], duration_ms: 1 };
+    };
+    const deps = makeDeps(repo, probe);
+
+    unwrap(
+      await probeAdHoc(deps, {
+        transport: 'http',
+        url: '  https://example.com/sse  ',
+        headers: { 'X-Token': 'v' },
+        command: 'ignored',
+        args: ['ignored'],
+        env: { IGNORED: '1' },
+      }),
+    );
+    expect(calls).toEqual([
+      {
+        transport: 'http',
+        command: '',
+        args: [],
+        env: {},
+        url: 'https://example.com/sse',
+        headers: { 'X-Token': 'v' },
+      },
+    ]);
+    expect(repo.writes).toBe(0);
+  });
+
+  it('transport 非法 → MCP_INVALID_TRANSPORT（400）', async () => {
+    const repo = new InMemoryMcpRepo();
+    const deps = makeDeps(repo);
+    expect(errorOf(await createServer(deps, { ...baseServer, transport: 'grpc' }))).toMatchObject({
+      code: 'MCP_INVALID_TRANSPORT',
+      status: 400,
+    });
+    expect(repo.writes).toBe(0);
+  });
+
+  it('http 缺 url / 非 http(s) / 超 2048 → MCP_INVALID_URL', async () => {
+    const repo = new InMemoryMcpRepo();
+    const deps = makeDeps(repo);
+    const httpBase = { name: 'remote', transport: 'http' as const };
+
+    expect(errorOf(await createServer(deps, httpBase)).code).toBe('MCP_INVALID_URL');
+    expect(errorOf(await createServer(deps, { ...httpBase, url: 'ftp://example.com/mcp' })).code).toBe(
+      'MCP_INVALID_URL',
+    );
+    expect(errorOf(await createServer(deps, { ...httpBase, url: 'not a url' })).code).toBe(
+      'MCP_INVALID_URL',
+    );
+    expect(
+      errorOf(await createServer(deps, { ...httpBase, url: `https://example.com/${'x'.repeat(2048)}` })).code,
+    ).toBe('MCP_INVALID_URL');
+    expect(repo.writes).toBe(0);
+  });
+
+  it('http headers 超 32 键 / 值超 2048 / 非字符串 → MCP_INVALID_HEADERS', async () => {
+    const repo = new InMemoryMcpRepo();
+    const deps = makeDeps(repo);
+    const httpBase = { name: 'remote', transport: 'http' as const, url: 'https://example.com/mcp' };
+
+    const manyHeaders = Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`X-${i}`, 'v']));
+    expect(errorOf(await createServer(deps, { ...httpBase, headers: manyHeaders })).code).toBe(
+      'MCP_INVALID_HEADERS',
+    );
+    expect(
+      errorOf(await createServer(deps, { ...httpBase, headers: { Authorization: 'x'.repeat(2049) } })).code,
+    ).toBe('MCP_INVALID_HEADERS');
+    expect(
+      errorOf(await createServer(deps, { ...httpBase, headers: { Authorization: 42 } })).code,
+    ).toBe('MCP_INVALID_HEADERS');
+    expect(
+      errorOf(await createServer(deps, { ...httpBase, headers: ['not-an-object'] })).code,
+    ).toBe('MCP_INVALID_HEADERS');
+    expect(repo.writes).toBe(0);
+  });
+
+  it('stdio 条目上的 url/headers 被丢弃', async () => {
+    const repo = new InMemoryMcpRepo();
+    const server = unwrap(
+      await createServer(makeDeps(repo), {
+        ...baseServer,
+        url: 'https://example.com/mcp',
+        headers: { 'X-Token': 'v' },
+      }),
+    );
+    expect(server.transport).toBe('stdio');
+    expect(server).not.toHaveProperty('url');
+    expect(server).not.toHaveProperty('headers');
+  });
+
+  it('http → stdio 更新：url/headers 丢弃、command 必填', async () => {
+    const repo = new InMemoryMcpRepo();
+    const deps = makeDeps(repo);
+    unwrap(
+      await createServer(deps, {
+        name: 'remote',
+        transport: 'http',
+        url: 'https://example.com/mcp',
+        headers: { 'X-Token': 'v' },
+      }),
+    );
+
+    const stdio = unwrap(await updateServer(deps, 'remote', { transport: 'stdio', command: 'node' }));
+    expect(stdio).toMatchObject({ name: 'remote', transport: 'stdio', command: 'node', args: [], env: {} });
+    expect(stdio).not.toHaveProperty('url');
+    expect(stdio).not.toHaveProperty('headers');
   });
 });

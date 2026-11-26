@@ -4,20 +4,18 @@
 
 import {
   McpDomainError,
-  normalizeCommandSpec,
   normalizeName,
   normalizeServer,
+  normalizeTarget,
   sortServers,
   type McpServer,
+  type McpTarget,
   type ProbeResult,
 } from '../mcp-model';
 import type { McpRepository } from '../mcp-repository';
 
-export type ProbeFn = (input: {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-}) => Promise<ProbeResult>;
+/** 探测函数：stdio 与 http 都传完整 target，由 infra/probe 统一分发。 */
+export type ProbeFn = (target: McpTarget) => Promise<ProbeResult>;
 
 export interface McpDeps {
   repo: McpRepository;
@@ -44,6 +42,26 @@ function toError(err: unknown): UseCaseError {
 
 function nowOf(deps: McpDeps): { now?: () => string } {
   return deps.now ? { now: deps.now } : {};
+}
+
+/** 已存储的服务器 → 探测 target（http 只带 url/headers，stdio 带 command/args/env）。 */
+function toTarget(server: McpServer): McpTarget {
+  if (server.transport === 'http') {
+    return {
+      transport: 'http',
+      command: '',
+      args: [],
+      env: {},
+      ...(server.url !== undefined ? { url: server.url } : {}),
+      ...(server.headers !== undefined ? { headers: server.headers } : {}),
+    };
+  }
+  return {
+    transport: 'stdio',
+    command: server.command,
+    args: server.args,
+    env: server.env,
+  };
 }
 
 export async function listServers(deps: McpDeps): Promise<Result<McpServer[]>> {
@@ -90,14 +108,20 @@ export async function updateServer(
     // 基于现有字段 + 显式给出的补丁重走整条校验；updated_at 由 normalizeServer 刷新。
     const merged = {
       name: current.name,
+      transport: current.transport,
       command: current.command,
       args: current.args,
       env: current.env,
+      url: current.url,
+      headers: current.headers,
       description: current.description,
       ...('name' in body ? { name: body.name } : {}),
+      ...('transport' in body ? { transport: body.transport } : {}),
       ...('command' in body ? { command: body.command } : {}),
       ...('args' in body ? { args: body.args } : {}),
       ...('env' in body ? { env: body.env } : {}),
+      ...('url' in body ? { url: body.url } : {}),
+      ...('headers' in body ? { headers: body.headers } : {}),
       ...('description' in body ? { description: body.description } : {}),
     };
     const updated = normalizeServer(merged, nowOf(deps));
@@ -134,18 +158,18 @@ export async function probeByName(deps: McpDeps, name: string): Promise<Result<P
     if (!found) {
       throw new McpDomainError('MCP_NOT_FOUND', 404, `server "${target}" not found`);
     }
-    const result = await deps.probe({ command: found.command, args: found.args, env: found.env });
+    const result = await deps.probe(toTarget(found));
     return { kind: 'ok', value: result };
   } catch (err) {
     return { kind: 'error', error: toError(err) };
   }
 }
 
-/** 保存前试连：不落库，只校验 spawn 规格后直接探测。 */
+/** 保存前试连：不落库，只校验 target（stdio/http 各自归一化）后直接探测。 */
 export async function probeAdHoc(deps: McpDeps, input: unknown): Promise<Result<ProbeResult>> {
   try {
-    const spec = normalizeCommandSpec(input);
-    const result = await deps.probe(spec);
+    const target = normalizeTarget(input);
+    const result = await deps.probe(target);
     return { kind: 'ok', value: result };
   } catch (err) {
     return { kind: 'error', error: toError(err) };

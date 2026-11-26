@@ -2057,6 +2057,19 @@
   resize: vertical;
 }
 
+/* 传输方式：分段控件按内容宽度，不被表单 label 拉满 */
+.st-mcp-transport > .st-seg {
+  align-self: flex-start;
+}
+
+/* 表单就地校验提示（缺 URL / 格式不对）：红字贴在输入框下面 */
+.st-mcp-form label > span.st-mcp-warn {
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: 1.5;
+  color: var(--danger);
+}
+
 .st-input:disabled {
   opacity: 0.65;
 }

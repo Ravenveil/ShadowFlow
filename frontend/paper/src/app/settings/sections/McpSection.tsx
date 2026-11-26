@@ -17,8 +17,11 @@ import {
   probeMcpServer,
   testMcpServer,
   updateMcpServer,
+  type McpProbeInput,
   type McpServer,
+  type McpServerInput,
   type McpTestResult,
+  type McpTransport,
 } from '@/shared/data/http/mcp';
 import {
   IconAlert,
@@ -30,28 +33,49 @@ import {
   IconPlus,
   IconTrash,
 } from '@/shared/ui/icons';
-import { Tag, Tile, useFlash } from '@/app/settings/primitives';
+import { Seg, Tag, Tile, useFlash } from '@/app/settings/primitives';
 
 const C = MCP_COPY;
 
-/** 表单草稿：args / env 用多行文本编辑，提交时再解析成结构。 */
+/** 表单草稿：args / env / headers 用多行文本编辑，提交时再解析成结构。 */
 interface Draft {
+  transport: McpTransport;
   name: string;
   command: string;
   args: string;
   env: string;
+  url: string;
+  headers: string;
   description: string;
 }
 
-const EMPTY_DRAFT: Draft = { name: '', command: '', args: '', env: '', description: '' };
+const EMPTY_DRAFT: Draft = {
+  transport: 'stdio',
+  name: '',
+  command: '',
+  args: '',
+  env: '',
+  url: '',
+  headers: '',
+  description: '',
+};
+
+function transportOf(server: McpServer): McpTransport {
+  return server.transport === 'http' ? 'http' : 'stdio';
+}
 
 function draftOf(server: McpServer): Draft {
   return {
+    transport: transportOf(server),
     name: server.name,
     command: server.command,
     args: server.args.join('\n'),
     env: Object.entries(server.env)
       .map(([k, v]) => `${k}=${v}`)
+      .join('\n'),
+    url: server.url ?? '',
+    headers: Object.entries(server.headers ?? {})
+      .map(([k, v]) => `${k}: ${v}`)
       .join('\n'),
     description: server.description ?? '',
   };
@@ -79,6 +103,43 @@ function parseEnv(text: string): Record<string, string> {
     if (key) out[key] = raw.slice(at + 1).trim();
   }
   return out;
+}
+
+/** 请求头一行的分隔符位置：`KEY: VALUE` 与 `KEY=VALUE` 都认，取最靠前的那个。 */
+function headerSeparator(line: string): number {
+  const colon = line.indexOf(':');
+  const eq = line.indexOf('=');
+  if (colon < 0) return eq;
+  if (eq < 0) return colon;
+  return Math.min(colon, eq);
+}
+
+/** 请求头：每行 KEY: VALUE 或 KEY=VALUE；格式不对的行标成 invalid，不静默丢掉。 */
+function parseHeaders(text: string): { headers: Record<string, string>; invalid: boolean } {
+  const headers: Record<string, string> = {};
+  let invalid = false;
+  for (const line of text.split('\n')) {
+    const raw = line.trim();
+    if (!raw) continue;
+    const at = headerSeparator(raw);
+    const key = at > 0 ? raw.slice(0, at).trim() : '';
+    if (!key) {
+      invalid = true;
+      continue;
+    }
+    headers[key] = raw.slice(at + 1).trim();
+  }
+  return { headers, invalid };
+}
+
+/** http 传输只接受 http/https；`new URL` 不认的字符串一律算非法。 */
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function errorText(err: unknown): string {
@@ -163,6 +224,43 @@ export function McpSection() {
 
   const setField = (patch: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
+  /** 切换传输方式：清空另一侧的字段，别把 stdio 的命令带进 http 请求。 */
+  const switchTransport = (next: McpTransport) => {
+    if (next === draft.transport) return;
+    setProbeResult(null);
+    setFormError(null);
+    setField(
+      next === 'http'
+        ? { transport: 'http', command: '', args: '', env: '' }
+        : { transport: 'stdio', url: '', headers: '' },
+    );
+  };
+
+  /** 按当前传输方式拼提交体：http 只带 URL 与请求头，stdio 只带启动规格。 */
+  const serverInput = (name: string): McpServerInput => {
+    const description = draft.description.trim();
+    if (draft.transport === 'http') {
+      return {
+        name,
+        transport: 'http',
+        command: '',
+        args: [],
+        env: {},
+        url: draft.url.trim(),
+        headers: parseHeaders(draft.headers).headers,
+        ...(description ? { description } : {}),
+      };
+    }
+    return {
+      name,
+      transport: 'stdio',
+      command: draft.command.trim(),
+      args: parseArgs(draft.args),
+      env: parseEnv(draft.env),
+      ...(description ? { description } : {}),
+    };
+  };
+
   const openAdd = () => {
     setDraft(EMPTY_DRAFT);
     setEditing({ name: null });
@@ -184,18 +282,38 @@ export function McpSection() {
   };
 
   const probe = async () => {
-    const command = draft.command.trim();
-    if (!command) {
-      setFormError(C.validation);
-      return;
-    }
-    setProbing(true);
     setFormError(null);
     setProbeResult(null);
+
+    let input: McpProbeInput;
+    if (draft.transport === 'http') {
+      const url = draft.url.trim();
+      if (!url) {
+        setFormError(C.missingUrl);
+        return;
+      }
+      if (!isHttpUrl(url)) {
+        setFormError(C.invalidUrl);
+        return;
+      }
+      const parsed = parseHeaders(draft.headers);
+      if (parsed.invalid) {
+        setFormError(C.invalidHeaders);
+        return;
+      }
+      input = { transport: 'http', url, headers: parsed.headers };
+    } else {
+      const command = draft.command.trim();
+      if (!command) {
+        setFormError(C.validation);
+        return;
+      }
+      input = { transport: 'stdio', command, args: parseArgs(draft.args), env: parseEnv(draft.env) };
+    }
+
+    setProbing(true);
     try {
-      setProbeResult(
-        await probeMcpServer({ command, args: parseArgs(draft.args), env: parseEnv(draft.env) }),
-      );
+      setProbeResult(await probeMcpServer(input));
     } catch (err) {
       setProbeResult(failedResult(err));
     } finally {
@@ -206,23 +324,35 @@ export function McpSection() {
   const save = async () => {
     if (!editing) return;
     const name = draft.name.trim();
-    const command = draft.command.trim();
-    if (!name || !command) {
+    if (!name) {
       setFormError(C.validation);
       return;
+    }
+    if (draft.transport === 'stdio' && !draft.command.trim()) {
+      setFormError(C.validation);
+      return;
+    }
+    if (draft.transport === 'http') {
+      const url = draft.url.trim();
+      if (!url) {
+        setFormError(C.missingUrl);
+        return;
+      }
+      if (!isHttpUrl(url)) {
+        setFormError(C.invalidUrl);
+        return;
+      }
+      if (parseHeaders(draft.headers).invalid) {
+        setFormError(C.invalidHeaders);
+        return;
+      }
     }
     if (editing.name === null && servers.some((s) => s.name === name)) {
       setFormError(C.duplicate);
       return;
     }
 
-    const input = {
-      name,
-      command,
-      args: parseArgs(draft.args),
-      env: parseEnv(draft.env),
-      ...(draft.description.trim() ? { description: draft.description.trim() } : {}),
-    };
+    const input = serverInput(name);
 
     setBusy('__save__');
     setFormError(null);
@@ -240,7 +370,6 @@ export function McpSection() {
       closeForm();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) setFormError(C.duplicate);
-      else if (err instanceof ApiError && err.status === 400) setFormError(C.invalid);
       else setFormError(errorText(err));
     } finally {
       setBusy(null);
@@ -282,6 +411,8 @@ export function McpSection() {
   };
 
   const deleting = busy === '__delete__';
+  /** http 缺 URL 时不能保存；就地禁用按钮并给出原因，不做静默兜底。 */
+  const urlMissing = draft.transport === 'http' && !draft.url.trim();
 
   return (
     <div className="st-stack">
@@ -305,6 +436,11 @@ export function McpSection() {
               {servers.map((server) => {
                 const result = tests[server.name];
                 const working = busy === server.name;
+                const transport = transportOf(server);
+                const summary =
+                  transport === 'http'
+                    ? (server.url ?? '')
+                    : [server.command, ...server.args].join(' ');
                 return (
                   <div className="st-card" key={server.name}>
                     <div className="st-card-head">
@@ -313,10 +449,11 @@ export function McpSection() {
                       </Tile>
                       <div className="st-card-text">
                         <b>{server.name}</b>
-                        <span className="st-mcp-cmd" title={[server.command, ...server.args].join(' ')}>
-                          {[server.command, ...server.args].join(' ')}
+                        <span className="st-mcp-cmd" title={summary}>
+                          {summary}
                         </span>
                       </div>
+                      {transport === 'http' ? <Tag tone="accent">{C.transports.http}</Tag> : null}
                       {result ? (
                         <Tag tone={result.ok ? 'ok' : 'danger'}>
                           {result.ok ? C.toolCount(result.tools.length) : C.testFailed}
@@ -360,6 +497,15 @@ export function McpSection() {
             <div className="st-form">
               <div className="st-form-title">{editing.name === null ? C.formAdd : C.formEdit}</div>
               <div className="st-form-grid st-mcp-form">
+                <label className="st-form-wide st-mcp-transport">
+                  <span>{C.fields.transport}</span>
+                  <Seg<McpTransport>
+                    label={C.fields.transport}
+                    value={draft.transport}
+                    options={C.transportOptions}
+                    onChange={switchTransport}
+                  />
+                </label>
                 <label className="st-form-wide">
                   <span>{C.fields.name}</span>
                   <input
@@ -370,36 +516,64 @@ export function McpSection() {
                     onChange={(e) => setField({ name: e.target.value })}
                   />
                 </label>
-                <label className="st-form-wide">
-                  <span>{C.fields.command}</span>
-                  <input
-                    className="st-input"
-                    data-mono="true"
-                    value={draft.command}
-                    placeholder={C.placeholders.command}
-                    onChange={(e) => setField({ command: e.target.value })}
-                  />
-                </label>
-                <label className="st-mcp-wide">
-                  <span>{C.fields.args}</span>
-                  <textarea
-                    className="st-input"
-                    rows={3}
-                    value={draft.args}
-                    placeholder={C.placeholders.args}
-                    onChange={(e) => setField({ args: e.target.value })}
-                  />
-                </label>
-                <label className="st-mcp-wide">
-                  <span>{C.fields.env}</span>
-                  <textarea
-                    className="st-input"
-                    rows={3}
-                    value={draft.env}
-                    placeholder={C.placeholders.env}
-                    onChange={(e) => setField({ env: e.target.value })}
-                  />
-                </label>
+                {draft.transport === 'stdio' ? (
+                  <>
+                    <label className="st-form-wide">
+                      <span>{C.fields.command}</span>
+                      <input
+                        className="st-input"
+                        data-mono="true"
+                        value={draft.command}
+                        placeholder={C.placeholders.command}
+                        onChange={(e) => setField({ command: e.target.value })}
+                      />
+                    </label>
+                    <label className="st-mcp-wide">
+                      <span>{C.fields.args}</span>
+                      <textarea
+                        className="st-input"
+                        rows={3}
+                        value={draft.args}
+                        placeholder={C.placeholders.args}
+                        onChange={(e) => setField({ args: e.target.value })}
+                      />
+                    </label>
+                    <label className="st-mcp-wide">
+                      <span>{C.fields.env}</span>
+                      <textarea
+                        className="st-input"
+                        rows={3}
+                        value={draft.env}
+                        placeholder={C.placeholders.env}
+                        onChange={(e) => setField({ env: e.target.value })}
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label className="st-form-wide">
+                      <span>{C.fields.url}</span>
+                      <input
+                        className="st-input"
+                        data-mono="true"
+                        value={draft.url}
+                        placeholder={C.placeholders.url}
+                        onChange={(e) => setField({ url: e.target.value })}
+                      />
+                      {urlMissing ? <span className="st-mcp-warn">{C.missingUrl}</span> : null}
+                    </label>
+                    <label className="st-mcp-wide">
+                      <span>{C.fields.headers}</span>
+                      <textarea
+                        className="st-input"
+                        rows={3}
+                        value={draft.headers}
+                        placeholder={C.placeholders.headers}
+                        onChange={(e) => setField({ headers: e.target.value })}
+                      />
+                    </label>
+                  </>
+                )}
                 <label className="st-form-wide">
                   <span>{C.fields.description}</span>
                   <input
@@ -412,14 +586,24 @@ export function McpSection() {
               </div>
 
               <p className="st-hint">{C.hints.name}</p>
-              <p className="st-hint">{C.hints.command}</p>
-              <p className="st-hint">{C.hints.args}</p>
-              <p className="st-hint">{C.hints.env}</p>
+              <p className="st-hint">{C.hints.transport}</p>
+              {draft.transport === 'stdio' ? (
+                <>
+                  <p className="st-hint">{C.hints.command}</p>
+                  <p className="st-hint">{C.hints.args}</p>
+                  <p className="st-hint">{C.hints.env}</p>
+                </>
+              ) : (
+                <>
+                  <p className="st-hint">{C.hints.url}</p>
+                  <p className="st-hint">{C.hints.headers}</p>
+                </>
+              )}
 
               <div className="st-actions">
                 <button
                   className="st-btn st-btn--solid"
-                  disabled={busy === '__save__'}
+                  disabled={busy === '__save__' || urlMissing}
                   onClick={() => void save()}
                 >
                   {busy === '__save__' ? C.saving : C.save}
