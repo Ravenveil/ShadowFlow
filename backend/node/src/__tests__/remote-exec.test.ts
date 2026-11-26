@@ -106,6 +106,12 @@ describe('validateSshConfig', () => {
     expect(cfg).not.toHaveProperty('remoteDir');
   });
 
+  it('拒绝打码的私钥路径：GET 回显的「…/id_ed25519」不是路径，回写会覆盖真路径', () => {
+    const { config, errors } = validateSshConfig({ host: 'h', user: 'u', keyPath: '…/id_ed25519' });
+    expect(config).toBeNull();
+    expect(errors).toEqual(['keyPath 不能是打码值，请填真实路径或留空']);
+  });
+
   it('非对象直接拒绝', () => {
     expect(validateSshConfig(null).config).toBeNull();
     expect(validateSshConfig([]).config).toBeNull();

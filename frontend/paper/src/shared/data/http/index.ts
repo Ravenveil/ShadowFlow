@@ -105,8 +105,11 @@ function writeLocal(settings: AppSettings): void {
   }
 }
 
-/** 打码的 Key（`••••uyWH`）不能回写后端，否则真 Key 被掩码覆盖。 */
-const isMasked = (key: string): boolean => key.includes('•') || key.includes('*');
+/**
+ * 打码值不能回写后端，否则真值被掩码覆盖：BYOK 的 Key 是 `••••uyWH`，SSH 私钥
+ * 路径是后端掩码的 `…/jy_ed25519`（见 remote-exec.ts 的 maskKeyPath）。
+ */
+const isMasked = (key: string): boolean => key.includes('•') || key.includes('*') || key.startsWith('…');
 
 /* ── 会话工作目录（产物 tab 的数据来源） ───────────────────────────── */
 
@@ -235,6 +238,9 @@ async function buildWorkspace(sessionId?: string): Promise<WorkspaceData> {
     clis: serverSettings.clis,
     ssh: serverSettings.ssh,
   };
+  // 服务端给的第一台主机即「已同步」：之后没动它就不必 PUT（也免得把掩码路径写回去）
+  sshHosts = settings.ssh;
+  syncedSsh = sshFingerprint(sshHosts[0]);
 
   return {
     sessions,
@@ -275,22 +281,40 @@ async function syncProviders(providers: ProviderSetting[]): Promise<void> {
   );
 }
 
-async function syncSsh(hosts: SshHost[]): Promise<void> {
-  const host = hosts[0];
-  if (!host) return;
-  const fp = `${host.host}|${host.port}|${host.user}|${host.keyPath}|${host.remoteDir}`;
-  if (fp === syncedSsh) return;
+/** 设置页当前的 SSH 主机行：后端只持久化一台，「测试连接」却要测点的那一台。 */
+let sshHosts: SshHost[] = [];
 
+function sshFingerprint(host: SshHost | undefined): string {
+  return host ? `${host.host}|${host.port}|${host.user}|${host.keyPath}|${host.remoteDir}` : '';
+}
+
+/** 主机行 → 后端配置体。打码的私钥路径不回写（后端沿用已存的那条）。 */
+function sshBodyOf(host: SshHost): Record<string, unknown> {
   const body: Record<string, unknown> = {
     host: host.host,
     port: host.port,
     user: host.user,
     remoteDir: host.remoteDir,
   };
-  // 打码路径不能回写（会把真私钥路径覆盖成「••••」）
   if (host.keyPath && !isMasked(host.keyPath)) body.keyPath = host.keyPath;
+  return body;
+}
 
-  await request(ROUTES.sshConfig, { method: 'PUT', body: JSON.stringify(body) });
+/** 后端只存第一台（见 remote-exec.ts 的单份 SshConfig）；列表里的其余行只在本机。 */
+async function syncSsh(hosts: SshHost[]): Promise<void> {
+  sshHosts = hosts;
+  const host = hosts[0];
+  const fp = sshFingerprint(host);
+  if (fp === syncedSsh) return;
+
+  // 最后一台被移除：后端配置要跟着清掉，否则刷新后它又回来
+  if (!host) {
+    await request(ROUTES.sshConfig, { method: 'DELETE' });
+    syncedSsh = fp;
+    return;
+  }
+
+  await request(ROUTES.sshConfig, { method: 'PUT', body: JSON.stringify(sshBodyOf(host)) });
   syncedSsh = fp;
 }
 
@@ -460,13 +484,18 @@ export const httpSource: WorkspaceSource = {  id: 'http',
     return toCliProbes(snap);
   },
 
-  async testSsh() {
-    const res = await request<Envelope<SshTestDto>>(ROUTES.sshTest, { method: 'POST' });
+  async testSsh(id: string) {
+    // 测点的那一台：请求体带 host 时后端只校验不落库（私钥留空则沿用已存的），
+    // 否则测的永远是「已保存的第一台」，结果却记在别的行上。
+    const host = sshHosts.find((h) => h.id === id);
+    const res = await request<Envelope<SshTestDto>>(ROUTES.sshTest, {
+      method: 'POST',
+      ...(host ? { body: JSON.stringify(sshBodyOf(host)) } : {}),
+    });
     const result = pickData<SshTestDto>(res);
     return {
       state: result?.ok ? ('ok' as const) : ('error' as const),
       latencyMs: result?.durationMs,
-      gpu: result?.stdout?.split('\n')[0]?.slice(0, 40) || undefined,
     };
   },
 

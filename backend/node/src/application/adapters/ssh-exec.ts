@@ -63,6 +63,8 @@ export function validateSshConfig(input: unknown): {
   else if (!HOST_RE.test(host)) errors.push('host 含非法字符');
   if (!user) errors.push('user 必填');
   else if (!USER_RE.test(user)) errors.push('user 含非法字符');
+  // 掩码值不是路径：GET /config 回给前端的是「…/id_ed25519」，被回写进来会把真路径覆盖掉
+  if (keyPath.startsWith('…')) errors.push('keyPath 不能是打码值，请填真实路径或留空');
   if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push('port 必须是 1-65535 的整数');
 
   if (errors.length) return { config: null, errors };

@@ -53,7 +53,8 @@ export function SshSection({
     setBusy(h.id);
     try {
       const next = await onTest(h.id);
-      setFlash(C.tested(h.name, next.latencyMs ?? 0));
+      // 连不上时后端回 ok:false 而不是报错：提示语要看探测结果，不能一律说「已连通」
+      setFlash(next.state === 'ok' ? C.tested(h.name, next.latencyMs ?? 0) : C.failed(h.name));
     } catch {
       setFlash(C.failed(h.name));
     } finally {
