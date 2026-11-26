@@ -9,6 +9,7 @@
  */
 import { useEffect, type ReactNode } from 'react';
 import { SETTINGS_COPY, SETTINGS_NAV } from '@/shared/content/settings';
+import { MCP_COPY } from '@/shared/content/mcp';
 import { useI18n } from '@/shared/i18n';
 import {
   IconBell,
@@ -34,6 +35,7 @@ import { ConnectorsSection } from '@/app/settings/sections/ConnectorsSection';
 import { DataSection } from '@/app/settings/sections/DataSection';
 import { LanguageSection } from '@/app/settings/sections/LanguageSection';
 import { MemorySection } from '@/app/settings/sections/MemorySection';
+import { McpSection } from '@/app/settings/sections/McpSection';
 import { ModelsSection } from '@/app/settings/sections/ModelsSection';
 import { NotifySection } from '@/app/settings/sections/NotifySection';
 import { ProfileSection } from '@/app/settings/sections/ProfileSection';
@@ -53,6 +55,7 @@ const ICONS: Record<SettingsSection, IconCmp> = {
   models: IconKey,
   cli: IconTerminal,
   connectors: IconPlug,
+  mcp: IconPlug,
   skills: IconLayers,
   ssh: IconServer,
   memory: IconBrain,
@@ -70,6 +73,7 @@ const HEAD: Record<SettingsSection, { title: string; note?: string }> = {
   models: SETTINGS_COPY.models,
   cli: SETTINGS_COPY.cli,
   connectors: SETTINGS_COPY.connectors,
+  mcp: { title: MCP_COPY.title, note: MCP_COPY.note },
   skills: SETTINGS_COPY.skills,
   ssh: SETTINGS_COPY.ssh,
   memory: SETTINGS_COPY.memory,
@@ -191,6 +195,7 @@ export function SettingsSheet({
               onExport,
               onReset,
               onLoggedOut,
+              onSection,
             })}
           </div>
 
@@ -218,6 +223,7 @@ function renderSection(
     onExport: () => void;
     onReset: () => Promise<void>;
     onLoggedOut?: () => void;
+    onSection: (next: SettingsSection) => void;
   },
 ): ReactNode {
   switch (section) {
@@ -240,7 +246,15 @@ function renderSection(
     case 'cli':
       return <CliSection clis={p.settings.clis} onRescan={p.onRescanCli} />;
     case 'connectors':
-      return <ConnectorsSection settings={p.settings} onPatch={p.onPatch} />;
+      return (
+        <ConnectorsSection
+          settings={p.settings}
+          onPatch={p.onPatch}
+          onOpenMcp={() => p.onSection('mcp')}
+        />
+      );
+    case 'mcp':
+      return <McpSection />;
     case 'ssh':
       return <SshSection settings={p.settings} onPatch={p.onPatch} onTest={p.onTestSsh} />;
     case 'skills':

@@ -24,6 +24,8 @@ import cliRouter from './application/adapters/cli';
 // ClawHub（2026-06）— 安装会话 REST + SSE
 import clawhubRouter from './application/skills/http/clawhub';
 import acpRouter from './application/adapters/acp';
+// MCP 服务器注册表管理（.shadowflow/mcp.json 的 CRUD + 试连）
+import mcpRouter from './application/mcp/http';
 import { groupsChatRouter } from './application/conversations/chat-orchestrator';
 // 后端合一·阶段1b（2026-06-12）— Node 自服务 /api/groups（仅 SF_GROUPS_BACKEND==='node'
 // 时挂载，挂载顺序无关（ADR-0001 后无 fallback））。默认（python / 未设）不挂 → 仍转 Python，现状零变化。
@@ -233,6 +235,8 @@ app.use('/api/cli', cliRouter);
 app.use('/api/clawhub', clawhubRouter);
 // Story 15.23 — ACP / MCP remote agent discovery.
 app.use('/api/acp', acpRouter);
+// MCP 服务器管理（2026-11-26）— .shadowflow/mcp.json 的 CRUD + stdio 试连。
+app.use('/api/mcp', mcpRouter);
 // Story 15.14 — POST /api/artifacts/lint
 app.use('/api/artifacts', artifactsRouter);
 // SIWE + guest authentication

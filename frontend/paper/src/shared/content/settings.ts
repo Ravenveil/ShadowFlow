@@ -35,6 +35,7 @@
       group: '集成',
       items: [
         { id: 'connectors', label: '连接器' },
+        { id: 'mcp', label: 'MCP 集成' },
         { id: 'skills', label: '技能' },
         { id: 'ssh', label: '远程执行' },
         { id: 'memory', label: '知识与记忆' },
@@ -183,8 +184,6 @@ export const SETTINGS_COPY = {
     note: '接上外部数据源，主控写作时能直接取文献、代码和组会记录。',
     state: { ok: '已连接', expired: '授权过期', off: '未启用' },
     reauth: '重新授权',
-    add: '添加连接器',
-    addNote: '支持 MCP：填一个服务地址即可接入。',
   },
 
   /* ── 远程执行（SSH） ── */

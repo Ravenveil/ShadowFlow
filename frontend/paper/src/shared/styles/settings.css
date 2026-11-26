@@ -1928,3 +1928,141 @@
 .st-cli-install-msg[data-tone='danger'] {
   color: var(--danger);
 }
+
+/* ── MCP 集成：服务器卡 + 试连结果 + 双列表单 ── */
+
+/* 卡片里的命令摘要：一行等宽，超长省略（完整值在 title 里） */
+.st-mcp-cmd {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-4);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-mcp-desc {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+/* 测试 / 试连结果：成功与失败靠 data-ok 区分，不把失败画成成功 */
+.st-mcp-result {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+}
+
+.st-mcp-result-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.st-mcp-result[data-ok='true'] .st-mcp-result-head svg {
+  color: var(--ok);
+}
+
+.st-mcp-result[data-ok='false'] .st-mcp-result-head svg {
+  color: var(--danger);
+}
+
+.st-mcp-result-head b {
+  font-weight: 600;
+}
+
+.st-mcp-ms {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-4);
+}
+
+.st-mcp-tools-title {
+  display: block;
+  margin-top: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-4);
+}
+
+.st-mcp-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 180px;
+  margin: 6px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.st-mcp-tools li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 9px;
+  border-left: 2px solid var(--line-strong);
+}
+
+.st-mcp-tools li b {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.st-mcp-tools li span {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--ink-4);
+}
+
+.st-mcp-empty-tools {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  color: var(--ink-4);
+}
+
+.st-mcp-error {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--danger);
+  word-break: break-word;
+}
+
+/* 表单：两列；参数 / 环境变量 / 描述各占整行 */
+.st-mcp-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.st-mcp-form .st-form-wide,
+.st-mcp-form .st-mcp-wide {
+  grid-column: span 2;
+}
+
+.st-mcp-form textarea.st-input {
+  width: 100%;
+  height: auto;
+  min-height: 62px;
+  padding: 7px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.st-input:disabled {
+  opacity: 0.65;
+}
+
+@media (max-width: 900px) {
+  .st-mcp-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

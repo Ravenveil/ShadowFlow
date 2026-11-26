@@ -1,4 +1,5 @@
 /** 连接器：外部数据源（Zotero / Overleaf / GitHub / MCP…）。开关即授权开关。 */
+import { MCP_COPY } from '@/shared/content/mcp';
 import { SETTINGS_COPY } from '@/shared/content/settings';
 import type { ConnectorSetting } from '@/shared/data/types';
 import { Switch, Tag, Tile, useFlash } from '@/app/settings/primitives';
@@ -8,7 +9,11 @@ const C = SETTINGS_COPY.connectors;
 
 const STATE_TONE = { ok: 'ok', expired: 'warn', off: 'mute' } as const;
 
-export function ConnectorsSection({ settings, onPatch }: SectionProps) {
+export function ConnectorsSection({
+  settings,
+  onPatch,
+  onOpenMcp,
+}: SectionProps & { onOpenMcp: () => void }) {
   const { connectors } = settings;
   const [flash, setFlash] = useFlash();
 
@@ -50,8 +55,8 @@ export function ConnectorsSection({ settings, onPatch }: SectionProps) {
       </div>
 
       <div className="st-actions">
-        <button className="st-btn st-btn--solid" onClick={() => setFlash(C.addNote)}>
-          {C.add}
+        <button className="st-btn st-btn--solid" onClick={onOpenMcp}>
+          {MCP_COPY.manageFromConnectors}
         </button>
         {flash ? <span className="st-flash">{flash}</span> : null}
       </div>

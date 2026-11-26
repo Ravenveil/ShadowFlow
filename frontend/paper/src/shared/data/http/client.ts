@@ -74,6 +74,11 @@ export const ROUTES = {
     `/api/clawhub/install/${encodeURIComponent(installId)}/cancel`,
   sshConfig: '/api/remote-exec/config',
   sshTest: '/api/remote-exec/test',
+  /** MCP 服务器配置（见 http/mcp.ts）。 */
+  mcpServers: '/api/mcp/servers',
+  mcpServer: (name: string) => `/api/mcp/servers/${encodeURIComponent(name)}`,
+  mcpServerTest: (name: string) => `/api/mcp/servers/${encodeURIComponent(name)}/test`,
+  mcpProbe: '/api/mcp/probe',
 
   packs: '/api/memory-bank/packs',
   asr: '/api/asr/transcribe',
